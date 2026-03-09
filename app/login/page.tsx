@@ -1,18 +1,28 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 
 export default function LoginPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const next = searchParams.get("next") || "/crm";
 
+  const [nextPath, setNextPath] = useState("/crm");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const params = new URLSearchParams(window.location.search);
+    const next = params.get("next");
+
+    if (next && next.startsWith("/")) {
+      setNextPath(next);
+    }
+  }, []);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -43,7 +53,7 @@ export default function LoginPage() {
         return;
       }
 
-      router.replace(next);
+      router.replace(nextPath);
       router.refresh();
     } catch (e: any) {
       setMsg(e?.message || "Beklenmeyen hata oluştu.");
@@ -54,7 +64,15 @@ export default function LoginPage() {
 
   return (
     <main style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 24 }}>
-      <div style={{ width: 380, maxWidth: "100%", border: "1px solid #e5e7eb", borderRadius: 12, padding: 18 }}>
+      <div
+        style={{
+          width: 380,
+          maxWidth: "100%",
+          border: "1px solid #e5e7eb",
+          borderRadius: 12,
+          padding: 18,
+        }}
+      >
         <h1 style={{ margin: 0, fontSize: 20 }}>Giriş</h1>
         <p style={{ marginTop: 8, color: "#4b5563", fontSize: 14 }}>
           Email ve şifren ile giriş yap.
