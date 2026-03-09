@@ -64,15 +64,7 @@ export default function LoginPage() {
 
   return (
     <main style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 24 }}>
-      <div
-        style={{
-          width: 380,
-          maxWidth: "100%",
-          border: "1px solid #e5e7eb",
-          borderRadius: 12,
-          padding: 18,
-        }}
-      >
+      <div style={{ width: 380, maxWidth: "100%", border: "1px solid #e5e7eb", borderRadius: 12, padding: 18 }}>
         <h1 style={{ margin: 0, fontSize: 20 }}>Giriş</h1>
         <p style={{ marginTop: 8, color: "#4b5563", fontSize: 14 }}>
           Email ve şifren ile giriş yap.

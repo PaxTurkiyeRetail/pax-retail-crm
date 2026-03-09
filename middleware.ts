@@ -42,27 +42,31 @@ export async function middleware(request: NextRequest) {
     },
   });
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-  const isProtected =
-    pathname.startsWith("/crm") ||
-    pathname.startsWith("/api/crm") ||
-    pathname.startsWith("/api/pipeline") ||
-    pathname.startsWith("/api/kunye");
+    const isProtected =
+      pathname.startsWith("/crm") ||
+      pathname.startsWith("/api/crm") ||
+      pathname.startsWith("/api/pipeline") ||
+      pathname.startsWith("/api/kunye");
 
-  if (isProtected && !user) {
-    const loginUrl = new URL("/login", request.url);
-    loginUrl.searchParams.set("next", pathname + search);
-    return NextResponse.redirect(loginUrl);
+    if (isProtected && !user) {
+      const loginUrl = new URL("/login", request.url);
+      loginUrl.searchParams.set("next", pathname + search);
+      return NextResponse.redirect(loginUrl);
+    }
+
+    if (user && pathname === "/login") {
+      return NextResponse.redirect(new URL("/crm", request.url));
+    }
+
+    return response;
+  } catch {
+    return response;
   }
-
-  if (user && pathname === "/login") {
-    return NextResponse.redirect(new URL("/crm", request.url));
-  }
-
-  return response;
 }
 
 export const config = {
