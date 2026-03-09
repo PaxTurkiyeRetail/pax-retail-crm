@@ -17,6 +17,8 @@ type CookieToSet = {
 };
 
 export async function middleware(request: NextRequest) {
+  const { pathname, search } = request.nextUrl;
+
   let response = NextResponse.next({ request });
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -34,23 +36,41 @@ export async function middleware(request: NextRequest) {
       setAll(cookiesToSet: CookieToSet[]) {
         cookiesToSet.forEach(({ name, value, options }) => {
           request.cookies.set(name, value);
-
-          response = NextResponse.next({ request });
           response.cookies.set(name, value, options);
         });
       },
     },
   });
 
-  try {
-    await supabase.auth.getUser();
-  } catch {
-    return response;
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const isProtected =
+    pathname.startsWith("/crm") ||
+    pathname.startsWith("/api/crm") ||
+    pathname.startsWith("/api/pipeline") ||
+    pathname.startsWith("/api/kunye");
+
+  if (isProtected && !user) {
+    const loginUrl = new URL("/login", request.url);
+    loginUrl.searchParams.set("next", pathname + search);
+    return NextResponse.redirect(loginUrl);
+  }
+
+  if (user && pathname === "/login") {
+    return NextResponse.redirect(new URL("/crm", request.url));
   }
 
   return response;
 }
 
 export const config = {
-  matcher: ["/crm/:path*", "/auth/callback"],
+  matcher: [
+    "/crm/:path*",
+    "/login",
+    "/api/crm/:path*",
+    "/api/pipeline/:path*",
+    "/api/kunye",
+  ],
 };
