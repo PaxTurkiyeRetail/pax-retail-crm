@@ -10,13 +10,13 @@ import {
 } from '@/lib/roles';
 
 export async function getSessionEmailOrNull(): Promise<string | null> {
-  const supabase = createSupabaseServerClient();
+  const supabase = (await createSupabaseServerClient());
   const { data } = await supabase.auth.getUser();
   return data.user?.email ?? null;
 }
 
 async function getAllowedUserOrThrowBase() {
-  const supabase = createSupabaseServerClient();
+  const supabase = (await createSupabaseServerClient());
   const { data: userData, error: userErr } = await supabase.auth.getUser();
   if (userErr || !userData.user?.email) throw Object.assign(new Error('UNAUTHORIZED'), { status: 401 });
 

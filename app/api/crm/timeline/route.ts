@@ -10,7 +10,7 @@ export async function GET(request: Request) {
     if (!musteriId) return NextResponse.json({ error: 'musteriId gerekli' }, { status: 400 });
 
     const me = await requireCrmAccessOrThrow();
-    const supabase = createSupabaseServerClient();
+    const supabase = (await createSupabaseServerClient());
 
     // User ise: önce müşterinin sorumlusu kontrol.
     if (!isAdminLike(me.role)) {

@@ -5,7 +5,7 @@ import { requireAllowedUserOrThrow } from '@/lib/authz';
 export async function GET() {
   try {
     const me = await requireAllowedUserOrThrow();
-    const supabase = createSupabaseServerClient();
+    const supabase = (await createSupabaseServerClient());
 
     // Fetch minimal fields for aggregations from view
     let q = supabase.from('vw_crm_musteriler').select('aktif_faz_adi, risk, sorumlu');

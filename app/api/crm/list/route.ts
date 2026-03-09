@@ -10,7 +10,7 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const lite = url.searchParams.get('lite') === '1';
 
-    const supabase = createSupabaseServerClient();
+    const supabase = (await createSupabaseServerClient());
     const me = await requireCrmAccessOrThrow();
 
     const myName = (me.full_name ?? '').trim();

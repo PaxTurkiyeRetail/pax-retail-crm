@@ -21,7 +21,7 @@ export async function POST(request: Request) {
     }
 
     const musteriId = body.musteriId;
-    const supabaseUser = createSupabaseServerClient();
+    const supabaseUser = (await createSupabaseServerClient());
 
     // User ise: müşteri sahipliği kontrol
     if (!isAdminLike(me.role)) {
