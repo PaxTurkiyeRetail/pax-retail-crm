@@ -11,11 +11,7 @@ type Body = {
     sorumlu?: string | null;
 };
 
-const allowedEntegrasyon = new Set<string>(
-    ENTEGRASYON_OPTIONS.filter(
-        (value): value is string => typeof value === "string" && value.trim().length > 0
-    )
-);
+const allowedEntegrasyon = new Set<string>(ENTEGRASYON_OPTIONS.filter((value) => String(value ?? '').trim().length > 0).map((value) => String(value).trim()));
 
 export async function POST(req: Request) {
     let me: Awaited<ReturnType<typeof requireCrmAccessOrThrow>>;

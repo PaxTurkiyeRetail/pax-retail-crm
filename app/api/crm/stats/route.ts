@@ -3,7 +3,7 @@ import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 import { requireCrmAccessOrThrow } from '@/lib/authz';
 import { isAdminLike } from '@/lib/roles';
-import { getKunyeStatus, mapKunyeDbToUi } from '@/lib/kunye';
+import { getKunyeStatus, mapKunyeDbToUi, normalizeKunyeStatusFilter } from '@/lib/kunye';
 
 function unique(values: Array<string | null | undefined>) {
   return new Set(values.map((item) => String(item ?? '').trim()).filter(Boolean)).size;
@@ -23,7 +23,7 @@ export async function GET(request: Request) {
     const owner = String(url.searchParams.get('owner') ?? '').trim();
     const sector = String(url.searchParams.get('sector') ?? '').trim();
     const integration = String(url.searchParams.get('integration') ?? '').trim();
-    const kunyeStatus = String(url.searchParams.get('kunye_status') ?? '').trim();
+    const kunyeStatus = normalizeKunyeStatusFilter(url.searchParams.get('kunye_status'));
     const fazNoRaw = String(url.searchParams.get('faz_no') ?? '').trim();
     const fazNo = fazNoRaw ? Number(fazNoRaw) : NaN;
 

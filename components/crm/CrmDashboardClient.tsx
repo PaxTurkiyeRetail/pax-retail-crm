@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { HAVUZ_ACCOUNT_NAME } from '@/lib/crm';
+import { presentKunyeStatus } from '@/lib/kunye';
 
 type CrmRow = {
     musteri_id: string;
@@ -13,7 +14,7 @@ type CrmRow = {
     aktif_faz_no: number | null;
     aktif_faz_adi: string | null;
     kasa_firmasi?: string | null;
-    hamwe_durumu?: string | null;
+    kunye_durumu?: string | null;
 };
 
 type Me = { email: string; full_name: string | null; role: string };
@@ -75,7 +76,7 @@ const EMPTY_OPTIONS: FilterOptions = {
 };
 
 function statusTone(status?: string | null) {
-    if (status === 'Var') {
+    if (status === 'Var' || status === 'Tamam') {
         return {
             background: '#ecfdf3',
             color: '#166534',
@@ -969,9 +970,13 @@ export default function CrmDashboardClient() {
                             onChange={(e) => setKunyeFilter(e.target.value)}
                         >
                             <option value="">Tüm Künye Durumları</option>
-                            {['Var', 'Eksik', 'Yok'].map((name) => (
-                                <option key={name} value={name}>
-                                    {name}
+                            {[
+                                { value: 'Tamam', label: 'Tamam' },
+                                { value: 'Eksik', label: 'Eksik' },
+                                { value: 'Yok', label: 'Yok' },
+                            ].map((item) => (
+                                <option key={item.value} value={item.value}>
+                                    {item.label}
                                 </option>
                             ))}
                         </select>
@@ -1063,7 +1068,7 @@ export default function CrmDashboardClient() {
                                     <td>{r.kasa_firmasi ?? '-'}</td>
                                     <td>
                                         <span className="pill" style={statusTone(r.kunye_durumu)}>
-                                            {r.kunye_durumu ?? 'Yok'}
+                                            {presentKunyeStatus(r.kunye_durumu)}
                                         </span>
                                     </td>
                                     <td>{r.entegrasyon_tipi ?? '-'}</td>

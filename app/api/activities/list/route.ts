@@ -28,15 +28,13 @@ export async function GET(req: Request) {
     const toDate = (url.searchParams.get('to') ?? '').trim();
     const page = parsePositiveInt(url.searchParams.get('page'), 1);
     const pageSize = Math.min(parsePositiveInt(url.searchParams.get('pageSize'), 20), 100);
-    const hasHeavyFiltering = Boolean(q || owner || responsible || partner || durum || sla || fromDate || toDate || Number.isFinite(fazNo));
-    const fetchLimit = hasHeavyFiltering ? Math.max(page * pageSize * 5, 400) : pageSize;
 
     const admin = createSupabaseAdminClient();
     let query = admin
       .from('pipeline_eventleri')
       .select('id,musteri_id,faz_no,iteration_no,event_type,durum,aksiyon,owner,partner_owner,notlar,created_at,hedef_tarihi,created_by,musteriler(musteri,sektor,entegrasyon_tipi,satis_olasiligi,sorumlu)')
       .order('created_at', { ascending: false })
-      .limit(fetchLimit);
+      .limit(5000);
 
     if (Number.isFinite(fazNo)) query = query.eq('faz_no', fazNo);
     if (partner) query = query.eq('partner_owner', partner);
@@ -80,7 +78,8 @@ export async function GET(req: Request) {
           || String(row?.notlar ?? '').toLocaleLowerCase('tr').includes(needle)
           || String(row?.owner ?? '').toLocaleLowerCase('tr').includes(needle)
           || String(row?.activity_status ?? '').toLocaleLowerCase('tr').includes(needle)
-          || String(row?.musteriler?.sorumlu ?? '').toLocaleLowerCase('tr').includes(needle);
+          || String(row?.musteriler?.sorumlu ?? '').toLocaleLowerCase('tr').includes(needle)
+          || String(row?.partner_owner ?? '').toLocaleLowerCase('tr').includes(needle);
       });
     }
 

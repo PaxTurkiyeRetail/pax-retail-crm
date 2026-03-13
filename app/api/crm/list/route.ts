@@ -2,8 +2,7 @@ import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 import { requireCrmAccessOrThrow } from '@/lib/authz';
-import { isAdminLike } from '@/lib/roles';
-import { getKunyeStatus, mapKunyeDbToUi } from '@/lib/kunye';
+import { getKunyeStatus, mapKunyeDbToUi, normalizeKunyeStatusFilter } from '@/lib/kunye';
 
 function parsePositiveInt(value: string | null, fallback: number) {
   const parsed = Number(value ?? '');
@@ -18,23 +17,22 @@ export async function GET(request: Request) {
     const owner = String(url.searchParams.get('owner') ?? '').trim();
     const sector = String(url.searchParams.get('sector') ?? '').trim();
     const integration = String(url.searchParams.get('integration') ?? '').trim();
-    const kunyeStatus = String(url.searchParams.get('kunye_status') ?? '').trim();
+    const kunyeStatus = normalizeKunyeStatusFilter(url.searchParams.get('kunye_status'));
     const fazNoRaw = String(url.searchParams.get('faz_no') ?? '').trim();
     const fazNo = fazNoRaw ? Number(fazNoRaw) : NaN;
     const page = parsePositiveInt(url.searchParams.get('page'), 1);
     const pageSize = Math.min(parsePositiveInt(url.searchParams.get('pageSize'), lite ? 200 : 10), lite ? 500 : 100);
     const from = (page - 1) * pageSize;
-    const to = from + pageSize - 1;
+    const to = from + pageSize;
 
     const supabase = await createSupabaseServerClient();
-    const me = await requireCrmAccessOrThrow();
+    await requireCrmAccessOrThrow();
 
-    const myName = (me.full_name ?? '').trim();
-    
     let query = supabase
       .from('vw_crm_musteriler')
-      .select(lite ? 'musteri_id,musteri,sorumlu,aktif_faz_no,aktif_faz_adi,entegrasyon_tipi,sektor' : '*', { count: 'exact' })
-      .order('musteri', { ascending: true });
+      .select('*', { count: 'exact' })
+      .order('musteri', { ascending: true })
+      .limit(5000);
 
     if (owner) query = query.eq('sorumlu', owner);
     if (sector) query = query.eq('sektor', sector);
@@ -47,10 +45,9 @@ export async function GET(request: Request) {
         `sektor.ilike.%${escaped}%`,
         `sorumlu.ilike.%${escaped}%`,
         `aktif_faz_adi.ilike.%${escaped}%`,
+        `entegrasyon_tipi.ilike.%${escaped}%`,
       ].join(','));
     }
-    if (!lite) query = query.range(from, to);
-    else query = query.limit(pageSize);
 
     const { data, error, count } = await query;
     if (error) return NextResponse.json({ message: error.message }, { status: 500 });
@@ -71,7 +68,7 @@ export async function GET(request: Request) {
       }
     }
 
-    const enriched = rows.map((row: any) => {
+    let enriched = rows.map((row: any) => {
       const kunye = mapKunyeDbToUi(kunyeMap.get(row.musteri_id) ?? null);
       const status = getKunyeStatus({ ...kunye, firma_adi: row.musteri, has_kunye_record: Boolean(kunye) });
       return {
@@ -81,12 +78,31 @@ export async function GET(request: Request) {
         kunye_durumu: status.status,
         kunye_eksik_sayisi: status.missing,
       };
-    }).filter((row: any) => (kunyeStatus ? row.kunye_durumu === kunyeStatus : true));
+    });
 
-    const filteredTotal = kunyeStatus ? enriched.length : (count ?? enriched.length);
-    const pagedRows = lite || !kunyeStatus ? enriched : enriched.slice(0, pageSize);
+    if (q) {
+      const needle = q.toLocaleLowerCase('tr');
+      enriched = enriched.filter((row: any) => {
+        return [
+          row.musteri,
+          row.sektor,
+          row.sorumlu,
+          row.aktif_faz_adi,
+          row.entegrasyon_tipi,
+          row.kasa_firmasi,
+          row.kunye_durumu,
+        ].some((value) => String(value ?? '').toLocaleLowerCase('tr').includes(needle));
+      });
+    }
 
-    return NextResponse.json({ rows: pagedRows, total: filteredTotal, page, pageSize });
+    if (kunyeStatus) {
+      enriched = enriched.filter((row: any) => row.kunye_durumu === kunyeStatus);
+    }
+
+    const filteredTotal = enriched.length;
+    const pagedRows = lite ? enriched.slice(0, pageSize) : enriched.slice(from, to);
+
+    return NextResponse.json({ rows: pagedRows, total: filteredTotal || (count ?? 0), page, pageSize });
   } catch (e: any) {
     return NextResponse.json({ message: 'Yetkisiz' }, { status: e?.status || 401 });
   }

@@ -135,6 +135,22 @@ export function mapKunyeUiToDb(payload: KunyePayload): Record<string, any> {
   };
 }
 
+
+export function normalizeKunyeStatusFilter(value: unknown) {
+  const normalized = String(value ?? '').trim().toLocaleLowerCase('tr');
+  if (!normalized) return '';
+  if (normalized === 'tamam' || normalized === 'var') return 'Var';
+  if (normalized === 'eksik') return 'Eksik';
+  if (normalized === 'yok') return 'Yok';
+  return '';
+}
+
+export function presentKunyeStatus(value: unknown) {
+  const normalized = normalizeKunyeStatusFilter(value);
+  if (normalized === 'Var') return 'Tamam';
+  return normalized || 'Yok';
+}
+
 export function getKunyeStatus(kunye: KunyeStatusInput | null | undefined) {
   const explicitHasRecord = typeof kunye?.has_kunye_record === 'boolean' ? kunye.has_kunye_record : undefined;
   const hasAnyKunyeField = [

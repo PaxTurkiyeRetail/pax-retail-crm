@@ -48,7 +48,7 @@ export default function CustomerDetailPage() {
     const loadedKunye = { ...EMPTY_KUNYE, ...(payload.kunye ?? {}) };
     setKunye(loadedKunye);
     setInitialKunye(loadedKunye);
-    setStatus(payload.kunyeStatus ?? { status: 'Yok', missing: 0 });
+    setStatus(payload.kunyeStatus ? { ...payload.kunyeStatus, status: payload.kunyeStatus.status === 'Var' ? 'Tamam' : payload.kunyeStatus.status } : { status: 'Yok', missing: 0 });
   };
 
   useEffect(() => { if (musteriId) void load(); }, [musteriId]);
@@ -77,7 +77,7 @@ export default function CustomerDetailPage() {
         const kuyeRes = await fetch('/api/kunye', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ musteriId: detail.id, ...kunye, pos_mulkiyet_bankalari: ['Banka','Bankada'].includes(String(kunye.pos_mulkiyet ?? '')) ? kunye.pos_mulkiyet_bankalari : null }) });
         const kuyeJson = await kuyeRes.json().catch(() => ({}));
         if (!kuyeRes.ok) return setMsg(kuyeJson?.message || 'Künye kaydedilemedi');
-        setStatus(kuyeJson?.status ?? { status: 'Var', missing: 0 });
+        setStatus(kuyeJson?.status ? { ...kuyeJson.status, status: kuyeJson.status.status === 'Var' ? 'Tamam' : kuyeJson.status.status } : { status: 'Tamam', missing: 0 });
         setInitialKunye(kunye);
         setMsg('Müşteri ve künye bilgileri kaydedildi.');
         return;
