@@ -173,8 +173,6 @@ export default function CrmDashboardClient() {
     { label: 'Künye Tamam', value: stats.kunyeVar, hint: 'Hazır kayıt' },
     { label: 'Künye Eksik', value: stats.kunyeEksik, hint: 'Takip gerekli' },
     { label: 'Künye Yok', value: stats.kunyeYok, hint: 'Giriş bekliyor' },
-    { label: 'Sorumlu', value: stats.accounts, hint: 'Aktif account' },
-    { label: 'Entegrasyon', value: stats.entegrasyonYapisi, hint: 'Yapı çeşitliliği' },
   ];
 
   const resetForm = () => { setEditingId(null); setMusteri(''); setSektor(''); setSorumlu(displayMeName || HAVUZ_ACCOUNT_NAME); };
@@ -227,7 +225,7 @@ export default function CrmDashboardClient() {
         .secondary, .ghost { border: 1px solid #d7e0ea; background: #fff; color: #0f172a; }
         .dashboard { display: grid; grid-template-columns: minmax(0,2fr) minmax(320px,1fr); gap: 16px; align-items: stretch; }
         .dashboard-grid, .filters-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
-        .sector-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; }
+        .sector-grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
         .field { display: grid; gap: 6px; }
         .field-label { color: #334155; font-size: 12px; font-weight: 900; text-transform: uppercase; letter-spacing: .04em; }
         .input, .select { min-height: 42px; border-radius: 14px; border: 1px solid #cfd8e3; background: #fff; padding: 0 12px; font-size: 14px; color: #0f172a; width: 100%; }
@@ -260,7 +258,7 @@ export default function CrmDashboardClient() {
         .modal-box { width: min(640px, 100%); padding: 20px; display: grid; gap: 14px; }
         .grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px; }
         .label { font-size: 12px; font-weight: 900; color: #334155; }
-        @media (max-width: 1320px) { .filters-grid, .dashboard-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .sector-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } .dashboard { grid-template-columns: 1fr; } }
+        @media (max-width: 1320px) { .filters-grid, .dashboard-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .dashboard { grid-template-columns: 1fr; } }
         @media (max-width: 900px) { .hero, .filters-grid, .grid, .dashboard-grid, .sector-grid { grid-template-columns: 1fr; } }
       `}</style>
 
