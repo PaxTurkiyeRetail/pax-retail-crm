@@ -19,9 +19,6 @@ export async function GET(request: Request) {
 
     if (musteriErr) return NextResponse.json({ message: musteriErr.message }, { status: 500 });
     if (!musteri) return NextResponse.json({ message: 'Müşteri bulunamadı.' }, { status: 404 });
-    if (!isAdminLike(me.role) && String(musteri.sorumlu ?? '').trim() !== String(me.full_name ?? '').trim()) {
-      return NextResponse.json({ message: 'Bu müşteriyi görüntüleme yetkin yok.' }, { status: 403 });
-    }
 
     const { data, error } = await admin.from('musteri_kunye').select('*').eq('musteri_id', musteriId).maybeSingle();
     if (error && !/relation .* does not exist/i.test(error.message)) {

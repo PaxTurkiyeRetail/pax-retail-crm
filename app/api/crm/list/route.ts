@@ -29,17 +29,11 @@ export async function GET(request: Request) {
     const supabase = await createSupabaseServerClient();
     const me = await requireCrmAccessOrThrow();
 
-    const myName = (me.full_name ?? '').trim();
-    if (!isAdminLike(me.role) && !myName) {
-      return NextResponse.json({ message: 'Kullanıcı adı/soyadı boş. allowed_users.full_name doldurulmalı.' }, { status: 400 });
-    }
-
     let query = supabase
       .from('vw_crm_musteriler')
       .select(lite ? 'musteri_id,musteri,sorumlu,aktif_faz_no,aktif_faz_adi,entegrasyon_tipi,sektor' : '*', { count: 'exact' })
       .order('musteri', { ascending: true });
 
-    if (!isAdminLike(me.role)) query = query.eq('sorumlu', myName);
     if (owner) query = query.eq('sorumlu', owner);
     if (sector) query = query.eq('sektor', sector);
     if (integration) query = query.eq('entegrasyon_tipi', integration);

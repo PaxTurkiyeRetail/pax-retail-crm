@@ -29,7 +29,6 @@ export async function GET(request: Request) {
 
     const supabase = await createSupabaseServerClient();
     let qy = supabase.from('vw_crm_musteriler').select('musteri_id,sektor,sorumlu,entegrasyon_tipi,aktif_faz_no,musteri');
-    if (!isAdminLike(me.role)) qy = qy.eq('sorumlu', (me.full_name ?? '').trim());
     if (owner) qy = qy.eq('sorumlu', owner);
     if (sector) qy = qy.eq('sektor', sector);
     if (integration) qy = qy.eq('entegrasyon_tipi', integration);

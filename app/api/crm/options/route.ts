@@ -12,15 +12,12 @@ export async function GET() {
   try {
     const me = await requireCrmAccessOrThrow();
     const supabase = await createSupabaseServerClient();
-    const myName = (me.full_name ?? '').trim();
-
     let query = supabase
       .from('vw_crm_musteriler')
       .select('sektor,sorumlu,entegrasyon_tipi,aktif_faz_no')
       .order('musteri_id', { ascending: true })
       .limit(3000);
 
-    if (!isAdminLike(me.role)) query = query.eq('sorumlu', myName);
 
     const { data, error } = await query;
     if (error) return NextResponse.json({ message: error.message }, { status: 500 });
