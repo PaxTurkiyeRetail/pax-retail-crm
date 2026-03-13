@@ -42,6 +42,7 @@ type FilterOptions = {
 };
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
+
 const SECTOR_PRESET_OPTIONS = [
     'Elektronik & Beyaz Eşya',
     'Ev & Yaşam / Yapı Market',
@@ -81,6 +82,7 @@ function statusTone(status?: string | null) {
             border: '1px solid #bbf7d0',
         };
     }
+
     if (status === 'Eksik') {
         return {
             background: '#fff7ed',
@@ -88,6 +90,7 @@ function statusTone(status?: string | null) {
             border: '1px solid #fed7aa',
         };
     }
+
     return {
         background: '#f8fafc',
         color: '#475569',
@@ -97,11 +100,7 @@ function statusTone(status?: string | null) {
 
 function uniqueOptions(values: Array<string | null | undefined>) {
     return Array.from(
-        new Set(
-            values
-                .map((item) => String(item ?? '').trim())
-                .filter(Boolean)
-        )
+        new Set(values.map((item) => String(item ?? '').trim()).filter(Boolean))
     ).sort((a, b) => a.localeCompare(b, 'tr'));
 }
 
@@ -110,21 +109,25 @@ export default function CrmDashboardClient() {
     const [me, setMe] = useState<Me | null>(null);
     const [allowed, setAllowed] = useState<AllowedUser[]>([]);
     const [filterOptions, setFilterOptions] = useState<FilterOptions>(EMPTY_OPTIONS);
+
     const [q, setQ] = useState('');
     const [debouncedQ, setDebouncedQ] = useState('');
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(20);
     const [total, setTotal] = useState(0);
     const [stats, setStats] = useState<StatsPayload>(EMPTY_STATS);
+
     const [open, setOpen] = useState(false);
     const [mode, setMode] = useState<ModalMode>('create');
     const [busySave, setBusySave] = useState(false);
     const [loading, setLoading] = useState(false);
     const [msg, setMsg] = useState<string | null>(null);
+
     const [editingId, setEditingId] = useState<string | null>(null);
     const [musteri, setMusteri] = useState('');
     const [sektor, setSektor] = useState('');
     const [sorumlu, setSorumlu] = useState('');
+
     const [ownerFilter, setOwnerFilter] = useState('');
     const [sectorFilter, setSectorFilter] = useState('');
     const [integrationFilter, setIntegrationFilter] = useState('');
@@ -213,6 +216,7 @@ export default function CrmDashboardClient() {
             const listRes = await fetch(`/api/crm/list?${params.toString()}`, {
                 cache: 'no-store',
             });
+
             const listJson = await listRes.json().catch(() => ({}));
 
             if (!listRes.ok) {
@@ -273,12 +277,7 @@ export default function CrmDashboardClient() {
     const totalPages = Math.max(1, Math.ceil(total / pageSize));
     const currentPage = Math.min(page, totalPages);
 
-    const cards = [
-        { label: 'Toplam Müşteri', value: stats.total, hint: 'Filtreye göre' },
-        { label: 'Künye Tamam', value: stats.kunyeVar, hint: 'Hazır kayıt' },
-        { label: 'Künye Eksik', value: stats.kunyeEksik, hint: 'Takip gerekli' },
-        { label: 'Künye Yok', value: stats.kunyeYok, hint: 'Giriş bekliyor' },
-    ];
+    const cards = [{ label: 'Toplam Müşteri', value: stats.total, hint: 'Filtreye göre' }];
 
     const resetForm = () => {
         setEditingId(null);
@@ -360,7 +359,8 @@ export default function CrmDashboardClient() {
         .hero,
         .surface,
         .card,
-        .modal-box {
+        .modal-box,
+        .kunye-summary {
           border: 1px solid #dbe4ef;
           background: rgba(255, 255, 255, 0.96);
           border-radius: 24px;
@@ -440,10 +440,20 @@ export default function CrmDashboardClient() {
           display: grid;
           grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr);
           gap: 16px;
-          align-items: stretch;
+          align-items: start;
         }
 
-        .dashboard-grid,
+        .dashboard-main {
+          display: grid;
+          gap: 16px;
+        }
+
+        .dashboard-grid {
+          display: grid;
+          grid-template-columns: repeat(1, minmax(0, 1fr));
+          gap: 10px;
+        }
+
         .filters-grid {
           display: grid;
           grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -538,6 +548,94 @@ export default function CrmDashboardClient() {
           margin-top: 4px;
           color: #94a3b8;
           font-size: 12px;
+        }
+
+        .kunye-summary {
+          display: grid;
+          gap: 12px;
+          padding: 16px;
+        }
+
+        .kunye-summary-head {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          flex-wrap: wrap;
+        }
+
+        .kunye-summary-title {
+          color: #0f172a;
+          font-size: 16px;
+          font-weight: 900;
+        }
+
+        .kunye-summary-note {
+          color: #64748b;
+          font-size: 12px;
+        }
+
+        .kunye-summary-grid {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 10px;
+        }
+
+        .kunye-stat {
+          border: 1px solid #dbe4ef;
+          border-radius: 18px;
+          padding: 14px;
+          background: #fff;
+          display: grid;
+          gap: 6px;
+        }
+
+        .kunye-stat-label {
+          font-size: 12px;
+          font-weight: 800;
+          color: #64748b;
+        }
+
+        .kunye-stat-value {
+          font-size: 24px;
+          font-weight: 900;
+          color: #0f172a;
+          line-height: 1;
+        }
+
+        .kunye-stat-hint {
+          font-size: 12px;
+          color: #94a3b8;
+        }
+
+        .kunye-stat.var {
+          background: #ecfdf3;
+          border: 1px solid #bbf7d0;
+        }
+
+        .kunye-stat.var .kunye-stat-label,
+        .kunye-stat.var .kunye-stat-value {
+          color: #166534;
+        }
+
+        .kunye-stat.eksik {
+          background: #fff7ed;
+          border: 1px solid #fed7aa;
+        }
+
+        .kunye-stat.eksik .kunye-stat-label,
+        .kunye-stat.eksik .kunye-stat-value {
+          color: #9a3412;
+        }
+
+        .kunye-stat.yok {
+          background: #f8fafc;
+          border: 1px solid #e2e8f0;
+        }
+
+        .kunye-stat.yok .kunye-stat-label,
+        .kunye-stat.yok .kunye-stat-value {
+          color: #475569;
         }
 
         .filter-actions,
@@ -687,13 +785,16 @@ export default function CrmDashboardClient() {
         }
 
         @media (max-width: 1320px) {
-          .filters-grid,
-          .dashboard-grid {
+          .filters-grid {
             grid-template-columns: repeat(2, minmax(0, 1fr));
           }
 
           .dashboard {
             grid-template-columns: 1fr;
+          }
+
+          .kunye-summary-grid {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
           }
         }
 
@@ -705,7 +806,8 @@ export default function CrmDashboardClient() {
             grid-template-columns: 1fr;
           }
 
-          .sector-grid {
+          .sector-grid,
+          .kunye-summary-grid {
             grid-template-columns: 1fr;
           }
         }
@@ -719,6 +821,7 @@ export default function CrmDashboardClient() {
                         Kurumsal müşteri portföyünü, künye durumunu ve sorumlu dağılımını tek ekrandan yönetin.
                     </div>
                 </div>
+
                 <button className="primary" onClick={openCreate}>
                     + Müşteri Ekle
                 </button>
@@ -745,14 +848,47 @@ export default function CrmDashboardClient() {
             </section>
 
             <section className="dashboard">
-                <div className="dashboard-grid">
-                    {cards.map((item) => (
-                        <div key={item.label} className="card">
-                            <div className="card-label">{item.label}</div>
-                            <div className="card-value">{item.value}</div>
-                            <div className="card-hint">{item.hint}</div>
+                <div className="dashboard-main">
+                    <div className="dashboard-grid">
+                        {cards.map((item) => (
+                            <div key={item.label} className="card">
+                                <div className="card-label">{item.label}</div>
+                                <div className="card-value">{item.value}</div>
+                                <div className="card-hint">{item.hint}</div>
+                            </div>
+                        ))}
+                    </div>
+
+                    <div className="kunye-summary">
+                        <div className="kunye-summary-head">
+                            <div>
+                                <div className="kunye-summary-title">Künye Durumu</div>
+                                <div className="kunye-summary-note">
+                                    Tamam, eksik ve henüz girilmemiş kayıtların özeti
+                                </div>
+                            </div>
                         </div>
-                    ))}
+
+                        <div className="kunye-summary-grid">
+                            <div className="kunye-stat var">
+                                <div className="kunye-stat-label">Tamam</div>
+                                <div className="kunye-stat-value">{stats.kunyeVar}</div>
+                                <div className="kunye-stat-hint">Hazır kayıt</div>
+                            </div>
+
+                            <div className="kunye-stat eksik">
+                                <div className="kunye-stat-label">Eksik</div>
+                                <div className="kunye-stat-value">{stats.kunyeEksik}</div>
+                                <div className="kunye-stat-hint">Takip gerekli</div>
+                            </div>
+
+                            <div className="kunye-stat yok">
+                                <div className="kunye-stat-label">Yok</div>
+                                <div className="kunye-stat-value">{stats.kunyeYok}</div>
+                                <div className="kunye-stat-hint">Giriş bekliyor</div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <div className="surface mini-list">
