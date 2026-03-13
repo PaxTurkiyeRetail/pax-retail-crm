@@ -462,8 +462,30 @@ export default function CrmDashboardClient() {
 
         .sector-grid {
           display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+          gap: 10px;
+        }
+
+        .sector-item {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
           gap: 12px;
+          padding: 12px 14px;
+          border: 1px solid #d7e0ea;
+          border-radius: 16px;
+          background: #fff;
+        }
+
+        .sector-label {
+          color: #334155;
+          font-size: 13px;
+          font-weight: 700;
+        }
+
+        .sector-value {
+          color: #0f172a;
+          font-size: 18px;
+          font-weight: 900;
         }
 
         .field {
@@ -577,17 +599,31 @@ export default function CrmDashboardClient() {
 
         .kunye-summary-grid {
           display: grid;
-          grid-template-columns: repeat(3, minmax(0, 1fr));
+          grid-template-columns: 1fr;
           gap: 10px;
         }
 
-        .kunye-stat {
+        .kunye-summary-box {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 0;
+          overflow: hidden;
           border: 1px solid #dbe4ef;
           border-radius: 18px;
-          padding: 14px;
+          background: #fff;
+        }
+
+        .kunye-stat {
+          padding: 16px 14px;
           background: #fff;
           display: grid;
           gap: 6px;
+          min-height: 108px;
+          align-content: center;
+        }
+
+        .kunye-stat + .kunye-stat {
+          border-left: 1px solid #dbe4ef;
         }
 
         .kunye-stat-label {
@@ -610,7 +646,6 @@ export default function CrmDashboardClient() {
 
         .kunye-stat.var {
           background: #ecfdf3;
-          border: 1px solid #bbf7d0;
         }
 
         .kunye-stat.var .kunye-stat-label,
@@ -620,7 +655,6 @@ export default function CrmDashboardClient() {
 
         .kunye-stat.eksik {
           background: #fff7ed;
-          border: 1px solid #fed7aa;
         }
 
         .kunye-stat.eksik .kunye-stat-label,
@@ -630,7 +664,6 @@ export default function CrmDashboardClient() {
 
         .kunye-stat.yok {
           background: #f8fafc;
-          border: 1px solid #e2e8f0;
         }
 
         .kunye-stat.yok .kunye-stat-label,
@@ -793,7 +826,7 @@ export default function CrmDashboardClient() {
             grid-template-columns: 1fr;
           }
 
-          .kunye-summary-grid {
+          .kunye-summary-box {
             grid-template-columns: repeat(3, minmax(0, 1fr));
           }
         }
@@ -806,9 +839,13 @@ export default function CrmDashboardClient() {
             grid-template-columns: 1fr;
           }
 
-          .sector-grid,
-          .kunye-summary-grid {
+          .kunye-summary-box {
             grid-template-columns: 1fr;
+          }
+
+          .kunye-stat + .kunye-stat {
+            border-left: 0;
+            border-top: 1px solid #dbe4ef;
           }
         }
       `}</style>
@@ -839,9 +876,9 @@ export default function CrmDashboardClient() {
                     {(stats.bySector.length ? stats.bySector : [{ label: 'Tanımsız', value: 0 }])
                         .slice(0, 12)
                         .map((item) => (
-                            <div key={item.label} className="card compact">
-                                <div className="card-label">{item.label}</div>
-                                <div className="card-value">{item.value}</div>
+                            <div key={item.label} className="sector-item">
+                                <span className="sector-label">{item.label}</span>
+                                <span className="sector-value">{item.value}</span>
                             </div>
                         ))}
                 </div>
@@ -870,22 +907,24 @@ export default function CrmDashboardClient() {
                         </div>
 
                         <div className="kunye-summary-grid">
-                            <div className="kunye-stat var">
-                                <div className="kunye-stat-label">Tamam</div>
-                                <div className="kunye-stat-value">{stats.kunyeVar}</div>
-                                <div className="kunye-stat-hint">Hazır kayıt</div>
-                            </div>
+                            <div className="kunye-summary-box">
+                                <div className="kunye-stat var">
+                                    <div className="kunye-stat-label">Tamam</div>
+                                    <div className="kunye-stat-value">{stats.kunyeVar}</div>
+                                    <div className="kunye-stat-hint">Hazır kayıt</div>
+                                </div>
 
-                            <div className="kunye-stat eksik">
-                                <div className="kunye-stat-label">Eksik</div>
-                                <div className="kunye-stat-value">{stats.kunyeEksik}</div>
-                                <div className="kunye-stat-hint">Takip gerekli</div>
-                            </div>
+                                <div className="kunye-stat eksik">
+                                    <div className="kunye-stat-label">Eksik</div>
+                                    <div className="kunye-stat-value">{stats.kunyeEksik}</div>
+                                    <div className="kunye-stat-hint">Takip gerekli</div>
+                                </div>
 
-                            <div className="kunye-stat yok">
-                                <div className="kunye-stat-label">Yok</div>
-                                <div className="kunye-stat-value">{stats.kunyeYok}</div>
-                                <div className="kunye-stat-hint">Giriş bekliyor</div>
+                                <div className="kunye-stat yok">
+                                    <div className="kunye-stat-label">Yok</div>
+                                    <div className="kunye-stat-value">{stats.kunyeYok}</div>
+                                    <div className="kunye-stat-hint">Giriş bekliyor</div>
+                                </div>
                             </div>
                         </div>
                     </div>
