@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireCrmAccessOrThrow } from '@/lib/authz';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
-import { getKunyeStatus } from '@/lib/kunye';
+import { getKunyeStatus, mapKunyeRow } from '@/lib/kunye';
 
 export async function GET(request: Request) {
   try {
@@ -25,7 +25,8 @@ export async function GET(request: Request) {
       return NextResponse.json({ message: kunyeError.message }, { status: 500 });
     }
 
-    return NextResponse.json({ musteri, kunye: kunye ?? null, kunyeStatus: getKunyeStatus({ ...(kunye ?? {}), firma_adi: musteri.musteri }) });
+    const mappedKunye = mapKunyeRow(kunye as any);
+    return NextResponse.json({ musteri, kunye: mappedKunye ?? null, kunyeStatus: getKunyeStatus({ ...(mappedKunye ?? {}), firma_adi: musteri.musteri }) });
   } catch (e: any) {
     return NextResponse.json({ message: 'Yetkisiz' }, { status: e?.status || 401 });
   }

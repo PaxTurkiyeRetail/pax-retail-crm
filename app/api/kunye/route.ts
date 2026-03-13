@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireCrmAccessOrThrow, isAdminLike } from '@/lib/authz';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
-import { getKunyeStatus, normalizeKunyePayload } from '@/lib/kunye';
+import { getKunyeStatus, mapKunyeRow, normalizeKunyePayload } from '@/lib/kunye';
 
 export async function GET(request: Request) {
   try {
@@ -23,7 +23,8 @@ export async function GET(request: Request) {
     if (error && !/relation .* does not exist/i.test(error.message)) {
       return NextResponse.json({ message: error.message }, { status: 500 });
     }
-    return NextResponse.json({ kunye: data ?? null, status: getKunyeStatus({ ...(data ?? {}), firma_adi: musteri.musteri }) });
+    const mappedKunye = mapKunyeRow(data as any);
+    return NextResponse.json({ kunye: mappedKunye ?? null, status: getKunyeStatus({ ...(mappedKunye ?? {}), firma_adi: musteri.musteri }) });
   } catch (e: any) {
     return NextResponse.json({ message: 'Yetkisiz' }, { status: e?.status || 401 });
   }
@@ -55,7 +56,7 @@ export async function POST(req: Request) {
     const { error } = await admin.from('musteri_kunye').upsert(record, { onConflict: 'musteri_id' });
     if (error) return NextResponse.json({ message: error.message }, { status: 400 });
 
-    return NextResponse.json({ ok: true, status: getKunyeStatus({ ...payload, firma_adi: musteri.musteri }) });
+    return NextResponse.json({ ok: true, status: getKunyeStatus({ ...mapKunyeRow(payload as any), firma_adi: musteri.musteri }) });
   } catch (e: any) {
     return NextResponse.json({ message: 'Yetkisiz' }, { status: e?.status || 401 });
   }

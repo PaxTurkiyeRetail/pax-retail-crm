@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireReportsAccessOrThrow } from '@/lib/authz';
 import { isAdminLike } from '@/lib/roles';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
-import { getKunyeStatus } from '@/lib/kunye';
+import { getKunyeStatus, mapKunyeRow } from '@/lib/kunye';
 import { activityLabelFromRow, isDisplayableActivityRow, presentDurum } from '@/app/api/activities/_helpers';
 import { getSlaState } from '@/lib/sla';
 
@@ -55,7 +55,7 @@ export async function GET() {
       const [{ data: kunyeler }, { data: activities }] = await Promise.all([
         admin
           .from('musteri_kunye')
-          .select('musteri_id,franchise_sayisi,kasapos_firmasi,magaza_sayisi,erp,pos_modeli,toplam_pos_adedi,bankalar,pos_mulkiyet')
+          .select('musteri_id,franchise_sayisi,kasa_pos_firmasi,magaza_sayisi,erp,pos_modeli,toplam_pos_adedi,bankalar,pos_mulkiyet')
           .in('musteri_id', ids),
         admin
           .from('pipeline_eventleri')
@@ -65,7 +65,7 @@ export async function GET() {
           .limit(2000),
       ]);
 
-      (kunyeler ?? []).forEach((row: any) => kunyeMap.set(row.musteri_id, row));
+      (kunyeler ?? []).forEach((row: any) => kunyeMap.set(row.musteri_id, mapKunyeRow(row)));
       for (const row of activities ?? []) {
         if (!row?.musteri_id || latestActivityMap.has(row.musteri_id)) continue;
         if (!isDisplayableActivityRow(row)) continue;

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 import { requireCrmAccessOrThrow } from '@/lib/authz';
-import { getKunyeStatus } from '@/lib/kunye';
+import { getKunyeStatus, mapKunyeRow } from '@/lib/kunye';
 
 function parsePositiveInt(value: string | null, fallback: number) {
   const parsed = Number(value ?? '');
@@ -60,11 +60,11 @@ export async function GET(request: Request) {
       const admin = createSupabaseAdminClient();
       const { data: kunyeler, error: kunyeErr } = await admin
         .from('musteri_kunye')
-        .select('musteri_id,franchise_sayisi,magaza_sayisi,kasapos_firmasi,toplam_pos_adedi,pos_modeli,erp,bankalar,pos_mulkiyet,pos_mulkiyet_bankalari,saha_hizmeti_firmasi')
+        .select('musteri_id,franchise_sayisi,magaza_sayisi,kasa_pos_firmasi,toplam_pos_adedi,pos_modeli,erp,bankalar,pos_mulkiyet,pos_mulkiyet_bankalari,saha_hizmeti_firmasi')
         .in('musteri_id', ids);
 
       if (!kunyeErr || !/relation .* does not exist/i.test(kunyeErr.message)) {
-        (kunyeler ?? []).forEach((item: any) => kunyeMap.set(item.musteri_id, item));
+        (kunyeler ?? []).forEach((item: any) => kunyeMap.set(item.musteri_id, mapKunyeRow(item)));
       }
     }
 
