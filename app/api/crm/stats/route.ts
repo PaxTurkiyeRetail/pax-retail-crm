@@ -45,7 +45,7 @@ export async function GET(request: Request) {
     const admin = createSupabaseAdminClient();
     const { data: kunyeler } = await admin
       .from('musteri_kunye')
-      .select('musteri_id,magaza_sayisi,franchise_sayisi,toplam_pos_adedi,pos_modeli,erp,bankalar,pos_mulkiyet,pos_mulkiyet_bankalari');
+      .select('musteri_id,sabit_kasa_yazilimi,magaza_sayisi,franchise_sayisi,toplam_pos_adedi,pos_modeli,erp,bankalar,pos_mulkiyet,pos_mulkiyet_bankalari');
 
     const kuyeMap = new Map((kunyeler ?? []).map((row: any) => [row.musteri_id, row]));
     const enriched = baseRows.map((row: any) => {
@@ -70,6 +70,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       total: enriched.length,
       sectors: unique(enriched.map((row: any) => row.sektor)),
+      kasaFirmasi: unique(enriched.map((row: any) => row.sabit_kasa_yazilimi)),
       accounts: unique(enriched.map((row: any) => row.sorumlu)),
       entegrasyonYapisi: unique(enriched.map((row: any) => row.entegrasyon_tipi)),
       kunyeVar: enriched.filter((row: any) => row.kunye_durumu === 'Var').length,

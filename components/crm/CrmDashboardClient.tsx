@@ -13,8 +13,8 @@ type CrmRow = {
     sorumlu: string | null;
     aktif_faz_no: number | null;
     aktif_faz_adi: string | null;
+    kasa_firmasi?: string | null;
     kunye_durumu?: string | null;
-    sabit_kasa_yazilimi?: string | null;
 };
 
 type Me = { email: string; full_name: string | null; role: string };
@@ -24,6 +24,7 @@ type SummaryItem = { label: string; value: number };
 type StatsPayload = {
     total: number;
     sectors: number;
+    kasaFirmasi: number;
     accounts: number;
     kunyeVar: number;
     kunyeYok: number;
@@ -56,6 +57,7 @@ const SECTOR_PRESET_OPTIONS = [
 const EMPTY_STATS: StatsPayload = {
     total: 0,
     sectors: 0,
+    kasaFirmasi: 0,
     accounts: 0,
     kunyeVar: 0,
     kunyeYok: 0,
@@ -1063,7 +1065,7 @@ export default function CrmDashboardClient() {
 
                                     <td>{r.sektor ?? '-'}</td>
                                     <td>{r.sorumlu ?? '-'}</td>
-                                    <td>{r.sabit_kasa_yazilimi ?? '-'}</td>
+                                    <td>{r.kasa_firmasi ?? '-'}</td>
                                     <td>
                                         <span className="pill" style={statusTone(r.kunye_durumu)}>
                                             {presentKunyeStatus(r.kunye_durumu)}

@@ -51,7 +51,7 @@ export async function POST(req: Request) {
     }
 
     const payload = normalizeKunyePayload(body);
-    const record = { musteri_id: musteriId, ...mapKunyeUiToDb(payload), updated_by: me.full_name ?? me.email };
+    const record = { musteri_id: musteriId, ...mapKunyeUiToDb(payload) };
 
     const { error } = await admin.from('musteri_kunye').upsert(record, { onConflict: 'musteri_id' });
     if (error) return NextResponse.json({ message: error.message }, { status: 400 });

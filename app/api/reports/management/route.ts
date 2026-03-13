@@ -51,7 +51,7 @@ export async function GET() {
       const [{ data: kunyeler }, { data: activities }] = await Promise.all([
         admin
           .from('musteri_kunye')
-          .select('musteri_id,magaza_sayisi,franchise_sayisi,toplam_pos_adedi,erp,pos_modeli,bankalar,pos_mulkiyet')
+          .select('musteri_id,sabit_kasa_yazilimi,magaza_sayisi,franchise_sayisi,toplam_pos_adedi,erp,pos_modeli,bankalar,pos_mulkiyet')
           .in('musteri_id', ids),
         admin
           .from('pipeline_eventleri')
