@@ -5,7 +5,6 @@ export type KunyePayload = {
   sabit_kasa_adedi?: string | null;
   reyonda_kullanilan_cihaz_sayisi?: string | null;
   kasapos_firmasi?: string | null;
-  kasa_pos_firmasi?: string | null;
   pos_modeli?: string | null;
   pos_notu?: string | null;
   el_terminali_modeli?: string | null;
@@ -24,19 +23,11 @@ export type KunyePayload = {
   problem_2?: string | null;
   problem_3?: string | null;
   degisim_nedeni?: string | null;
-  firma_adi?: string | null;
-  musteri?: string | null;
 };
 
-export const REQUIRED_KUNYE_RULE_FIELDS = ['firma_adi', 'magaza_veya_franchise', 'pos_modeli', 'toplam_pos_adedi'] as const;
-
-type RequiredRuleField = typeof REQUIRED_KUNYE_RULE_FIELDS[number];
-
-const REQUIRED_FIELD_LABELS: Record<RequiredRuleField, string> = {
-  firma_adi: 'Firma Adı',
-  magaza_veya_franchise: 'Mağaza veya Franchise Sayısı',
-  pos_modeli: 'POS Modeli',
-  toplam_pos_adedi: 'Toplam POS Adedi',
+export type KunyeStatusInput = Partial<KunyePayload> & {
+  firma_adi?: string | null;
+  has_kunye_record?: boolean;
 };
 
 export function trimOrNull(value: unknown) {
@@ -72,7 +63,9 @@ export function normalizeKunyePayload(input: Record<string, unknown>): KunyePayl
     erp: trimOrNull(input.erp),
     bankalar: normalizeDelimitedList(input.bankalar),
     pos_mulkiyet,
-    pos_mulkiyet_bankalari: ['Banka', 'Bankada'].includes(String(pos_mulkiyet ?? '')) ? normalizeDelimitedList(input.pos_mulkiyet_bankalari) : null,
+    pos_mulkiyet_bankalari: ['Banka', 'Bankada'].includes(String(pos_mulkiyet ?? ''))
+      ? normalizeDelimitedList(input.pos_mulkiyet_bankalari)
+      : null,
     saha_hizmeti_firmasi: trimOrNull(input.saha_hizmeti_firmasi),
     genel_memnuniyet: trimOrNull(input.genel_memnuniyet),
     problem_1: trimOrNull(input.problem_1),
@@ -82,75 +75,93 @@ export function normalizeKunyePayload(input: Record<string, unknown>): KunyePayl
   };
 }
 
-export function mapKunyeRow(row: any) {
+export function mapKunyeDbToUi(row: Record<string, any> | null | undefined): (KunyePayload & { has_kunye_record: boolean }) | null {
   if (!row) return null;
   return {
-    ...row,
-    kasapos_firmasi: row.kasapos_firmasi ?? row.kasa_pos_firmasi ?? null,
+    has_kunye_record: true,
+    franchise_sayisi: row.franchise_sayisi == null ? null : String(row.franchise_sayisi),
+    magaza_sayisi: row.magaza_sayisi == null ? null : String(row.magaza_sayisi),
+    toplam_pos_adedi: row.toplam_pos_adedi == null ? null : String(row.toplam_pos_adedi),
+    sabit_kasa_adedi: row.sabit_kasa_adedi == null ? null : String(row.sabit_kasa_adedi),
+    reyonda_kullanilan_cihaz_sayisi: row.reyonda_kullanilan_cihaz_sayisi == null ? null : String(row.reyonda_kullanilan_cihaz_sayisi),
+    kasapos_firmasi: trimOrNull(row.kasapos_firmasi ?? row.kasa_pos_firmasi),
+    pos_modeli: trimOrNull(row.pos_modeli),
+    pos_notu: trimOrNull(row.pos_notu),
+    el_terminali_modeli: trimOrNull(row.el_terminali_modeli),
+    el_terminali_adedi: row.el_terminali_adedi == null ? null : String(row.el_terminali_adedi),
+    reyon_cihazi_modeli: trimOrNull(row.reyon_cihazi_modeli),
+    reyon_cihazi_adedi: row.reyon_cihazi_adedi == null ? null : String(row.reyon_cihazi_adedi),
+    sabit_kasa_yazilimi: trimOrNull(row.sabit_kasa_yazilimi),
+    reyonda_odeme_yazilimi: trimOrNull(row.reyonda_odeme_yazilimi),
+    erp: trimOrNull(row.erp),
+    bankalar: normalizeDelimitedList(row.bankalar),
+    pos_mulkiyet: trimOrNull(row.pos_mulkiyet),
+    pos_mulkiyet_bankalari: normalizeDelimitedList(row.pos_mulkiyet_bankalari),
+    saha_hizmeti_firmasi: trimOrNull(row.saha_hizmeti_firmasi),
+    genel_memnuniyet: trimOrNull(row.genel_memnuniyet),
+    problem_1: trimOrNull(row.problem_1),
+    problem_2: trimOrNull(row.problem_2),
+    problem_3: trimOrNull(row.problem_3),
+    degisim_nedeni: trimOrNull(row.degisim_nedeni),
   };
 }
 
-function hasValue(value: unknown) {
-  if (value == null) return false;
-  return String(value).trim().length > 0;
+export function mapKunyeUiToDb(payload: KunyePayload): Record<string, any> {
+  return {
+    franchise_sayisi: payload.franchise_sayisi == null ? null : Number(payload.franchise_sayisi),
+    magaza_sayisi: payload.magaza_sayisi == null ? null : Number(payload.magaza_sayisi),
+    toplam_pos_adedi: payload.toplam_pos_adedi == null ? null : Number(payload.toplam_pos_adedi),
+    sabit_kasa_adedi: payload.sabit_kasa_adedi == null ? null : Number(payload.sabit_kasa_adedi),
+    reyonda_kullanilan_cihaz_sayisi: payload.reyonda_kullanilan_cihaz_sayisi == null ? null : Number(payload.reyonda_kullanilan_cihaz_sayisi),
+    kasa_pos_firmasi: payload.kasapos_firmasi,
+    pos_modeli: payload.pos_modeli,
+    pos_notu: payload.pos_notu,
+    el_terminali_modeli: payload.el_terminali_modeli,
+    el_terminali_adedi: payload.el_terminali_adedi == null ? null : Number(payload.el_terminali_adedi),
+    reyon_cihazi_modeli: payload.reyon_cihazi_modeli,
+    reyon_cihazi_adedi: payload.reyon_cihazi_adedi == null ? null : Number(payload.reyon_cihazi_adedi),
+    sabit_kasa_yazilimi: payload.sabit_kasa_yazilimi,
+    reyonda_odeme_yazilimi: payload.reyonda_odeme_yazilimi,
+    erp: payload.erp,
+    bankalar: payload.bankalar ? payload.bankalar.split(',').map((s) => s.trim()).filter(Boolean) : null,
+    pos_mulkiyet: payload.pos_mulkiyet,
+    pos_mulkiyet_bankalari: payload.pos_mulkiyet_bankalari ? payload.pos_mulkiyet_bankalari.split(',').map((s) => s.trim()).filter(Boolean) : null,
+    saha_hizmeti_firmasi: payload.saha_hizmeti_firmasi,
+    genel_memnuniyet: payload.genel_memnuniyet,
+    problem_1: payload.problem_1,
+    problem_2: payload.problem_2,
+    problem_3: payload.problem_3,
+    degisim_nedeni: payload.degisim_nedeni,
+  };
 }
 
-export function getKunyeStatus(kunye: Partial<KunyePayload> | null | undefined) {
-  if (!kunye) {
+export function getKunyeStatus(kunye: KunyeStatusInput | null | undefined) {
+  const hasRecord = Boolean(kunye?.has_kunye_record) || Boolean(kunye);
+  if (!hasRecord) {
     return {
-      status: 'Yok' as const,
+      status: 'Yok',
       complete: false,
-      missing: REQUIRED_KUNYE_RULE_FIELDS.length,
-      missingFields: REQUIRED_KUNYE_RULE_FIELDS.map((key) => REQUIRED_FIELD_LABELS[key]),
-      present: 0,
-      hasRecord: false,
+      missing: 4,
+      missingFields: ['firma_adi', 'magaza_veya_franchise', 'pos_modeli', 'toplam_pos_adedi'],
     };
   }
 
-  const firmaAdi = trimOrNull((kunye as any).firma_adi ?? (kunye as any).musteri);
-  const magazaSayisi = trimOrNull((kunye as any).magaza_sayisi);
-  const franchiseSayisi = trimOrNull((kunye as any).franchise_sayisi);
-  const posModeli = trimOrNull((kunye as any).pos_modeli);
-  const toplamPosAdedi = trimOrNull((kunye as any).toplam_pos_adedi);
+  const hasFirmaAdi = Boolean(trimOrNull(kunye?.firma_adi));
+  const hasStoreInfo = Boolean(trimOrNull(kunye?.magaza_sayisi)) || Boolean(trimOrNull(kunye?.franchise_sayisi));
+  const hasPosModeli = Boolean(trimOrNull(kunye?.pos_modeli));
+  const hasToplamPosAdedi = Boolean(trimOrNull(kunye?.toplam_pos_adedi));
 
-  const checks: Record<RequiredRuleField, boolean> = {
-    firma_adi: hasValue(firmaAdi),
-    magaza_veya_franchise: hasValue(magazaSayisi) || hasValue(franchiseSayisi),
-    pos_modeli: hasValue(posModeli),
-    toplam_pos_adedi: hasValue(toplamPosAdedi),
-  };
-
-  const missingFields = REQUIRED_KUNYE_RULE_FIELDS.filter((key) => !checks[key]).map((key) => REQUIRED_FIELD_LABELS[key]);
-  const present = REQUIRED_KUNYE_RULE_FIELDS.length - missingFields.length;
-
-  if (present === 0) {
-    return {
-      status: 'Yok' as const,
-      complete: false,
-      missing: missingFields.length,
-      missingFields,
-      present,
-      hasRecord: true,
-    };
-  }
-
-  if (missingFields.length === 0) {
-    return {
-      status: 'Var' as const,
-      complete: true,
-      missing: 0,
-      missingFields: [],
-      present,
-      hasRecord: true,
-    };
-  }
+  const missingFields = [
+    !hasFirmaAdi ? 'firma_adi' : null,
+    !hasStoreInfo ? 'magaza_veya_franchise' : null,
+    !hasPosModeli ? 'pos_modeli' : null,
+    !hasToplamPosAdedi ? 'toplam_pos_adedi' : null,
+  ].filter(Boolean) as string[];
 
   return {
-    status: 'Eksik' as const,
-    complete: false,
+    status: missingFields.length === 0 ? 'Var' : 'Eksik',
+    complete: missingFields.length === 0,
     missing: missingFields.length,
     missingFields,
-    present,
-    hasRecord: true,
   };
 }

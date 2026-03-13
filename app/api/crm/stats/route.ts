@@ -3,7 +3,7 @@ import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 import { requireCrmAccessOrThrow } from '@/lib/authz';
 import { isAdminLike } from '@/lib/roles';
-import { getKunyeStatus, mapKunyeRow } from '@/lib/kunye';
+import { getKunyeStatus, mapKunyeDbToUi } from '@/lib/kunye';
 
 function unique(values: Array<string | null | undefined>) {
   return new Set(values.map((item) => String(item ?? '').trim()).filter(Boolean)).size;
@@ -29,7 +29,6 @@ export async function GET(request: Request) {
 
     const supabase = await createSupabaseServerClient();
     let qy = supabase.from('vw_crm_musteriler').select('musteri_id,sektor,sorumlu,entegrasyon_tipi,aktif_faz_no,musteri');
-    if (!isAdminLike(me.role)) qy = qy.eq('sorumlu', (me.full_name ?? '').trim());
     if (owner) qy = qy.eq('sorumlu', owner);
     if (sector) qy = qy.eq('sektor', sector);
     if (integration) qy = qy.eq('entegrasyon_tipi', integration);
@@ -48,25 +47,25 @@ export async function GET(request: Request) {
       .from('musteri_kunye')
       .select('musteri_id,kasa_pos_firmasi,magaza_sayisi,franchise_sayisi,toplam_pos_adedi,pos_modeli,erp,bankalar,pos_mulkiyet,pos_mulkiyet_bankalari');
 
-    const kuyeMap = new Map((kunyeler ?? []).map((row: any) => [row.musteri_id, mapKunyeRow(row)]));
+    const kuyeMap = new Map((kunyeler ?? []).map((row: any) => [row.musteri_id, row]));
     const enriched = baseRows.map((row: any) => {
-      const kunye = kuyeMap.get(row.musteri_id) ?? null;
-      const status = getKunyeStatus({ ...kunye, firma_adi: row.musteri });
+      const kunye = mapKunyeDbToUi(kuyeMap.get(row.musteri_id) ?? null);
+      const status = getKunyeStatus({ ...kunye, firma_adi: row.musteri, has_kunye_record: Boolean(kunye) });
       return {
         ...row,
         ...(kunye ?? null),
         kunye_durumu: status.status,
         kunye_eksik_sayisi: status.missing,
-        kunye_eksik_alanlar: status.missingFields,
+        kunye_missing_fields: status.missingFields,
       };
     }).filter((row: any) => (kunyeStatus ? row.kunye_durumu === kunyeStatus : true));
 
-    const eksikAlanCounts = enriched
-      .flatMap((row: any) => Array.isArray(row.kunye_eksik_alanlar) ? row.kunye_eksik_alanlar : [])
-      .reduce<Record<string, number>>((acc, field) => {
-        acc[field] = (acc[field] ?? 0) + 1;
-        return acc;
-      }, {});
+    const missingBreakdown = {
+      firma_adi: enriched.filter((row: any) => row.kunye_durumu === 'Eksik' && row.kunye_missing_fields?.includes('firma_adi')).length,
+      magaza_veya_franchise: enriched.filter((row: any) => row.kunye_durumu === 'Eksik' && row.kunye_missing_fields?.includes('magaza_veya_franchise')).length,
+      pos_modeli: enriched.filter((row: any) => row.kunye_durumu === 'Eksik' && row.kunye_missing_fields?.includes('pos_modeli')).length,
+      toplam_pos_adedi: enriched.filter((row: any) => row.kunye_durumu === 'Eksik' && row.kunye_missing_fields?.includes('toplam_pos_adedi')).length,
+    };
 
     return NextResponse.json({
       total: enriched.length,
@@ -80,9 +79,7 @@ export async function GET(request: Request) {
       byPhase: toSummary(enriched.map((row: any) => row.aktif_faz_no != null ? `FAZ ${row.aktif_faz_no}` : 'Fazsız')),
       byOwner: toSummary(enriched.map((row: any) => row.sorumlu)),
       bySector: toSummary(enriched.map((row: any) => row.sektor || '-')),
-      missingFieldBreakdown: Object.entries(eksikAlanCounts)
-        .map(([label, value]) => ({ label, value }))
-        .sort((a, b) => b.value - a.value || a.label.localeCompare(b.label, 'tr')),
+      missingBreakdown,
     });
   } catch (e: any) {
     return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: e?.status || 401 });

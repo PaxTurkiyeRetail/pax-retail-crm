@@ -3,7 +3,7 @@ import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 import { requireCrmAccessOrThrow } from '@/lib/authz';
 import { isAdminLike } from '@/lib/roles';
-import { getKunyeStatus, mapKunyeRow } from '@/lib/kunye';
+import { getKunyeStatus, mapKunyeDbToUi } from '@/lib/kunye';
 
 function parsePositiveInt(value: string | null, fallback: number) {
   const parsed = Number(value ?? '');
@@ -30,16 +30,12 @@ export async function GET(request: Request) {
     const me = await requireCrmAccessOrThrow();
 
     const myName = (me.full_name ?? '').trim();
-    if (!isAdminLike(me.role) && !myName) {
-      return NextResponse.json({ message: 'Kullanıcı adı/soyadı boş. allowed_users.full_name doldurulmalı.' }, { status: 400 });
-    }
-
+    
     let query = supabase
       .from('vw_crm_musteriler')
       .select(lite ? 'musteri_id,musteri,sorumlu,aktif_faz_no,aktif_faz_adi,entegrasyon_tipi,sektor' : '*', { count: 'exact' })
       .order('musteri', { ascending: true });
 
-    if (!isAdminLike(me.role)) query = query.eq('sorumlu', myName);
     if (owner) query = query.eq('sorumlu', owner);
     if (sector) query = query.eq('sektor', sector);
     if (integration) query = query.eq('entegrasyon_tipi', integration);
@@ -71,19 +67,19 @@ export async function GET(request: Request) {
         .in('musteri_id', ids);
 
       if (!kunyeErr || !/relation .* does not exist/i.test(kunyeErr.message)) {
-        (kunyeler ?? []).forEach((item: any) => kunyeMap.set(item.musteri_id, mapKunyeRow(item)));
+        (kunyeler ?? []).forEach((item: any) => kunyeMap.set(item.musteri_id, item));
       }
     }
 
     const enriched = rows.map((row: any) => {
-      const kunye = mapKunyeRow(kunyeMap.get(row.musteri_id) ?? null);
-      const status = getKunyeStatus({ ...kunye, firma_adi: row.musteri });
+      const kunye = mapKunyeDbToUi(kunyeMap.get(row.musteri_id) ?? null);
+      const status = getKunyeStatus({ ...kunye, firma_adi: row.musteri, has_kunye_record: Boolean(kunye) });
       return {
         ...row,
         kasa_firmasi: kunye?.kasapos_firmasi ?? null,
+        kunye_missing_fields: status.missingFields,
         kunye_durumu: status.status,
         kunye_eksik_sayisi: status.missing,
-        kunye_eksik_alanlar: status.missingFields,
       };
     }).filter((row: any) => (kunyeStatus ? row.kunye_durumu === kunyeStatus : true));
 

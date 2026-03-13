@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireReportsAccessOrThrow } from '@/lib/authz';
 import { isAdminLike } from '@/lib/roles';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
-import { getKunyeStatus, mapKunyeRow } from '@/lib/kunye';
+import { getKunyeStatus, mapKunyeDbToUi } from '@/lib/kunye';
 import { activityLabelFromRow, isDisplayableActivityRow, presentDurum } from '@/app/api/activities/_helpers';
 import { getSlaState } from '@/lib/sla';
 
@@ -31,9 +31,6 @@ export async function GET() {
     const me = await requireReportsAccessOrThrow();
 
     const myName = (me.full_name ?? '').trim();
-    if (!isAdminLike(me.role) && !myName) {
-      return NextResponse.json({ message: 'Kullanıcı adı/soyadı boş. allowed_users.full_name doldurulmalı.' }, { status: 400 });
-    }
 
     const admin = createSupabaseAdminClient();
     let q = admin
@@ -41,7 +38,6 @@ export async function GET() {
       .select('musteri_id,musteri,sektor,entegrasyon_tipi,aktif_faz_no,aktif_faz_adi,sorumlu,son_not,bekleyen_taraf')
       .order('musteri', { ascending: true });
 
-    if (!isAdminLike(me.role)) q = q.eq('sorumlu', myName);
 
     const { data, error } = await q;
     if (error) return NextResponse.json({ message: error.message }, { status: 500 });
@@ -65,7 +61,7 @@ export async function GET() {
           .limit(2000),
       ]);
 
-      (kunyeler ?? []).forEach((row: any) => kunyeMap.set(row.musteri_id, mapKunyeRow(row)));
+      (kunyeler ?? []).forEach((row: any) => kunyeMap.set(row.musteri_id, row));
       for (const row of activities ?? []) {
         if (!row?.musteri_id || latestActivityMap.has(row.musteri_id)) continue;
         if (!isDisplayableActivityRow(row)) continue;
@@ -81,8 +77,8 @@ export async function GET() {
       const aktifFazNo = r.aktif_faz_no ?? null;
       const mevcutFaz = aktifFazNo != null ? `FAZ ${aktifFazNo}` : '-';
       const bekleyenTaraf = ((r.bekleyen_taraf ?? '').trim()) || '-';
-      const kunye = r.musteri_id ? kunyeMap.get(r.musteri_id) ?? null : null;
-      const kunyeDurum = getKunyeStatus({ ...kunye, firma_adi: r.musteri }).status;
+      const kunye = r.musteri_id ? mapKunyeDbToUi(kunyeMap.get(r.musteri_id) ?? null) : null;
+      const kunyeDurum = getKunyeStatus({ ...kunye, firma_adi: r.musteri, has_kunye_record: Boolean(kunye) }).status;
       const latestActivity = r.musteri_id ? latestActivityMap.get(r.musteri_id) ?? null : null;
       const slaState = getSlaState(latestActivity?.hedef_tarihi ?? null, latestActivity?.activity_status ?? null);
       return {

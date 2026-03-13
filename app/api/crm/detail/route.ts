@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireCrmAccessOrThrow, isAdminLike } from '@/lib/authz';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
-import { getKunyeStatus, mapKunyeRow } from '@/lib/kunye';
+import { getKunyeStatus, mapKunyeDbToUi } from '@/lib/kunye';
 
 export async function GET(request: Request) {
   try {
@@ -20,17 +20,13 @@ export async function GET(request: Request) {
     if (error) return NextResponse.json({ message: error.message }, { status: 500 });
     if (!musteri) return NextResponse.json({ message: 'Müşteri bulunamadı.' }, { status: 404 });
 
-    if (!isAdminLike(me.role) && String(musteri.sorumlu ?? '').trim() !== String(me.full_name ?? '').trim()) {
-      return NextResponse.json({ message: 'Bu müşteriyi görüntüleme yetkin yok.' }, { status: 403 });
-    }
-
     const { data: kunye, error: kunyeError } = await admin.from('musteri_kunye').select('*').eq('musteri_id', musteriId).maybeSingle();
     if (kunyeError && !/relation .* does not exist/i.test(kunyeError.message)) {
       return NextResponse.json({ message: kunyeError.message }, { status: 500 });
     }
 
-    const mappedKunye = mapKunyeRow(kunye ?? null);
-    return NextResponse.json({ musteri, kunye: mappedKunye, kunyeStatus: getKunyeStatus({ ...mappedKunye, firma_adi: musteri.musteri }) });
+    const mappedKunye = mapKunyeDbToUi(kunye ?? null);
+    return NextResponse.json({ musteri, kunye: mappedKunye, kunyeStatus: getKunyeStatus({ ...mappedKunye, firma_adi: musteri.musteri, has_kunye_record: Boolean(mappedKunye) }) });
   } catch (e: any) {
     return NextResponse.json({ message: 'Yetkisiz' }, { status: e?.status || 401 });
   }
