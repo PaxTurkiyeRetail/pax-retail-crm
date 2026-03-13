@@ -136,7 +136,35 @@ export function mapKunyeUiToDb(payload: KunyePayload): Record<string, any> {
 }
 
 export function getKunyeStatus(kunye: KunyeStatusInput | null | undefined) {
-  const hasRecord = Boolean(kunye?.has_kunye_record) || Boolean(kunye);
+  const explicitHasRecord = typeof kunye?.has_kunye_record === 'boolean' ? kunye.has_kunye_record : undefined;
+  const hasAnyKunyeField = [
+    kunye?.franchise_sayisi,
+    kunye?.magaza_sayisi,
+    kunye?.toplam_pos_adedi,
+    kunye?.sabit_kasa_adedi,
+    kunye?.reyonda_kullanilan_cihaz_sayisi,
+    kunye?.kasapos_firmasi,
+    kunye?.pos_modeli,
+    kunye?.pos_notu,
+    kunye?.el_terminali_modeli,
+    kunye?.el_terminali_adedi,
+    kunye?.reyon_cihazi_modeli,
+    kunye?.reyon_cihazi_adedi,
+    kunye?.sabit_kasa_yazilimi,
+    kunye?.reyonda_odeme_yazilimi,
+    kunye?.erp,
+    kunye?.bankalar,
+    kunye?.pos_mulkiyet,
+    kunye?.pos_mulkiyet_bankalari,
+    kunye?.saha_hizmeti_firmasi,
+    kunye?.genel_memnuniyet,
+    kunye?.problem_1,
+    kunye?.problem_2,
+    kunye?.problem_3,
+    kunye?.degisim_nedeni,
+  ].some((value) => Boolean(trimOrNull(value)));
+
+  const hasRecord = explicitHasRecord ?? hasAnyKunyeField;
   if (!hasRecord) {
     return {
       status: 'Yok',
