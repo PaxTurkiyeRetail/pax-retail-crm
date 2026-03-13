@@ -462,30 +462,34 @@ export default function CrmDashboardClient() {
 
         .sector-grid {
           display: grid;
-          gap: 10px;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 8px;
         }
 
         .sector-item {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          gap: 12px;
-          padding: 12px 14px;
+          gap: 10px;
+          padding: 9px 12px;
           border: 1px solid #d7e0ea;
-          border-radius: 16px;
+          border-radius: 14px;
           background: #fff;
+          min-height: 44px;
         }
 
         .sector-label {
           color: #334155;
-          font-size: 13px;
+          font-size: 12px;
           font-weight: 700;
+          line-height: 1.25;
         }
 
         .sector-value {
           color: #0f172a;
-          font-size: 18px;
+          font-size: 15px;
           font-weight: 900;
+          flex-shrink: 0;
         }
 
         .field {
@@ -604,26 +608,29 @@ export default function CrmDashboardClient() {
         }
 
         .kunye-summary-box {
-          display: grid;
-          grid-template-columns: repeat(3, minmax(0, 1fr));
-          gap: 0;
+          display: flex;
+          align-items: center;
+          gap: 12px;
           overflow: hidden;
           border: 1px solid #dbe4ef;
           border-radius: 18px;
           background: #fff;
+          padding: 10px 12px;
+          flex-wrap: wrap;
         }
 
         .kunye-stat {
-          padding: 16px 14px;
-          background: #fff;
-          display: grid;
+          padding: 0;
+          background: transparent;
+          display: inline-flex;
+          align-items: baseline;
           gap: 6px;
-          min-height: 108px;
-          align-content: center;
+          min-height: auto;
+          white-space: nowrap;
         }
 
         .kunye-stat + .kunye-stat {
-          border-left: 1px solid #dbe4ef;
+          border-left: 0;
         }
 
         .kunye-stat-label {
@@ -633,19 +640,19 @@ export default function CrmDashboardClient() {
         }
 
         .kunye-stat-value {
-          font-size: 24px;
+          font-size: 16px;
           font-weight: 900;
           color: #0f172a;
           line-height: 1;
         }
 
         .kunye-stat-hint {
-          font-size: 12px;
-          color: #94a3b8;
+          display: none;
         }
 
-        .kunye-stat.var {
-          background: #ecfdf3;
+        .kunye-divider {
+          color: #cbd5e1;
+          font-weight: 900;
         }
 
         .kunye-stat.var .kunye-stat-label,
@@ -653,17 +660,9 @@ export default function CrmDashboardClient() {
           color: #166534;
         }
 
-        .kunye-stat.eksik {
-          background: #fff7ed;
-        }
-
         .kunye-stat.eksik .kunye-stat-label,
         .kunye-stat.eksik .kunye-stat-value {
           color: #9a3412;
-        }
-
-        .kunye-stat.yok {
-          background: #f8fafc;
         }
 
         .kunye-stat.yok .kunye-stat-label,
@@ -825,27 +824,19 @@ export default function CrmDashboardClient() {
           .dashboard {
             grid-template-columns: 1fr;
           }
-
-          .kunye-summary-box {
-            grid-template-columns: repeat(3, minmax(0, 1fr));
-          }
         }
 
         @media (max-width: 900px) {
           .hero,
           .filters-grid,
           .grid,
-          .dashboard-grid {
+          .dashboard-grid,
+          .sector-grid {
             grid-template-columns: 1fr;
           }
 
           .kunye-summary-box {
-            grid-template-columns: 1fr;
-          }
-
-          .kunye-stat + .kunye-stat {
-            border-left: 0;
-            border-top: 1px solid #dbe4ef;
+            gap: 8px;
           }
         }
       `}</style>
@@ -911,19 +902,16 @@ export default function CrmDashboardClient() {
                                 <div className="kunye-stat var">
                                     <div className="kunye-stat-label">Tamam</div>
                                     <div className="kunye-stat-value">{stats.kunyeVar}</div>
-                                    <div className="kunye-stat-hint">Hazır kayıt</div>
                                 </div>
-
+                                <span className="kunye-divider">/</span>
                                 <div className="kunye-stat eksik">
                                     <div className="kunye-stat-label">Eksik</div>
                                     <div className="kunye-stat-value">{stats.kunyeEksik}</div>
-                                    <div className="kunye-stat-hint">Takip gerekli</div>
                                 </div>
-
+                                <span className="kunye-divider">/</span>
                                 <div className="kunye-stat yok">
                                     <div className="kunye-stat-label">Yok</div>
                                     <div className="kunye-stat-value">{stats.kunyeYok}</div>
-                                    <div className="kunye-stat-hint">Giriş bekliyor</div>
                                 </div>
                             </div>
                         </div>
