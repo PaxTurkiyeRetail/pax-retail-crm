@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { requireCrmAccessOrThrow } from "@/lib/authz";
-import { isAdminLike } from "@/lib/roles";
 
 export async function GET(request: Request) {
   try {
@@ -9,8 +8,10 @@ export async function GET(request: Request) {
     const musteriId = url.searchParams.get("musteriId");
     if (!musteriId) return NextResponse.json({ error: "musteriId gerekli" }, { status: 400 });
 
-    const me = await requireCrmAccessOrThrow();
+    await requireCrmAccessOrThrow();
     const supabase = await createSupabaseServerClient();
+
+
 
     const { data, error } = await supabase
       .from("vw_crm_timeline")

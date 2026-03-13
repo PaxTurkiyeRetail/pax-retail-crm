@@ -47,11 +47,35 @@ franchise_sayisi: trimOrNull(input.franchise_sayisi), magaza_sayisi: trimOrNull(
   };
 }
 
-export function getKunyeStatus(kunye: Partial<KunyePayload> | null | undefined) {
-  if (!kunye) return { status: 'Yok', complete: false, missing: REQUIRED_KUNYE_FIELDS.length };
-  const missing = REQUIRED_KUNYE_FIELDS.filter((key) => !String((kunye as any)[key] ?? '').trim());
-  if (['Banka','Bankada'].includes(String((kunye as any).pos_mulkiyet ?? '').trim()) && !String((kunye as any).pos_mulkiyet_bankalari ?? '').trim()) missing.push('pos_mulkiyet_bankalari');
-  if (missing.length >= REQUIRED_KUNYE_FIELDS.length) return { status: 'Yok', complete: false, missing: missing.length };
-  if (missing.length > 0) return { status: 'Eksik', complete: false, missing: missing.length };
-  return { status: 'Var', complete: true, missing: 0 };
+export function getKunyeStatus(
+  kunye: (Partial<KunyePayload> & { firma_adi?: string | null }) | null | undefined
+) {
+  if (!kunye) return { status: 'Yok', complete: false, missing: 4 };
+
+  const firmaAdi = String((kunye as any).firma_adi ?? '').trim();
+  const magazaSayisi = String((kunye as any).magaza_sayisi ?? '').trim();
+  const franchiseSayisi = String((kunye as any).franchise_sayisi ?? '').trim();
+  const posModeli = String((kunye as any).pos_modeli ?? '').trim();
+  const toplamPosAdedi = String((kunye as any).toplam_pos_adedi ?? '').trim();
+
+  const hasFirmaAdi = !!firmaAdi;
+  const hasStoreInfo = !!magazaSayisi || !!franchiseSayisi;
+  const hasPosModeli = !!posModeli;
+  const hasToplamPosAdedi = !!toplamPosAdedi;
+
+  const filledCount =
+    Number(hasFirmaAdi) +
+    Number(hasStoreInfo) +
+    Number(hasPosModeli) +
+    Number(hasToplamPosAdedi);
+
+  if (filledCount === 0) {
+    return { status: 'Yok', complete: false, missing: 4 };
+  }
+
+  if (hasFirmaAdi && hasStoreInfo && hasPosModeli && hasToplamPosAdedi) {
+    return { status: 'Var', complete: true, missing: 0 };
+  }
+
+  return { status: 'Eksik', complete: false, missing: 4 - filledCount };
 }

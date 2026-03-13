@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
-import { requireCrmAccessOrThrow, isAdminLike } from '@/lib/authz';
+import { requireCrmAccessOrThrow } from '@/lib/authz';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 import { getKunyeStatus } from '@/lib/kunye';
 
 export async function GET(request: Request) {
   try {
-    const me = await requireCrmAccessOrThrow();
+    await requireCrmAccessOrThrow();
     const url = new URL(request.url);
     const musteriId = String(url.searchParams.get('musteriId') ?? '').trim();
     if (!musteriId) return NextResponse.json({ message: 'musteriId gerekli' }, { status: 400 });
@@ -25,7 +25,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ message: kunyeError.message }, { status: 500 });
     }
 
-    return NextResponse.json({ musteri, kunye: kunye ?? null, kunyeStatus: getKunyeStatus(kunye ?? null) });
+    return NextResponse.json({ musteri, kunye: kunye ?? null, kunyeStatus: getKunyeStatus({ ...(kunye ?? {}), firma_adi: musteri.musteri }) });
   } catch (e: any) {
     return NextResponse.json({ message: 'Yetkisiz' }, { status: e?.status || 401 });
   }

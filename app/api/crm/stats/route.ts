@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 import { requireCrmAccessOrThrow } from '@/lib/authz';
-import { isAdminLike } from '@/lib/roles';
 import { getKunyeStatus } from '@/lib/kunye';
 
 function unique(values: Array<string | null | undefined>) {
@@ -17,7 +16,7 @@ function toSummary(values: string[]) {
 
 export async function GET(request: Request) {
   try {
-    const me = await requireCrmAccessOrThrow();
+    await requireCrmAccessOrThrow();
     const url = new URL(request.url);
     const q = String(url.searchParams.get('q') ?? '').trim();
     const owner = String(url.searchParams.get('owner') ?? '').trim();
@@ -45,10 +44,20 @@ export async function GET(request: Request) {
     const admin = createSupabaseAdminClient();
     const { data: kunyeler } = await admin
       .from('musteri_kunye')
-      .select('musteri_id,kasapos_firmasi,magaza_sayisi,toplam_pos_adedi,pos_modeli,erp,bankalar,pos_mulkiyet,pos_mulkiyet_bankalari');
+      .select('musteri_id,franchise_sayisi,kasapos_firmasi,magaza_sayisi,toplam_pos_adedi,pos_modeli,erp,bankalar,pos_mulkiyet,pos_mulkiyet_bankalari');
 
     const kuyeMap = new Map((kunyeler ?? []).map((row: any) => [row.musteri_id, row]));
-    const enriched = baseRows.map((row: any) => ({ ...row, ...(kuyeMap.get(row.musteri_id) ?? null), kunye_durumu: getKunyeStatus(kuyeMap.get(row.musteri_id) ?? null).status }))
+    const enriched = baseRows.map((row: any) => {
+      const kunye = kuyeMap.get(row.musteri_id) ?? null;
+      return {
+        ...row,
+        ...(kunye ?? null),
+        kunye_durumu: getKunyeStatus({
+          ...(kunye ?? {}),
+          firma_adi: row.musteri,
+        }).status,
+      };
+    })
       .filter((row: any) => (kunyeStatus ? row.kunye_durumu === kunyeStatus : true));
 
     return NextResponse.json({

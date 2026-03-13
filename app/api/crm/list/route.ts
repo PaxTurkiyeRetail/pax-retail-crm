@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 import { requireCrmAccessOrThrow } from '@/lib/authz';
-import { isAdminLike } from '@/lib/roles';
 import { getKunyeStatus } from '@/lib/kunye';
 
 function parsePositiveInt(value: string | null, fallback: number) {
@@ -27,7 +26,7 @@ export async function GET(request: Request) {
     const to = from + pageSize - 1;
 
     const supabase = await createSupabaseServerClient();
-    const me = await requireCrmAccessOrThrow();
+    await requireCrmAccessOrThrow();
 
     let query = supabase
       .from('vw_crm_musteriler')
@@ -61,7 +60,7 @@ export async function GET(request: Request) {
       const admin = createSupabaseAdminClient();
       const { data: kunyeler, error: kunyeErr } = await admin
         .from('musteri_kunye')
-        .select('musteri_id,magaza_sayisi,kasapos_firmasi,toplam_pos_adedi,pos_modeli,erp,bankalar,pos_mulkiyet,pos_mulkiyet_bankalari,saha_hizmeti_firmasi')
+        .select('musteri_id,franchise_sayisi,magaza_sayisi,kasapos_firmasi,toplam_pos_adedi,pos_modeli,erp,bankalar,pos_mulkiyet,pos_mulkiyet_bankalari,saha_hizmeti_firmasi')
         .in('musteri_id', ids);
 
       if (!kunyeErr || !/relation .* does not exist/i.test(kunyeErr.message)) {
@@ -71,7 +70,10 @@ export async function GET(request: Request) {
 
     const enriched = rows.map((row: any) => {
       const kunye = kunyeMap.get(row.musteri_id) ?? null;
-      const status = getKunyeStatus(kunye);
+      const status = getKunyeStatus({
+        ...(kunye ?? {}),
+        firma_adi: row.musteri,
+      });
       return {
         ...row,
         kasa_firmasi: kunye?.kasapos_firmasi ?? null,

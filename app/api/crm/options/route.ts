@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { requireCrmAccessOrThrow } from '@/lib/authz';
-import { isAdminLike } from '@/lib/roles';
 import { HAVUZ_ACCOUNT_NAME } from '@/lib/crm';
 
 function uniqueSorted(values: Array<string | null | undefined>) {
@@ -10,7 +9,7 @@ function uniqueSorted(values: Array<string | null | undefined>) {
 
 export async function GET() {
   try {
-    const me = await requireCrmAccessOrThrow();
+    await requireCrmAccessOrThrow();
     const supabase = await createSupabaseServerClient();
     let query = supabase
       .from('vw_crm_musteriler')
