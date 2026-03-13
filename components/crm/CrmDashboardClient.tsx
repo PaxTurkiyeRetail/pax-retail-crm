@@ -116,6 +116,7 @@ export default function CrmDashboardClient() {
     const [pageSize, setPageSize] = useState(20);
     const [total, setTotal] = useState(0);
     const [stats, setStats] = useState<StatsPayload>(EMPTY_STATS);
+    const [showSectorSummary, setShowSectorSummary] = useState(false);
 
     const [open, setOpen] = useState(false);
     const [mode, setMode] = useState<ModalMode>('create');
@@ -576,82 +577,24 @@ export default function CrmDashboardClient() {
           font-size: 12px;
         }
 
-        .kunye-summary {
-          display: grid;
-          gap: 12px;
-          padding: 16px;
-        }
-
-        .kunye-summary-head {
+        .kunye-breakdown {
+          margin-top: 10px;
           display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 12px;
           flex-wrap: wrap;
-        }
-
-        .kunye-summary-title {
-          color: #0f172a;
-          font-size: 16px;
-          font-weight: 900;
-        }
-
-        .kunye-summary-note {
+          gap: 10px 18px;
           color: #64748b;
           font-size: 12px;
         }
 
-        .kunye-summary-grid {
-          display: grid;
-          grid-template-columns: 1fr;
-          gap: 10px;
-        }
-
-        .kunye-summary-box {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          overflow: hidden;
-          border: 1px solid #dbe4ef;
-          border-radius: 18px;
-          background: #fff;
-          padding: 10px 12px;
-          flex-wrap: wrap;
-        }
-
-        .kunye-stat {
-          padding: 0;
-          background: transparent;
+        .kunye-breakdown-item {
           display: inline-flex;
           align-items: baseline;
           gap: 6px;
-          min-height: auto;
           white-space: nowrap;
         }
 
-        .kunye-stat + .kunye-stat {
-          border-left: 0;
-        }
-
-        .kunye-stat-label {
-          font-size: 12px;
-          font-weight: 800;
+        .kunye-breakdown-label {
           color: #64748b;
-        }
-
-        .kunye-stat-value {
-          font-size: 16px;
-          font-weight: 900;
-          color: #0f172a;
-          line-height: 1;
-        }
-
-        .kunye-stat-hint {
-          display: none;
-        }
-
-        .kunye-divider {
-          color: #cbd5e1;
           font-weight: 900;
         }
 
@@ -685,8 +628,12 @@ export default function CrmDashboardClient() {
         }
 
         .section-head {
+          display: flex;
+          align-items: center;
           justify-content: space-between;
+          gap: 12px;
           margin-bottom: 12px;
+          flex-wrap: wrap;
         }
 
         .section-kicker {
@@ -698,6 +645,18 @@ export default function CrmDashboardClient() {
         .section-note {
           color: #64748b;
           font-size: 12px;
+        }
+
+        .section-toggle {
+          min-height: 34px;
+          border-radius: 12px;
+          border: 1px solid #d7e0ea;
+          background: #fff;
+          color: #334155;
+          padding: 0 12px;
+          font-size: 12px;
+          font-weight: 800;
+          cursor: pointer;
         }
 
         .table-wrap {
@@ -861,18 +820,28 @@ export default function CrmDashboardClient() {
                         <div className="section-kicker">Sektör Dağılımı</div>
                         <div className="section-note">Toplam sektör: {stats.sectors}</div>
                     </div>
+
+                    <button
+                        type="button"
+                        className="section-toggle"
+                        onClick={() => setShowSectorSummary((prev) => !prev)}
+                    >
+                        {showSectorSummary ? 'Sektör listesini gizle' : 'Sektör listesini göster'}
+                    </button>
                 </div>
 
-                <div className="sector-grid">
-                    {(stats.bySector.length ? stats.bySector : [{ label: 'Tanımsız', value: 0 }])
-                        .slice(0, 12)
-                        .map((item) => (
-                            <div key={item.label} className="sector-item">
-                                <span className="sector-label">{item.label}</span>
-                                <span className="sector-value">{item.value}</span>
-                            </div>
-                        ))}
-                </div>
+                {showSectorSummary ? (
+                    <div className="sector-grid">
+                        {(stats.bySector.length ? stats.bySector : [{ label: 'Tanımsız', value: 0 }])
+                            .slice(0, 12)
+                            .map((item) => (
+                                <div key={item.label} className="sector-item">
+                                    <span className="sector-label">{item.label}</span>
+                                    <span className="sector-value">{item.value}</span>
+                                </div>
+                            ))}
+                    </div>
+                ) : null}
             </section>
 
             <section className="dashboard">
@@ -887,33 +856,23 @@ export default function CrmDashboardClient() {
                         ))}
                     </div>
 
-                    <div className="kunye-summary">
-                        <div className="kunye-summary-head">
-                            <div>
-                                <div className="kunye-summary-title">Künye Durumu</div>
-                                <div className="kunye-summary-note">
-                                    Tamam, eksik ve henüz girilmemiş kayıtların özeti
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="kunye-summary-grid">
-                            <div className="kunye-summary-box">
-                                <div className="kunye-stat var">
-                                    <div className="kunye-stat-label">Tamam</div>
-                                    <div className="kunye-stat-value">{stats.kunyeVar}</div>
-                                </div>
-                                <span className="kunye-divider">/</span>
-                                <div className="kunye-stat eksik">
-                                    <div className="kunye-stat-label">Eksik</div>
-                                    <div className="kunye-stat-value">{stats.kunyeEksik}</div>
-                                </div>
-                                <span className="kunye-divider">/</span>
-                                <div className="kunye-stat yok">
-                                    <div className="kunye-stat-label">Yok</div>
-                                    <div className="kunye-stat-value">{stats.kunyeYok}</div>
-                                </div>
-                            </div>
+                    <div className="card">
+                        <div className="card-label">Künye Durumu</div>
+                        <div className="card-value">{stats.kunyeVar + stats.kunyeEksik + stats.kunyeYok}</div>
+                        <div className="card-hint">Toplam değerlendirilen kayıt</div>
+                        <div className="kunye-breakdown">
+                            <span className="kunye-breakdown-item">
+                                <span className="kunye-breakdown-label">Tamam</span>
+                                <strong>{stats.kunyeVar}</strong>
+                            </span>
+                            <span className="kunye-breakdown-item">
+                                <span className="kunye-breakdown-label">Eksik</span>
+                                <strong>{stats.kunyeEksik}</strong>
+                            </span>
+                            <span className="kunye-breakdown-item">
+                                <span className="kunye-breakdown-label">Yok</span>
+                                <strong>{stats.kunyeYok}</strong>
+                            </span>
                         </div>
                     </div>
                 </div>
