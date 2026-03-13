@@ -14,6 +14,7 @@ type CrmRow = {
     aktif_faz_no: number | null;
     aktif_faz_adi: string | null;
     kunye_durumu?: string | null;
+    sabit_kasa_yazilimi?: string | null;
 };
 
 type Me = { email: string; full_name: string | null; role: string };
@@ -1037,7 +1038,7 @@ export default function CrmDashboardClient() {
                                     'Müşteri Adı',
                                     'Sektör',
                                     'Account',
-                                    'Kasa Firması',
+                                    'Sabit Kasa Yazılımı',
                                     'Künye',
                                     'Entegrasyon Yapısı',
                                     'İşlem',
@@ -1062,6 +1063,7 @@ export default function CrmDashboardClient() {
 
                                     <td>{r.sektor ?? '-'}</td>
                                     <td>{r.sorumlu ?? '-'}</td>
+                                    <td>{r.sabit_kasa_yazilimi ?? '-'}</td>
                                     <td>
                                         <span className="pill" style={statusTone(r.kunye_durumu)}>
                                             {presentKunyeStatus(r.kunye_durumu)}

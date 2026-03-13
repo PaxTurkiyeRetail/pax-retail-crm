@@ -45,7 +45,6 @@ export async function GET(request: Request) {
         `sektor.ilike.%${escaped}%`,
         `sorumlu.ilike.%${escaped}%`,
         `aktif_faz_adi.ilike.%${escaped}%`,
-        `entegrasyon_tipi.ilike.%${escaped}%`,
       ].join(','));
     }
 
@@ -60,7 +59,7 @@ export async function GET(request: Request) {
       const admin = createSupabaseAdminClient();
       const { data: kunyeler, error: kunyeErr } = await admin
         .from('musteri_kunye')
-        .select('musteri_id,magaza_sayisi,franchise_sayisi,toplam_pos_adedi,pos_modeli,erp,bankalar,pos_mulkiyet,pos_mulkiyet_bankalari,saha_hizmeti_firmasi')
+        .select('musteri_id,magaza_sayisi,franchise_sayisi,toplam_pos_adedi,pos_modeli,sabit_kasa_yazilimi,erp,bankalar,pos_mulkiyet,pos_mulkiyet_bankalari,saha_hizmeti_firmasi')
         .in('musteri_id', ids);
 
       if (!kunyeErr || !/relation .* does not exist/i.test(kunyeErr.message)) {
