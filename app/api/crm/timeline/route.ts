@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { requireCrmAccessOrThrow } from "@/lib/authz";
+import { isAdminLike } from "@/lib/roles";
 
 export async function GET(request: Request) {
   try {
@@ -8,10 +9,24 @@ export async function GET(request: Request) {
     const musteriId = url.searchParams.get("musteriId");
     if (!musteriId) return NextResponse.json({ error: "musteriId gerekli" }, { status: 400 });
 
-    await requireCrmAccessOrThrow();
+    const me = await requireCrmAccessOrThrow();
     const supabase = await createSupabaseServerClient();
 
+    if (!isAdminLike(me.role)) {
+      const { data: card, error: cardErr } = await supabase
+        .from("vw_crm_musteriler")
+        .select("musteri_id, sorumlu")
+        .eq("musteri_id", musteriId)
+        .maybeSingle();
 
+      if (cardErr) return NextResponse.json({ error: cardErr.message }, { status: 500 });
+      if (!card) return NextResponse.json({ error: "Kayıt bulunamadı" }, { status: 404 });
+
+      const myName = (me.full_name ?? "").trim();
+      if (card.sorumlu !== myName) {
+        return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
+      }
+    }
 
     const { data, error } = await supabase
       .from("vw_crm_timeline")

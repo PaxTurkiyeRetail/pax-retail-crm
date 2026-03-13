@@ -6,7 +6,6 @@ export type KunyePayload = {
   reyonda_kullanilan_cihaz_sayisi?: string | null;
   kasapos_firmasi?: string | null;
   kasa_pos_firmasi?: string | null;
-  kasa_firmasi?: string | null;
   pos_modeli?: string | null;
   pos_notu?: string | null;
   el_terminali_modeli?: string | null;
@@ -25,6 +24,19 @@ export type KunyePayload = {
   problem_2?: string | null;
   problem_3?: string | null;
   degisim_nedeni?: string | null;
+  firma_adi?: string | null;
+  musteri?: string | null;
+};
+
+export const REQUIRED_KUNYE_RULE_FIELDS = ['firma_adi', 'magaza_veya_franchise', 'pos_modeli', 'toplam_pos_adedi'] as const;
+
+type RequiredRuleField = typeof REQUIRED_KUNYE_RULE_FIELDS[number];
+
+const REQUIRED_FIELD_LABELS: Record<RequiredRuleField, string> = {
+  firma_adi: 'Firma Adı',
+  magaza_veya_franchise: 'Mağaza veya Franchise Sayısı',
+  pos_modeli: 'POS Modeli',
+  toplam_pos_adedi: 'Toplam POS Adedi',
 };
 
 export function trimOrNull(value: unknown) {
@@ -40,27 +52,15 @@ export function normalizeDelimitedList(value: unknown) {
   return trimOrNull(value);
 }
 
-export function mapKunyeRow(row: Record<string, unknown> | null | undefined): Partial<KunyePayload> | null {
-  if (!row) return null;
-  const kasaPosFirmasi = trimOrNull((row as any).kasapos_firmasi ?? (row as any).kasa_pos_firmasi ?? (row as any).kasa_firmasi);
-  return {
-    ...(row as any),
-    kasapos_firmasi: kasaPosFirmasi,
-    kasa_pos_firmasi: kasaPosFirmasi,
-  };
-}
-
-export function normalizeKunyePayload(input: Record<string, unknown>): Record<string, string | null> {
+export function normalizeKunyePayload(input: Record<string, unknown>): KunyePayload {
   const pos_mulkiyet = trimOrNull(input.pos_mulkiyet);
-  const kasa_pos_firmasi = trimOrNull((input as any).kasapos_firmasi ?? (input as any).kasa_pos_firmasi ?? (input as any).kasa_firmasi);
-
   return {
     franchise_sayisi: trimOrNull(input.franchise_sayisi),
     magaza_sayisi: trimOrNull(input.magaza_sayisi),
     toplam_pos_adedi: trimOrNull(input.toplam_pos_adedi),
     sabit_kasa_adedi: trimOrNull(input.sabit_kasa_adedi),
     reyonda_kullanilan_cihaz_sayisi: trimOrNull(input.reyonda_kullanilan_cihaz_sayisi),
-    kasa_pos_firmasi,
+    kasapos_firmasi: trimOrNull(input.kasapos_firmasi ?? input.kasa_pos_firmasi),
     pos_modeli: trimOrNull(input.pos_modeli),
     pos_notu: trimOrNull(input.pos_notu),
     el_terminali_modeli: trimOrNull(input.el_terminali_modeli),
@@ -82,35 +82,75 @@ export function normalizeKunyePayload(input: Record<string, unknown>): Record<st
   };
 }
 
-export function getKunyeStatus(
-  hamwe: (Partial<KunyePayload> & { firma_adi?: string | null }) | null | undefined
-) {
-  if (!hamwe) return { status: 'Yok', complete: false, missing: 4 };
+export function mapKunyeRow(row: any) {
+  if (!row) return null;
+  return {
+    ...row,
+    kasapos_firmasi: row.kasapos_firmasi ?? row.kasa_pos_firmasi ?? null,
+  };
+}
 
-  const firmaAdi = String((hamwe as any).firma_adi ?? '').trim();
-  const magazaSayisi = String((hamwe as any).magaza_sayisi ?? '').trim();
-  const franchiseSayisi = String((hamwe as any).franchise_sayisi ?? '').trim();
-  const posModeli = String((hamwe as any).pos_modeli ?? '').trim();
-  const toplamPosAdedi = String((hamwe as any).toplam_pos_adedi ?? '').trim();
+function hasValue(value: unknown) {
+  if (value == null) return false;
+  return String(value).trim().length > 0;
+}
 
-  const hasFirmaAdi = !!firmaAdi;
-  const hasStoreInfo = !!magazaSayisi || !!franchiseSayisi;
-  const hasPosModeli = !!posModeli;
-  const hasToplamPosAdedi = !!toplamPosAdedi;
-
-  const filledCount =
-    Number(hasFirmaAdi) +
-    Number(hasStoreInfo) +
-    Number(hasPosModeli) +
-    Number(hasToplamPosAdedi);
-
-  if (filledCount === 0) {
-    return { status: 'Yok', complete: false, missing: 4 };
+export function getKunyeStatus(kunye: Partial<KunyePayload> | null | undefined) {
+  if (!kunye) {
+    return {
+      status: 'Yok' as const,
+      complete: false,
+      missing: REQUIRED_KUNYE_RULE_FIELDS.length,
+      missingFields: REQUIRED_KUNYE_RULE_FIELDS.map((key) => REQUIRED_FIELD_LABELS[key]),
+      present: 0,
+      hasRecord: false,
+    };
   }
 
-  if (hasFirmaAdi && hasStoreInfo && hasPosModeli && hasToplamPosAdedi) {
-    return { status: 'Var', complete: true, missing: 0 };
+  const firmaAdi = trimOrNull((kunye as any).firma_adi ?? (kunye as any).musteri);
+  const magazaSayisi = trimOrNull((kunye as any).magaza_sayisi);
+  const franchiseSayisi = trimOrNull((kunye as any).franchise_sayisi);
+  const posModeli = trimOrNull((kunye as any).pos_modeli);
+  const toplamPosAdedi = trimOrNull((kunye as any).toplam_pos_adedi);
+
+  const checks: Record<RequiredRuleField, boolean> = {
+    firma_adi: hasValue(firmaAdi),
+    magaza_veya_franchise: hasValue(magazaSayisi) || hasValue(franchiseSayisi),
+    pos_modeli: hasValue(posModeli),
+    toplam_pos_adedi: hasValue(toplamPosAdedi),
+  };
+
+  const missingFields = REQUIRED_KUNYE_RULE_FIELDS.filter((key) => !checks[key]).map((key) => REQUIRED_FIELD_LABELS[key]);
+  const present = REQUIRED_KUNYE_RULE_FIELDS.length - missingFields.length;
+
+  if (present === 0) {
+    return {
+      status: 'Yok' as const,
+      complete: false,
+      missing: missingFields.length,
+      missingFields,
+      present,
+      hasRecord: true,
+    };
   }
 
-  return { status: 'Eksik', complete: false, missing: 4 - filledCount };
+  if (missingFields.length === 0) {
+    return {
+      status: 'Var' as const,
+      complete: true,
+      missing: 0,
+      missingFields: [],
+      present,
+      hasRecord: true,
+    };
+  }
+
+  return {
+    status: 'Eksik' as const,
+    complete: false,
+    missing: missingFields.length,
+    missingFields,
+    present,
+    hasRecord: true,
+  };
 }

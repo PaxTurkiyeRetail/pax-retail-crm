@@ -5,7 +5,7 @@ import { getKunyeStatus, mapKunyeRow, normalizeKunyePayload } from '@/lib/kunye'
 
 export async function GET(request: Request) {
   try {
-    await requireCrmAccessOrThrow();
+    const me = await requireCrmAccessOrThrow();
     const url = new URL(request.url);
     const musteriId = String(url.searchParams.get('musteriId') ?? '').trim();
     if (!musteriId) return NextResponse.json({ message: 'musteriId gerekli' }, { status: 400 });
@@ -13,18 +13,22 @@ export async function GET(request: Request) {
     const admin = createSupabaseAdminClient();
     const { data: musteri, error: musteriErr } = await admin
       .from('musteriler')
-      .select('id,sorumlu,musteri')
+      .select('id,musteri,sorumlu')
       .eq('id', musteriId)
       .maybeSingle();
 
     if (musteriErr) return NextResponse.json({ message: musteriErr.message }, { status: 500 });
     if (!musteri) return NextResponse.json({ message: 'Müşteri bulunamadı.' }, { status: 404 });
+    if (!isAdminLike(me.role) && String(musteri.sorumlu ?? '').trim() !== String(me.full_name ?? '').trim()) {
+      return NextResponse.json({ message: 'Bu müşteriyi görüntüleme yetkin yok.' }, { status: 403 });
+    }
+
     const { data, error } = await admin.from('musteri_kunye').select('*').eq('musteri_id', musteriId).maybeSingle();
     if (error && !/relation .* does not exist/i.test(error.message)) {
       return NextResponse.json({ message: error.message }, { status: 500 });
     }
-    const mappedKunye = mapKunyeRow(data as any);
-    return NextResponse.json({ kunye: mappedKunye ?? null, status: getKunyeStatus({ ...(mappedKunye ?? {}), firma_adi: musteri.musteri }) });
+    const mapped = mapKunyeRow(data ?? null);
+    return NextResponse.json({ kunye: mapped, status: getKunyeStatus({ ...mapped, firma_adi: musteri.musteri }) });
   } catch (e: any) {
     return NextResponse.json({ message: 'Yetkisiz' }, { status: e?.status || 401 });
   }
@@ -40,7 +44,7 @@ export async function POST(req: Request) {
     const admin = createSupabaseAdminClient();
     const { data: musteri, error: musteriErr } = await admin
       .from('musteriler')
-      .select('id,sorumlu,musteri')
+      .select('id,musteri,sorumlu')
       .eq('id', musteriId)
       .maybeSingle();
 
@@ -51,12 +55,12 @@ export async function POST(req: Request) {
     }
 
     const payload = normalizeKunyePayload(body);
-    const record = { musteri_id: musteriId, ...payload, updated_by: me.full_name ?? me.email };
+    const record = { musteri_id: musteriId, ...payload, kasa_pos_firmasi: payload.kasapos_firmasi ?? null };
 
     const { error } = await admin.from('musteri_kunye').upsert(record, { onConflict: 'musteri_id' });
     if (error) return NextResponse.json({ message: error.message }, { status: 400 });
 
-    return NextResponse.json({ ok: true, status: getKunyeStatus({ ...mapKunyeRow(payload as any), firma_adi: musteri.musteri }) });
+    return NextResponse.json({ ok: true, status: getKunyeStatus({ ...payload, firma_adi: musteri.musteri }) });
   } catch (e: any) {
     return NextResponse.json({ message: 'Yetkisiz' }, { status: e?.status || 401 });
   }

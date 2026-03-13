@@ -55,7 +55,7 @@ export async function GET() {
       const [{ data: kunyeler }, { data: activities }] = await Promise.all([
         admin
           .from('musteri_kunye')
-          .select('musteri_id,franchise_sayisi,kasa_pos_firmasi,magaza_sayisi,erp,pos_modeli,toplam_pos_adedi,bankalar,pos_mulkiyet')
+          .select('musteri_id,kasa_pos_firmasi,magaza_sayisi,franchise_sayisi,toplam_pos_adedi,erp,pos_modeli,bankalar,pos_mulkiyet')
           .in('musteri_id', ids),
         admin
           .from('pipeline_eventleri')
@@ -82,7 +82,7 @@ export async function GET() {
       const mevcutFaz = aktifFazNo != null ? `FAZ ${aktifFazNo}` : '-';
       const bekleyenTaraf = ((r.bekleyen_taraf ?? '').trim()) || '-';
       const kunye = r.musteri_id ? kunyeMap.get(r.musteri_id) ?? null : null;
-      const kunyeDurum = getKunyeStatus({ ...(kunye ?? {}), firma_adi: r.musteri }).status;
+      const kunyeDurum = getKunyeStatus({ ...kunye, firma_adi: r.musteri }).status;
       const latestActivity = r.musteri_id ? latestActivityMap.get(r.musteri_id) ?? null : null;
       const slaState = getSlaState(latestActivity?.hedef_tarihi ?? null, latestActivity?.activity_status ?? null);
       return {
