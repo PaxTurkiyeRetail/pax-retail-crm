@@ -4,7 +4,6 @@ export type KunyePayload = {
   toplam_pos_adedi?: string | null;
   sabit_kasa_adedi?: string | null;
   reyonda_kullanilan_cihaz_sayisi?: string | null;
-  kasapos_firmasi?: string | null;
   pos_modeli?: string | null;
   pos_notu?: string | null;
   el_terminali_modeli?: string | null;
@@ -51,7 +50,6 @@ export function normalizeKunyePayload(input: Record<string, unknown>): KunyePayl
     toplam_pos_adedi: trimOrNull(input.toplam_pos_adedi),
     sabit_kasa_adedi: trimOrNull(input.sabit_kasa_adedi),
     reyonda_kullanilan_cihaz_sayisi: trimOrNull(input.reyonda_kullanilan_cihaz_sayisi),
-    kasapos_firmasi: trimOrNull(input.kasapos_firmasi ?? input.kasa_pos_firmasi),
     pos_modeli: trimOrNull(input.pos_modeli),
     pos_notu: trimOrNull(input.pos_notu),
     el_terminali_modeli: trimOrNull(input.el_terminali_modeli),
@@ -84,7 +82,6 @@ export function mapKunyeDbToUi(row: Record<string, any> | null | undefined): (Ku
     toplam_pos_adedi: row.toplam_pos_adedi == null ? null : String(row.toplam_pos_adedi),
     sabit_kasa_adedi: row.sabit_kasa_adedi == null ? null : String(row.sabit_kasa_adedi),
     reyonda_kullanilan_cihaz_sayisi: row.reyonda_kullanilan_cihaz_sayisi == null ? null : String(row.reyonda_kullanilan_cihaz_sayisi),
-    kasapos_firmasi: trimOrNull(row.kasapos_firmasi ?? row.kasa_pos_firmasi),
     pos_modeli: trimOrNull(row.pos_modeli),
     pos_notu: trimOrNull(row.pos_notu),
     el_terminali_modeli: trimOrNull(row.el_terminali_modeli),
@@ -113,7 +110,6 @@ export function mapKunyeUiToDb(payload: KunyePayload): Record<string, any> {
     toplam_pos_adedi: payload.toplam_pos_adedi == null ? null : Number(payload.toplam_pos_adedi),
     sabit_kasa_adedi: payload.sabit_kasa_adedi == null ? null : Number(payload.sabit_kasa_adedi),
     reyonda_kullanilan_cihaz_sayisi: payload.reyonda_kullanilan_cihaz_sayisi == null ? null : Number(payload.reyonda_kullanilan_cihaz_sayisi),
-    kasa_pos_firmasi: payload.kasapos_firmasi,
     pos_modeli: payload.pos_modeli,
     pos_notu: payload.pos_notu,
     el_terminali_modeli: payload.el_terminali_modeli,
@@ -159,7 +155,6 @@ export function getKunyeStatus(kunye: KunyeStatusInput | null | undefined) {
     kunye?.toplam_pos_adedi,
     kunye?.sabit_kasa_adedi,
     kunye?.reyonda_kullanilan_cihaz_sayisi,
-    kunye?.kasapos_firmasi,
     kunye?.pos_modeli,
     kunye?.pos_notu,
     kunye?.el_terminali_modeli,

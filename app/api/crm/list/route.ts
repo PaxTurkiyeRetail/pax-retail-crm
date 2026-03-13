@@ -60,7 +60,7 @@ export async function GET(request: Request) {
       const admin = createSupabaseAdminClient();
       const { data: kunyeler, error: kunyeErr } = await admin
         .from('musteri_kunye')
-        .select('musteri_id,magaza_sayisi,franchise_sayisi,kasa_pos_firmasi,toplam_pos_adedi,pos_modeli,erp,bankalar,pos_mulkiyet,pos_mulkiyet_bankalari,saha_hizmeti_firmasi')
+        .select('musteri_id,magaza_sayisi,franchise_sayisi,toplam_pos_adedi,pos_modeli,erp,bankalar,pos_mulkiyet,pos_mulkiyet_bankalari,saha_hizmeti_firmasi')
         .in('musteri_id', ids);
 
       if (!kunyeErr || !/relation .* does not exist/i.test(kunyeErr.message)) {
@@ -73,7 +73,6 @@ export async function GET(request: Request) {
       const status = getKunyeStatus({ ...kunye, firma_adi: row.musteri, has_kunye_record: Boolean(kunye) });
       return {
         ...row,
-        kasa_firmasi: kunye?.kasapos_firmasi ?? null,
         kunye_missing_fields: status.missingFields,
         kunye_durumu: status.status,
         kunye_eksik_sayisi: status.missing,
@@ -89,7 +88,6 @@ export async function GET(request: Request) {
           row.sorumlu,
           row.aktif_faz_adi,
           row.entegrasyon_tipi,
-          row.kasa_firmasi,
           row.kunye_durumu,
         ].some((value) => String(value ?? '').toLocaleLowerCase('tr').includes(needle));
       });
