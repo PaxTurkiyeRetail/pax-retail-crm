@@ -1,0 +1,19 @@
+
+/* PAX Retail Brand Tokens */
+
+:root{
+
+--pax-blue-dark:#132C8E;
+--pax-blue-main:#1E5AA8;
+--pax-blue-light:#2B8FD0;
+
+--crm-bg:#F6F8FC;
+--crm-card:#FFFFFF;
+
+--phase-lead:#94A3B8;
+--phase-first:#64748B;
+--phase-commercial:#1E5AA8;
+--phase-operation:#2B8FD0;
+--phase-rollout:#0F172A;
+
+}

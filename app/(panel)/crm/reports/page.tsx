@@ -3,10 +3,18 @@ import { requireReportsAccessOrThrow } from '@/lib/authz';
 
 const reportCards = [
   {
+    href: '/crm/sales-radar',
+    title: 'Sales Radar',
+    text: 'Müşteri fazı, sorumlu, son temas ve sıradaki aksiyonları aynı tasarım çizgisinde operasyonel olarak izleyin.',
+    badge: '1 · Operasyonel radar',
+    points: ['Faz görünümü', 'Risk özeti', 'Sıradaki aksiyon'],
+    tone: 'slate',
+  },
+  {
     href: '/crm/reports/management',
     title: 'Yönetim Dashboard',
     text: 'Toplam müşteri, künye durumu, sorumlu dağılımı ve operasyon sağlığını tek ekranda izleyin.',
-    badge: '1 · Yönetim özeti',
+    badge: '2 · Yönetim özeti',
     points: ['KPI kartları', 'Sorumlu dağılımı', 'Künye ve SLA görünümü'],
     tone: 'blue',
   },
@@ -14,7 +22,7 @@ const reportCards = [
     href: '/crm/reports/weekly-activities',
     title: 'Haftalık Aktivite Raporu',
     text: 'Kişi, ekip ve firma bazlı haftalık aktivite yoğunluğunu teknik kırılım ile birlikte analiz edin.',
-    badge: '2 · Aktivite analizi',
+    badge: '3 · Aktivite analizi',
     points: ['Haftalık kırılım', 'Kişi ve ekip bazlı görünüm', 'Firma yoğunluğu'],
     tone: 'slate',
   },
@@ -49,18 +57,18 @@ export default async function ReportsPage() {
             </span>
             <h1 className="mt-3 text-3xl font-black tracking-tight text-slate-900 sm:text-4xl">Raporlar</h1>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
-              Burada iki ayrı rapor bulunuyor. Yönetim ekranı genel resmi gösterir, haftalık aktivite ekranı ise saha ve ekip yoğunluğunu analiz eder.
+              Burada üç ayrı rapor bulunuyor. Sales Radar operasyonel öncelikleri, yönetim ekranı genel resmi, haftalık aktivite ekranı ise saha ve ekip yoğunluğunu gösterir.
             </p>
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
               <div className="text-xs font-bold uppercase tracking-wide text-slate-500">Rapor sayısı</div>
-              <div className="mt-1 text-2xl font-black text-slate-900">2</div>
+              <div className="mt-1 text-2xl font-black text-slate-900">3</div>
             </div>
             <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
               <div className="text-xs font-bold uppercase tracking-wide text-slate-500">Kullanım amacı</div>
-              <div className="mt-1 text-sm font-semibold text-slate-800">Yönetim + Haftalık operasyon</div>
+              <div className="mt-1 text-sm font-semibold text-slate-800">Radar + Yönetim + Haftalık operasyon</div>
             </div>
           </div>
         </div>

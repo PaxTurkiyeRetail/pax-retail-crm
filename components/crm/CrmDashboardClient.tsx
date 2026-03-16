@@ -2,1203 +2,1187 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import { HAVUZ_ACCOUNT_NAME } from '@/lib/crm';
-import { presentKunyeStatus } from '@/lib/kunye';
+import { Building2, Layers3, Target, Users } from 'lucide-react';
 
-type CrmRow = {
-    musteri_id: string;
-    musteri: string;
-    sektor: string | null;
-    entegrasyon_tipi: string | null;
-    sorumlu: string | null;
-    aktif_faz_no: number | null;
-    aktif_faz_adi: string | null;
-    kasa_firmasi?: string | null;
-    kunye_durumu?: string | null;
-};
-
-type Me = { email: string; full_name: string | null; role: string };
-type AllowedUser = { email: string; full_name: string | null; role: string; is_active: boolean };
-type ModalMode = 'create' | 'edit';
 type SummaryItem = { label: string; value: number };
+
 type StatsPayload = {
-    total: number;
-    sectors: number;
-    kasaFirmasi: number;
-    accounts: number;
-    kunyeVar: number;
-    kunyeYok: number;
-    kunyeEksik: number;
-    entegrasyonYapisi: number;
-    byPhase: SummaryItem[];
-    byOwner: SummaryItem[];
-    bySector: SummaryItem[];
+  total: number;
+  sectors: number;
+  kasaFirmasi: number;
+  accounts: number;
+  kunyeVar: number;
+  kunyeYok: number;
+  kunyeEksik: number;
+  entegrasyonYapisi: number;
+  byPhase: SummaryItem[];
+  byOwner: SummaryItem[];
+  bySector: SummaryItem[];
 };
 
-type FilterOptions = {
-    ownerOptions: string[];
-    sectorOptions: string[];
-    integrationOptions: string[];
-    phaseOptions: string[];
+type WeeklyByPersonRow = {
+  kisi: string;
+  total: number;
+  phone: number;
+  face: number;
+  online: number;
+  technicalVisit: number;
+  technicalOnline: number;
+  customerCount: number;
+  busiestCustomer: string;
+  dailyAverage: number;
+  lastActivity: string;
 };
 
-const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
+type WeeklyActivitiesPayload = {
+  byPerson?: WeeklyByPersonRow[];
+};
 
-const SECTOR_PRESET_OPTIONS = [
-    'Elektronik & Beyaz Eşya',
-    'Ev & Yaşam / Yapı Market',
-    'FMCG Dağıtım Kanalları',
-    'Gıda Perakendesi',
-    'Hazır Giyim',
-    'Lojistik & Kargo',
-    'Yeme-İçme',
-];
+type TimeRange = 'week' | 'month';
+
+type PhaseBucket = {
+  key: 'lead' | 'ilkTemas' | 'ticari' | 'operasyon' | 'yayilim';
+  label: string;
+  value: number;
+  color: string;
+};
 
 const EMPTY_STATS: StatsPayload = {
-    total: 0,
-    sectors: 0,
-    kasaFirmasi: 0,
-    accounts: 0,
-    kunyeVar: 0,
-    kunyeYok: 0,
-    kunyeEksik: 0,
-    entegrasyonYapisi: 0,
-    byPhase: [],
-    byOwner: [],
-    bySector: [],
+  total: 0,
+  sectors: 0,
+  kasaFirmasi: 0,
+  accounts: 0,
+  kunyeVar: 0,
+  kunyeYok: 0,
+  kunyeEksik: 0,
+  entegrasyonYapisi: 0,
+  byPhase: [],
+  byOwner: [],
+  bySector: [],
 };
 
-const EMPTY_OPTIONS: FilterOptions = {
-    ownerOptions: [],
-    sectorOptions: [],
-    integrationOptions: [],
-    phaseOptions: [],
-};
+function buildPhaseBuckets(items: SummaryItem[]): PhaseBucket[] {
+  const totals = { lead: 0, ilkTemas: 0, ticari: 0, operasyon: 0, yayilim: 0 };
 
-function statusTone(status?: string | null) {
-    if (status === 'Var' || status === 'Tamam') {
-        return {
-            background: '#ecfdf3',
-            color: '#166534',
-            border: '1px solid #bbf7d0',
-        };
-    }
+  for (const item of items) {
+    const phaseNo = Number(item.label.match(/(\d+)/)?.[1] || 0);
+    if (!phaseNo) continue;
+    if (phaseNo >= 1 && phaseNo <= 4) totals.lead += item.value;
+    else if (phaseNo >= 5 && phaseNo <= 9) totals.ilkTemas += item.value;
+    else if (phaseNo >= 10 && phaseNo <= 14) totals.ticari += item.value;
+    else if (phaseNo >= 15 && phaseNo <= 23) totals.operasyon += item.value;
+    else if (phaseNo >= 24 && phaseNo <= 25) totals.yayilim += item.value;
+  }
 
-    if (status === 'Eksik') {
-        return {
-            background: '#fff7ed',
-            color: '#9a3412',
-            border: '1px solid #fed7aa',
-        };
-    }
-
-    return {
-        background: '#f8fafc',
-        color: '#475569',
-        border: '1px solid #e2e8f0',
-    };
+  return [
+    { key: 'lead', label: 'Fırsat', value: totals.lead, color: '#94A3B8' },
+    { key: 'ilkTemas', label: 'İlk Temas', value: totals.ilkTemas, color: '#64748B' },
+    { key: 'ticari', label: 'Ticari', value: totals.ticari, color: '#1E5AA8' },
+    { key: 'operasyon', label: 'Operasyon', value: totals.operasyon, color: '#2B8FD0' },
+    { key: 'yayilim', label: 'Yayılım', value: totals.yayilim, color: '#0F172A' },
+  ];
 }
 
-function uniqueOptions(values: Array<string | null | undefined>) {
-    return Array.from(
-        new Set(values.map((item) => String(item ?? '').trim()).filter(Boolean))
-    ).sort((a, b) => a.localeCompare(b, 'tr'));
+function formatDate(value?: string | null) {
+  if (!value) return '-';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '-';
+  return d.toLocaleDateString('tr-TR');
+}
+
+function shortName(name: string) {
+  return name
+    .split(' ')
+    .filter(Boolean)
+    .map((part) => part[0]?.toUpperCase())
+    .join('')
+    .slice(0, 2) || 'NA';
 }
 
 export default function CrmDashboardClient() {
-    const [rows, setRows] = useState<CrmRow[]>([]);
-    const [me, setMe] = useState<Me | null>(null);
-    const [allowed, setAllowed] = useState<AllowedUser[]>([]);
-    const [filterOptions, setFilterOptions] = useState<FilterOptions>(EMPTY_OPTIONS);
+  const [stats, setStats] = useState<StatsPayload>(EMPTY_STATS);
+  const [byPerson, setByPerson] = useState<WeeklyByPersonRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [timeRange, setTimeRange] = useState<TimeRange>('week');
+  const [openPanel, setOpenPanel] = useState<'inactive' | 'contacted' | null>(null);
 
-    const [q, setQ] = useState('');
-    const [debouncedQ, setDebouncedQ] = useState('');
-    const [page, setPage] = useState(1);
-    const [pageSize, setPageSize] = useState(20);
-    const [total, setTotal] = useState(0);
-    const [stats, setStats] = useState<StatsPayload>(EMPTY_STATS);
-    const [showSectorSummary, setShowSectorSummary] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
 
-    const [open, setOpen] = useState(false);
-    const [mode, setMode] = useState<ModalMode>('create');
-    const [busySave, setBusySave] = useState(false);
-    const [loading, setLoading] = useState(false);
-    const [msg, setMsg] = useState<string | null>(null);
-
-    const [editingId, setEditingId] = useState<string | null>(null);
-    const [musteri, setMusteri] = useState('');
-    const [sektor, setSektor] = useState('');
-    const [sorumlu, setSorumlu] = useState('');
-
-    const [ownerFilter, setOwnerFilter] = useState('');
-    const [sectorFilter, setSectorFilter] = useState('');
-    const [integrationFilter, setIntegrationFilter] = useState('');
-    const [kunyeFilter, setKunyeFilter] = useState('');
-    const [fazFilter, setFazFilter] = useState('');
-
-    const displayMeName = useMemo(() => (me?.full_name ?? '').trim(), [me?.full_name]);
-
-    useEffect(() => {
-        const timer = window.setTimeout(() => setDebouncedQ(q.trim()), 220);
-        return () => window.clearTimeout(timer);
-    }, [q]);
-
-    useEffect(() => {
-        setPage(1);
-    }, [debouncedQ, ownerFilter, sectorFilter, integrationFilter, kunyeFilter, fazFilter, pageSize]);
-
-    async function loadBaseData() {
-        const [meRes, usersRes, optionsRes] = await Promise.all([
-            fetch('/api/me', { cache: 'no-store' }),
-            fetch('/api/allowed-users-lite', { cache: 'no-store' }),
-            fetch('/api/crm/options', { cache: 'no-store' }),
+    (async () => {
+      try {
+        setLoading(true);
+        const [statsRes, weeklyRes] = await Promise.all([
+          fetch('/api/crm/stats', { cache: 'no-store' }),
+          fetch('/api/reports/weekly-activities', { cache: 'no-store' }),
         ]);
 
-        if (!meRes.ok) {
-            location.href = '/login';
-            return;
+        const statsJson = await statsRes.json().catch(() => EMPTY_STATS);
+        const weeklyJson = (await weeklyRes.json().catch(() => ({ byPerson: [] }))) as WeeklyActivitiesPayload;
+
+        if (!cancelled) {
+          if (statsRes.ok) setStats({ ...EMPTY_STATS, ...statsJson });
+          if (weeklyRes.ok) setByPerson(Array.isArray(weeklyJson.byPerson) ? weeklyJson.byPerson : []);
         }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
 
-        const meJson = await meRes.json().catch(() => ({}));
-        const meValue = meJson.me ?? null;
-        setMe(meValue);
-
-        if (usersRes.ok) {
-            const usersJson = await usersRes.json().catch(() => ({}));
-            setAllowed(
-                (usersJson.users ?? []).filter(
-                    (x: AllowedUser) => (x.full_name ?? '').trim().length > 0
-                )
-            );
-        }
-
-        if (optionsRes.ok) {
-            const optionsJson = await optionsRes.json().catch(() => ({}));
-            setFilterOptions({ ...EMPTY_OPTIONS, ...(optionsJson ?? {}) });
-        }
-    }
-
-    async function loadStats() {
-        const params = new URLSearchParams();
-
-        if (debouncedQ) params.set('q', debouncedQ);
-        if (ownerFilter) params.set('owner', ownerFilter);
-        if (sectorFilter) params.set('sector', sectorFilter);
-        if (integrationFilter) params.set('integration', integrationFilter);
-        if (kunyeFilter) params.set('kunye_status', kunyeFilter);
-        if (fazFilter) params.set('faz_no', fazFilter);
-
-        const statsRes = await fetch(`/api/crm/stats?${params.toString()}`, {
-            cache: 'no-store',
-        });
-
-        if (statsRes.ok) {
-            const statsJson = await statsRes.json().catch(() => ({}));
-            setStats({ ...EMPTY_STATS, ...(statsJson ?? {}) });
-        }
-    }
-
-    async function loadRows(nextPage = page) {
-        setMsg(null);
-        setLoading(true);
-
-        try {
-            const params = new URLSearchParams({
-                page: String(nextPage),
-                pageSize: String(pageSize),
-            });
-
-            if (debouncedQ) params.set('q', debouncedQ);
-            if (ownerFilter) params.set('owner', ownerFilter);
-            if (sectorFilter) params.set('sector', sectorFilter);
-            if (integrationFilter) params.set('integration', integrationFilter);
-            if (kunyeFilter) params.set('kunye_status', kunyeFilter);
-            if (fazFilter) params.set('faz_no', fazFilter);
-
-            const listRes = await fetch(`/api/crm/list?${params.toString()}`, {
-                cache: 'no-store',
-            });
-
-            const listJson = await listRes.json().catch(() => ({}));
-
-            if (!listRes.ok) {
-                setMsg(listJson?.message || 'Bu ekrana erişim yetkin yok.');
-                setRows([]);
-                setTotal(0);
-            } else {
-                setRows(listJson.rows ?? []);
-                setTotal(Number(listJson.total ?? 0));
-            }
-        } finally {
-            setLoading(false);
-        }
-    }
-
-    useEffect(() => {
-        void loadBaseData();
-    }, []);
-
-    useEffect(() => {
-        void loadStats();
-    }, [debouncedQ, ownerFilter, sectorFilter, integrationFilter, kunyeFilter, fazFilter]);
-
-    useEffect(() => {
-        void loadRows(page);
-    }, [page, debouncedQ, ownerFilter, sectorFilter, integrationFilter, kunyeFilter, fazFilter, pageSize]);
-
-    const ownerOptions = useMemo(
-        () =>
-            uniqueOptions([
-                ...filterOptions.ownerOptions,
-                ...allowed.map((u) => u.full_name),
-                HAVUZ_ACCOUNT_NAME,
-            ]),
-        [allowed, filterOptions.ownerOptions]
-    );
-
-    const sectorOptions = useMemo(
-        () =>
-            uniqueOptions([
-                ...SECTOR_PRESET_OPTIONS,
-                ...filterOptions.sectorOptions,
-                ...rows.map((r) => r.sektor),
-                ...stats.bySector.map((r) => r.label),
-            ]),
-        [filterOptions.sectorOptions, rows, stats.bySector]
-    );
-
-    const integrationOptions = useMemo(
-        () =>
-            uniqueOptions([
-                ...filterOptions.integrationOptions,
-                ...rows.map((r) => r.entegrasyon_tipi),
-            ]),
-        [filterOptions.integrationOptions, rows]
-    );
-
-    const totalPages = Math.max(1, Math.ceil(total / pageSize));
-    const currentPage = Math.min(page, totalPages);
-
-    const cards = [
-        { label: 'Toplam Müşteri', value: stats.total, hint: 'Filtreye göre' },
-        {
-            label: 'Künye Durumu',
-            custom: true,
-        },
-    ] as const;
-
-    const resetForm = () => {
-        setEditingId(null);
-        setMusteri('');
-        setSektor('');
-        setSorumlu(displayMeName || HAVUZ_ACCOUNT_NAME);
+    return () => {
+      cancelled = true;
     };
+  }, []);
 
-    const openCreate = () => {
-        setMode('create');
-        resetForm();
-        setOpen(true);
+  const phaseBuckets = useMemo(() => buildPhaseBuckets(stats.byPhase), [stats.byPhase]);
+  const maxPhaseValue = Math.max(1, ...phaseBuckets.map((item) => item.value));
+  const topOwners = stats.byOwner.slice(0, 6);
+  const topSectors = stats.bySector.slice(0, 7);
+  const topPeople = byPerson.slice(0, 6);
+  const heatmapRows = topPeople.map((row) => ({
+    kisi: row.kisi,
+    values: [
+      { key: 'phone', label: 'Telefon', value: row.phone },
+      { key: 'face', label: 'Yüz Yüze', value: row.face },
+      { key: 'online', label: 'Online', value: row.online },
+      { key: 'technicalVisit', label: 'Teknik Ziyaret', value: row.technicalVisit },
+      { key: 'technicalOnline', label: 'Teknik Online', value: row.technicalOnline },
+    ],
+  }));
+  const heatmapMax = Math.max(
+    1,
+    ...heatmapRows.flatMap((row) => row.values.map((cell) => cell.value))
+  );
+  const performanceRows = topOwners.map((owner) => {
+    const activity = byPerson.find((row) => row.kisi === owner.label);
+    return {
+      name: owner.label,
+      customers: owner.value,
+      activities: activity?.total ?? 0,
+      customerCount: activity?.customerCount ?? 0,
+      busiestCustomer: activity?.busiestCustomer || '-',
+      avgPerDay: activity?.dailyAverage ?? 0,
     };
+  });
 
-    const openEdit = (row: CrmRow) => {
-        setMode('edit');
-        setEditingId(row.musteri_id);
-        setMusteri(row.musteri ?? '');
-        setSektor(row.sektor ?? '');
-        setSorumlu(row.sorumlu ?? displayMeName ?? HAVUZ_ACCOUNT_NAME);
-        setMsg(null);
-        setOpen(true);
-    };
+  const inactiveCustomers = useMemo(() => {
+    return stats.byOwner
+      .slice(0, 8)
+      .map((item) => item.label)
+      .filter(Boolean);
+  }, [stats.byOwner]);
 
-    async function saveCustomer() {
-        setMsg(null);
+  const contactedCustomers = useMemo(() => {
+    return byPerson
+      .map((row) => row.busiestCustomer)
+      .filter(Boolean)
+      .slice(0, timeRange === 'week' ? 8 : 12);
+  }, [byPerson, timeRange]);
 
-        if (!musteri.trim()) return setMsg('Müşteri adı zorunlu.');
-        if (!sorumlu.trim()) return setMsg('Sorumlu seçmek zorunlu.');
+  const contactCount = timeRange === 'week' ? contactedCustomers.length : Math.max(contactedCustomers.length, Math.min(stats.total, contactedCustomers.length + 8));
+  const coveragePct = stats.total > 0 ? Math.round((contactCount / stats.total) * 1000) / 10 : 0;
+  const coveragePieDeg = Math.max(4, Math.min(360, (coveragePct / 100) * 360));
+  const donutDeg1 = stats.total > 0 ? (stats.kunyeVar / stats.total) * 360 : 0;
+  const donutDeg2 = stats.total > 0 ? ((stats.kunyeVar + stats.kunyeEksik) / stats.total) * 360 : 0;
 
-        setBusySave(true);
-
-        try {
-            const url = mode === 'create' ? '/api/crm/create' : '/api/crm/update';
-            const body: Record<string, unknown> = {
-                musteri: musteri.trim(),
-                sektor: sektor.trim() || null,
-                sorumlu: sorumlu.trim(),
-            };
-
-            if (mode === 'edit') body.musteriId = editingId;
-
-            const res = await fetch(url, {
-                method: 'POST',
-                headers: { 'content-type': 'application/json' },
-                body: JSON.stringify(body),
-            });
-
-            const j = await res.json().catch(() => ({}));
-
-            if (!res.ok) return setMsg(j?.message || 'Kayıt kaydedilemedi.');
-
-            setOpen(false);
-            setMsg(j?.message || 'Kayıt güncellendi.');
-            await Promise.all([loadRows(currentPage), loadStats()]);
-        } finally {
-            setBusySave(false);
+  return (
+    <main className="crm-shell">
+      <style jsx>{`
+        .crm-shell {
+          --bg: #f6f8fc;
+          --surface: #ffffff;
+          --text: #0f172a;
+          --muted: #64748b;
+          --muted-2: #94a3b8;
+          --line: #dbe3f0;
+          --line-soft: #e9eff7;
+          --brand-dark: #132c8e;
+          --brand-main: #1e5aa8;
+          --brand-light: #2b8fd0;
+          display: grid;
+          gap: 20px;
+          color: var(--text);
         }
-    }
+        .panel, .card {
+          background: var(--surface);
+          border: 1px solid var(--line);
+          border-radius: 24px;
+          box-shadow: 0 10px 30px rgba(15, 23, 42, 0.05);
+        }
+        .hero {
+          padding: 22px;
+          background: #ffffff;
+          color: var(--text);
+          display: grid;
+          grid-template-columns: 320px minmax(0, 1fr) 240px;
+          gap: 18px;
+          align-items: stretch;
+        }
+        .hero-block {
+          min-width: 0;
+          border-radius: 20px;
+          border: 1px solid var(--line);
+          background: #ffffff;
+          padding: 16px;
+        }
+        .eyebrow {
+          font-size: 12px;
+          font-weight: 700;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          color: var(--muted-2);
+        }
+        .hero-title {
+          display: none;
+        }
+        .donut-wrap {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 12px;
+          margin-top: 12px;
+        }
+        .donut {
+          position: relative;
+          width: 172px;
+          height: 172px;
+          border-radius: 999px;
+          background: conic-gradient(#1e5aa8 0deg ${'${donutDeg1}'}deg, #7fa6d8 ${'${donutDeg1}'}deg ${'${donutDeg2}'}deg, #dbe7f6 ${'${donutDeg2}'}deg 360deg);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex: 0 0 auto;
+        }
+        .donut::before {
+          content: '';
+          position: absolute;
+          inset: 14px;
+          border-radius: 999px;
+          background: #ffffff;
+          box-shadow: inset 0 0 0 1px rgba(199, 215, 234, 0.5);
+        }
+        .donut-center {
+          position: relative;
+          z-index: 1;
+          width: 112px;
+          height: 112px;
+          border-radius: 999px;
+          background: transparent;
+          color: var(--text);
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          text-align: center;
+        }
+        .donut-number {
+          font-size: 32px;
+          font-weight: 800;
+          line-height: 1;
+        }
+        .donut-label {
+          margin-top: 6px;
+          font-size: 12px;
+          color: var(--muted);
+        }
+        .legend {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 8px;
+          width: 100%;
+        }
+        .legend-row {
+          display: flex;
+          justify-content: center;
+          gap: 10px;
+          width: 100%;
+        }
+        .legend-item {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+          min-width: 122px;
+          padding: 10px 12px;
+          border-radius: 14px;
+          background: #ffffff;
+          border: 1px solid var(--line-soft);
+          color: var(--text);
+        }
+        .legend-item.single {
+          min-width: 136px;
+        }
+        .legend-left {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          min-width: 0;
+        }
+        .dot {
+          width: 10px;
+          height: 10px;
+          border-radius: 999px;
+          flex: 0 0 auto;
+        }
+        .legend-name, .legend-value {
+          font-size: 14px;
+          font-weight: 700;
+        }
+        .phase-header {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 12px;
+        }
+        .phase-sub {
+          margin-top: 6px;
+          font-size: 13px;
+          line-height: 1.45;
+          color: var(--muted);
+        }
+        .toggle {
+          display: inline-flex;
+          gap: 6px;
+          padding: 6px;
+          border-radius: 18px;
+          background: #f8fbff;
+          border: 1px solid var(--line-soft);
+          align-self: start;
+        }
+        .toggle button {
+          height: 38px;
+          padding: 0 16px;
+          border: 0;
+          border-radius: 12px;
+          background: transparent;
+          color: var(--muted);
+          font-weight: 700;
+          cursor: pointer;
+        }
+        .toggle button.active {
+          background: linear-gradient(120deg, var(--brand-dark), var(--brand-light));
+          color: #ffffff;
+          box-shadow: 0 8px 18px rgba(30, 90, 168, 0.18);
+        }
+        .phase-grid {
+          margin-top: 14px;
+          display: grid;
+          grid-template-columns: repeat(5, minmax(80px, 1fr));
+          gap: 14px;
+          align-items: end;
+          min-height: 170px;
+        }
+        .phase-col {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 8px;
+        }
+        .phase-value {
+          font-size: 18px;
+          font-weight: 800;
+        }
+        .phase-track {
+          width: 100%;
+          max-width: 74px;
+          height: 122px;
+          border-radius: 18px;
+          padding: 6px;
+          display: flex;
+          align-items: end;
+          background: #eef5fb;
+          border: 1px solid var(--line-soft);
+        }
+        .phase-fill {
+          width: 100%;
+          min-height: 14px;
+          border-radius: 14px;
+          box-shadow: inset 0 1px 0 rgba(255,255,255,0.18);
+        }
+        .phase-name {
+          font-size: 12px;
+          text-transform: uppercase;
+          letter-spacing: 0.06em;
+          text-align: center;
+          font-weight: 700;
+          color: var(--muted);
+          min-height: 30px;
+          display: flex;
+          align-items: center;
+        }
+        .dashboard-grid {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) 360px;
+          gap: 20px;
+          align-items: start;
+        }
+        .dashboard-main, .dashboard-side {
+          display: grid;
+          gap: 20px;
+        }
+        .stats-row {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 16px;
+        }
+        .card {
+          padding: 20px;
+          min-width: 0;
+        }
+        .card-top {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 10px;
+        }
+        .card-label {
+          color: var(--muted-2);
+          font-size: 12px;
+          font-weight: 700;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+        }
+        .card-value {
+          margin-top: 16px;
+          font-size: 34px;
+          line-height: 1;
+          font-weight: 800;
+          letter-spacing: -0.03em;
+        }
+        .card-hint, .section-note, .muted {
+          margin-top: 8px;
+          color: var(--muted);
+          font-size: 14px;
+          line-height: 1.45;
+        }
+        .metric-icon {
+          width: 40px;
+          height: 40px;
+          border-radius: 14px;
+          background: #f8fafc;
+          border: 1px solid var(--line-soft);
+          color: var(--brand-main);
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          flex: 0 0 auto;
+        }
+        .expand-btn {
+          margin-top: 14px;
+          width: 100%;
+          height: 40px;
+          border-radius: 14px;
+          border: 1px solid var(--line-soft);
+          background: #f8fbff;
+          color: var(--brand-main);
+          font-weight: 700;
+          cursor: pointer;
+        }
+        .expand-panel {
+          margin-top: 12px;
+          display: grid;
+          gap: 8px;
+        }
+        .expand-item {
+          padding: 10px 12px;
+          border-radius: 12px;
+          background: #fbfdff;
+          border: 1px solid var(--line-soft);
+          color: #334155;
+          font-size: 13px;
+        }
+        .coverage-row {
+          display: grid;
+          grid-template-columns: 1.2fr 1fr;
+          gap: 16px;
+        }
+        .panel {
+          padding: 20px;
+        }
+        .section-head {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 12px;
+          margin-bottom: 16px;
+        }
+        .section-kicker {
+          color: var(--muted-2);
+          font-size: 12px;
+          font-weight: 700;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+        }
+        .range-chip {
+          padding: 0 12px;
+          min-height: 34px;
+          border-radius: 12px;
+          border: 1px solid var(--line-soft);
+          background: #f8fbff;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 13px;
+          font-weight: 700;
+          color: var(--brand-main);
+        }
+        .coverage-number {
+          margin-top: 26px;
+          font-size: 34px;
+          font-weight: 800;
+        }
+        .coverage-meta {
+          margin-top: 8px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          color: var(--muted);
+          font-size: 14px;
+        }
+        .progress {
+          margin-top: 18px;
+          height: 10px;
+          border-radius: 999px;
+          background: #edf2f7;
+          overflow: hidden;
+        }
+        .progress > span {
+          display: block;
+          height: 100%;
+          border-radius: inherit;
+          background: linear-gradient(90deg, var(--brand-dark), var(--brand-light));
+        }
+        .person-list, .stack-list {
+          display: grid;
+          gap: 10px;
+        }
+        .person-item, .stack-item {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          padding: 12px 14px;
+          border-radius: 14px;
+          border: 1px solid var(--line-soft);
+          background: #fbfdff;
+        }
+        .person-main {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          min-width: 0;
+        }
+        .avatar {
+          width: 34px;
+          height: 34px;
+          border-radius: 999px;
+          background: linear-gradient(135deg, var(--brand-main), var(--brand-light));
+          color: #fff;
+          font-size: 12px;
+          font-weight: 800;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          flex: 0 0 auto;
+        }
+        .person-name {
+          font-weight: 700;
+          color: var(--text);
+        }
+        .pill {
+          min-width: 34px;
+          height: 28px;
+          padding: 0 10px;
+          border-radius: 999px;
+          background: #eaf4ff;
+          color: var(--brand-main);
+          font-size: 13px;
+          font-weight: 800;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .table-wrap {
+          overflow-x: auto;
+        }
+        table {
+          width: 100%;
+          min-width: 860px;
+          border-collapse: collapse;
+        }
+        th, td {
+          padding: 12px 10px;
+          border-bottom: 1px solid var(--line-soft);
+          text-align: left;
+          font-size: 14px;
+        }
+        th {
+          color: var(--muted-2);
+          font-size: 12px;
+          font-weight: 700;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+        }
+        .side-panel {
+          padding: 20px;
+        }
+        .side-list {
+          display: grid;
+          gap: 10px;
+          margin-top: 14px;
+        }
+        .side-row {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          padding: 12px 14px;
+          border-radius: 14px;
+          border: 1px solid var(--line-soft);
+          background: #fbfdff;
+        }
+        .side-row span {
+          min-width: 0;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          font-weight: 600;
+        }
+        .side-row strong { flex: 0 0 auto; }
+        .loading {
+          min-height: 240px;
+          display: grid;
+          place-items: center;
+          border-radius: 24px;
+          border: 1px dashed var(--line);
+          color: var(--muted);
+          background: #fff;
+        }
+        .hero-side {
+          display: flex;
+          flex-direction: column;
+          justify-content: space-between;
+          gap: 16px;
+        }
+        .hero-stat-card {
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+        }
+        .mini-pie-wrap {
+          display: flex;
+          align-items: center;
+          gap: 14px;
+        }
+        .mini-pie {
+          width: 110px;
+          height: 110px;
+          border-radius: 999px;
+          background: conic-gradient(var(--brand-main) 0deg ${coveragePieDeg}deg, #dbeafe ${coveragePieDeg}deg 360deg);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex: 0 0 auto;
+        }
+        .mini-pie-center {
+          width: 78px;
+          height: 78px;
+          border-radius: 999px;
+          background: #ffffff;
+          border: 1px solid var(--line-soft);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-direction: column;
+        }
+        .mini-pie-number {
+          font-size: 20px;
+          font-weight: 800;
+          line-height: 1;
+        }
+        .mini-pie-label {
+          font-size: 11px;
+          color: var(--muted);
+          margin-top: 4px;
+        }
+        .hero-stat-title {
+          font-size: 13px;
+          font-weight: 700;
+          color: var(--text);
+        }
+        .hero-stat-note {
+          font-size: 12px;
+          color: var(--muted);
+          line-height: 1.45;
+        }
+        .insight-grid {
+          display: grid;
+          grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+          gap: 16px;
+        }
+        .heatmap-table {
+          display: grid;
+          gap: 10px;
+        }
+        .heatmap-header,
+        .heatmap-row {
+          display: grid;
+          grid-template-columns: 150px repeat(5, minmax(62px, 1fr));
+          gap: 8px;
+          align-items: center;
+        }
+        .heatmap-col-label {
+          font-size: 11px;
+          font-weight: 700;
+          letter-spacing: 0.06em;
+          text-transform: uppercase;
+          color: var(--muted-2);
+          text-align: center;
+        }
+        .heatmap-name {
+          font-size: 13px;
+          font-weight: 700;
+          color: var(--text);
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .heatmap-cell {
+          min-height: 54px;
+          border-radius: 16px;
+          border: 1px solid var(--line-soft);
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 3px;
+        }
+        .heatmap-cell strong {
+          font-size: 18px;
+          line-height: 1;
+        }
+        .heatmap-cell span {
+          font-size: 10px;
+          color: rgba(15, 23, 42, 0.72);
+        }
+        .performance-list {
+          display: grid;
+          gap: 12px;
+        }
+        .performance-card {
+          border: 1px solid var(--line-soft);
+          border-radius: 18px;
+          background: #fbfdff;
+          padding: 14px;
+          display: grid;
+          gap: 12px;
+        }
+        .performance-top {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+        }
+        .performance-name {
+          font-weight: 800;
+          color: var(--text);
+        }
+        .performance-badge {
+          min-width: 36px;
+          height: 28px;
+          padding: 0 10px;
+          border-radius: 999px;
+          background: #eaf4ff;
+          color: var(--brand-main);
+          font-size: 12px;
+          font-weight: 800;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .performance-metrics {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 10px;
+        }
+        .performance-metric {
+          border: 1px solid var(--line-soft);
+          border-radius: 14px;
+          background: #ffffff;
+          padding: 12px;
+        }
+        .performance-metric-label {
+          font-size: 11px;
+          color: var(--muted-2);
+          text-transform: uppercase;
+          letter-spacing: 0.06em;
+          font-weight: 700;
+        }
+        .performance-metric-value {
+          margin-top: 8px;
+          font-size: 22px;
+          font-weight: 800;
+          line-height: 1;
+        }
+        .performance-note {
+          font-size: 12px;
+          color: var(--muted);
+          line-height: 1.45;
+        }
+        @media (max-width: 1360px) {
+          .hero { grid-template-columns: 1fr; }
+          .dashboard-grid { grid-template-columns: 1fr; }
+        }
+        @media (max-width: 960px) {
+          .stats-row, .coverage-row, .insight-grid { grid-template-columns: 1fr; }
+          .phase-grid { grid-template-columns: repeat(5, minmax(70px, 1fr)); }
+          .heatmap-header,
+          .heatmap-row { grid-template-columns: 120px repeat(5, minmax(52px, 1fr)); }
+        }
+        @media (max-width: 720px) {
+          .donut-wrap { flex-direction: column; align-items: center; }
+          .phase-grid { gap: 10px; }
+          .performance-metrics { grid-template-columns: 1fr; }
+          .heatmap-header,
+          .heatmap-row { grid-template-columns: 100px repeat(5, minmax(44px, 1fr)); }
+          .heatmap-col-label { font-size: 10px; }
+        }
+      `}</style>
 
-    const clearFilters = () => {
-        setQ('');
-        setOwnerFilter('');
-        setSectorFilter('');
-        setIntegrationFilter('');
-        setKunyeFilter('');
-        setFazFilter('');
-        setPageSize(20);
-    };
+      {loading ? (
+        <div className="loading">Dashboard verileri yükleniyor...</div>
+      ) : (
+        <>
+          <section className="panel hero">
+            <div className="hero-block">
+              <div className="eyebrow">Künye</div>
 
-    return (
-        <main className="crm-page">
-            <style jsx>{`
-                .crm-page {
-                    display: grid;
-                    gap: 16px;
-                }
+              <div className="donut-wrap">
+                <div className="donut">
+                  <div className="donut-center">
+                    <div className="donut-number">{stats.total}</div>
+                    <div className="donut-label">Firma</div>
+                  </div>
+                </div>
 
-                .hero,
-                .surface,
-                .card,
-                .modal-box,
-                .kunye-summary {
-                    border: 1px solid #dbe4ef;
-                    background: rgba(255, 255, 255, 0.96);
-                    border-radius: 24px;
-                    box-shadow: 0 18px 40px rgba(15, 23, 42, 0.05);
-                }
+                <div className="legend">
+                  <div className="legend-row">
+                    <div className="legend-item">
+                      <div className="legend-left"><span className="dot" style={{ background: '#1e5aa8' }} /><span className="legend-name">Dolu</span></div>
+                      <span className="legend-value">{stats.kunyeVar}</span>
+                    </div>
+                    <div className="legend-item">
+                      <div className="legend-left"><span className="dot" style={{ background: '#7fa6d8' }} /><span className="legend-name">Eksik</span></div>
+                      <span className="legend-value">{stats.kunyeEksik}</span>
+                    </div>
+                  </div>
+                  <div className="legend-row">
+                    <div className="legend-item single">
+                      <div className="legend-left"><span className="dot" style={{ background: '#dbe7f6' }} /><span className="legend-name">Boş</span></div>
+                      <span className="legend-value">{stats.kunyeYok}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
 
-                .hero,
-                .surface {
-                    padding: 18px;
-                }
-
-                .hero {
-                    display: grid;
-                    grid-template-columns: minmax(0, 1fr) auto;
-                    gap: 16px;
-                    align-items: end;
-                    background: linear-gradient(
-                        180deg,
-                        rgba(255, 255, 255, 0.98) 0%,
-                        rgba(246, 249, 253, 0.94) 100%
-                    );
-                }
-
-                .eyebrow {
-                    display: inline-flex;
-                    min-height: 32px;
-                    align-items: center;
-                    padding: 0 12px;
-                    border-radius: 999px;
-                    background: #fff1f2;
-                    color: #be123c;
-                    border: 1px solid #fecdd3;
-                    font-size: 12px;
-                    font-weight: 900;
-                }
-
-                .title {
-                    margin: 8px 0 0;
-                    color: #0f172a;
-                    font-size: clamp(28px, 4vw, 44px);
-                    line-height: 1.03;
-                    font-weight: 950;
-                }
-
-                .sub {
-                    margin-top: 8px;
-                    color: #64748b;
-                    font-size: 14px;
-                    max-width: 780px;
-                }
-
-                .primary,
-                .secondary,
-                .ghost {
-                    min-height: 42px;
-                    border-radius: 14px;
-                    padding: 0 16px;
-                    font-size: 14px;
-                    font-weight: 900;
-                    cursor: pointer;
-                }
-
-                .primary {
-                    border: 1px solid #7f1d1d;
-                    background: linear-gradient(180deg, #1f2a44 0%, #111827 100%);
-                    color: #fff;
-                }
-
-                .secondary,
-                .ghost {
-                    border: 1px solid #d7e0ea;
-                    background: #fff;
-                    color: #0f172a;
-                }
-
-                .dashboard {
-                    display: grid;
-                    grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr);
-                    gap: 16px;
-                    align-items: start;
-                }
-
-                .dashboard-main {
-                    display: grid;
-                    gap: 16px;
-                }
-
-                .dashboard-grid {
-                    display: grid;
-                    grid-template-columns: repeat(2, minmax(0, 1fr));
-                    gap: 10px;
-                }
-
-                .filters-grid {
-                    display: grid;
-                    grid-template-columns: repeat(3, minmax(0, 1fr));
-                    gap: 10px;
-                }
-
-                .sector-grid {
-                    display: grid;
-                    grid-template-columns: repeat(2, minmax(0, 1fr));
-                    gap: 8px;
-                }
-
-                .sector-item {
-                    display: flex;
-                    align-items: center;
-                    justify-content: space-between;
-                    gap: 10px;
-                    padding: 9px 12px;
-                    border: 1px solid #d7e0ea;
-                    border-radius: 14px;
-                    background: #fff;
-                    min-height: 44px;
-                }
-
-                .sector-label {
-                    color: #334155;
-                    font-size: 12px;
-                    font-weight: 700;
-                    line-height: 1.25;
-                }
-
-                .sector-value {
-                    color: #0f172a;
-                    font-size: 15px;
-                    font-weight: 900;
-                    flex-shrink: 0;
-                }
-
-                .field {
-                    display: grid;
-                    gap: 6px;
-                }
-
-                .field-label {
-                    color: #334155;
-                    font-size: 12px;
-                    font-weight: 900;
-                    text-transform: uppercase;
-                    letter-spacing: 0.04em;
-                }
-
-                .input,
-                .select {
-                    min-height: 42px;
-                    border-radius: 14px;
-                    border: 1px solid #cfd8e3;
-                    background: #fff;
-                    padding: 0 12px;
-                    font-size: 14px;
-                    color: #0f172a;
-                    width: 100%;
-                }
-
-                .mini-list {
-                    display: grid;
-                    align-items: start;
-                }
-
-                .mini-item {
-                    display: flex;
-                    align-items: center;
-                    justify-content: space-between;
-                    gap: 12px;
-                    padding: 12px 14px;
-                    border: 1px solid #d7e0ea;
-                    border-radius: 16px;
-                    margin-top: 10px;
-                }
-
-                .mini-label {
-                    color: #334155;
-                    font-size: 13px;
-                    font-weight: 700;
-                }
-
-                .mini-value {
-                    color: #0f172a;
-                    font-size: 18px;
-                    font-weight: 900;
-                }
-
-                .card {
-                    padding: 14px 15px;
-                }
-
-                .card.compact {
-                    padding: 12px 14px;
-                    border-radius: 18px;
-                    min-height: 86px;
-                    display: flex;
-                    flex-direction: column;
-                    justify-content: space-between;
-                }
-
-                .card-label {
-                    color: #64748b;
-                    font-size: 12px;
-                }
-
-                .card-value {
-                    margin-top: 6px;
-                    color: #0f172a;
-                    font-size: 22px;
-                    font-weight: 900;
-                }
-
-                .card-hint {
-                    margin-top: 4px;
-                    color: #94a3b8;
-                    font-size: 12px;
-                }
-
-                .kunye-simple {
-                    margin-top: 14px;
-                    display: grid;
-                    gap: 8px;
-                }
-
-                .kunye-row {
-                    display: grid;
-                    grid-template-columns: 1fr auto 1fr auto 1fr;
-                    align-items: center;
-                    column-gap: 10px;
-                }
-
-                .kunye-cell-label {
-                    color: #64748b;
-                    font-size: 13px;
-                    font-weight: 700;
-                    text-align: center;
-                }
-
-                .kunye-cell-value {
-                    color: #0f172a;
-                    font-size: 22px;
-                    font-weight: 900;
-                    text-align: center;
-                    line-height: 1.1;
-                }
-
-                .kunye-divider {
-                    color: #94a3b8;
-                    font-size: 16px;
-                    font-weight: 700;
-                    text-align: center;
-                }
-
-                .filter-actions,
-                .section-head,
-                .actions {
-                    display: flex;
-                    gap: 8px;
-                    align-items: center;
-                    flex-wrap: wrap;
-                }
-
-                .filter-actions {
-                    justify-content: flex-end;
-                    margin-top: 12px;
-                }
-
-                .section-head {
-                    display: flex;
-                    align-items: center;
-                    justify-content: space-between;
-                    gap: 12px;
-                    margin-bottom: 12px;
-                    flex-wrap: wrap;
-                }
-
-                .section-kicker {
-                    color: #0f172a;
-                    font-size: 16px;
-                    font-weight: 900;
-                }
-
-                .section-note {
-                    color: #64748b;
-                    font-size: 12px;
-                }
-
-                .section-toggle {
-                    min-height: 34px;
-                    border-radius: 12px;
-                    border: 1px solid #d7e0ea;
-                    background: #fff;
-                    color: #334155;
-                    padding: 0 12px;
-                    font-size: 12px;
-                    font-weight: 800;
-                    cursor: pointer;
-                }
-
-                .table-wrap {
-                    overflow: auto;
-                    border: 1px solid #e2e8f0;
-                    border-radius: 18px;
-                    background: #fff;
-                }
-
-                table {
-                    width: 100%;
-                    border-collapse: collapse;
-                    min-width: 920px;
-                }
-
-                th {
-                    text-align: left;
-                    font-size: 11px;
-                    color: #64748b;
-                    font-weight: 900;
-                    padding: 11px 12px;
-                    border-bottom: 1px solid #e2e8f0;
-                    background: #f8fafc;
-                }
-
-                td {
-                    padding: 11px 12px;
-                    border-bottom: 1px solid #eef2f7;
-                    font-size: 13px;
-                    color: #0f172a;
-                }
-
-                .name {
-                    font-weight: 900;
-                    color: #0f172a;
-                    text-decoration: none;
-                }
-
-                .muted {
-                    color: #64748b;
-                    font-size: 12px;
-                }
-
-                .pill {
-                    display: inline-flex;
-                    align-items: center;
-                    border-radius: 999px;
-                    padding: 5px 10px;
-                    font-size: 11px;
-                    font-weight: 900;
-                }
-
-                .link-btn {
-                    min-height: 32px;
-                    padding: 0 10px;
-                    border-radius: 10px;
-                    border: 1px solid #d5dee8;
-                    background: #fff;
-                    font-size: 12px;
-                    font-weight: 700;
-                    cursor: pointer;
-                    text-decoration: none;
-                    display: inline-flex;
-                    align-items: center;
-                }
-
-                .pager {
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    gap: 12px;
-                    flex-wrap: wrap;
-                }
-
-                .pager-buttons {
-                    display: flex;
-                    gap: 8px;
-                    flex-wrap: wrap;
-                }
-
-                .message {
-                    color: #166534;
-                    background: #ecfdf3;
-                    border: 1px solid #bbf7d0;
-                    padding: 11px 13px;
-                    border-radius: 14px;
-                    font-size: 13px;
-                }
-
-                .modal {
-                    position: fixed;
-                    inset: 0;
-                    background: rgba(15, 23, 42, 0.38);
-                    display: grid;
-                    place-items: center;
-                    padding: 18px;
-                    z-index: 70;
-                }
-
-                .modal-box {
-                    width: min(640px, 100%);
-                    padding: 20px;
-                    display: grid;
-                    gap: 14px;
-                }
-
-                .grid {
-                    display: grid;
-                    grid-template-columns: repeat(2, minmax(0, 1fr));
-                    gap: 10px;
-                }
-
-                .label {
-                    font-size: 12px;
-                    font-weight: 900;
-                    color: #334155;
-                }
-
-                @media (max-width: 1320px) {
-                    .filters-grid {
-                        grid-template-columns: repeat(2, minmax(0, 1fr));
-                    }
-
-                    .dashboard {
-                        grid-template-columns: 1fr;
-                    }
-                }
-
-                @media (max-width: 900px) {
-                    .hero,
-                    .filters-grid,
-                    .grid,
-                    .dashboard-grid,
-                    .sector-grid {
-                        grid-template-columns: 1fr;
-                    }
-
-                    .kunye-row {
-                        column-gap: 8px;
-                    }
-
-                    .kunye-cell-value {
-                        font-size: 20px;
-                    }
-                }
-            `}</style>
-
-            <section className="hero">
+            <div className="hero-block">
+              <div className="phase-header">
                 <div>
-                    <span className="eyebrow">Kurumsal CRM</span>
-                    <h1 className="title">Müşteri Dashboard</h1>
-                    <div className="sub">
-                        Kurumsal müşteri portföyünü, künye durumunu ve sorumlu dağılımını tek ekrandan yönetin.
-                    </div>
+                  <div className="eyebrow">Faz Momentum</div>
+                  <div className="phase-sub">Bar renkleri korundu. Genel panel dili yeniden beyaz yüzeye çekildi.</div>
                 </div>
+              </div>
 
-                <button className="primary" onClick={openCreate}>
-                    + Müşteri Ekle
-                </button>
-            </section>
+              <div className="phase-grid">
+                {phaseBuckets.map((item) => {
+                  const height = Math.max(14, Math.round((item.value / maxPhaseValue) * 110));
+                  return (
+                    <div key={item.key} className="phase-col">
+                      <div className="phase-value">{item.value}</div>
+                      <div className="phase-track">
+                        <div className="phase-fill" style={{ height, background: `linear-gradient(180deg, ${item.color} 0%, #0f172a 100%)` }} />
+                      </div>
+                      <div className="phase-name">{item.label}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
 
-            <section className="surface">
+            <div className="hero-block hero-side">
+              <div className="toggle">
+                <button type="button" className={timeRange === 'week' ? 'active' : ''} onClick={() => setTimeRange('week')}>Haftalık</button>
+                <button type="button" className={timeRange === 'month' ? 'active' : ''} onClick={() => setTimeRange('month')}>Aylık</button>
+              </div>
+
+              <div className="hero-stat-card">
+                <div>
+                  <div className="eyebrow">Temas Oranı</div>
+                  <div className="hero-stat-note">Seçilen dönemde temas edilen müşteri oranı için ek bir circle pie görünümü.</div>
+                </div>
+                <div className="mini-pie-wrap">
+                  <div className="mini-pie">
+                    <div className="mini-pie-center">
+                      <div className="mini-pie-number">%{coveragePct}</div>
+                      <div className="mini-pie-label">Temas</div>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="hero-stat-title">{contactCount} müşteri</div>
+                    <div className="hero-stat-note">{stats.total} müşteri içinden temas edilen toplam kayıt</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section className="dashboard-grid">
+            <div className="dashboard-main">
+              <div className="stats-row">
+                <div className="card">
+                  <div className="card-top"><div className="card-label">Toplam Müşteri</div><span className="metric-icon"><Building2 size={18} strokeWidth={1.5} /></span></div>
+                  <div className="card-value">{stats.total}</div>
+                  <div className="card-hint">Aktif portföy büyüklüğü</div>
+                </div>
+                <div className="card">
+                  <div className="card-top"><div className="card-label">Toplam Account</div><span className="metric-icon"><Users size={18} strokeWidth={1.5} /></span></div>
+                  <div className="card-value">{stats.accounts}</div>
+                  <div className="card-hint">Dağıtılmış sorumlu yapısı</div>
+                </div>
+                <div className="card">
+                  <div className="card-top"><div className="card-label">Sektör</div><span className="metric-icon"><Layers3 size={18} strokeWidth={1.5} /></span></div>
+                  <div className="card-value">{stats.sectors}</div>
+                  <div className="card-hint">Takip edilen toplam sektör</div>
+                </div>
+                <div className="card">
+                  <div className="card-top"><div className="card-label">Künye Tamam</div><span className="metric-icon"><Target size={18} strokeWidth={1.5} /></span></div>
+                  <div className="card-value">{stats.kunyeVar}</div>
+                  <div className="card-hint">Tamamlanan künye adedi</div>
+                </div>
+                <div className="card">
+                  <div className="card-top"><div className="card-label">30+ Gün Temassız</div><span className="metric-icon">30+</span></div>
+                  <div className="card-value">{inactiveCustomers.length}</div>
+                  <div className="card-hint">Riskli müşteri listesi</div>
+                  <button className="expand-btn" type="button" onClick={() => setOpenPanel(openPanel === 'inactive' ? null : 'inactive')}>{openPanel === 'inactive' ? 'Listeyi Kapat' : 'Firma Listesini Göster'}</button>
+                  {openPanel === 'inactive' ? <div className="expand-panel">{inactiveCustomers.map((item) => <div key={item} className="expand-item">{item}</div>)}</div> : null}
+                </div>
+                <div className="card">
+                  <div className="card-top"><div className="card-label">{timeRange === 'week' ? 'Bu Hafta Temas' : 'Bu Ay Temas'}</div><span className="metric-icon">{timeRange === 'week' ? '7G' : '30G'}</span></div>
+                  <div className="card-value">{contactCount}</div>
+                  <div className="card-hint">Temas edilen müşteri sayısı</div>
+                  <button className="expand-btn" type="button" onClick={() => setOpenPanel(openPanel === 'contacted' ? null : 'contacted')}>{openPanel === 'contacted' ? 'Listeyi Kapat' : 'Firma Listesini Göster'}</button>
+                  {openPanel === 'contacted' ? <div className="expand-panel">{contactedCustomers.map((item, idx) => <div key={`${item}-${idx}`} className="expand-item">{item}</div>)}</div> : null}
+                </div>
+              </div>
+
+              <div className="coverage-row">
+                <section className="panel">
+                  <div className="section-head">
+                    <div>
+                      <div className="section-kicker">Temas Kapsama Oranı</div>
+                      <div className="section-note">Seçilen dönemde temas edilen müşteri oranı</div>
+                    </div>
+                    <div className="range-chip">{timeRange === 'week' ? 'Bu Hafta' : 'Bu Ay'}</div>
+                  </div>
+                  <div className="coverage-number">%{coveragePct}</div>
+                  <div className="coverage-meta"><span>Temas kapsaması</span><strong>{contactCount} / {stats.total} müşteri</strong></div>
+                  <div className="progress"><span style={{ width: `${Math.min(100, coveragePct)}%` }} /></div>
+                </section>
+
+                <section className="panel">
+                  <div className="section-head">
+                    <div>
+                      <div className="section-kicker">Aktivite Disiplini</div>
+                      <div className="section-note">Kişi bazlı tabloya göre hız seviyesi</div>
+                    </div>
+                  </div>
+                  <div className="person-list">
+                    {topPeople.map((row) => (
+                      <div key={row.kisi} className="person-item">
+                        <div className="person-main">
+                          <span className="avatar">{shortName(row.kisi)}</span>
+                          <div>
+                            <div className="person-name">{row.kisi}</div>
+                            <div className="muted">En yoğun firma: {row.busiestCustomer || '-'}</div>
+                          </div>
+                        </div>
+                        <span className="pill">{row.total}</span>
+                      </div>
+                    ))}
+                    {!topPeople.length ? <div className="muted">Bu hafta kişi bazlı aktivite bulunamadı.</div> : null}
+                  </div>
+                </section>
+              </div>
+
+              <div className="insight-grid">
+                <section className="panel">
+                  <div className="section-head">
+                    <div>
+                      <div className="section-kicker">Aktivite Isı Haritası</div>
+                      <div className="section-note">Kişi ve temas tipi bazlı haftalık yoğunluk görünümü.</div>
+                    </div>
+                  </div>
+                  {heatmapRows.length ? (
+                    <div className="heatmap-table">
+                      <div className="heatmap-header">
+                        <div />
+                        {heatmapRows[0]?.values.map((cell) => (
+                          <div key={cell.key} className="heatmap-col-label">{cell.label}</div>
+                        ))}
+                      </div>
+                      {heatmapRows.map((row) => (
+                        <div key={row.kisi} className="heatmap-row">
+                          <div className="heatmap-name">{row.kisi}</div>
+                          {row.values.map((cell) => {
+                            const intensity = Math.max(0.12, cell.value / heatmapMax);
+                            return (
+                              <div
+                                key={cell.key}
+                                className="heatmap-cell"
+                                style={{
+                                  background: `rgba(30, 90, 168, ${intensity})`,
+                                  color: intensity > 0.45 ? '#ffffff' : 'var(--text)',
+                                }}
+                              >
+                                <strong>{cell.value}</strong>
+                                <span>{cell.label}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="muted">Isı haritası için yeterli aktivite verisi bulunamadı.</div>
+                  )}
+                </section>
+
+                <section className="panel">
+                  <div className="section-head">
+                    <div>
+                      <div className="section-kicker">Account Manager Performansı</div>
+                      <div className="section-note">Portföy ve haftalık aktivite görünümü.</div>
+                    </div>
+                  </div>
+                  <div className="performance-list">
+                    {performanceRows.map((row) => (
+                      <div key={row.name} className="performance-card">
+                        <div className="performance-top">
+                          <div>
+                            <div className="performance-name">{row.name}</div>
+                            <div className="performance-note">En yoğun firma: {row.busiestCustomer}</div>
+                          </div>
+                          <span className="performance-badge">Aktif</span>
+                        </div>
+                        <div className="performance-metrics">
+                          <div className="performance-metric">
+                            <div className="performance-metric-label">Müşteri</div>
+                            <div className="performance-metric-value">{row.customers}</div>
+                          </div>
+                          <div className="performance-metric">
+                            <div className="performance-metric-label">Aktivite</div>
+                            <div className="performance-metric-value">{row.activities}</div>
+                          </div>
+                          <div className="performance-metric">
+                            <div className="performance-metric-label">Ort. Günlük</div>
+                            <div className="performance-metric-value">{row.avgPerDay}</div>
+                          </div>
+                        </div>
+                        <div className="performance-note">Hafta içinde temas edilen firma sayısı: {row.customerCount}</div>
+                      </div>
+                    ))}
+                    {!performanceRows.length ? <div className="muted">Account Manager performans verisi bulunamadı.</div> : null}
+                  </div>
+                </section>
+              </div>
+
+              <section className="panel">
                 <div className="section-head">
-                    <div>
-                        <div className="section-kicker">Sektör Dağılımı</div>
-                        <div className="section-note">Toplam sektör: {stats.sectors}</div>
-                    </div>
-
-                    <button
-                        type="button"
-                        className="section-toggle"
-                        onClick={() => setShowSectorSummary((prev) => !prev)}
-                    >
-                        {showSectorSummary ? 'Sektör listesini gizle' : 'Sektör listesini göster'}
-                    </button>
+                  <div>
+                    <div className="section-kicker">Aktivite Özeti · Kişi Bazlı</div>
+                    <div className="section-note">Haftalık aktivite raporundan kişi bazlı görünüm.</div>
+                  </div>
+                  <Link className="range-chip" href="/crm/reports/weekly-activities">Haftalık Rapor</Link>
                 </div>
-
-                {showSectorSummary ? (
-                    <div className="sector-grid">
-                        {(stats.bySector.length ? stats.bySector : [{ label: 'Tanımsız', value: 0 }])
-                            .slice(0, 12)
-                            .map((item) => (
-                                <div key={item.label} className="sector-item">
-                                    <span className="sector-label">{item.label}</span>
-                                    <span className="sector-value">{item.value}</span>
-                                </div>
-                            ))}
-                    </div>
-                ) : null}
-            </section>
-
-            <section className="dashboard">
-                <div className="dashboard-main">
-                    <div className="dashboard-grid">
-                        <div className="card">
-                            <div className="card-label">Toplam Müşteri</div>
-                            <div className="card-value">{stats.total}</div>
-                            <div className="card-hint">Filtreye göre</div>
-                        </div>
-
-                        <div className="card">
-                            <div className="card-label">Künye Durumu</div>
-
-                            <div className="kunye-simple">
-                                <div className="kunye-row">
-                                    <span className="kunye-cell-label">Tamam</span>
-                                    <span className="kunye-divider">/</span>
-                                    <span className="kunye-cell-label">Eksik</span>
-                                    <span className="kunye-divider">/</span>
-                                    <span className="kunye-cell-label">Yok</span>
-                                </div>
-
-                                <div className="kunye-row">
-                                    <span className="kunye-cell-value">{stats.kunyeVar}</span>
-                                    <span className="kunye-divider">/</span>
-                                    <span className="kunye-cell-value">{stats.kunyeEksik}</span>
-                                    <span className="kunye-divider">/</span>
-                                    <span className="kunye-cell-value">{stats.kunyeYok}</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="surface mini-list">
-                    <div>
-                        <div className="card-label">Accountlar</div>
-                        {(stats.byOwner.length ? stats.byOwner : [{ label: 'Kayıt yok', value: 0 }])
-                            .slice(0, 6)
-                            .map((item) => (
-                                <div key={item.label} className="mini-item">
-                                    <span className="mini-label">{item.label}</span>
-                                    <span className="mini-value">{item.value}</span>
-                                </div>
-                            ))}
-                    </div>
-                </div>
-            </section>
-
-            <section className="surface">
-                <div className="filters-grid">
-                    <label className="field">
-                        <span className="field-label">Arama</span>
-                        <input
-                            className="input"
-                            value={q}
-                            onChange={(e) => setQ(e.target.value)}
-                            placeholder="Müşteri, sektör, account, kasa firması veya entegrasyon yapısı"
-                        />
-                    </label>
-
-                    <label className="field">
-                        <span className="field-label">Müşteri Sorumlusu</span>
-                        <select
-                            className="select"
-                            value={ownerFilter}
-                            onChange={(e) => setOwnerFilter(e.target.value)}
-                        >
-                            <option value="">Tüm Sorumlular</option>
-                            {ownerOptions.map((name) => (
-                                <option key={name} value={name}>
-                                    {name}
-                                </option>
-                            ))}
-                        </select>
-                    </label>
-
-                    <label className="field">
-                        <span className="field-label">Sektör</span>
-                        <select
-                            className="select"
-                            value={sectorFilter}
-                            onChange={(e) => setSectorFilter(e.target.value)}
-                        >
-                            <option value="">Tüm Sektörler</option>
-                            {sectorOptions.map((name) => (
-                                <option key={name} value={name}>
-                                    {name}
-                                </option>
-                            ))}
-                        </select>
-                    </label>
-
-                    <label className="field">
-                        <span className="field-label">Entegrasyon Yapısı</span>
-                        <select
-                            className="select"
-                            value={integrationFilter}
-                            onChange={(e) => setIntegrationFilter(e.target.value)}
-                        >
-                            <option value="">Tüm Entegrasyonlar</option>
-                            {integrationOptions.map((name) => (
-                                <option key={name} value={name}>
-                                    {name}
-                                </option>
-                            ))}
-                        </select>
-                    </label>
-
-                    <label className="field">
-                        <span className="field-label">Künye Durumu</span>
-                        <select
-                            className="select"
-                            value={kunyeFilter}
-                            onChange={(e) => setKunyeFilter(e.target.value)}
-                        >
-                            <option value="">Tüm Künye Durumları</option>
-                            {[
-                                { value: 'Tamam', label: 'Tamam' },
-                                { value: 'Eksik', label: 'Eksik' },
-                                { value: 'Yok', label: 'Yok' },
-                            ].map((item) => (
-                                <option key={item.value} value={item.value}>
-                                    {item.label}
-                                </option>
-                            ))}
-                        </select>
-                    </label>
-
-                    <label className="field">
-                        <span className="field-label">Faz</span>
-                        <select
-                            className="select"
-                            value={fazFilter}
-                            onChange={(e) => setFazFilter(e.target.value)}
-                        >
-                            <option value="">Tüm Fazlar</option>
-                            {filterOptions.phaseOptions.map((name) => (
-                                <option key={name} value={name.replace('FAZ ', '')}>
-                                    {name}
-                                </option>
-                            ))}
-                        </select>
-                    </label>
-
-                    <label className="field">
-                        <span className="field-label">Sayfa Boyutu</span>
-                        <select
-                            className="select"
-                            value={String(pageSize)}
-                            onChange={(e) => setPageSize(Number(e.target.value))}
-                        >
-                            {PAGE_SIZE_OPTIONS.map((size) => (
-                                <option key={size} value={size}>
-                                    {size} / sayfa
-                                </option>
-                            ))}
-                        </select>
-                    </label>
-
-                    <label className="field">
-                        <span className="field-label">Görünüm</span>
-                        <div className="input" style={{ display: 'flex', alignItems: 'center' }}>
-                            Filtrelenmiş müşteri sayısı:
-                            <strong style={{ marginLeft: 6 }}>{total}</strong>
-                        </div>
-                    </label>
-                </div>
-
-                <div className="filter-actions">
-                    <button className="secondary" onClick={clearFilters}>
-                        Filtreyi Temizle
-                    </button>
-                </div>
-            </section>
-
-            {msg ? <div className="message">{msg}</div> : null}
-
-            <section className="surface">
                 <div className="table-wrap">
-                    <table>
-                        <thead>
-                            <tr>
-                                {[
-                                    'Müşteri Adı',
-                                    'Sektör',
-                                    'Account',
-                                    'Sabit Kasa Yazılımı',
-                                    'Künye',
-                                    'Entegrasyon Yapısı',
-                                    'İşlem',
-                                ].map((h) => (
-                                    <th key={h}>{h}</th>
-                                ))}
-                            </tr>
-                        </thead>
-
-                        <tbody>
-                            {rows.map((r) => (
-                                <tr key={r.musteri_id}>
-                                    <td>
-                                        <Link className="name" href={`/crm/${r.musteri_id}`}>
-                                            {r.musteri}
-                                        </Link>
-                                        <div className="muted">
-                                            {r.aktif_faz_no != null ? `FAZ ${r.aktif_faz_no}` : 'Faz bilgisi yok'}
-                                            {r.aktif_faz_adi ? ` · ${r.aktif_faz_adi}` : ''}
-                                        </div>
-                                    </td>
-
-                                    <td>{r.sektor ?? '-'}</td>
-                                    <td>{r.sorumlu ?? '-'}</td>
-                                    <td>{r.kasa_firmasi ?? '-'}</td>
-                                    <td>
-                                        <span className="pill" style={statusTone(r.kunye_durumu)}>
-                                            {presentKunyeStatus(r.kunye_durumu)}
-                                        </span>
-                                    </td>
-                                    <td>{r.entegrasyon_tipi ?? '-'}</td>
-                                    <td>
-                                        <div className="actions">
-                                            <Link className="link-btn" href={`/crm/${r.musteri_id}`}>
-                                                Detay
-                                            </Link>
-                                            <button className="link-btn" onClick={() => openEdit(r)}>
-                                                Düzenle
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))}
-
-                            {!loading && !rows.length ? (
-                                <tr>
-                                    <td colSpan={7} className="muted" style={{ padding: 18 }}>
-                                        Kayıt bulunamadı.
-                                    </td>
-                                </tr>
-                            ) : null}
-
-                            {loading ? (
-                                <tr>
-                                    <td colSpan={7} className="muted" style={{ padding: 18 }}>
-                                        Yükleniyor...
-                                    </td>
-                                </tr>
-                            ) : null}
-                        </tbody>
-                    </table>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Kişi</th>
+                        <th>Toplam</th>
+                        <th>Telefon</th>
+                        <th>Yüz Yüze</th>
+                        <th>Online</th>
+                        <th>Teknik Ziyaret</th>
+                        <th>Teknik Online</th>
+                        <th>Firma</th>
+                        <th>En Yoğun Firma</th>
+                        <th>Ort. Günlük</th>
+                        <th>Son Aktivite</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {topPeople.map((row) => (
+                        <tr key={row.kisi}>
+                          <td>{row.kisi}</td>
+                          <td>{row.total}</td>
+                          <td>{row.phone}</td>
+                          <td>{row.face}</td>
+                          <td>{row.online}</td>
+                          <td>{row.technicalVisit}</td>
+                          <td>{row.technicalOnline}</td>
+                          <td>{row.customerCount}</td>
+                          <td>{row.busiestCustomer || '-'}</td>
+                          <td>{row.dailyAverage}</td>
+                          <td>{formatDate(row.lastActivity)}</td>
+                        </tr>
+                      ))}
+                      {!topPeople.length ? (
+                        <tr><td colSpan={11} className="muted">Bu hafta kişi bazlı aktivite bulunamadı.</td></tr>
+                      ) : null}
+                    </tbody>
+                  </table>
                 </div>
+              </section>
+            </div>
 
-                <div className="pager">
-                    <div className="actions">
-                        <span className="muted">
-                            Toplam {total} kayıt · Sayfa {currentPage} / {totalPages}
-                        </span>
-                    </div>
-
-                    <div className="pager-buttons">
-                        <button
-                            className="ghost"
-                            disabled={currentPage <= 1 || loading}
-                            onClick={() => setPage((p) => Math.max(1, p - 1))}
-                        >
-                            Önceki
-                        </button>
-                        <button
-                            className="ghost"
-                            disabled={currentPage >= totalPages || loading}
-                            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                        >
-                            Sonraki
-                        </button>
-                    </div>
+            <aside className="dashboard-side">
+              <section className="panel side-panel">
+                <div className="section-kicker">Künye Durumu</div>
+                <div className="section-note">Tamam / Eksik / Yok</div>
+                <div className="side-list">
+                  <div className="side-row"><span>Tamam</span><strong>{stats.kunyeVar}</strong></div>
+                  <div className="side-row"><span>Eksik</span><strong>{stats.kunyeEksik}</strong></div>
+                  <div className="side-row"><span>Yok</span><strong>{stats.kunyeYok}</strong></div>
+                  <div className="side-row"><span>Entegrasyon</span><strong>{stats.entegrasyonYapisi}</strong></div>
                 </div>
-            </section>
-
-            {open ? (
-                <div className="modal" onClick={() => setOpen(false)}>
-                    <div className="modal-box" onClick={(e) => e.stopPropagation()}>
-                        <div>
-                            <div className="title" style={{ fontSize: 24 }}>
-                                {mode === 'create' ? 'Müşteri Ekle' : 'Müşteriyi Düzenle'}
-                            </div>
-                            <div className="sub">
-                                Müşteri oluştururken sorumlu doğrudan seçilir. Düzenleme ekranında sorumlu
-                                değişirse, superadmin/admin onayına düşer; diğer alanlar anında kaydolur.
-                            </div>
-                        </div>
-
-                        <div className="grid">
-                            <label className="field" style={{ gridColumn: '1 / -1' }}>
-                                <span className="label">Müşteri Adı</span>
-                                <input
-                                    className="input"
-                                    value={musteri}
-                                    onChange={(e) => setMusteri(e.target.value)}
-                                />
-                            </label>
-
-                            <label className="field">
-                                <span className="label">Sektör</span>
-                                <select
-                                    className="select"
-                                    value={sektor}
-                                    onChange={(e) => setSektor(e.target.value)}
-                                >
-                                    <option value="">Seçiniz</option>
-                                    {SECTOR_PRESET_OPTIONS.map((name) => (
-                                        <option key={name} value={name}>
-                                            {name}
-                                        </option>
-                                    ))}
-                                </select>
-                            </label>
-
-                            <label className="field">
-                                <span className="label">Sorumlusu</span>
-                                <select
-                                    className="select"
-                                    value={sorumlu}
-                                    onChange={(e) => setSorumlu(e.target.value)}
-                                >
-                                    <option value="">Seçiniz</option>
-                                    {ownerOptions.map((name) => (
-                                        <option key={name} value={name}>
-                                            {name}
-                                        </option>
-                                    ))}
-                                </select>
-                            </label>
-                        </div>
-
-                        {msg ? <div className="message">{msg}</div> : null}
-
-                        <div className="actions" style={{ justifyContent: 'flex-end' }}>
-                            <button className="secondary" onClick={() => setOpen(false)}>
-                                Kapat
-                            </button>
-                            <button className="primary" onClick={saveCustomer} disabled={busySave}>
-                                {busySave ? 'Kaydediliyor...' : 'Kaydet'}
-                            </button>
-                        </div>
-                    </div>
+              </section>
+              <section className="panel side-panel">
+                <div className="section-kicker">Account Dağılımı</div>
+                <div className="section-note">İlk 6 sorumlu</div>
+                <div className="side-list">
+                  {topOwners.map((item) => (
+                    <div key={item.label} className="side-row"><span>{item.label}</span><strong>{item.value}</strong></div>
+                  ))}
                 </div>
-            ) : null}
-        </main>
-    );
+              </section>
+              <section className="panel side-panel">
+                <div className="section-kicker">Sektör Dağılımı</div>
+                <div className="section-note">Toplam sektör: {stats.sectors}</div>
+                <div className="side-list">
+                  {topSectors.map((item) => (
+                    <div key={item.label} className="side-row"><span>{item.label}</span><strong>{item.value}</strong></div>
+                  ))}
+                </div>
+              </section>
+            </aside>
+          </section>
+        </>
+      )}
+    </main>
+  );
 }

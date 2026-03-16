@@ -4,12 +4,6 @@ import PanelShell from '@/components/PanelShell';
 
 export default async function PanelLayout({ children }: { children: React.ReactNode }) {
   let user: Awaited<ReturnType<typeof requireAllowedUserOrThrow>>;
-
-  try {
-    user = await requireAllowedUserOrThrow();
-  } catch {
-    redirect('/login');
-  }
-
-  return <PanelShell role={user.role}>{children}</PanelShell>;
+  try { user = await requireAllowedUserOrThrow(); } catch { redirect('/login'); }
+  return <PanelShell role={user.role} fullName={user.full_name} email={user.email}>{children}</PanelShell>;
 }
