@@ -6,6 +6,8 @@ export type SlaPresentation = {
   dayText: string;
   dotColor: string;
   dotText: string;
+  dotBorderColor?: string;
+  textColor?: string;
   tone: {
     background: string;
     color: string;
@@ -22,99 +24,142 @@ function isWaitingStatus(status?: string | null) {
   return normalized === 'bekleniyor' || normalized === 'başlamadı';
 }
 
-export function getSlaState(dueDate: string | null | undefined, status?: string | null): SlaState {
+function buildDateAtUtcMidnight(year: number, monthIndex: number, day: number) {
+  return new Date(Date.UTC(year, monthIndex, day));
+}
+
+function parseDateOnly(value: string | null | undefined) {
+  if (!value) return null;
+  const raw = String(value).trim();
+  if (!raw) return null;
+
+  const trDateMatch = raw.match(/^(\d{2})\.(\d{2})\.(\d{4})(?:\s|T|$)/);
+  if (trDateMatch) {
+    const [, d, m, y] = trDateMatch;
+    return buildDateAtUtcMidnight(Number(y), Number(m) - 1, Number(d));
+  }
+
+  const isoDateTimeMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T\s].*)?$/);
+  if (isoDateTimeMatch) {
+    const [, y, m, d] = isoDateTimeMatch;
+    return buildDateAtUtcMidnight(Number(y), Number(m) - 1, Number(d));
+  }
+
+  const parsed = new Date(raw);
+  if (!Number.isNaN(parsed.getTime())) {
+    return buildDateAtUtcMidnight(parsed.getUTCFullYear(), parsed.getUTCMonth(), parsed.getUTCDate());
+  }
+
+  return null;
+}
+
+function getNormalizedToday() {
+  const today = new Date();
+  return buildDateAtUtcMidnight(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
+}
+
+export function getSlaState(dueDate: string | null | undefined, status?: string | null, todayValue?: string | Date | null): SlaState {
   const normalized = normalizeActivityStatus(status);
   if (normalized === 'tamamlandı') return 'completed';
   if (isWaitingStatus(status)) return 'waiting';
-  if (!dueDate) return 'unscheduled';
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const due = new Date(dueDate);
-  due.setHours(0, 0, 0, 0);
+  const due = parseDateOnly(dueDate);
+  if (!due) return 'unscheduled';
 
+  const today = typeof todayValue === 'string' ? (parseDateOnly(todayValue) ?? getNormalizedToday()) : todayValue instanceof Date ? buildDateAtUtcMidnight(todayValue.getUTCFullYear(), todayValue.getUTCMonth(), todayValue.getUTCDate()) : getNormalizedToday();
   const diff = Math.round((due.getTime() - today.getTime()) / 86400000);
   if (diff < 0) return 'overdue';
   if (diff === 0) return 'today';
   return 'upcoming';
 }
 
-export function getSlaDayDiff(dueDate: string | null | undefined) {
-  if (!dueDate) return null;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const due = new Date(dueDate);
-  due.setHours(0, 0, 0, 0);
+export function getSlaDayDiff(dueDate: string | null | undefined, todayValue?: string | Date | null) {
+  const due = parseDateOnly(dueDate);
+  if (!due) return null;
+  const today = typeof todayValue === 'string' ? (parseDateOnly(todayValue) ?? getNormalizedToday()) : todayValue instanceof Date ? buildDateAtUtcMidnight(todayValue.getUTCFullYear(), todayValue.getUTCMonth(), todayValue.getUTCDate()) : getNormalizedToday();
   return Math.round((due.getTime() - today.getTime()) / 86400000);
 }
 
-export function getSlaPresentation(dueDate: string | null | undefined, status?: string | null): SlaPresentation {
-  const state = getSlaState(dueDate, status);
-  const diff = getSlaDayDiff(dueDate);
+export function getSlaPresentation(dueDate: string | null | undefined, status?: string | null, todayValue?: string | Date | null): SlaPresentation {
+  const normalized = normalizeActivityStatus(status);
+  const state = getSlaState(dueDate, status, todayValue);
+  const diff = getSlaDayDiff(dueDate, todayValue);
 
-  if (state === 'completed') {
+  if (normalized === 'tamamlandı' || state === 'completed') {
+    if (diff !== null) {
+      return {
+        state: 'completed',
+        label: 'Tamamlandı',
+        dayText: '',
+        dotColor: '#16a34a',
+        dotText: diff < 0 ? `-${Math.abs(diff)}` : `${diff}`,
+        dotBorderColor: '#16a34a',
+        textColor: '#ffffff',
+        tone: { background: 'transparent', color: '#166534', border: '1px solid transparent' },
+      };
+    }
+
     return {
-      state,
+      state: 'completed',
       label: 'Tamamlandı',
       dayText: '',
       dotColor: '#16a34a',
-      dotText: '✓',
+      dotText: '',
+      dotBorderColor: '#16a34a',
+      textColor: '#ffffff',
       tone: { background: 'transparent', color: '#166534', border: '1px solid transparent' },
     };
   }
 
-  if (state === 'unscheduled') {
-    return {
-      state,
-      label: 'Tarihsiz',
-      dayText: '',
-      dotColor: '#94a3b8',
-      dotText: '•',
-      tone: { background: 'transparent', color: '#64748b', border: '1px solid transparent' },
-    };
-  }
+  if (diff !== null) {
+    if (diff < 0) {
+      const days = Math.abs(diff);
+      return {
+        state: 'overdue',
+        label: 'Gecikti',
+        dayText: '',
+        dotColor: '#ef4444',
+        dotText: `-${days}`,
+        dotBorderColor: '#ef4444',
+        textColor: '#ffffff',
+        tone: { background: 'transparent', color: '#b91c1c', border: '1px solid transparent' },
+      };
+    }
 
-  if (state === 'waiting') {
     return {
-      state,
-      label: 'Bekleniyor',
-      dayText: '',
-      dotColor: '#f59e0b',
-      dotText: '!',
-      tone: { background: 'transparent', color: '#b45309', border: '1px solid transparent' },
-    };
-  }
-
-  if (state === 'overdue') {
-    const days = Math.abs(diff ?? 0);
-    return {
-      state,
-      label: 'Gecikti',
-      dayText: '',
-      dotColor: '#ef4444',
-      dotText: `-${days}`,
-      tone: { background: 'transparent', color: '#b91c1c', border: '1px solid transparent' },
-    };
-  }
-
-  if (state === 'today') {
-    return {
-      state,
-      label: 'Bugün',
+      state: diff === 0 ? 'today' : 'upcoming',
+      label: diff === 0 ? 'Bugün' : 'Planlı',
       dayText: '',
       dotColor: '#16a34a',
-      dotText: '0',
+      dotText: `${diff}`,
+      dotBorderColor: '#16a34a',
+      textColor: '#ffffff',
       tone: { background: 'transparent', color: '#166534', border: '1px solid transparent' },
+    };
+  }
+
+  if (normalized === 'devam ediyor' || normalized === 'devam ediyorlar') {
+    return {
+      state: 'waiting',
+      label: 'Devam Ediyor',
+      dayText: '',
+      dotColor: '#facc15',
+      dotText: '',
+      dotBorderColor: '#facc15',
+      textColor: '#92400e',
+      tone: { background: 'transparent', color: '#92400e', border: '1px solid transparent' },
     };
   }
 
   return {
-    state,
-    label: 'Planlı',
+    state: state === 'unscheduled' ? 'unscheduled' : 'waiting',
+    label: normalized === 'başlamadı' ? 'Başlamadı' : 'Tarihsiz',
     dayText: '',
-    dotColor: '#16a34a',
-    dotText: `${diff ?? 0}`,
-    tone: { background: 'transparent', color: '#166534', border: '1px solid transparent' },
+    dotColor: 'transparent',
+    dotText: '',
+    dotBorderColor: '#cbd5e1',
+    textColor: '#64748b',
+    tone: { background: 'transparent', color: '#64748b', border: '1px solid transparent' },
   };
 }
 

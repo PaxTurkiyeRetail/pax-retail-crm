@@ -15,6 +15,7 @@ type ActivityRow = {
   created_at: string;
   due_date: string | null;
   musteriler: { musteri: string; sorumlu: string | null } | null;
+  sla_presentation?: ReturnType<typeof getSlaPresentation>;
 };
 
 type FilterOptions = {
@@ -45,6 +46,7 @@ export default function ActivitiesPage() {
   const [total, setTotal] = useState(0);
   const [msg, setMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [serverToday, setServerToday] = useState<string | null>(null);
   const [status, setStatus] = useState('');
   const [partnerOwner, setPartnerOwner] = useState('');
   const [fazNo, setFazNo] = useState('');
@@ -95,19 +97,20 @@ export default function ActivitiesPage() {
         }
         setRows(payload.rows ?? []);
         setTotal(Number(payload.total ?? 0));
+        setServerToday(typeof payload.serverToday === 'string' ? payload.serverToday : null);
       } finally { setLoading(false); }
     };
     void load();
   }, [debouncedQ, page, pageSize, status, partnerOwner, fazNo, sla, owner, responsible, fromDate, toDate]);
 
-  const slimRows = useMemo(() => rows.map((row) => ({ ...row, sla: getSlaPresentation(row.due_date, row.activity_status) })), [rows]);
+  const slimRows = useMemo(() => rows.map((row) => ({ ...row, sla: row.sla_presentation ?? getSlaPresentation(row.due_date, row.activity_status, serverToday) })), [rows, serverToday]);
   const stats = useMemo(() => ([
     { label: 'Görünen Aktivite', value: rows.length },
     { label: 'Toplam Sonuç', value: total },
-    { label: 'Tamamlanan', value: rows.filter((row) => getSlaState(row.due_date, row.activity_status) === 'completed').length },
-    { label: 'Geciken', value: rows.filter((row) => getSlaState(row.due_date, row.activity_status) === 'overdue').length },
-    { label: 'Bugün', value: rows.filter((row) => getSlaState(row.due_date, row.activity_status) === 'today').length },
-  ]), [rows, total]);
+    { label: 'Tamamlanan', value: rows.filter((row) => getSlaState(row.due_date, row.activity_status, serverToday) === 'completed').length },
+    { label: 'Geciken', value: rows.filter((row) => getSlaState(row.due_date, row.activity_status, serverToday) === 'overdue').length },
+    { label: 'Bugün', value: rows.filter((row) => getSlaState(row.due_date, row.activity_status, serverToday) === 'today').length },
+  ]), [rows, total, serverToday]);
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   const clearFilters = () => {
@@ -195,7 +198,7 @@ export default function ActivitiesPage() {
       {msg ? <div className="message">{msg}</div> : null}
 
       <section className="surface">
-        <div className="table-wrap"><table><thead><tr>{['Tarih', 'Müşteri', 'Fazı', 'Ekleyen', 'Bekleyen', 'Sonraki Aksiyon', 'Hedef Tarih', 'SLA', 'İşlem'].map((h) => <th key={h}>{h}</th>)}</tr></thead><tbody>{slimRows.map((row) => (<tr key={row.id}><td>{formatDate(row.created_at)}</td><td><div className="name">{row.musteriler?.musteri ?? '-'}</div><div className="muted">Sorumlu: {row.musteriler?.sorumlu ?? '-'}</div></td><td><span className="phase">{row.faz_no != null ? `FAZ ${row.faz_no}` : '-'}</span></td><td>{row.owner ?? '-'}</td><td>{row.partner_owner ?? '-'}</td><td>{row.activity_label ?? '-'}</td><td>{formatDate(row.due_date)}</td><td><span className="sla-pill" style={row.sla.tone}><span className="sla-top"><span className="sla-dot" style={{ backgroundColor: row.sla.dotColor }}>{row.sla.dotText || ""}</span><span className="sla-sub">{row.sla.dayText || "-"}</span></span></span></td><td><Link className="action-link" href={`/crm/activities/new?edit=${row.id}`}>Düzenle</Link></td></tr>))}{!loading && !slimRows.length ? <tr><td colSpan={9} style={{ padding: 16, color: '#64748b' }}>Kayıt bulunamadı.</td></tr> : null}{loading ? <tr><td colSpan={9} style={{ padding: 16, color: '#64748b' }}>Yükleniyor...</td></tr> : null}</tbody></table></div>
+        <div className="table-wrap"><table><thead><tr>{['Tarih', 'Müşteri', 'Fazı', 'Ekleyen', 'Bekleyen', 'Sonraki Aksiyon', 'Hedef Tarih', 'SLA', 'İşlem'].map((h) => <th key={h}>{h}</th>)}</tr></thead><tbody>{slimRows.map((row) => (<tr key={row.id}><td>{formatDate(row.created_at)}</td><td><div className="name">{row.musteriler?.musteri ?? '-'}</div><div className="muted">Sorumlu: {row.musteriler?.sorumlu ?? '-'}</div></td><td><span className="phase">{row.faz_no != null ? `FAZ ${row.faz_no}` : '-'}</span></td><td>{row.owner ?? '-'}</td><td>{row.partner_owner ?? '-'}</td><td>{row.activity_label ?? '-'}</td><td>{formatDate(row.due_date)}</td><td><span className="sla-pill" style={row.sla.tone}><span className="sla-top"><span className="sla-dot" style={{ backgroundColor: row.sla.dotColor, borderColor: row.sla.dotBorderColor ?? 'transparent', color: row.sla.textColor ?? '#ffffff' }}>{row.sla.dotText || ""}</span><span className="sla-sub">{row.sla.dayText || "-"}</span></span></span></td><td><Link className="action-link" href={`/crm/activities/new?edit=${row.id}`}>Düzenle</Link></td></tr>))}{!loading && !slimRows.length ? <tr><td colSpan={9} style={{ padding: 16, color: '#64748b' }}>Kayıt bulunamadı.</td></tr> : null}{loading ? <tr><td colSpan={9} style={{ padding: 16, color: '#64748b' }}>Yükleniyor...</td></tr> : null}</tbody></table></div>
         <div className="pager"><div className="inline"><span className="muted">Toplam {total} kayıt · Sayfa {page} / {totalPages}</span></div><div className="pager-buttons"><button className="ghost" disabled={page <= 1 || loading} onClick={() => setPage((p) => Math.max(1, p - 1))}>Önceki</button><button className="ghost" disabled={page >= totalPages || loading} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>Sonraki</button></div></div>
       </section>
     </main>

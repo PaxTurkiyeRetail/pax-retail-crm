@@ -4,6 +4,22 @@ import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 import { requireCrmAccessOrThrow } from '@/lib/authz';
 import { getKunyeStatus, mapKunyeDbToUi, normalizeKunyeStatusFilter } from '@/lib/kunye';
 
+function normalizeSearchText(value: string | null | undefined) {
+  return String(value ?? '')
+    .toLocaleLowerCase('tr')
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[ıİ]/g, 'i')
+    .replace(/[I]/g, 'i')
+    .replace(/[şŞ]/g, 's')
+    .replace(/[ğĞ]/g, 'g')
+    .replace(/[üÜ]/g, 'u')
+    .replace(/[öÖ]/g, 'o')
+    .replace(/[çÇ]/g, 'c')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
 function parsePositiveInt(value: string | null, fallback: number) {
   const parsed = Number(value ?? '');
   return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
@@ -38,7 +54,7 @@ export async function GET(request: Request) {
     if (sector) query = query.eq('sektor', sector);
     if (integration) query = query.eq('entegrasyon_tipi', integration);
     if (Number.isFinite(fazNo)) query = query.eq('aktif_faz_no', fazNo);
-    if (q) {
+    if (q && !lite) {
       const escaped = q.replace(/[,%]/g, ' ').trim();
       query = query.or([
         `musteri.ilike.%${escaped}%`,
@@ -80,7 +96,7 @@ export async function GET(request: Request) {
     });
 
     if (q) {
-      const needle = q.toLocaleLowerCase('tr');
+      const needle = normalizeSearchText(q);
       enriched = enriched.filter((row: any) => {
         return [
           row.musteri,
@@ -90,7 +106,7 @@ export async function GET(request: Request) {
           row.entegrasyon_tipi,
           row.kasa_firmasi,
           row.kunye_durumu,
-        ].some((value) => String(value ?? '').toLocaleLowerCase('tr').includes(needle));
+        ].some((value) => normalizeSearchText(value).includes(needle));
       });
     }
 

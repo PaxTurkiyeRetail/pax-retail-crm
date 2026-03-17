@@ -41,10 +41,28 @@ const FAZ_DURUM_OPTIONS = [
 ] as const;
 const BEKLEYEN_TARAFLAR = ["Müşteri", "Müşteri IT", "Müşteri (Finance Owner)", "PAX RS(Support)"] as const;
 
+function normalizeSearchText(value: string) {
+  return String(value ?? "")
+    .toLocaleLowerCase("tr")
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[ıİ]/g, "i")
+    .replace(/[I]/g, "i")
+    .replace(/[şŞ]/g, "s")
+    .replace(/[ğĞ]/g, "g")
+    .replace(/[üÜ]/g, "u")
+    .replace(/[öÖ]/g, "o")
+    .replace(/[çÇ]/g, "c")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
 export default function NewActivityPage() {
   const searchParams = useSearchParams();
   const [me, setMe] = useState<Me | null>(null);
   const [customers, setCustomers] = useState<CrmRow[]>([]);
+  const [searchResults, setSearchResults] = useState<CrmRow[]>([]);
+  const [customerBusy, setCustomerBusy] = useState(false);
   const [fazlar, setFazlar] = useState<FazRow[]>([]);
   const [recentRows, setRecentRows] = useState<RecentRow[]>([]);
 
@@ -53,7 +71,15 @@ export default function NewActivityPage() {
   const [customerMenuOpen, setCustomerMenuOpen] = useState(false);
   const customerBoxRef = useRef<HTMLDivElement | null>(null);
   const customerInputRef = useRef<HTMLInputElement | null>(null);
-  const selected = useMemo(() => customers.find((c) => c.musteri_id === musteriId) ?? null, [customers, musteriId]);
+  const customerPool = useMemo(() => {
+    const map = new Map<string, CrmRow>();
+    for (const row of [...customers, ...searchResults]) {
+      if (!row?.musteri_id) continue;
+      if (!map.has(row.musteri_id)) map.set(row.musteri_id, row);
+    }
+    return Array.from(map.values());
+  }, [customers, searchResults]);
+  const selected = useMemo(() => customerPool.find((c) => c.musteri_id === musteriId) ?? null, [customerPool, musteriId]);
   const fazMap = useMemo(() => Object.fromEntries(fazlar.map((f) => [String(f.faz_no), f.asama_adi])), [fazlar]);
 
   const [kanal, setKanal] = useState<(typeof AKTIVITELER)[number]>("Online Toplantı");
@@ -75,16 +101,43 @@ export default function NewActivityPage() {
   const [phaseMetaBusy, setPhaseMetaBusy] = useState(false);
   const [recentBusy, setRecentBusy] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const currentFazLabel = selected ? (selected.aktif_faz_no ?? '-') + (selected.aktif_faz_adi ? ` / ${selected.aktif_faz_adi}` : '') : '-';
+  const lastKnownFazNo = useMemo(() => {
+    if (selected?.aktif_faz_no != null) return selected.aktif_faz_no;
+    for (const row of recentRows) {
+      if (row?.faz_no != null) return row.faz_no;
+    }
+    return null;
+  }, [selected?.aktif_faz_no, recentRows]);
+  const currentFazLabel = useMemo(() => {
+    if (!selected) return '-';
+    const fazNoValue = lastKnownFazNo;
+    const fazAdi = (fazNoValue != null ? fazMap[String(fazNoValue)] : null) ?? selected.aktif_faz_adi ?? null;
+    return `${fazNoValue ?? '-'}${fazAdi ? ` / ${fazAdi}` : ''}`;
+  }, [selected, lastKnownFazNo, fazMap]);
   const isEditMode = Boolean(editActivityId);
 
   const filteredCustomers = useMemo(() => {
-    const q = musteriQuery.trim().toLocaleLowerCase("tr");
-    if (!q) return customers.slice(0, 12);
-    const starts = customers.filter((c) => c.musteri.toLocaleLowerCase("tr").startsWith(q));
-    const contains = customers.filter((c) => !c.musteri.toLocaleLowerCase("tr").startsWith(q) && c.musteri.toLocaleLowerCase("tr").includes(q));
-    return [...starts, ...contains].slice(0, 14);
-  }, [customers, musteriQuery]);
+    const q = normalizeSearchText(musteriQuery);
+    const pool = q ? searchResults : customers;
+    if (!q) return pool.slice(0, 12);
+
+    const scoreOf = (row: CrmRow) => {
+      const name = normalizeSearchText(row.musteri);
+      if (!name) return 999;
+      if (name === q) return 0;
+      if (name.startsWith(q)) return 1;
+      if (name.split(" ").some((part) => part.startsWith(q))) return 2;
+      if (name.includes(q)) return 3;
+      return 999;
+    };
+
+    return [...pool]
+      .map((row) => ({ row, score: scoreOf(row) }))
+      .filter((item) => item.score < 999)
+      .sort((a, b) => a.score - b.score || a.row.musteri.localeCompare(b.row.musteri, "tr"))
+      .map((item) => item.row)
+      .slice(0, 20);
+  }, [customers, musteriQuery, searchResults]);
 
   const load = async () => {
     setMsg(null);
@@ -95,7 +148,10 @@ export default function NewActivityPage() {
     }
     setMe((await meRes.json()).me);
     const cj = await cRes.json().catch(() => ({}));
-    if (cRes.ok) setCustomers(cj.rows ?? []);
+    if (cRes.ok) {
+      setCustomers(cj.rows ?? []);
+      setSearchResults(cj.rows ?? []);
+    }
     const fj = await fRes.json().catch(() => ({}));
     if (fRes.ok) setFazlar((fj.fazlar ?? []).sort((a: FazRow, b: FazRow) => a.faz_no - b.faz_no));
     if (!fRes.ok) setMsg(fj?.message || "Faz listesi alınamadı.");
@@ -104,6 +160,43 @@ export default function NewActivityPage() {
   useEffect(() => {
     load();
   }, []);
+
+  useEffect(() => {
+    const q = musteriQuery.trim();
+    if (!customerMenuOpen && !q) return;
+
+    let ignore = false;
+    const controller = new AbortController();
+    const loadCustomers = async () => {
+      setCustomerBusy(true);
+      try {
+        const params = new URLSearchParams({ lite: "1", pageSize: "20" });
+        if (q) params.set("q", q);
+        const res = await fetch(`/api/crm/list?${params.toString()}`, { cache: "no-store", signal: controller.signal });
+        const j = await res.json().catch(() => ({}));
+        if (!res.ok || ignore) return;
+        setSearchResults(j.rows ?? []);
+      } catch (error: any) {
+        if (error?.name !== "AbortError" && !ignore) setSearchResults([]);
+      } finally {
+        if (!ignore) setCustomerBusy(false);
+      }
+    };
+
+    const timer = window.setTimeout(loadCustomers, q ? 180 : 0);
+    return () => {
+      ignore = true;
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [musteriQuery, customerMenuOpen]);
+
+  useEffect(() => {
+    if (!customerMenuOpen) return;
+    const previous = document.body.style.overflow;
+    if (window.innerWidth <= 768) document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = previous; };
+  }, [customerMenuOpen]);
 
   useEffect(() => {
     const closeOnOutside = (event: MouseEvent) => {
@@ -121,7 +214,7 @@ export default function NewActivityPage() {
   useEffect(() => {
     if (!selected) return;
     if (editActivityId) return;
-    const current = selected.aktif_faz_no ?? null;
+    const current = lastKnownFazNo ?? null;
     setFazNo(current);
     setPlanEnabled(false);
     setPlanTarih("");
@@ -131,7 +224,7 @@ export default function NewActivityPage() {
     setPlanHedefFazNo(current);
     setFazDurum("Devam Ediyor");
     setNotlar("");
-  }, [selected?.musteri_id, editActivityId]);
+  }, [selected?.musteri_id, lastKnownFazNo, editActivityId]);
 
   useEffect(() => {
     if (fazNo == null) return;
@@ -212,10 +305,19 @@ export default function NewActivityPage() {
     loadRecent();
   }, [musteriId]);
 
+  useEffect(() => {
+    if (!selected || editActivityId) return;
+    if (fazNo != null) return;
+    if (lastKnownFazNo == null) return;
+    setFazNo(lastKnownFazNo);
+    setPlanHedefFazNo(lastKnownFazNo);
+  }, [selected?.musteri_id, fazNo, lastKnownFazNo, editActivityId]);
+
   const chooseCustomer = (customer: CrmRow) => {
     setEditActivityId("");
     setMusteriId(customer.musteri_id);
     setMusteriQuery(customer.musteri);
+    setSearchResults([customer]);
     setCustomerMenuOpen(false);
   };
 
@@ -224,6 +326,7 @@ export default function NewActivityPage() {
     setMusteriId("");
     setMusteriQuery("");
     setCustomerMenuOpen(true);
+    setSearchResults(customers.slice(0, 12));
     setFazNo(null);
     setPlanHedefFazNo(null);
     setRecentRows([]);
@@ -284,6 +387,8 @@ export default function NewActivityPage() {
         .search-input { padding-right: 42px; }
         .search-toggle { position: absolute; right: 10px; top: 10px; width: 28px; height: 28px; border-radius: 10px; border: none; background: transparent; cursor: pointer; color: #475569; }
         .customer-menu { position: absolute; z-index: 30; left: 0; right: 0; top: calc(100% + 8px); background: #fff; border: 1px solid #d8e3ef; border-radius: 18px; box-shadow: 0 18px 36px rgba(15,23,42,0.12); max-height: 340px; overflow: auto; }
+        .customer-menu-hint { padding: 12px 16px 0; font-size: 12px; color: #64748b; }
+        .customer-backdrop { display: none; }
         .customer-option { width: 100%; border: none; background: transparent; display: grid; gap: 4px; text-align: left; padding: 14px 16px; cursor: pointer; }
         .customer-option:hover { background: #f8fbff; }
         .customer-name { font-weight: 900; color: #0f172a; }
@@ -316,6 +421,7 @@ export default function NewActivityPage() {
         .actions { display: flex; justify-content: flex-end; }
         .empty { padding: 18px; color: #64748b; }
         @media (max-width: 920px) { .grid-two, .plan-grid { grid-template-columns: 1fr; } .selected-customer, .summary-card, .header, .plan-header { align-items: stretch; } .actions { justify-content: stretch; } .primary-btn, .secondary-btn, .toggle-btn { width: 100%; } }
+        @media (max-width: 768px) { .surface { padding: 16px; border-radius: 20px; } .title { font-size: 28px; } .search-input, .field, .select, .textarea { min-height: 52px; font-size: 16px; } .customer-backdrop { display: block; position: fixed; inset: 0; background: rgba(15,23,42,0.28); z-index: 29; } .customer-menu { position: fixed; left: 12px; right: 12px; bottom: 12px; top: auto; max-height: min(70vh, 560px); border-radius: 22px; z-index: 30; padding-bottom: env(safe-area-inset-bottom); } .customer-search { position: static; } .customer-option { padding: 16px; } }
       `}</style>
 
       <div className="header">
@@ -330,7 +436,7 @@ export default function NewActivityPage() {
             <div className="selected-customer">
               <div className="selected-main">
                 <div className="selected-title">{selected.musteri}</div>
-                <div className="customer-meta">Mevcut faz: {selected.aktif_faz_no ?? "-"}{selected.aktif_faz_adi ? ` - ${selected.aktif_faz_adi}` : ""}</div>
+                <div className="customer-meta">Mevcut faz: {currentFazLabel}</div>
                 {selected.sorumlu ? <div className="customer-meta">Sorumlu: {selected.sorumlu}</div> : null}
                 {phaseMetaBusy || editLoading ? <div className="customer-meta">Faz bilgisi yükleniyor…</div> : null}
               </div>
@@ -338,16 +444,20 @@ export default function NewActivityPage() {
             </div>
           ) : (
             <div className="customer-search">
-              <input ref={customerInputRef} className="search-input" value={musteriQuery} onFocus={() => setCustomerMenuOpen(true)} onChange={(e) => { setMusteriQuery(e.target.value); setCustomerMenuOpen(true); if (musteriId) setMusteriId(""); }} placeholder="Müşteri adıyla ara..." autoComplete="off" />
+              {customerMenuOpen ? <button type="button" className="customer-backdrop" aria-label="Müşteri aramayı kapat" onClick={() => setCustomerMenuOpen(false)} /> : null}
+              <input ref={customerInputRef} className="search-input" value={musteriQuery} onFocus={() => setCustomerMenuOpen(true)} onChange={(e) => { setMusteriQuery(e.target.value); setCustomerMenuOpen(true); if (musteriId) setMusteriId(""); }} placeholder="Müşteri adıyla ara..." autoComplete="off" autoCapitalize="words" autoCorrect="off" spellCheck={false} />
               <button type="button" className="search-toggle" onClick={() => setCustomerMenuOpen((v) => !v)}>▾</button>
               {customerMenuOpen ? (
                 <div className="customer-menu">
-                  {filteredCustomers.length ? filteredCustomers.map((c) => (
+                  <div className="customer-menu-hint">Büyük-küçük harf fark etmez. Türkçe karakter olmadan da arayabilirsin.</div>
+                  {customerBusy ? <div className="empty">Müşteriler aranıyor...</div> : null}
+                  {!customerBusy && filteredCustomers.length ? filteredCustomers.map((c) => (
                     <button key={c.musteri_id} type="button" className="customer-option" onClick={() => chooseCustomer(c)}>
                       <span className="customer-name">{c.musteri}</span>
                       <span className="customer-meta">{c.aktif_faz_no ?? "-"}{c.aktif_faz_adi ? ` - ${c.aktif_faz_adi}` : ""}</span>
                     </button>
-                  )) : <div className="empty">Sonuç bulunamadı.</div>}
+                  )) : null}
+                  {!customerBusy && !filteredCustomers.length ? <div className="empty">Sonuç bulunamadı.</div> : null}
                 </div>
               ) : null}
             </div>
@@ -413,7 +523,7 @@ export default function NewActivityPage() {
             <span className="field-label">Faz</span>
             <select value={fazNo ?? ""} onChange={(e) => setFazNo(e.target.value ? Number(e.target.value) : null)} className="select" disabled={!selected || !fazlar.length}>
               {!selected ? <option value="">Önce müşteri seç...</option> : <option value="">Faz seç...</option>}
-              {fazlar.map((f) => <option key={f.faz_no} value={f.faz_no}>{f.faz_no} - {f.asama_adi}</option>)}
+              {fazlar.map((f) => <option key={f.faz_no} value={f.faz_no}>{f.faz_no} - {f.asama_adi}{lastKnownFazNo === f.faz_no ? " (Son Faz)" : ""}</option>)}
             </select>
             <span className="field-help">İşlem hangi faz için yapılıyorsa o fazı seç. Geçmiş aktivite düzenleme modunda kayıt güncellenir, tekrar eklenmez.</span>
           </label>

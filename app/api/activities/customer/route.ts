@@ -1,4 +1,4 @@
-import { activityLabelFromRow, isDisplayableActivityRow, presentDurum } from '@/app/api/activities/_helpers';
+import { activityLabelFromRow, presentDurum } from '@/app/api/activities/_helpers';
 import { NextResponse } from 'next/server';
 import { requireAllowedUserOrThrow } from '@/lib/authz';
 import { isAdminLike } from '@/lib/roles';
@@ -24,7 +24,7 @@ export async function GET(req: Request) {
     const { data, error } = await q;
     if (error) return NextResponse.json({ message: error.message }, { status: 500 });
 
-    const rows = (data ?? []).filter((row: any) => isDisplayableActivityRow(row)).map((row: any) => ({
+    const rows = (data ?? []).map((row: any) => ({
       ...row,
       hedef_tarihi: row.hedef_tarihi ?? null,
       notlar: row.notlar ?? null,

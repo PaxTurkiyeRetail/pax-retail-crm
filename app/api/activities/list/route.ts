@@ -2,7 +2,21 @@ import { NextResponse } from 'next/server';
 import { requireAllowedUserOrThrow } from '@/lib/authz';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 import { activityLabelFromRow, isDisplayableActivityRow, presentDurum } from '@/app/api/activities/_helpers';
-import { matchesSlaFilter } from '@/lib/sla';
+import { getSlaPresentation, matchesSlaFilter } from '@/lib/sla';
+
+
+function getTurkeyToday() {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Istanbul',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date());
+  const year = parts.find((part) => part.type === 'year')?.value ?? '1970';
+  const month = parts.find((part) => part.type === 'month')?.value ?? '01';
+  const day = parts.find((part) => part.type === 'day')?.value ?? '01';
+  return `${year}-${month}-${day}`;
+}
 
 function parsePositiveInt(value: string | null, fallback: number) {
   const parsed = Number(value ?? '');
@@ -29,6 +43,8 @@ export async function GET(req: Request) {
     const page = parsePositiveInt(url.searchParams.get('page'), 1);
     const pageSize = Math.min(parsePositiveInt(url.searchParams.get('pageSize'), 20), 100);
 
+    const serverToday = getTurkeyToday();
+
     const admin = createSupabaseAdminClient();
     let query = admin
       .from('pipeline_eventleri')
@@ -47,13 +63,18 @@ export async function GET(req: Request) {
 
     let rows = (data ?? [])
       .filter((row: any) => isDisplayableActivityRow(row))
-      .map((row: any) => ({
-        ...row,
-        due_date: row.hedef_tarihi ?? null,
-        activity_label: activityLabelFromRow(row),
-        activity_status: presentDurum(row.durum),
-        owner: row.created_by ?? row.owner ?? null,
-      }));
+      .map((row: any) => {
+        const dueDate = row.hedef_tarihi ?? null;
+        const activityStatus = presentDurum(row.durum);
+        return {
+          ...row,
+          due_date: dueDate,
+          activity_label: activityLabelFromRow(row),
+          activity_status: activityStatus,
+          owner: row.created_by ?? row.owner ?? null,
+          sla_presentation: getSlaPresentation(dueDate, activityStatus, serverToday),
+        };
+      });
 
     if (owner) {
       const normalizedOwner = owner.toLocaleLowerCase('tr');
@@ -89,7 +110,7 @@ export async function GET(req: Request) {
     const from = (page - 1) * pageSize;
     const paged = rows.slice(from, from + pageSize);
 
-    return NextResponse.json({ rows: paged, total, page, pageSize });
+    return NextResponse.json({ rows: paged, total, page, pageSize, serverToday });
   } catch (e: any) {
     return NextResponse.json({ message: 'Yetkisiz' }, { status: e?.status || 401 });
   }
