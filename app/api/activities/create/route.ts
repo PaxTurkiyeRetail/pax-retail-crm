@@ -1,5 +1,6 @@
 import { normalizeDurum } from '@/app/api/activities/_helpers';
 import { NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import { requireAllowedUserOrThrow } from '@/lib/authz';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 
@@ -209,5 +210,6 @@ export async function POST(req: Request) {
   const { error: pipelineErr } = await admin.from('musteri_pipeline').upsert(pipelinePayload, { onConflict: 'musteri_id' });
   if (pipelineErr) return NextResponse.json({ message: `musteri_pipeline güncellenemedi: ${pipelineErr.message}` }, { status: 400 });
 
+  revalidatePath('/crm/activities');
   return NextResponse.json({ ok: true, iteration_no, updated_existing: activityUpdated, pipeline: pipelinePayload });
 }

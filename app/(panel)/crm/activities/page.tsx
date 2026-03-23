@@ -1,8 +1,11 @@
 'use client';
+import '@/styles/activities-page.css';
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { getSlaPresentation, getSlaState } from '@/lib/sla';
+import { formatDate } from '@/lib/utils';
+import ActivitiesDashboard from '@/components/activities/ActivitiesDashboard';
 
 type ActivityRow = {
   id: string;
@@ -18,6 +21,10 @@ type ActivityRow = {
   sla_presentation?: ReturnType<typeof getSlaPresentation>;
 };
 
+type ActivityRowWithSla = ActivityRow & {
+  sla: ReturnType<typeof getSlaPresentation>;
+};
+
 type FilterOptions = {
   phaseOptions: string[];
   statusOptions: string[];
@@ -26,46 +33,98 @@ type FilterOptions = {
   responsibleOptions: string[];
 };
 
-const PAGE_SIZE_OPTIONS = [20, 50, 100];
-const SLA_OPTIONS = ['', 'overdue', 'today', 'upcoming', 'waiting', 'completed', 'unscheduled'];
-const SLA_LABELS: Record<string, string> = { overdue: 'Geciken', today: 'Bugün', upcoming: 'Planlı', waiting: 'Bekleniyor', completed: 'Tamamlanan', unscheduled: 'Tarihsiz' };
-const EMPTY_OPTIONS: FilterOptions = { phaseOptions: [], statusOptions: [], partnerOptions: [], ownerOptions: [], responsibleOptions: [] };
+type TimeRange = 'week' | 'month' | 'quarter' | 'all';
+type RoleKey = 'sales' | 'rs';
 
-function formatDate(value: string | null | undefined) {
-  if (!value) return '-';
-  return new Date(value).toLocaleDateString('tr-TR');
+const EMPTY_OPTIONS: FilterOptions = {
+  phaseOptions: [],
+  statusOptions: [],
+  partnerOptions: [],
+  ownerOptions: [],
+  responsibleOptions: [],
+};
+
+const SLA_OPTIONS = ['', 'overdue', 'today', 'upcoming', 'waiting', 'completed', 'unscheduled'];
+const SLA_LABELS: Record<string, string> = {
+  overdue: 'Geciken',
+  today: 'Bugün',
+  upcoming: 'Planlı',
+  waiting: 'Bekliyor',
+  completed: 'Tamamlanan',
+  unscheduled: 'Tarihsiz',
+};
+
+const PHASE_DEFS = [
+  { key: 'lead', title: 'Lead', range: 'Faz 1-4', colorClass: 'lead', match: (v: number | null) => (v ?? 0) >= 1 && (v ?? 0) <= 4 },
+  { key: 'first', title: 'İlk Temas', range: 'Faz 5-8', colorClass: 'first', match: (v: number | null) => (v ?? 0) >= 5 && (v ?? 0) <= 8 },
+  { key: 'business', title: 'Business', range: 'Faz 9-14', colorClass: 'business', match: (v: number | null) => (v ?? 0) >= 9 && (v ?? 0) <= 14 },
+  { key: 'ops', title: 'Operasyon', range: 'Faz 15-22', colorClass: 'ops', match: (v: number | null) => (v ?? 0) >= 15 && (v ?? 0) <= 22 },
+  { key: 'rollout', title: 'Yayılım', range: 'Faz 23+', colorClass: 'rollout', match: (v: number | null) => (v ?? 0) >= 23 },
+] as const;
+
+
+function toIsoDate(d: Date) {
+  const copy = new Date(d);
+  copy.setHours(0, 0, 0, 0);
+  return copy.toISOString().slice(0, 10);
 }
+
+function getRangeDates(range: TimeRange) {
+  const end = new Date();
+  if (range === 'all') return { from: '', to: '' };
+  const start = new Date();
+  if (range === 'week') start.setDate(end.getDate() - 6);
+  if (range === 'month') start.setDate(end.getDate() - 29);
+  if (range === 'quarter') start.setDate(end.getDate() - 89);
+  return { from: toIsoDate(start), to: toIsoDate(end) };
+}
+
+function percentage(value: number, total: number) {
+  if (!total) return 0;
+  return Math.max(0, Math.min(100, Math.round((value / total) * 100)));
+}
+
+function resolveRole(row: ActivityRow): RoleKey {
+  const source = `${row.owner ?? ''} ${row.partner_owner ?? ''}`.toLocaleLowerCase('tr-TR');
+  const rsHints = ['retail support', 'support', 'destek', 'teknik', 'rs', 'ishak', 'işhak', 'taha'];
+  return rsHints.some((hint) => source.includes(hint)) ? 'rs' : 'sales';
+}
+
 
 export default function ActivitiesPage() {
   const [rows, setRows] = useState<ActivityRow[]>([]);
+  const [analyticsRows, setAnalyticsRows] = useState<ActivityRow[]>([]);
   const [options, setOptions] = useState<FilterOptions>(EMPTY_OPTIONS);
   const [q, setQ] = useState('');
   const [debouncedQ, setDebouncedQ] = useState('');
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  const [pageSize] = useState(20);
   const [total, setTotal] = useState(0);
   const [msg, setMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [serverToday, setServerToday] = useState<string | null>(null);
   const [status, setStatus] = useState('');
-  const [partnerOwner, setPartnerOwner] = useState('');
   const [fazNo, setFazNo] = useState('');
   const [sla, setSla] = useState('');
   const [owner, setOwner] = useState('');
   const [responsible, setResponsible] = useState('');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
+  const [timeRange, setTimeRange] = useState<TimeRange>('week');
+  const [showAdvanced, setShowAdvanced] = useState(false);
+
+  const rangeDates = useMemo(() => getRangeDates(timeRange), [timeRange]);
+  const effectiveFrom = fromDate || rangeDates.from;
+  const effectiveTo = toDate || rangeDates.to;
 
   useEffect(() => {
-    const timer = window.setTimeout(() => setDebouncedQ(q.trim()), 240);
+    const timer = window.setTimeout(() => setDebouncedQ(q.trim()), 220);
     return () => window.clearTimeout(timer);
   }, [q]);
 
-  useEffect(() => { setPage(1); }, [debouncedQ, status, partnerOwner, fazNo, sla, owner, responsible, fromDate, toDate, pageSize]);
-
   useEffect(() => {
     const loadOptions = async () => {
-      const res = await fetch('/api/activities/options', { cache: 'no-store' });
+      const res = await fetch('/api/activities/options', { next: { revalidate: 300 } });
       const payload = await res.json().catch(() => ({}));
       if (res.ok) setOptions({ ...EMPTY_OPTIONS, ...(payload ?? {}) });
     };
@@ -73,133 +132,449 @@ export default function ActivitiesPage() {
   }, []);
 
   useEffect(() => {
+    // Filtre değişince sayfa sıfırla
+    setPage(1);
+  }, [debouncedQ, status, fazNo, sla, owner, responsible, effectiveFrom, effectiveTo]);
+
+  useEffect(() => {
+    const buildParams = (extra: Record<string, string>) => {
+      const p = new URLSearchParams({ ...extra });
+      if (debouncedQ) p.set('q', debouncedQ);
+      if (status) p.set('durum', status);
+      if (fazNo) p.set('faz_no', fazNo);
+      if (sla) p.set('sla', sla);
+      if (owner) p.set('owner', owner);
+      if (responsible) p.set('responsible', responsible);
+      if (effectiveFrom) p.set('from', effectiveFrom);
+      if (effectiveTo) p.set('to', effectiveTo);
+      return p;
+    };
+
     const load = async () => {
-      setMsg(null);
       setLoading(true);
+      setMsg(null);
       try {
-        const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
-        if (debouncedQ) params.set('q', debouncedQ);
-        if (status) params.set('durum', status);
-        if (partnerOwner) params.set('partner_owner', partnerOwner);
-        if (fazNo) params.set('faz_no', fazNo);
-        if (sla) params.set('sla', sla);
-        if (owner) params.set('owner', owner);
-        if (responsible) params.set('responsible', responsible);
-        if (fromDate) params.set('from', fromDate);
-        if (toDate) params.set('to', toDate);
-        const res = await fetch(`/api/activities/list?${params.toString()}`, { cache: 'no-store' });
-        const payload = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          setMsg(payload?.message || 'Liste alınamadı');
+        // Sayfalı liste + analytics fetch'leri paralel çalışır
+        const [listRes, analyticsRes] = await Promise.all([
+          fetch(`/api/activities/list?${buildParams({ page: String(page), pageSize: String(pageSize) }).toString()}`, { next: { revalidate: 30 } }),
+          fetch(`/api/activities/list?${buildParams({ page: '1', pageSize: '500' }).toString()}`, { next: { revalidate: 30 } }),
+        ]);
+        const [listPayload, analyticsPayload] = await Promise.all([
+          listRes.json().catch(() => ({})),
+          analyticsRes.json().catch(() => ({})),
+        ]);
+        if (!listRes.ok) {
+          setMsg(listPayload?.message || 'Liste alınamadı');
           setRows([]);
           setTotal(0);
-          return;
+        } else {
+          setRows(listPayload.rows ?? []);
+          setTotal(Number(listPayload.total ?? 0));
+          setServerToday(typeof listPayload.serverToday === 'string' ? listPayload.serverToday : null);
         }
-        setRows(payload.rows ?? []);
-        setTotal(Number(payload.total ?? 0));
-        setServerToday(typeof payload.serverToday === 'string' ? payload.serverToday : null);
-      } finally { setLoading(false); }
+        if (analyticsRes.ok) setAnalyticsRows(analyticsPayload.rows ?? []);
+      } finally {
+        setLoading(false);
+      }
     };
     void load();
-  }, [debouncedQ, page, pageSize, status, partnerOwner, fazNo, sla, owner, responsible, fromDate, toDate]);
+  }, [debouncedQ, page, pageSize, status, fazNo, sla, owner, responsible, effectiveFrom, effectiveTo]);
 
-  const slimRows = useMemo(() => rows.map((row) => ({ ...row, sla: row.sla_presentation ?? getSlaPresentation(row.due_date, row.activity_status, serverToday) })), [rows, serverToday]);
-  const stats = useMemo(() => ([
-    { label: 'Görünen Aktivite', value: rows.length },
-    { label: 'Toplam Sonuç', value: total },
-    { label: 'Tamamlanan', value: rows.filter((row) => getSlaState(row.due_date, row.activity_status, serverToday) === 'completed').length },
-    { label: 'Geciken', value: rows.filter((row) => getSlaState(row.due_date, row.activity_status, serverToday) === 'overdue').length },
-    { label: 'Bugün', value: rows.filter((row) => getSlaState(row.due_date, row.activity_status, serverToday) === 'today').length },
-  ]), [rows, total, serverToday]);
+  const slimRows = useMemo<ActivityRowWithSla[]>(
+    () => rows.map((row) => ({ ...row, sla: row.sla_presentation ?? getSlaPresentation(row.due_date, row.activity_status, serverToday) })),
+    [rows, serverToday],
+  );
+
+  const analyticsSlimRows = useMemo<ActivityRowWithSla[]>(
+    () => analyticsRows.map((row) => ({ ...row, sla: row.sla_presentation ?? getSlaPresentation(row.due_date, row.activity_status, serverToday) })),
+    [analyticsRows, serverToday],
+  );
+
+  const personRows = useMemo(() => {
+    const map = new Map<string, { title: string; role: string; totalCount: number; overdueCount: number; firms: Set<string> }>();
+    analyticsSlimRows.forEach((row) => {
+      const title = (row.owner ?? '').trim() || 'Tanımsız Kişi';
+      const role = resolveRole(row) === 'rs' ? 'Retail Support' : 'Sales';
+      const firm = (row.musteriler?.musteri ?? '').trim() || 'Tanımsız Firma';
+      if (!map.has(title)) map.set(title, { title, role, totalCount: 0, overdueCount: 0, firms: new Set() });
+      const item = map.get(title)!;
+      item.totalCount += 1;
+      item.firms.add(firm);
+      if (getSlaState(row.due_date, row.activity_status, serverToday) === 'overdue') item.overdueCount += 1;
+    });
+    return Array.from(map.values())
+      .map((v) => ({ ...v, firms: v.firms.size }))
+      .sort((a, b) => b.totalCount - a.totalCount);
+  }, [analyticsSlimRows, serverToday]);
+
+  const roleRows = useMemo(() => {
+    const roles = [
+      { title: 'Sales', key: 'sales' as const },
+      { title: 'Retail Support', key: 'rs' as const },
+    ];
+    return roles.map((role) => {
+      const subset = analyticsSlimRows.filter((row) => resolveRole(row) === role.key);
+      const firmCount = new Set(subset.map((row) => (row.musteriler?.musteri ?? '').trim() || 'Tanımsız Firma')).size;
+      const overdue = subset.filter((row) => getSlaState(row.due_date, row.activity_status, serverToday) === 'overdue').length;
+      const today = subset.filter((row) => getSlaState(row.due_date, row.activity_status, serverToday) === 'today').length;
+      return { title: role.title, totalCount: subset.length, firms: firmCount, overdueCount: overdue, todayCount: today };
+    });
+  }, [analyticsSlimRows, serverToday]);
+
+  const leaderboard = personRows.slice(0, 3);
+  const salesTotal = roleRows.find((row) => row.title === 'Sales')?.totalCount ?? 0;
+  const rsTotal = roleRows.find((row) => row.title === 'Retail Support')?.totalCount ?? 0;
+  const overdueTotal = analyticsSlimRows.filter((row) => getSlaState(row.due_date, row.activity_status, serverToday) === 'overdue').length;
+  const todayTotal = analyticsSlimRows.filter((row) => getSlaState(row.due_date, row.activity_status, serverToday) === 'today').length;
+  const completedTotal = analyticsSlimRows.filter((row) => getSlaState(row.due_date, row.activity_status, serverToday) === 'completed').length;
+  const slaHealthPct = Math.round((completedTotal / Math.max(1, analyticsSlimRows.length)) * 100);
+
+  const companyPhase = useMemo(() => {
+    const latestByFirm = new Map<string, ActivityRowWithSla>();
+    analyticsSlimRows.forEach((row) => {
+      const firm = (row.musteriler?.musteri ?? '').trim() || 'Tanımsız Firma';
+      const existing = latestByFirm.get(firm);
+      if (!existing || new Date(row.created_at).getTime() > new Date(existing.created_at).getTime()) {
+        latestByFirm.set(firm, row);
+      }
+    });
+
+    const totalFirms = latestByFirm.size;
+    const list = PHASE_DEFS.map((phase) => {
+      let count = 0;
+      latestByFirm.forEach((row) => {
+        if (phase.match(row.faz_no)) count += 1;
+      });
+      return {
+        ...phase,
+        count,
+        pct: percentage(count, totalFirms || 1),
+      };
+    });
+
+    return {
+      totalFirms,
+      list,
+    };
+  }, [analyticsSlimRows]);
+
+  const riskByPhase = useMemo(() => {
+    return companyPhase.list
+      .map((item) => ({
+        title: item.title,
+        count: item.count,
+        pct: item.pct,
+      }))
+      .sort((a, b) => b.count - a.count)[0];
+  }, [companyPhase]);
+
+  const dashboardMetrics = useMemo(() => {
+    const now = new Date();
+    const startOfToday = new Date(now);
+    startOfToday.setHours(0, 0, 0, 0);
+
+    const dayOfWeek = startOfToday.getDay();
+    const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    const startOfWorkWeek = new Date(startOfToday);
+    startOfWorkWeek.setDate(startOfToday.getDate() + mondayOffset);
+
+    const weekdayLabels = ['PZT', 'SAL', 'ÇAR', 'PER', 'CUM'];
+    const weekdayBucket = Array.from({ length: 5 }, (_, index) => {
+      const day = new Date(startOfWorkWeek);
+      day.setDate(startOfWorkWeek.getDate() + index);
+      const key = day.toISOString().slice(0, 10);
+      return {
+        key,
+        label: weekdayLabels[index],
+        count: 0,
+      };
+    });
+    const weekdayMap = new Map(weekdayBucket.map((item) => [item.key, item]));
+
+    const currentWeekStart = new Date(startOfToday);
+    currentWeekStart.setDate(startOfToday.getDate() - 6);
+    const previousWeekStart = new Date(startOfToday);
+    previousWeekStart.setDate(startOfToday.getDate() - 13);
+    const previousWeekEnd = new Date(startOfToday);
+    previousWeekEnd.setDate(startOfToday.getDate() - 7);
+
+    let currentWeekCount = 0;
+    let previousWeekCount = 0;
+    const firmsThisWeek = new Set<string>();
+
+    analyticsSlimRows.forEach((row) => {
+      const created = new Date(row.created_at);
+      const createdKey = created.toISOString().slice(0, 10);
+      const firm = (row.musteriler?.musteri ?? '').trim() || 'Tanımsız Firma';
+
+      if (weekdayMap.has(createdKey)) {
+        weekdayMap.get(createdKey)!.count += 1;
+      }
+      if (created >= currentWeekStart && created <= now) {
+        currentWeekCount += 1;
+        firmsThisWeek.add(firm);
+      }
+      if (created >= previousWeekStart && created <= previousWeekEnd) {
+        previousWeekCount += 1;
+      }
+    });
+
+    const momentumPct = previousWeekCount > 0
+      ? Math.round(((currentWeekCount - previousWeekCount) / previousWeekCount) * 100)
+      : currentWeekCount > 0
+        ? 100
+        : 0;
+
+    const atRiskFirmCount = new Set(
+      analyticsSlimRows
+        .filter((row) => getSlaState(row.due_date, row.activity_status, serverToday) === 'overdue')
+        .map((row) => (row.musteriler?.musteri ?? '').trim() || 'Tanımsız Firma'),
+    ).size;
+
+    const avgPerFirm = companyPhase.totalFirms ? (analyticsSlimRows.length / companyPhase.totalFirms) : 0;
+    const workWeekCount = weekdayBucket.reduce((sum, item) => sum + item.count, 0);
+
+    return {
+      momentumPct,
+      currentWeekCount,
+      previousWeekCount,
+      newFirmsThisWeek: firmsThisWeek.size,
+      atRiskFirmCount,
+      avgPerFirm: avgPerFirm.toFixed(1),
+      trend: weekdayBucket,
+      trendTotal: workWeekCount,
+      trendMax: Math.max(1, ...weekdayBucket.map((item) => item.count)),
+    };
+  }, [analyticsSlimRows, companyPhase.totalFirms, serverToday]);
+
+  const dueDateAnalysis = useMemo(() => {
+    const relevant = analyticsSlimRows.filter((row) => getSlaState(row.due_date, row.activity_status, serverToday) !== 'completed');
+    const overdue = relevant.filter((row) => getSlaState(row.due_date, row.activity_status, serverToday) === 'overdue').length;
+    const dueToday = relevant.filter((row) => getSlaState(row.due_date, row.activity_status, serverToday) === 'today').length;
+    const onTime = relevant.filter((row) => getSlaState(row.due_date, row.activity_status, serverToday) === 'upcoming').length;
+    const totalOpen = Math.max(1, relevant.length);
+    return {
+      overdue,
+      dueToday,
+      onTime,
+      totalOpen: relevant.length,
+      overduePct: percentage(overdue, totalOpen),
+      onTimePct: percentage(onTime, totalOpen),
+    };
+  }, [analyticsSlimRows, serverToday]);
+
+  const activeFilterCount = [debouncedQ, status, fazNo, sla, owner, responsible, fromDate, toDate].filter(Boolean).length;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   const clearFilters = () => {
     setQ('');
     setStatus('');
-    setPartnerOwner('');
     setFazNo('');
     setSla('');
     setOwner('');
     setResponsible('');
     setFromDate('');
     setToDate('');
-    setPageSize(20);
+    setTimeRange('week');
+    setShowAdvanced(false);
+    setPage(1);
   };
 
   return (
-    <main className="page">
-      <style jsx>{`
-        .page { display: grid; gap: 16px; }
-        .hero, .surface, .card { border: 1px solid #d7e3ef; background: rgba(255,255,255,.97); border-radius: 24px; box-shadow: 0 18px 40px rgba(8,28,66,.06); }
-        .hero, .surface { padding: 18px; }
-        .hero { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 16px; align-items: end; }
-        .eyebrow { display: inline-flex; min-height: 32px; align-items: center; padding: 0 12px; border-radius: 999px; background: rgba(9,51,122,.08); color: #09337a; border: 1px solid rgba(9,51,122,.15); font-size: 12px; font-weight: 900; }
-        .title { margin: 12px 0 0; font-size: clamp(28px, 3vw, 40px); letter-spacing: -.05em; }
-        .sub { color: #5b6b80; font-size: 14px; margin-top: 8px; max-width: 68ch; }
-        .primary, .secondary, .ghost { min-height: 42px; border-radius: 14px; padding: 0 14px; font-weight: 800; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; }
-        .primary { border: 1px solid #06285d; background: linear-gradient(135deg,#06285d 0%,#0a4fa3 100%); color: #fff; }
-        .secondary, .ghost { border: 1px solid #d5dee8; background: #fff; color: #0f172a; }
-        .filters-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
-        .input, .select { min-height: 42px; border-radius: 14px; border: 1px solid #d5dee8; padding: 0 13px; background: #fff; width: 100%; }
-        .field { display: grid; gap: 6px; }
-        .field-label { font-size: 11px; font-weight: 900; color: #5b6b80; text-transform: uppercase; letter-spacing: .04em; }
-        .filter-actions { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; margin-top: 10px; }
-        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
-        .card { padding: 14px 15px; }
-        .card-label { color: #64748b; font-size: 12px; }
-        .card-value { margin-top: 6px; font-size: 22px; font-weight: 900; }
-        .table-wrap { overflow: auto; border: 1px solid #e2e8f0; border-radius: 18px; background: #fff; }
-        table { width: 100%; border-collapse: collapse; min-width: 1080px; }
-        th { text-align: left; font-size: 11px; color: #64748b; padding: 11px 12px; border-bottom: 1px solid #e2e8f0; background: #f8fafc; }
-        td { padding: 11px 12px; border-bottom: 1px solid #eef2f7; font-size: 13px; color: #0f172a; vertical-align: middle; }
-        .name { font-weight: 900; }
-        .phase { display: inline-flex; padding: 5px 10px; border-radius: 999px; background: rgba(9,51,122,.08); color: #09337a; font-size: 11px; font-weight: 900; }
-        .sla-pill { display: inline-flex; align-items: center; gap: 0; min-width: 64px; padding: 0; border-radius: 0; font-size: 11px; font-weight: 900; white-space: nowrap; }
-        .sla-top { display:flex; align-items:center; gap:0; }
-        .sla-dot { min-width: 28px; height: 28px; border-radius: 999px; border: 1px solid transparent; display:inline-flex; align-items:center; justify-content:center; font-size: 11px; line-height: 1; font-weight: 900; box-shadow: none; color: #fff; background: currentColor; padding: 0 8px; }
-        .sla-sub { display:none; }
-        .message { color: #b91c1c; background: #fff1f2; border: 1px solid #fecdd3; padding: 11px 13px; border-radius: 14px; font-size: 13px; }
-        .muted { color: #64748b; font-size: 12px; }
-        .action-link { display:inline-flex; min-height: 34px; align-items:center; justify-content:center; border-radius: 10px; border: 1px solid #cbd5e1; padding: 0 10px; text-decoration:none; color:#0f172a; font-weight:800; background:#fff; }
-        .pager { display:flex; justify-content:space-between; gap:12px; align-items:center; flex-wrap:wrap; }
-        .pager-buttons, .inline { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
-        @media (max-width: 1320px) { .filters-grid { grid-template-columns: repeat(3, minmax(0,1fr)); } }
-        @media (max-width: 900px) { .hero, .filters-grid { grid-template-columns: 1fr; } }
-      `}</style>
+    <main className="pax-page-container">
 
-      <section className="hero">
-        <div>
-          <span className="eyebrow">Kurumsal CRM · Aktiviteler</span>
-          <h1 className="title">Aktivite Dashboard</h1>
-          <div className="sub">Aktivite filtreleri sorumlu, ekleyen, bekleyen taraf, tarih aralığı ve SLA bazında genişletildi. SLA alanı sadeleştirildi: tamamlananlar yeşil tik, planlı kayıtlar yeşil gün sayısı, gecikenler kırmızı eksi gün, bekleyenler sarı uyarı olarak görünür.</div>
+      <ActivitiesDashboard
+        slaHealthPct={slaHealthPct}
+        dashboardMetrics={dashboardMetrics}
+        companyPhase={companyPhase}
+        leaderboard={leaderboard}
+        riskByPhase={riskByPhase}
+        salesTotal={salesTotal}
+        rsTotal={rsTotal}
+        dueDateAnalysis={dueDateAnalysis}
+      />
+
+      <section className="command-bar">
+        <div className="command-shell">
+          <div className="command-main">
+            <div className="command-search">
+              <span style={{ color: 'var(--text-3)' }}>⌕</span>
+              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Müşteri, aktivite veya firma ara" />
+            </div>
+            <div className="command-select-wrap">
+              <span className="command-label">Sorumlu</span>
+              <select className="command-select" value={responsible} onChange={(e) => setResponsible(e.target.value)}>
+                <option value="">Tüm sorumlular</option>
+                {options.responsibleOptions.map((v) => <option key={v} value={v}>{v}</option>)}
+              </select>
+            </div>
+            <div className="command-select-wrap">
+              <span className="command-label">Durum</span>
+              <select className="command-select" value={status} onChange={(e) => setStatus(e.target.value)}>
+                <option value="">Tüm durumlar</option>
+                {options.statusOptions.map((v) => <option key={v} value={v}>{v}</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="command-side" />
         </div>
-        <Link className="primary" href="/crm/activities/new">+ Aktivite Ekle</Link>
+
+        <div className="command-toolbar">
+          <div className="command-meta-left">
+            <span className="status-chip">{total} toplam sonuç</span>
+            <span className="status-chip">{rows.length} görünür kayıt</span>
+            <span className="status-chip">{pageSize} / sayfa</span>
+            {activeFilterCount > 0 ? <span className="chip active">{activeFilterCount} aktif filtre</span> : null}
+          </div>
+          <div className="command-actions">
+            <button className={`segment-btn${timeRange === 'week' ? ' active' : ''}`} onClick={() => setTimeRange('week')}>Haftalık</button>
+            <button className={`segment-btn${timeRange === 'month' ? ' active' : ''}`} onClick={() => setTimeRange('month')}>Aylık</button>
+            <button className={`segment-btn${timeRange === 'quarter' ? ' active' : ''}`} onClick={() => setTimeRange('quarter')}>Quarterly</button>
+            <button className={`segment-btn${timeRange === 'all' ? ' active' : ''}`} onClick={() => setTimeRange('all')}>Tümü</button>
+            <button className="command-action" onClick={() => setShowAdvanced((v) => !v)}>{showAdvanced ? 'Detaylı aramayı kapat' : 'Detaylı arama'}</button>
+            <button className="command-action ghost" onClick={clearFilters}>Sıfırla</button>
+          </div>
+        </div>
+
+        {showAdvanced ? (
+          <div className="advanced-shell">
+            <div className="advanced-grid">
+              <label className="field">
+                <span className="field-label">Faz</span>
+                <select className="select" value={fazNo} onChange={(e) => setFazNo(e.target.value)}>
+                  <option value="">Tüm fazlar</option>
+                  {options.phaseOptions.map((v) => <option key={v} value={v}>{`FAZ ${v}`}</option>)}
+                </select>
+              </label>
+              <label className="field">
+                <span className="field-label">SLA / risk</span>
+                <select className="select" value={sla} onChange={(e) => setSla(e.target.value)}>
+                  <option value="">Tüm SLA</option>
+                  {SLA_OPTIONS.filter(Boolean).map((v) => <option key={v} value={v}>{SLA_LABELS[v]}</option>)}
+                </select>
+              </label>
+              <label className="field">
+                <span className="field-label">Aktiviteyi giren</span>
+                <select className="select" value={owner} onChange={(e) => setOwner(e.target.value)}>
+                  <option value="">Tüm kişiler</option>
+                  {options.ownerOptions.map((v) => <option key={v} value={v}>{v}</option>)}
+                </select>
+              </label>
+              <label className="field">
+                <span className="field-label">Başlangıç tarihi</span>
+                <input className="input" type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
+              </label>
+              <label className="field">
+                <span className="field-label">Bitiş tarihi</span>
+                <input className="input" type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
+              </label>
+            </div>
+          </div>
+        ) : null}
       </section>
 
-      <section className="surface">
-        <div className="filters-grid">
-          <label className="field"><span className="field-label">Arama</span><input className="input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Müşteri, aksiyon, not, ekleyen" /></label>
-          <label className="field"><span className="field-label">Müşteri Sorumlusu</span><select className="select" value={responsible} onChange={(e) => setResponsible(e.target.value)}><option value="">Tüm Sorumlular</option>{options.responsibleOptions.map((v) => <option key={v} value={v}>{v}</option>)}</select></label>
-          <label className="field"><span className="field-label">Aktiviteyi Giren</span><select className="select" value={owner} onChange={(e) => setOwner(e.target.value)}><option value="">Tüm Kişiler</option>{options.ownerOptions.map((v) => <option key={v} value={v}>{v}</option>)}</select></label>
-          <label className="field"><span className="field-label">Bekleyen Taraf</span><select className="select" value={partnerOwner} onChange={(e) => setPartnerOwner(e.target.value)}><option value="">Tüm Bekleyenler</option>{options.partnerOptions.map((v) => <option key={v} value={v}>{v}</option>)}</select></label>
-          <label className="field"><span className="field-label">Faz</span><select className="select" value={fazNo} onChange={(e) => setFazNo(e.target.value)}><option value="">Tüm Fazlar</option>{options.phaseOptions.map((v) => <option key={v} value={v}>{`FAZ ${v}`}</option>)}</select></label>
-          <label className="field"><span className="field-label">Durum</span><select className="select" value={status} onChange={(e) => setStatus(e.target.value)}><option value="">Tüm Durumlar</option>{options.statusOptions.map((v) => <option key={v} value={v}>{v}</option>)}</select></label>
-          <label className="field"><span className="field-label">SLA</span><select className="select" value={sla} onChange={(e) => setSla(e.target.value)}><option value="">Tüm SLA</option>{SLA_OPTIONS.filter(Boolean).map((v) => <option key={v} value={v}>{SLA_LABELS[v]}</option>)}</select></label>
-          <label className="field"><span className="field-label">Sayfa Boyutu</span><select className="select" value={String(pageSize)} onChange={(e) => setPageSize(Number(e.target.value))}>{PAGE_SIZE_OPTIONS.map((v) => <option key={v} value={v}>{v} / sayfa</option>)}</select></label>
-          <label className="field"><span className="field-label">Başlangıç Tarihi</span><input className="input" type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} /></label>
-          <label className="field"><span className="field-label">Bitiş Tarihi</span><input className="input" type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} /></label>
-        </div>
-        <div className="filter-actions">
-          <button className="secondary" onClick={clearFilters}>Filtreyi Temizle</button>
-        </div>
-      </section>
-
-      <section className="stats">{stats.map((item) => <div key={item.label} className="card"><div className="card-label">{item.label}</div><div className="card-value">{item.value}</div></div>)}</section>
       {msg ? <div className="message">{msg}</div> : null}
 
       <section className="surface">
-        <div className="table-wrap"><table><thead><tr>{['Tarih', 'Müşteri', 'Fazı', 'Ekleyen', 'Bekleyen', 'Sonraki Aksiyon', 'Hedef Tarih', 'SLA', 'İşlem'].map((h) => <th key={h}>{h}</th>)}</tr></thead><tbody>{slimRows.map((row) => (<tr key={row.id}><td>{formatDate(row.created_at)}</td><td><div className="name">{row.musteriler?.musteri ?? '-'}</div><div className="muted">Sorumlu: {row.musteriler?.sorumlu ?? '-'}</div></td><td><span className="phase">{row.faz_no != null ? `FAZ ${row.faz_no}` : '-'}</span></td><td>{row.owner ?? '-'}</td><td>{row.partner_owner ?? '-'}</td><td>{row.activity_label ?? '-'}</td><td>{formatDate(row.due_date)}</td><td><span className="sla-pill" style={row.sla.tone}><span className="sla-top"><span className="sla-dot" style={{ backgroundColor: row.sla.dotColor, borderColor: row.sla.dotBorderColor ?? 'transparent', color: row.sla.textColor ?? '#ffffff' }}>{row.sla.dotText || ""}</span><span className="sla-sub">{row.sla.dayText || "-"}</span></span></span></td><td><Link className="action-link" href={`/crm/activities/new?edit=${row.id}`}>Düzenle</Link></td></tr>))}{!loading && !slimRows.length ? <tr><td colSpan={9} style={{ padding: 16, color: '#64748b' }}>Kayıt bulunamadı.</td></tr> : null}{loading ? <tr><td colSpan={9} style={{ padding: 16, color: '#64748b' }}>Yükleniyor...</td></tr> : null}</tbody></table></div>
-        <div className="pager"><div className="inline"><span className="muted">Toplam {total} kayıt · Sayfa {page} / {totalPages}</span></div><div className="pager-buttons"><button className="ghost" disabled={page <= 1 || loading} onClick={() => setPage((p) => Math.max(1, p - 1))}>Önceki</button><button className="ghost" disabled={page >= totalPages || loading} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>Sonraki</button></div></div>
+        <div className="table-head">
+          <div>
+            <h2 className="section-title">Aktivite listesi</h2>
+          </div>
+          <div className="table-actions">
+            <Link
+              href="/crm/activities/new"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                minHeight: 40,
+                padding: '0 16px',
+                borderRadius: 12,
+                border: '1px solid #0b2456',
+                background: 'linear-gradient(135deg,#0b2456 0%, #1d4ed8 100%)',
+                color: '#ffffff',
+                fontSize: 12,
+                fontWeight: 800,
+                textDecoration: 'none',
+                boxShadow: '0 10px 18px rgba(29,78,216,.22)',
+              }}
+            >
+              Aktivite Ekle
+            </Link>
+          </div>
+        </div>
+
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Tarih</th>
+                <th>Müşteri Adı</th>
+                <th>Faz</th>
+                <th>Ekleyen</th>
+                <th>Bekleyen Taraf</th>
+                <th>Sonraki Aksiyon</th>
+                <th>Hedef Tarih</th>
+                <th>SLA</th>
+                <th>İşlem</th>
+              </tr>
+            </thead>
+            <tbody>
+              {slimRows.map((row) => {
+                const role = resolveRole(row);
+                return (
+                  <tr key={row.id}>
+                    <td>{formatDate(row.created_at)}</td>
+                    <td>
+                      <div className="name">{row.musteriler?.musteri ?? '-'}</div>
+                      <div className="muted">Sorumlu: {row.musteriler?.sorumlu ?? '-'}</div>
+                    </td>
+                    <td><span className="phase-pill">{row.faz_no != null ? `FAZ ${row.faz_no}` : '-'}</span></td>
+                    <td>
+                      <div className="person-stack">
+                        <span className="person-main">{row.owner ?? '-'}</span>
+                        <span className="person-sub">{role === 'rs' ? 'Retail Support' : 'Sales'}</span>
+                      </div>
+                    </td>
+                    <td>
+                      <div className="person-stack">
+                        <span className="person-main">{row.partner_owner ?? '-'}</span>
+                      </div>
+                    </td>
+                    <td><span className="activity-pill">{row.activity_label ?? '-'}</span></td>
+                    <td>{formatDate(row.due_date)}</td>
+                    <td>
+                      <span className="sla-inline">
+                        <span
+                          className="sla-dot"
+                          style={{
+                            backgroundColor: row.sla.dotColor,
+                            borderColor: row.sla.dotBorderColor ?? 'transparent',
+                            color: row.sla.textColor ?? '#ffffff',
+                          }}
+                        >
+                          {row.sla.dotText || ''}
+                        </span>
+                        <span className="sla-text">{row.sla.dayText || '-'}</span>
+                      </span>
+                    </td>
+                    <td><Link className="link-btn" href={`/crm/activities/new?edit=${row.id}`}>Düzenle</Link></td>
+                  </tr>
+                );
+              })}
+              {!loading && !slimRows.length ? <tr><td colSpan={9} style={{ padding: 18, color: 'var(--text-3)' }}>Kayıt bulunamadı.</td></tr> : null}
+              {loading ? <tr><td colSpan={9} style={{ padding: 18, color: 'var(--text-3)' }}>Yükleniyor...</td></tr> : null}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="pager">
+          <div className="inline"><span style={{ color: 'var(--text-3)', fontSize: 13 }}>Toplam {total} kayıt · Sayfa {page} / {totalPages}</span></div>
+          <div className="pager-buttons">
+            <button className="btn-ghost" disabled={page <= 1 || loading} onClick={() => setPage((p) => Math.max(1, p - 1))}>Önceki</button>
+            <button className="btn-ghost" disabled={page >= totalPages || loading} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>Sonraki</button>
+          </div>
+        </div>
       </section>
     </main>
   );

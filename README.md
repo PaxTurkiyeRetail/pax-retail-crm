@@ -66,3 +66,22 @@ Aktivite planları için `pipeline_eventleri` tablosuna plan alanlarını ekle:
 
 ## Künye migration notu
 Künye ekranindaki `Franchise Sayisi` alani DBde `public.musteri_kunye.franchise_sayisi` kolonuna yazilir. Canli DBde bu kolon yoksa `sql/kunye_enterprise_refresh.sql` dosyasini once calistirin.
+
+## Quote Module (Teklif Yönetimi)
+Yeni eklenen ekranlar:
+- `/crm/quotes` : teklif portföyü
+- `/crm/quotes/new` : quote builder
+- `/crm/quotes/[quoteId]` : teklif detay
+- `/crm/quotes/[quoteId]/print` : yazdır / PDF görünümü
+
+### Zorunlu DB setup
+Supabase SQL Editor içinde şu dosyayı çalıştır:
+```sql
+-- sql/quote_module_setup.sql
+```
+
+### Akış
+- Draft veya Sent teklif oluşturulur.
+- Sent olduğunda `pipeline_eventleri` tablosuna `AKTIVITE:Teklif Paylaşıldı` aktivitesi otomatik eklenir.
+- Follow-up tarihi teklif tarihinden +30 gün, geçerlilik +15 gündür.
+- Pricing engine önce `quote_products` ve `quote_pricing_rules` tablolarını okur; tablolar yoksa kod içi static fallback katalog kullanır.

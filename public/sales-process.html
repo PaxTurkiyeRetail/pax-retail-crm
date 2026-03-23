@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PAX Retail Yeni Müşteri Kazanım Süreci</title>
+  <style>
+    :root{
+      --bg:#f8fafc;
+      --text:#0f172a;
+      --muted:#64748b;
+      --muted-2:#94a3b8;
+      --border:#e2e8f0;
+      --card:#ffffff;
+      --shadow:0 1px 2px rgba(15,23,42,.04);
+      --indigo-bg:#eef2ff;
+      --indigo-br:#c7d2fe;
+      --indigo-tx:#312e81;
+
+      --blue-bg:#eff6ff; --blue-br:#93c5fd; --blue-tx:#1d4ed8; --blue-l:#60a5fa;
+      --purple-bg:#faf5ff; --purple-br:#d8b4fe; --purple-tx:#7e22ce; --purple-l:#a855f7;
+      --amber-bg:#fffbeb; --amber-br:#fcd34d; --amber-tx:#b45309; --amber-l:#f59e0b;
+      --emerald-bg:#ecfdf5; --emerald-br:#86efac; --emerald-tx:#15803d; --emerald-l:#22c55e;
+      --slate-bg:#f1f5f9; --slate-br:#cbd5e1; --slate-tx:#475569; --slate-l:#94a3b8;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      background:var(--bg);
+      color:var(--text);
+      font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+    }
+    .page{min-height:auto;padding:16px;color:var(--text)}
+    .container{width:100%;max-width:none;margin:0 auto}
+    h1{margin:0 0 8px;font-size:30px;line-height:1.2;font-weight:700}
+    p{margin:0}
+    .sub{margin-bottom:8px;color:var(--muted)}
+    .desc{width:100%;margin-bottom:16px;color:var(--muted);font-size:14px;line-height:1.7}
+    .discipline{
+      width:100%;margin-bottom:32px;padding:16px;
+      border:1px solid var(--indigo-br);border-radius:12px;
+      background:var(--indigo-bg);color:var(--indigo-tx);
+      font-size:14px;line-height:1.75;
+    }
+    .grid-5{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:16px;margin-bottom:24px}
+    .grid-assets{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:16px;margin-bottom:24px;align-items:stretch}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow)}
+    .grid-assets > .card{height:100%}
+    .p-4{padding:16px}.p-6{padding:24px}
+    .metric-label{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted-2);text-align:center}
+    .metric-value{margin-top:8px;font-size:30px;line-height:1;font-weight:600;text-align:center}
+    .section-title{
+      margin-bottom:16px;font-size:14px;font-weight:600;
+      letter-spacing:.08em;text-transform:uppercase;color:#64748b;
+    }
+    .asset-title{margin:0 0 16px;font-size:14px;line-height:1.2;font-weight:600;white-space:nowrap;min-height:17px}
+    .stack{display:grid;gap:8px}
+    .asset-device-shift .stack{transform:translateX(-16px)}
+    .item{font-size:14px;line-height:1.35;color:var(--text)}
+
+    .item-highlight{color:#16a34a;}
+    .device-text-green{color:#16a34a;}
+    .item-red{color:#dc2626;}
+    .device-group{
+      padding-top:8px;font-size:12px;font-weight:600;letter-spacing:.08em;
+      text-transform:uppercase;color:var(--muted-2)
+    }
+    .stack > .device-group:first-child{padding-top:0}
+    .device-row{
+      display:grid;grid-template-columns:12px 1fr 28px 12px 1fr;
+      align-items:start;font-size:14px;line-height:1.35
+    }
+    .bullet{color:#94a3b8}
+    .device-text{white-space:nowrap;font-weight:400;color:var(--text)}
+    .process-wrap{
+      width:100%;
+      max-width:none;
+      margin:0 auto;
+      padding-inline:0;
+    }
+    .pipeline{
+      width:100%;
+      margin:0 auto 24px;display:flex;flex-wrap:wrap;align-items:center;gap:10px;
+      font-size:12px;color:var(--muted)
+    }
+    .process-title{
+      width:100%;
+      max-width:100%;
+      margin:0 0 16px;
+    }
+    .pill{
+      display:inline-flex;align-items:center;gap:8px;
+      border:1px solid var(--border);border-radius:999px;
+      padding:4px 12px;background:#fff;
+      white-space:nowrap;flex-wrap:nowrap
+    }
+    .blue{background:var(--blue-bg);border-color:var(--blue-br);color:var(--blue-tx)}
+    .purple{background:var(--purple-bg);border-color:var(--purple-br);color:var(--purple-tx)}
+    .amber{background:var(--amber-bg);border-color:var(--amber-br);color:var(--amber-tx)}
+    .emerald{background:var(--emerald-bg);border-color:var(--emerald-br);color:var(--emerald-tx)}
+    .slate{background:var(--slate-bg);border-color:var(--slate-br);color:var(--slate-tx)}
+    .pipeline-arrow{white-space:nowrap;flex:none}
+    .section-head,.row{min-width:0}
+    .sections{width:100%;display:grid;gap:16px}
+    .section-card{width:100%;overflow:hidden;padding:16px 20px;border-left:4px solid}
+    .border-blue{border-left-color:var(--blue-l)}
+    .border-purple{border-left-color:var(--purple-l)}
+    .border-amber{border-left-color:var(--amber-l)}
+    .border-emerald{border-left-color:var(--emerald-l)}
+    .border-slate{border-left-color:var(--slate-l)}
+    .section-head{
+      display:flex;align-items:center;justify-content:space-between;gap:12px;
+      margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid #f1f5f9;
+    }
+    .section-name{display:flex;align-items:center;gap:8px;font-size:16px;font-weight:600}
+    .count{
+      border:1px solid var(--border);border-radius:999px;
+      padding:4px 10px;font-size:11px;font-weight:500
+    }
+    .rows{display:grid}
+    .row{
+      display:grid;grid-template-columns:48px minmax(0,1fr);gap:8px;
+      align-items:center;padding:8px 0;border-bottom:1px solid #f1f5f9;
+      transition:background-color .15s ease;
+    }
+    .row:hover{background:#f8fafc}
+    .num{
+      display:flex;align-items:center;justify-content:center;
+      width:max-content;min-width:28px;height:28px;padding:0 8px;
+      border:1px solid var(--border);border-radius:6px;
+      background:#f1f5f9;color:#475569;font-size:11px;font-weight:500;
+      transition:.15s ease;
+    }
+    .row:hover .num{border-color:#c7d2fe;background:#eef2ff;color:#4338ca}
+    .row-text{display:flex;align-items:center;font-size:14px;font-weight:500;color:var(--text);white-space:nowrap}
+    .footer-note{margin-top:32px;font-size:12px;color:var(--muted-2)}
+    .icon{width:14px;height:14px;display:inline-block;color:#94a3b8;flex:none}
+    @media (max-width:1280px){
+      .grid-assets{grid-template-columns:repeat(3,minmax(0,1fr))}
+    }
+    @media (max-width:1100px){
+      .grid-5{grid-template-columns:repeat(3,minmax(0,1fr))}
+      .grid-assets{grid-template-columns:repeat(2,minmax(0,1fr))}
+    }
+    @media (max-width:700px){
+      .page{padding:16px}
+      .process-wrap{max-width:100%;padding-inline:0}
+      .grid-5,.grid-assets{grid-template-columns:1fr}
+      .device-row{grid-template-columns:12px 1fr}
+      .accessory-row{
+        grid-template-columns:12px max-content 18px 12px max-content;
+        justify-content:center;
+        transform:translateX(-10px);
+      }
+      .right-only{display:none}
+      .section-head{align-items:flex-start;flex-direction:column}
+    }
+    .device-text.device-text-green,.device-text.right-only.device-text-green{color:#16a34a !important;}
+    .device-text.device-text-red,.device-text.right-only.device-text-red{color:#dc2626 !important;}
+    .bullet.bullet-red,.bullet.right-only.bullet-red{color:#dc2626 !important;}
+    .bullet.bullet-green,.bullet.right-only.bullet-green{color:#16a34a !important;}
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="container">
+      <h1>PAX Retail Yeni Müşteri Kazanım Süreci</h1>
+      <p class="sub">Retail satış ve operasyon süreç mimarisi</p>
+      <p class="desc">PAX Retail ekibinin müşteri kazanımından operasyon stabilizasyonuna kadar tüm satış, teslimat ve büyüme süreçlerini tanımlayan çalışma standardı.</p>
+
+      <div class="discipline">
+        <strong>Retail Sales Discipline:</strong>
+        Her müşteri teması sonrası, en geç <strong>24 saat içinde</strong> PAX 360 CRM kaydının tamamlanması ve kısa görüşme özetinin mail ile paylaşılması, sürecin sağlıklı, görünür ve yönetilebilir ilerlemesi için kritik önem taşır. Kayıt yoksa takip yoktur; takip yoksa da sürecin sağlıklı şekilde finalize edilmesi mümkün olmaz.
+      </div>
+
+      <div class="grid-5">
+        <div class="card p-4"><div class="metric-label">Toplam Adım</div><div class="metric-value">25</div></div>
+        <div class="card p-4"><div class="metric-label">Sunum</div><div class="metric-value">10</div></div>
+        <div class="card p-4"><div class="metric-label">Sözleşme</div><div class="metric-value">7</div></div>
+        <div class="card p-4"><div class="metric-label">Operasyon Dokümanı</div><div class="metric-value">7</div></div>
+        <div class="card p-4"><div class="metric-label">Cihaz Portföyü</div><div class="metric-value">11</div></div>
+        <div class="card p-4"><div class="metric-label">Mail Şablonu</div><div class="metric-value">3</div></div>
+      </div>
+
+      <div class="section-title">Kullanılan Varlıklar</div>
+
+      <div class="grid-assets">
+        <div class="card p-6">
+          <h3 class="asset-title">Sunumlar</h3>
+          <div class="stack">
+            <div class="item item-red">• PAX Retail Sn.</div>
+            <div class="item item-red">• Cihaz Sn.</div>
+            <div class="item item-highlight">• PAX Platform Sn.</div>
+            <div class="item item-red">• Entegrasyon Sn.</div>
+            <div class="item item-highlight">• TMS Sn.</div>
+            <div class="item item-highlight">• Max Store Sn.</div>
+            <div class="item item-red">• POM Sn.</div>
+            <div class="item item-red">• ÖKC-EFT POS Fark Sn.</div>
+            <div class="item item-red">• VUK 507 Sn.</div>
+            <div class="item item-red">• Proje Geiçş Sn.</div>
+          </div>
+        </div>
+
+        <div class="card p-6">
+          <h3 class="asset-title">Sözleşmeler</h3>
+          <div class="stack">
+            <div class="item item-highlight">• NDA</div>
+            <div class="item item-highlight">• Cihaz Satış Sözl.</div>
+            <div class="item item-highlight">• PAX Platform Sözl.</div>
+            <div class="item item-red">• Kasa POS + TMS Sözl.</div>
+            <div class="item item-highlight">• TMS Sözl.</div>
+            <div class="item item-red">• Max Store Sözl.</div>
+            <div class="item item-red">• POM Sözl.</div>
+          </div>
+        </div>
+
+        <div class="card p-6">
+          <h3 class="asset-title">Operasyon Dokümanları</h3>
+          <div class="stack">
+            <div class="item item-highlight">• Teklif Şablonu</div>
+            <div class="item item-highlight">• Kurulum Kılavuzu</div>
+            <div class="item item-red">• <span style="white-space:nowrap;">PAX Platform Dk.</span></div>
+            <div class="item item-highlight">• ITSM Kullanım Dk.</div>
+            <div class="item item-red">• TMS Kullanım Dk.</div>
+            <div class="item item-highlight">• Test Senaryosu</div>
+            <div class="item item-red">• POC Scope Dk.</div>
+          </div>
+        </div>
+
+        <div class="card p-6">
+          <h3 class="asset-title">Cihaz / Datasheet / Guide</h3>
+          <div class="stack">
+            <div class="device-group">PAX Terminal Serisi</div>
+            <div class="device-row">
+              <div class="bullet bullet-green">•</div><div class="device-text device-text-green">A80</div><div></div>
+              <div class="bullet right-only bullet-green">•</div><div class="device-text right-only device-text-green">S210</div>
+            </div>
+            <div class="device-row">
+              <div class="bullet bullet-green">•</div><div class="device-text device-text-green">A920 Pro</div><div></div>
+              <div class="bullet right-only bullet-green">•</div><div class="device-text right-only device-text-green">A910S</div>
+            </div>
+            <div class="device-row">
+              <div class="bullet bullet-green">•</div><div class="device-text device-text-green">A6650</div><div></div>
+              <div class="bullet right-only bullet-green">•</div><div class="device-text right-only device-text-green">A6630</div>
+            </div>
+            <div class="device-row">
+              <div class="bullet bullet-green">•</div><div class="device-text device-text-green">A35</div><div></div>
+              <div class="bullet right-only"></div><div class="device-text right-only"></div>
+            </div>
+            <div class="device-row">
+              <div class="bullet bullet-green">•</div><div class="device-text device-text-green">IM30</div><div></div>
+              <div class="bullet right-only"></div><div class="device-text right-only"></div>
+            </div>
+
+            <div class="device-group">ELYS POS PC Serisi</div>
+            <div class="device-row">
+              <div class="bullet bullet-green">•</div><div class="device-text device-text-green">ELYS L1400</div><div></div>
+              <div class="bullet right-only bullet-green" style="margin-left:-6px;">•</div><div class="device-text right-only device-text-green" style="margin-left:-6px;">A3700</div>
+            </div>
+            <div class="device-row">
+              <div class="bullet bullet-green">•</div><div class="device-text device-text-green">ELYS T1450</div><div></div>
+              <div class="bullet right-only bullet-green" style="margin-left:-6px;">•</div><div class="device-text right-only device-text-green" style="margin-left:-6px;">B3700</div>
+            </div>
+
+            <div class="device-group">Yan Ürünler</div>
+            <div class="device-row accessory-row">
+              <div class="bullet bullet-red">•</div><div class="device-text device-text-red">T3180 (Prnt)</div><div></div>
+              <div class="bullet right-only bullet-green" style="margin-left:-12px;">•</div><div class="device-text right-only device-text-green" style="margin-left:-12px;">ELYS Hub</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card p-6">
+          <h3 class="asset-title">Standart Mail Şablonları</h3>
+          <div class="stack">
+          <div class="item item-highlight">• Referans Şablonu</div>
+          <div class="item item-highlight">• Satış Toplantısı Sonrası</div>
+          <div class="item item-highlight">• Vadesi Geçen Fatura Hk.</div>
+</div>
+          </div>
+        </div>
+        </div>
+      </div>
+
+      <div class="process-wrap">
+      <div class="pipeline">
+        <span class="pill blue">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><path d="M20 8v6"/><path d="M23 11h-6"/></svg>
+          Lead & Keşif (Fırsat)
+        </span>
+        <span>→</span>
+        <span class="pill purple">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 3h20"/><path d="M6 3v18"/><path d="m18 3-6 6"/><path d="m18 9-6-6"/><path d="M10 12H2"/><path d="M10 18H2"/></svg>
+          Çözüm Konumlandırma (İlk Temas)
+        </span>
+        <span>→</span>
+        <span class="pill amber">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/></svg>
+          Business Süreci (Business)
+        </span>
+        <span>→</span>
+        <span class="pill emerald">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10 17h4V5H2v12h3"/><path d="M14 8h4l4 4v5h-3"/><circle cx="7.5" cy="17.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>
+          Teslimat & Aktivasyon (Operasyon)
+        </span>
+        <span>→</span>
+        <span class="pill slate">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4.5 16.5c-1.5 1.5-2 4.5-2 4.5s3-.5 4.5-2L19 7a3.18 3.18 0 0 0-4.5-4.5z"/><path d="m12 15 3 3"/></svg>
+          Operasyon & Büyüme (Yayılım)
+        </span>
+      </div>
+
+      <div class="section-title">Satış Süreci (5 Bölüm / 25 Adım)</div>
+
+      <div class="sections">
+        <div class="card section-card border-blue">
+          <div class="section-head">
+            <div class="section-name">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><path d="M20 8v6"/><path d="M23 11h-6"/></svg>
+              Lead & Keşif
+            </div>
+            <div class="count blue">4 adım</div>
+          </div>
+          <div class="rows">
+            <div class="row"><div class="num">01</div><div class="row-text">Lead Oluşumu</div></div>
+            <div class="row"><div class="num">02</div><div class="row-text">İlk Temas</div></div>
+            <div class="row"><div class="num">03</div><div class="row-text">İlk Müşteri Görüşmesi</div></div>
+            <div class="row"><div class="num">04</div><div class="row-text">Lead Validasyonu</div></div>
+          </div>
+        </div>
+
+        <div class="card section-card border-purple">
+          <div class="section-head">
+            <div class="section-name">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 3h20"/><path d="M6 3v18"/><path d="m18 3-6 6"/><path d="m18 9-6-6"/><path d="M10 12H2"/><path d="M10 18H2"/></svg>
+              Çözüm Konumlandırma
+            </div>
+            <div class="count purple">5 adım</div>
+          </div>
+          <div class="rows">
+            <div class="row"><div class="num">05</div><div class="row-text">Şirket Sunumu</div></div>
+            <div class="row"><div class="num">06</div><div class="row-text">Donanım Sunumu</div></div>
+            <div class="row"><div class="num">07</div><div class="row-text">TMS Sunumu</div></div>
+            <div class="row"><div class="num">08</div><div class="row-text">PAX Platform Sunumu</div></div>
+            <div class="row"><div class="num">09</div><div class="row-text">Operasyon Analizi</div></div>
+          </div>
+        </div>
+
+        <div class="card section-card border-amber">
+          <div class="section-head">
+            <div class="section-name">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/></svg>
+              Business Süreci
+            </div>
+            <div class="count amber">5 adım</div>
+          </div>
+          <div class="rows">
+            <div class="row"><div class="num">10</div><div class="row-text">Teklif Hazırlama</div></div>
+            <div class="row"><div class="num">11</div><div class="row-text">Konsinye</div></div>
+            <div class="row"><div class="num">12</div><div class="row-text">POC Scope / Pilot Kurulum</div></div>
+            <div class="row"><div class="num">13</div><div class="row-text">Uçtan Uca Test</div></div>
+            <div class="row"><div class="num">14</div><div class="row-text">Fiyat Mutabakatı & Sözleşme</div></div>
+          </div>
+        </div>
+
+        <div class="card section-card border-emerald">
+          <div class="section-head">
+            <div class="section-name">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10 17h4V5H2v12h3"/><path d="M14 8h4l4 4v5h-3"/><circle cx="7.5" cy="17.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>
+              Teslimat & Aktivasyon
+            </div>
+            <div class="count emerald">7 adım</div>
+          </div>
+          <div class="rows">
+            <div class="row"><div class="num">15</div><div class="row-text">Sipariş</div></div>
+            <div class="row"><div class="num">16</div><div class="row-text">Depo Planlama</div></div>
+            <div class="row"><div class="num">17</div><div class="row-text">Sevkiyat</div></div>
+            <div class="row"><div class="num">18</div><div class="row-text">Cihaz Kurulum Eğitimi</div></div>
+            <div class="row"><div class="num">19</div><div class="row-text">ITSM Eğitimi</div></div>
+            <div class="row"><div class="num">20</div><div class="row-text">TMS Eğitimi</div></div>
+            <div class="row"><div class="num">21</div><div class="row-text">PAX Platform Eğitimi</div></div>
+          </div>
+        </div>
+
+        <div class="card section-card border-slate">
+          <div class="section-head">
+            <div class="section-name">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4.5 16.5c-1.5 1.5-2 4.5-2 4.5s3-.5 4.5-2L19 7a3.18 3.18 0 0 0-4.5-4.5z"/><path d="m12 15 3 3"/></svg>
+              Operasyon & Büyüme
+            </div>
+            <div class="count slate">4 adım</div>
+          </div>
+          <div class="rows">
+            <div class="row"><div class="num">22</div><div class="row-text">ITSM Devri</div></div>
+            <div class="row"><div class="num">23</div><div class="row-text">Stabilizasyon</div></div>
+            <div class="row"><div class="num">24</div><div class="row-text">Rollout</div></div>
+            <div class="row"><div class="num">25</div><div class="row-text">Referans & Verimlilik</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="footer-note">Toplam Adım: 25</div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

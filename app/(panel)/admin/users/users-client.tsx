@@ -1,4 +1,5 @@
 'use client';
+import '@/styles/users-admin.css';
 
 import { useEffect, useState } from 'react';
 
@@ -33,7 +34,7 @@ export default function UsersClient() {
     setLoading(true);
     setErr(null);
     try {
-      const r = await fetch('/api/admin/users', { cache: 'no-store' });
+      const r = await fetch('/api/admin/users', { next: { revalidate: 30 } });
       if (!r.ok) {
         const j = await r.json().catch(() => ({}));
         throw new Error(j?.message || 'Liste alınamadı');
@@ -118,27 +119,18 @@ export default function UsersClient() {
 
   return (
     <div className="users-page">
-      <style jsx>{`
-        .users-page { display: grid; gap: 16px; }
-        .surface {
-          border: 1px solid #dbe4ef; background: rgba(255,255,255,.96); border-radius: 24px; padding: 18px; box-shadow: 0 18px 40px rgba(15,23,42,.05);
-        }
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
-        .field { display: grid; gap: 7px; }
-        .label { font-size: 12px; font-weight: 900; color: #334155; }
-        .input, .select { min-height: 42px; border-radius: 14px; border: 1px solid #d5dee8; padding: 0 13px; background: #fff; }
-        .primary, .secondary, .danger { min-height: 40px; border-radius: 12px; padding: 0 12px; font-weight: 800; cursor: pointer; }
-        .primary { border: 1px solid #0f172a; background: linear-gradient(135deg,#0f172a 0%,#1e293b 100%); color: #fff; }
-        .secondary { border: 1px solid #d5dee8; background: #fff; }
-        .danger { border: 1px solid #ef4444; background: #ef4444; color: white; }
-        .toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
-        .table-wrap { overflow: auto; border: 1px solid #e2e8f0; border-radius: 18px; }
-        table { width: 100%; min-width: 940px; border-collapse: collapse; }
-        th { text-align: left; padding: 11px 12px; font-size: 11px; color: #64748b; background: #f8fafc; border-bottom: 1px solid #e2e8f0; }
-        td { padding: 11px 12px; border-bottom: 1px solid #eef2f7; font-size: 13px; vertical-align: middle; }
-        .actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
-        .message { font-size: 13px; color: #b91c1c; background: #fff1f2; padding: 11px 13px; border-radius: 14px; border: 1px solid #fecdd3; }
-      `}</style>
+
+      <div className="pax-hero">
+        <span className="pax-hero-eyebrow">Admin Paneli</span>
+        <h1 className="pax-hero-title">Kullanıcı Yönetimi</h1>
+        <p className="pax-hero-description">Sisteme erişim yetkisi olan kullanıcıları ekle, düzenle ve yönet.</p>
+        <div className="pax-hero-stats">
+          <div className="pax-hero-stat"><div className="pax-hero-stat-label">Toplam Kullanıcı</div><div className="pax-hero-stat-value">{rows.length}</div></div>
+          <div className="pax-hero-stat"><div className="pax-hero-stat-label">Sales</div><div className="pax-hero-stat-value">{rows.filter((r: any) => r.role === 'sales').length}</div></div>
+          <div className="pax-hero-stat"><div className="pax-hero-stat-label">Retail Support</div><div className="pax-hero-stat-value">{rows.filter((r: any) => r.role === 'retail_support').length}</div></div>
+          <div className="pax-hero-stat"><div className="pax-hero-stat-label">Admin</div><div className="pax-hero-stat-value">{rows.filter((r: any) => r.role === 'admin').length}</div></div>
+        </div>
+      </div>
 
       <form onSubmit={createUser} className="surface" style={{ display: 'grid', gap: 14 }}>
         <div className="toolbar">

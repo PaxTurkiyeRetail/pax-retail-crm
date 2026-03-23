@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 import { requireCrmAccessOrThrow } from '@/lib/authz';
 import { isAdminLike } from '@/lib/roles';
 import { HAVUZ_ACCOUNT_NAME } from '@/lib/crm';
@@ -16,7 +17,7 @@ export async function GET() {
 
     let query = supabase
       .from('vw_crm_musteriler')
-      .select('sektor,sorumlu,entegrasyon_tipi,aktif_faz_no')
+      .select('musteri_id,sektor,sorumlu,entegrasyon_tipi,aktif_faz_no')
       .order('musteri_id', { ascending: true })
       .limit(3000);
 
@@ -26,10 +27,24 @@ export async function GET() {
     if (error) return NextResponse.json({ message: error.message }, { status: 500 });
 
     const rows = data ?? [];
+    const ids = rows.map((row: any) => row.musteri_id).filter(Boolean);
+
+    let kasaOptions: string[] = [];
+    if (ids.length > 0) {
+      const admin = createSupabaseAdminClient();
+      const { data: kunyeler } = await admin
+        .from('musteri_kunye')
+        .select('musteri_id,sabit_kasa_yazilimi')
+        .in('musteri_id', ids);
+
+      kasaOptions = uniqueSorted((kunyeler ?? []).map((row: any) => row.sabit_kasa_yazilimi));
+    }
+
     return NextResponse.json({
       ownerOptions: uniqueSorted([...rows.map((row: any) => row.sorumlu), HAVUZ_ACCOUNT_NAME]),
       sectorOptions: uniqueSorted(rows.map((row: any) => row.sektor)),
       integrationOptions: uniqueSorted(rows.map((row: any) => row.entegrasyon_tipi)),
+      kasaOptions,
       phaseOptions: uniqueSorted(rows.map((row: any) => row.aktif_faz_no != null ? `FAZ ${row.aktif_faz_no}` : '')),
     });
   } catch (e: any) {

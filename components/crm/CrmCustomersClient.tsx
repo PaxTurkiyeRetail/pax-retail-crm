@@ -2,18 +2,21 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import {
-  Building2,
-  ChevronDown,
-  Filter,
-  Layers3,
-  Plus,
-  Search,
-  Target,
-  Users,
-} from 'lucide-react';
+// Inline SVG icons — no lucide dependency
+const _svg = { fill: 'none', stroke: 'currentColor', strokeWidth: '1.75', strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
+function Building2({ size = 16 }: { size?: number }) { return <svg width={size} height={size} viewBox="0 0 24 24" {..._svg}><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22V12h6v10"/><path d="M8 7h.01M12 7h.01M16 7h.01M8 11h.01M12 11h.01M16 11h.01"/></svg>; }
+function ChevronDown({ size = 16 }: { size?: number }) { return <svg width={size} height={size} viewBox="0 0 24 24" {..._svg}><polyline points="6 9 12 15 18 9"/></svg>; }
+function Filter({ size = 16 }: { size?: number }) { return <svg width={size} height={size} viewBox="0 0 24 24" {..._svg}><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>; }
+function Layers3({ size = 16 }: { size?: number }) { return <svg width={size} height={size} viewBox="0 0 24 24" {..._svg}><path d="M12 2 2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>; }
+function Plus({ size = 16 }: { size?: number }) { return <svg width={size} height={size} viewBox="0 0 24 24" {..._svg}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>; }
+function Search({ size = 16 }: { size?: number }) { return <svg width={size} height={size} viewBox="0 0 24 24" {..._svg}><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>; }
+function Target({ size = 16 }: { size?: number }) { return <svg width={size} height={size} viewBox="0 0 24 24" {..._svg}><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>; }
+function Users({ size = 16 }: { size?: number }) { return <svg width={size} height={size} viewBox="0 0 24 24" {..._svg}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>; }
+import { uniqueOptions, parsePhaseNo, sumPhaseRange } from '@/lib/utils';
+import CustomersHero from '@/components/crm/CustomersHero';
 import { HAVUZ_ACCOUNT_NAME } from '@/lib/crm';
 import { presentKunyeStatus } from '@/lib/kunye';
+import { FIRMA_DURUMU_OPTIONS, YONETIM_TIPI_OPTIONS, customerStatusTone, deriveCustomerSegmentation, managementTypeTone } from '@/lib/customer-segmentation';
 
 type CrmRow = {
   musteri_id: string;
@@ -23,6 +26,10 @@ type CrmRow = {
   sorumlu: string | null;
   aktif_faz_no: number | null;
   aktif_faz_adi: string | null;
+  son_kalinan_faz_no?: number | null;
+  son_kalinan_faz_adi?: string | null;
+  son_kalinan_faz_durumu?: string | null;
+  son_kalinan_faz_tarihi?: string | null;
   kasa_firmasi?: string | null;
   kunye_durumu?: string | null;
 };
@@ -48,6 +55,7 @@ type FilterOptions = {
   ownerOptions: string[];
   sectorOptions: string[];
   integrationOptions: string[];
+  kasaOptions: string[];
   phaseOptions: string[];
 };
 type PhaseBucket = { key: string; label: string; range: string; value: number; tone: string; filterValue: string };
@@ -97,6 +105,7 @@ const EMPTY_OPTIONS: FilterOptions = {
   ownerOptions: [],
   sectorOptions: [],
   integrationOptions: [],
+  kasaOptions: [],
   phaseOptions: [],
 };
 
@@ -155,30 +164,12 @@ function statusTone(status?: string | null) {
   return { background: '#f8fafc', color: '#475569', border: '1px solid #e2e8f0' };
 }
 
-function uniqueOptions(values: Array<string | null | undefined>) {
-  return Array.from(new Set(values.map((item) => String(item ?? '').trim()).filter(Boolean))).sort((a, b) =>
-    a.localeCompare(b, 'tr')
-  );
-}
-
-function parsePhaseNo(label: string) {
-  const match = label.match(/(\d+)/);
-  return match ? Number(match[1]) : null;
-}
-
-function sumPhaseRange(items: SummaryItem[], min: number, max: number) {
-  return items.reduce((acc, item) => {
-    const phaseNo = parsePhaseNo(item.label);
-    if (phaseNo && phaseNo >= min && phaseNo <= max) return acc + item.value;
-    return acc;
-  }, 0);
-}
 
 function buildPhaseBuckets(items: SummaryItem[]): PhaseBucket[] {
   return [
     {
       key: 'lead',
-      label: 'Lead',
+      label: 'Fırsat',
       range: 'Faz 1-4',
       value: sumPhaseRange(items, 1, 4),
       filterValue: '1-4',
@@ -186,7 +177,7 @@ function buildPhaseBuckets(items: SummaryItem[]): PhaseBucket[] {
     },
     {
       key: 'contact',
-      label: 'Contact',
+      label: 'İlk Temas',
       range: 'Faz 5-9',
       value: sumPhaseRange(items, 5, 9),
       filterValue: '5-9',
@@ -194,7 +185,7 @@ function buildPhaseBuckets(items: SummaryItem[]): PhaseBucket[] {
     },
     {
       key: 'opportunity',
-      label: 'Opportunity',
+      label: 'Business',
       range: 'Faz 10-14',
       value: sumPhaseRange(items, 10, 14),
       filterValue: '10-14',
@@ -202,7 +193,7 @@ function buildPhaseBuckets(items: SummaryItem[]): PhaseBucket[] {
     },
     {
       key: 'pilot',
-      label: 'Pilot',
+      label: 'Operasyon',
       range: 'Faz 15-23',
       value: sumPhaseRange(items, 15, 23),
       filterValue: '15-23',
@@ -210,13 +201,55 @@ function buildPhaseBuckets(items: SummaryItem[]): PhaseBucket[] {
     },
     {
       key: 'rollout',
-      label: 'Rollout',
+      label: 'Yayılım',
       range: 'Faz 24-25',
       value: sumPhaseRange(items, 24, 25),
       filterValue: '24-25',
       tone: 'linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%)',
     },
   ];
+}
+
+function getPhaseMeta(phaseNo: number | null | undefined) {
+  if (phaseNo != null && phaseNo >= 1 && phaseNo <= 4) {
+    return { label: 'Fırsat', style: { background: '#f3e8ff', color: '#7c3aed', border: '1px solid #ddd6fe' } };
+  }
+  if (phaseNo != null && phaseNo >= 5 && phaseNo <= 9) {
+    return { label: 'İlk Temas', style: { background: '#e0f2fe', color: '#2563eb', border: '1px solid #bfdbfe' } };
+  }
+  if (phaseNo != null && phaseNo >= 10 && phaseNo <= 14) {
+    return { label: 'Business', style: { background: '#fef3c7', color: '#b45309', border: '1px solid #fde68a' } };
+  }
+  if (phaseNo != null && phaseNo >= 15 && phaseNo <= 23) {
+    return { label: 'Operasyon', style: { background: '#ffe4e6', color: '#be185d', border: '1px solid #fecdd3' } };
+  }
+  if (phaseNo != null && phaseNo >= 24 && phaseNo <= 25) {
+    return { label: 'Yayılım', style: { background: '#dcfce7', color: '#166534', border: '1px solid #bbf7d0' } };
+  }
+  return { label: 'Faz Yok', style: { background: '#f8fafc', color: '#475569', border: '1px solid #e2e8f0' } };
+}
+
+function buildPhaseSearchAliases(phaseNo: number | null | undefined, phaseName: string | null | undefined) {
+  const meta = getPhaseMeta(phaseNo);
+  return [meta.label, phaseName ?? '', phaseNo != null ? `Faz ${phaseNo}` : '', 'Yazılım'].filter(Boolean).join(' ');
+}
+
+function getDisplayedPhase(row: CrmRow) {
+  if (row.son_kalinan_faz_no != null) {
+    return {
+      phaseNo: row.son_kalinan_faz_no,
+      phaseName: row.son_kalinan_faz_adi ?? row.aktif_faz_adi ?? null,
+      phaseStatus: row.son_kalinan_faz_durumu ?? null,
+      isLastStayed: true,
+    };
+  }
+
+  return {
+    phaseNo: row.aktif_faz_no,
+    phaseName: row.aktif_faz_adi ?? null,
+    phaseStatus: null,
+    isLastStayed: false,
+  };
 }
 
 export default function CrmCustomersClient() {
@@ -249,8 +282,11 @@ export default function CrmCustomersClient() {
   const [ownerFilter, setOwnerFilter] = useState('');
   const [sectorFilter, setSectorFilter] = useState('');
   const [integrationFilter, setIntegrationFilter] = useState('');
+  const [kasaFilter, setKasaFilter] = useState('');
   const [kunyeFilter, setKunyeFilter] = useState('');
   const [fazFilter, setFazFilter] = useState('');
+  const [firmaDurumuFilter, setFirmaDurumuFilter] = useState('');
+  const [yonetimTipiFilter, setYonetimTipiFilter] = useState('');
 
   const displayMeName = useMemo(() => (me?.full_name ?? '').trim(), [me?.full_name]);
 
@@ -261,7 +297,7 @@ export default function CrmCustomersClient() {
 
   useEffect(() => {
     setPage(1);
-  }, [debouncedQ, ownerFilter, sectorFilter, integrationFilter, kunyeFilter, fazFilter, pageSize]);
+  }, [debouncedQ, ownerFilter, sectorFilter, integrationFilter, kasaFilter, kunyeFilter, fazFilter, firmaDurumuFilter, yonetimTipiFilter, pageSize]);
 
   useEffect(() => {
     if (actionMode === 'all') return;
@@ -299,9 +335,9 @@ export default function CrmCustomersClient() {
 
   async function loadBaseData() {
     const [meRes, usersRes, optionsRes] = await Promise.all([
-      fetch('/api/me', { cache: 'no-store' }),
-      fetch('/api/allowed-users-lite', { cache: 'no-store' }),
-      fetch('/api/crm/options', { cache: 'no-store' }),
+      fetch('/api/me', { next: { revalidate: 30 } }),
+      fetch('/api/allowed-users-lite', { next: { revalidate: 30 } }),
+      fetch('/api/crm/options', { next: { revalidate: 300 } }),
     ]);
 
     if (!meRes.ok) {
@@ -329,10 +365,11 @@ export default function CrmCustomersClient() {
     if (ownerFilter) params.set('owner', ownerFilter);
     if (sectorFilter) params.set('sector', sectorFilter);
     if (integrationFilter) params.set('integration', integrationFilter);
+    if (kasaFilter) params.set('kasa_firmasi', kasaFilter);
     if (kunyeFilter) params.set('kunye_status', kunyeFilter);
     if (fazFilter) params.set('faz_no', fazFilter);
 
-    const statsRes = await fetch(`/api/crm/stats?${params.toString()}`, { cache: 'no-store' });
+    const statsRes = await fetch(`/api/crm/stats?${params.toString()}`, { next: { revalidate: 30 } });
     if (statsRes.ok) {
       const statsJson = await statsRes.json().catch(() => ({}));
       setStats({ ...EMPTY_STATS, ...(statsJson ?? {}) });
@@ -348,10 +385,11 @@ export default function CrmCustomersClient() {
       if (ownerFilter) params.set('owner', ownerFilter);
       if (sectorFilter) params.set('sector', sectorFilter);
       if (integrationFilter) params.set('integration', integrationFilter);
+      if (kasaFilter) params.set('kasa_firmasi', kasaFilter);
       if (kunyeFilter) params.set('kunye_status', kunyeFilter);
       if (fazFilter) params.set('faz_no', fazFilter);
 
-      const listRes = await fetch(`/api/crm/list?${params.toString()}`, { cache: 'no-store' });
+      const listRes = await fetch(`/api/crm/list?${params.toString()}`, { next: { revalidate: 30 } });
       const listJson = await listRes.json().catch(() => ({}));
       if (!listRes.ok) {
         setMsg(listJson?.message || 'Bu ekrana erişim yetkin yok.');
@@ -371,12 +409,8 @@ export default function CrmCustomersClient() {
   }, []);
 
   useEffect(() => {
-    void loadStats();
-  }, [debouncedQ, ownerFilter, sectorFilter, integrationFilter, kunyeFilter, fazFilter]);
-
-  useEffect(() => {
-    void loadRows(page);
-  }, [page, debouncedQ, ownerFilter, sectorFilter, integrationFilter, kunyeFilter, fazFilter, pageSize]);
+    void Promise.all([loadStats(), loadRows(page)]);
+  }, [page, debouncedQ, ownerFilter, sectorFilter, integrationFilter, kasaFilter, kunyeFilter, fazFilter, pageSize]);
 
   const ownerOptions = useMemo(
     () => uniqueOptions([...filterOptions.ownerOptions, ...allowed.map((u) => u.full_name), HAVUZ_ACCOUNT_NAME]),
@@ -399,6 +433,20 @@ export default function CrmCustomersClient() {
     [filterOptions.integrationOptions, rows]
   );
 
+  const kasaOptions = useMemo(
+    () => uniqueOptions([...filterOptions.kasaOptions, ...rows.map((r) => r.kasa_firmasi)]),
+    [filterOptions.kasaOptions, rows]
+  );
+
+  const visibleRows = useMemo(() => rows.filter((r) => {
+    const segmentation = deriveCustomerSegmentation(r.aktif_faz_no);
+    if (firmaDurumuFilter && segmentation.firmaDurumu !== firmaDurumuFilter) return false;
+    if (yonetimTipiFilter && segmentation.yonetimTipi !== yonetimTipiFilter) return false;
+    return true;
+  }), [rows, firmaDurumuFilter, yonetimTipiFilter]);
+
+  const visibleTotal = visibleRows.length;
+
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const currentPage = Math.min(page, totalPages);
   const phaseBuckets = useMemo(() => buildPhaseBuckets(stats.byPhase), [stats.byPhase]);
@@ -408,35 +456,70 @@ export default function CrmCustomersClient() {
   const riskCount = stats.kunyeEksik + stats.kunyeYok;
   const sectorMax = Math.max(1, ...topSectors.map((item) => item.value));
   const ownerMax = Math.max(1, ...topOwners.map((item) => item.value));
+  const havuzOwner = topOwners.find((item) => item.label === HAVUZ_ACCOUNT_NAME) ?? null;
+  const fieldOwners = topOwners.filter((item) => item.label !== HAVUZ_ACCOUNT_NAME);
+  const visibleOwnerBars = fieldOwners.length ? fieldOwners : topOwners;
+  const fieldOwnerMax = Math.max(1, ...visibleOwnerBars.map((item) => item.value));
   const completionRate = stats.total ? Math.round((stats.kunyeVar / Math.max(1, stats.total)) * 100) : 0;
   const riskRate = stats.total ? Math.round((riskCount / Math.max(1, stats.total)) * 100) : 0;
   const top3SectorShare = stats.total
     ? Math.round((topSectors.slice(0, 3).reduce((sum, item) => sum + item.value, 0) / Math.max(1, stats.total)) * 100)
     : 0;
-  const accountShare = stats.total && topOwners[0]?.value
-    ? Math.round((topOwners[0].value / Math.max(1, stats.total)) * 100)
+  const accountShare = stats.total && visibleOwnerBars[0]?.value
+    ? Math.round((visibleOwnerBars[0].value / Math.max(1, stats.total)) * 100)
     : 0;
+  const fieldAccountCount = Math.max(0, fieldOwners.length);
   const kunyeDonutStyle = {
     background: `conic-gradient(#22c55e 0% ${completionRate}%, #f59e0b ${completionRate}% ${Math.min(100, completionRate + (stats.total ? Math.round((stats.kunyeEksik / Math.max(1, stats.total)) * 100) : 0))}%, #64748b ${Math.min(100, completionRate + (stats.total ? Math.round((stats.kunyeEksik / Math.max(1, stats.total)) * 100) : 0))}% 100%)`,
   } as React.CSSProperties;
-  const accountSegments = topOwners.length
+  const accountSegments = visibleOwnerBars.length
     ? (() => {
-        const colors = ['#93c5fd', '#60a5fa', '#2563eb', '#1d4ed8', '#0f172a', '#94a3b8'];
+        const totalFieldOwners = visibleOwnerBars.reduce((sum, item) => sum + item.value, 0);
+        const colors = ['#93c5fd', '#60a5fa', '#2563eb', '#1d4ed8', '#bfdbfe'];
         let start = 0;
-        const parts = topOwners.map((item, index) => {
-          const pct = Math.round((item.value / Math.max(1, stats.total || 1)) * 100);
+        const parts = visibleOwnerBars.map((item, index) => {
+          const pct = Math.round((item.value / Math.max(1, totalFieldOwners)) * 100);
           const end = Math.min(100, start + pct);
           const part = `${colors[index % colors.length]} ${start}% ${end}%`;
           start = end;
           return part;
         });
-        if (start < 100) parts.push(`#e2e8f0 ${start}% 100%`);
+        if (start < 100) parts.push(`#cbd5e1 ${start}% 100%`);
         return parts.join(', ');
       })()
-    : '#e2e8f0 0% 100%';
+    : '#cbd5e1 0% 100%';
   const accountDonutStyle = {
     background: `conic-gradient(${accountSegments})`,
   } as React.CSSProperties;
+  const kasaMap = rows.reduce<Record<string, number>>((acc, row) => {
+    const key = (row.kasa_firmasi ?? '').trim() || 'Tanımsız';
+    acc[key] = (acc[key] ?? 0) + 1;
+    return acc;
+  }, {});
+  const kasaBreakdown = Object.entries(kasaMap)
+    .map(([label, value]) => ({ label, value }))
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 4);
+  const kasaTotal = kasaBreakdown.reduce((sum, item) => sum + item.value, 0);
+  const kasaSegments = kasaBreakdown.length
+    ? (() => {
+        const colors = ['#5eead4', '#38bdf8', '#818cf8', '#cbd5e1'];
+        let start = 0;
+        const parts = kasaBreakdown.map((item, index) => {
+          const pct = Math.round((item.value / Math.max(1, kasaTotal)) * 100);
+          const end = Math.min(100, start + pct);
+          const part = `${colors[index % colors.length]} ${start}% ${end}%`;
+          start = end;
+          return part;
+        });
+        if (start < 100) parts.push(`#334155 ${start}% 100%`);
+        return parts.join(', ');
+      })()
+    : '#334155 0% 100%';
+  const kasaDonutStyle = {
+    background: `conic-gradient(${kasaSegments})`,
+  } as React.CSSProperties;
+  const topKasa = kasaBreakdown[0] ?? null;
   const actionCards = ACTION_MODES.map((item) => ({ ...item, value: item.metric(stats) }));
   const currentAction = actionCards.find((item) => item.key === actionMode) ?? actionCards[0];
 
@@ -454,6 +537,9 @@ export default function CrmCustomersClient() {
     if (kunyeFilter) tokens.push({ key: 'kunye', label: `Künye: ${kunyeFilter}`, onClear: () => setKunyeFilter('') });
     if (fazFilter) tokens.push({ key: 'phase', label: `Faz: ${fazFilter}`, onClear: () => setFazFilter('') });
     if (sectorFilter) tokens.push({ key: 'sector', label: `Sektör: ${sectorFilter}`, onClear: () => setSectorFilter('') });
+    if (kasaFilter) tokens.push({ key: 'kasa', label: `Kasa Firması: ${kasaFilter}`, onClear: () => setKasaFilter('') });
+    if (firmaDurumuFilter) tokens.push({ key: 'firma', label: `Firma Durumu: ${firmaDurumuFilter}`, onClear: () => setFirmaDurumuFilter('') });
+    if (yonetimTipiFilter) tokens.push({ key: 'yonetim', label: `Yönetim Tipi: ${yonetimTipiFilter}`, onClear: () => setYonetimTipiFilter('') });
     if (integrationFilter) {
       tokens.push({
         key: 'integration',
@@ -529,8 +615,11 @@ export default function CrmCustomersClient() {
     setOwnerFilter('');
     setSectorFilter('');
     setIntegrationFilter('');
+    setKasaFilter('');
     setKunyeFilter('');
     setFazFilter('');
+    setFirmaDurumuFilter('');
+    setYonetimTipiFilter('');
   }
 
   function applyPhaseBucket(filterValue: string, actionKey: ActionModeKey) {
@@ -543,7 +632,7 @@ export default function CrmCustomersClient() {
     <main className="customers-page">
       <style jsx>{`
         .customers-page { display: grid; gap: 18px; }
-        .hero {
+        .pax-hero {
           position: relative;
           overflow: hidden;
           display: grid;
@@ -591,6 +680,7 @@ export default function CrmCustomersClient() {
           border: 1px solid rgba(255,255,255,0.14); backdrop-filter: blur(12px); display: grid; gap: 14px;
           box-shadow: inset 0 1px 0 rgba(255,255,255,.08);
           min-height: 310px;
+          overflow: hidden;
         }
         .executive-card.is-risk { background: linear-gradient(180deg, rgba(255,247,237,.16) 0%, rgba(255,255,255,.10) 100%); border-color: rgba(254,215,170,.48); }
         .executive-head {
@@ -602,9 +692,10 @@ export default function CrmCustomersClient() {
         .executive-value { font-size: 38px; line-height: 1; font-weight: 900; letter-spacing: -0.04em; }
         .executive-sub { font-size: 12px; line-height: 1.55; color: rgba(255,255,255,.76); margin-top: 6px; }
         .executive-main {
-          display: grid; grid-template-columns: minmax(0, 1fr) 110px; gap: 14px; align-items: center;
+          display: grid; grid-template-columns: minmax(0, 1fr) 116px; gap: 16px; align-items: center;
+          min-width: 0;
         }
-        .donut-wrap { display: grid; gap: 10px; justify-items: center; }
+        .donut-wrap { display: grid; gap: 10px; justify-items: center; min-width: 0; }
         .donut {
           width: 96px; height: 96px; border-radius: 999px; position: relative;
           box-shadow: inset 0 0 0 1px rgba(255,255,255,.08);
@@ -614,25 +705,33 @@ export default function CrmCustomersClient() {
           box-shadow: inset 0 1px 0 rgba(255,255,255,.06);
         }
         .donut-center {
-          position: absolute; inset: 0; z-index: 1; display: grid; place-items: center; text-align: center;
+          position: absolute; inset: 0; z-index: 1; display: grid; place-items: center; text-align: center; padding: 0 10px;
         }
-        .donut-center strong { font-size: 22px; line-height: 1; font-weight: 900; }
-        .donut-center span { font-size: 10px; color: rgba(255,255,255,.72); text-transform: uppercase; letter-spacing: .08em; }
-        .split-stats { display: grid; gap: 8px; }
+        .donut-center > div { display: grid; justify-items: center; gap: 4px; max-width: 62px; width: 100%; }
+        .donut-center strong { font-size: 17px; line-height: 1; font-weight: 900; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+        .donut-center span { font-size: 9px; line-height: 1.05; color: rgba(255,255,255,.74); text-transform: uppercase; letter-spacing: .04em; text-align: center; word-break: keep-all; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+        .split-stats { display: grid; gap: 8px; min-width: 0; }
         .split-row {
-          display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center;
+          display: grid; grid-template-columns: 10px minmax(56px, 1fr) minmax(24px, auto); gap: 10px; align-items: center;
           font-size: 12px; color: rgba(255,255,255,.84);
+          min-width: 0;
         }
+        .split-row span:not(.split-dot) { min-width: 0; }
+        .split-row strong { justify-self: end; white-space: nowrap; }
         .split-dot { width: 8px; height: 8px; border-radius: 999px; }
         .split-bar { height: 6px; border-radius: 999px; background: rgba(255,255,255,.12); overflow: hidden; }
         .split-bar span { display:block; height:100%; border-radius:inherit; background: rgba(255,255,255,.82); }
-        .micro-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-        .micro-card {
-          min-height: 72px; padding: 12px; border-radius: 16px; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.10);
-          display: grid; align-content: space-between; gap: 8px;
+        .donut-secondary {
+          display: grid; grid-template-columns: 116px minmax(0, 1fr); gap: 14px; align-items: center;
+          min-height: 88px; padding: 12px; border-radius: 18px; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.10);
         }
-        .micro-card span { font-size: 11px; color: rgba(255,255,255,.7); text-transform: uppercase; letter-spacing: .06em; font-weight: 800; }
-        .micro-card strong { font-size: 20px; line-height: 1; font-weight: 900; }
+        .donut-secondary-info { display: grid; gap: 8px; min-width: 0; }
+        .donut-secondary-kicker { font-size: 11px; color: rgba(255,255,255,.72); text-transform: uppercase; letter-spacing: .06em; font-weight: 800; }
+        .donut-secondary-title { font-size: 18px; line-height: 1.1; font-weight: 900; }
+        .donut-secondary-note { font-size: 12px; line-height: 1.45; color: rgba(255,255,255,.76); }
+        .legend-list { display: grid; gap: 6px; }
+        .legend-row { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; gap: 8px; align-items: center; font-size: 12px; color: rgba(255,255,255,.86); }
+        .legend-row strong { white-space: nowrap; }
         .sector-bars, .owner-bars { display: grid; gap: 10px; }
         .bar-row {
           display: grid; grid-template-columns: minmax(104px, 132px) minmax(0, 1fr) auto; gap: 10px; align-items: center;
@@ -642,7 +741,7 @@ export default function CrmCustomersClient() {
         .bar-track { height: 8px; border-radius: 999px; background: rgba(255,255,255,.12); overflow: hidden; }
         .bar-track span { display:block; height:100%; border-radius:inherit; background: linear-gradient(90deg, rgba(191,219,254,.95), rgba(255,255,255,.75)); }
         .bar-value { font-size: 12px; font-weight: 900; color: #fff; }
-        .owner-layout { display: grid; grid-template-columns: minmax(0, 1fr) 108px; gap: 14px; align-items: center; }
+        .owner-layout { display: grid; grid-template-columns: minmax(0, 1fr) 132px; gap: 16px; align-items: center; }
         .hero-metric {
           padding: 18px; border-radius: 24px; background: rgba(255,255,255,0.12);
           border: 1px solid rgba(255,255,255,0.14); backdrop-filter: blur(12px); display: grid; gap: 12px;
@@ -700,7 +799,7 @@ export default function CrmCustomersClient() {
           color: #2563eb; margin-bottom: 6px;
         }
         .section-title { font-size: 20px; font-weight: 900; letter-spacing: -0.02em; }
-        .section-note { margin-top: 4px; color: #64748b; font-size: 13px; line-height: 1.5; }
+        .section-note { margin-top: 4px; color: var(--text-3); font-size: 13px; line-height: 1.5; }
 
         .primary, .secondary, .ghost, .phase-segment, .action-card {
           display: inline-flex; align-items: center; justify-content: center; gap: 8px;
@@ -709,13 +808,13 @@ export default function CrmCustomersClient() {
         }
         .primary { border: 1px solid #0f172a; background: linear-gradient(135deg,#0f172a 0%,#1e293b 100%); color: #fff; }
         .secondary { border: 1px solid rgba(255,255,255,0.18); background: rgba(255,255,255,0.12); color: #fff; }
-        .ghost { border: 1px solid #d5dee8; background: #f8fafc; color: #0f172a; }
+        .ghost { border: 1px solid #d5dee8; background: var(--surface-2); color: var(--text); }
 
         .command-grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(290px, 0.95fr); gap: 18px; }
         .action-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
         .action-card {
           align-items: flex-start; justify-content: flex-start; flex-direction: column;
-          min-height: 132px; padding: 16px; border: 1px solid #e2e8f0; background: #fff;
+          min-height: 132px; padding: 16px; border: 1px solid var(--border); background: #fff;
           box-shadow: inset 0 1px 0 rgba(255,255,255,0.65);
         }
         .action-card:hover { transform: translateY(-1px); box-shadow: 0 14px 26px rgba(15,23,42,0.06); }
@@ -725,16 +824,16 @@ export default function CrmCustomersClient() {
           width: 40px; height: 40px; border-radius: 14px; display: inline-flex; align-items: center; justify-content: center;
           background: #eff6ff; color: #1d4ed8; border: 1px solid #dbeafe;
         }
-        .action-value { font-size: 28px; line-height: 1; font-weight: 900; color: #0f172a; letter-spacing: -0.03em; }
-        .action-title { font-size: 15px; font-weight: 900; color: #0f172a; }
-        .action-desc { margin-top: 6px; font-size: 12px; line-height: 1.5; color: #64748b; }
+        .action-value { font-size: 28px; line-height: 1; font-weight: 900; color: var(--text); letter-spacing: -0.03em; }
+        .action-title { font-size: 15px; font-weight: 900; color: var(--text); }
+        .action-desc { margin-top: 6px; font-size: 12px; line-height: 1.5; color: var(--text-3); }
 
         .search-shell { display: grid; grid-template-columns: minmax(0, 1.45fr) repeat(3, minmax(180px, 1fr)); gap: 12px; }
         .field { display: grid; gap: 8px; }
-        .field-label { font-size: 12px; font-weight: 900; color: #334155; }
+        .field-label { font-size: 12px; font-weight: 900; color: var(--text-2); }
         .input, .select {
           width: 100%; min-height: 46px; border-radius: 14px; border: 1px solid #d5dee8;
-          padding: 0 14px; background: #fff; color: #0f172a; outline: none;
+          padding: 0 14px; background: #fff; color: var(--text); outline: none;
         }
         .search-input {
           display: flex; align-items: center; gap: 10px; min-height: 46px; padding: 0 14px;
@@ -745,32 +844,32 @@ export default function CrmCustomersClient() {
         .phase-strip { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
         .phase-segment {
           flex-direction: column; align-items: flex-start; justify-content: flex-start;
-          min-height: 120px; padding: 16px; border: 1px solid #e2e8f0; background: #fff;
+          min-height: 120px; padding: 16px; border: 1px solid var(--border); background: #fff;
         }
         .phase-segment.active { outline: 2px solid rgba(37,99,235,0.18); border-color: #93c5fd; }
         .phase-segment-head {
           width: 100%; display: flex; align-items: center; justify-content: space-between;
           gap: 8px; margin-bottom: 14px;
         }
-        .phase-segment-name { font-size: 15px; font-weight: 900; color: #0f172a; }
-        .phase-segment-range { font-size: 12px; color: #64748b; }
-        .phase-segment-value { font-size: 28px; font-weight: 900; letter-spacing: -0.03em; color: #0f172a; line-height: 1; }
+        .phase-segment-name { font-size: 15px; font-weight: 900; color: var(--text); }
+        .phase-segment-range { font-size: 12px; color: var(--text-3); }
+        .phase-segment-value { font-size: 28px; font-weight: 900; letter-spacing: -0.03em; color: var(--text); line-height: 1; }
         .phase-progress { margin-top: auto; width: 100%; height: 8px; border-radius: 999px; background: rgba(255,255,255,0.65); overflow: hidden; }
         .phase-progress span {
           display: block; height: 100%; border-radius: inherit;
           background: linear-gradient(90deg, rgba(15,23,42,.88), rgba(37,99,235,.72));
         }
 
-        .advanced-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+        .advanced-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
         .result-bar {
           display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
           padding: 14px 16px; border-radius: 18px; background: linear-gradient(180deg, #fbfcff 0%, #f8fafc 100%);
-          border: 1px solid #e2e8f0;
+          border: 1px solid var(--border);
         }
         .result-copy { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
         .result-metric { display: grid; gap: 2px; }
         .result-metric strong { font-size: 26px; line-height: 1; letter-spacing: -0.03em; }
-        .result-metric span { font-size: 12px; color: #64748b; }
+        .result-metric span { font-size: 12px; color: var(--text-3); }
         .token-row { display: flex; flex-wrap: wrap; gap: 8px; }
         .token {
           display: inline-flex; align-items: center; gap: 10px; min-height: 34px; padding: 0 12px;
@@ -792,35 +891,40 @@ export default function CrmCustomersClient() {
         .mini-list, .sector-grid { display: grid; gap: 10px; }
         .mini-item, .sector-item {
           display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center;
-          padding: 12px 14px; border-radius: 16px; background: #f8fafc; border: 1px solid #e2e8f0;
+          padding: 12px 14px; border-radius: 16px; background: var(--surface-2); border: 1px solid var(--border);
         }
-        .mini-label, .sector-label { font-size: 13px; font-weight: 700; color: #0f172a; }
+        .mini-label, .sector-label { font-size: 13px; font-weight: 700; color: var(--text); }
         .mini-value {
           min-width: 36px; height: 30px; display: inline-flex; align-items: center; justify-content: center;
           padding: 0 10px; border-radius: 999px; background: #fff; border: 1px solid #dbe4ef;
-          font-size: 12px; font-weight: 900; color: #0f172a;
+          font-size: 12px; font-weight: 900; color: var(--text);
         }
         .sector-value { font-size: 12px; font-weight: 900; color: #2563eb; }
 
-        .table-wrap { overflow: auto; border: 1px solid #e2e8f0; border-radius: 18px; }
+        .table-wrap { overflow: auto; border: 1px solid var(--border); border-radius: 18px; }
         table { width: 100%; min-width: 980px; border-collapse: collapse; background: white; }
         th {
           text-align: left; padding: 13px 14px; font-size: 11px; letter-spacing: .04em;
-          text-transform: uppercase; color: #64748b; background: #f8fafc; border-bottom: 1px solid #e2e8f0;
+          text-transform: uppercase; color: var(--text-3); background: var(--surface-2); border-bottom: 1px solid #e2e8f0;
         }
-        td { padding: 14px; border-bottom: 1px solid #eef2f7; font-size: 13px; vertical-align: middle; color: #0f172a; }
-        .name { color: #0f172a; font-weight: 900; text-decoration: none; }
-        .muted { color: #64748b; font-size: 12px; margin-top: 6px; }
+        td { padding: 14px; border-bottom: 1px solid #eef2f7; font-size: 13px; vertical-align: middle; color: var(--text); }
+        .name { color: var(--text); font-weight: 900; text-decoration: none; }
+        .name-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .phase-pill { min-height: 28px; padding: 0 10px; }
+        .muted { color: var(--text-3); font-size: 12px; margin-top: 6px; }
         .pill {
           display: inline-flex; align-items: center; justify-content: center; min-height: 30px;
           padding: 0 12px; border-radius: 999px; font-size: 12px; font-weight: 900; white-space: nowrap;
         }
+        .phase-column, .kunye-column { width: 170px; text-align: center; }
+        .phase-pill, .kunye-pill { min-width: 118px; min-height: 32px; justify-content: center; }
         .actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
         .link-btn {
           display: inline-flex; align-items: center; justify-content: center; min-height: 34px; padding: 0 12px;
-          border-radius: 12px; border: 1px solid #dbe4ef; background: #fff; color: #0f172a;
+          border-radius: 12px; border: 1px solid #dbe4ef; background: #fff; color: var(--text);
           font-size: 12px; font-weight: 900; text-decoration: none; cursor: pointer;
         }
+        .phase-column { text-align: center; white-space: nowrap; }
         .pager {
           display: flex; align-items: center; justify-content: space-between; gap: 12px;
           flex-wrap: wrap; margin-top: 14px;
@@ -839,10 +943,10 @@ export default function CrmCustomersClient() {
           width: min(720px, 100%); display: grid; gap: 18px; border-radius: 24px; padding: 22px;
           background: white; border: 1px solid #dbe4ef; box-shadow: 0 32px 60px rgba(15,23,42,.18);
         }
-        .title { font-size: 24px; line-height: 1.1; font-weight: 900; letter-spacing: -0.03em; color: #0f172a; }
-        .sub { margin-top: 8px; color: #64748b; font-size: 13px; line-height: 1.55; }
+        .title { font-size: 24px; line-height: 1.1; font-weight: 900; letter-spacing: -0.03em; color: var(--text); }
+        .sub { margin-top: 8px; color: var(--text-3); font-size: 13px; line-height: 1.55; }
         .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-        .label { font-size: 12px; font-weight: 900; color: #334155; }
+        .label { font-size: 12px; font-weight: 900; color: var(--text-2); }
         .tooltip-anchor { position: relative; }
         .tooltip-anchor::after {
           content: attr(data-tip);
@@ -887,160 +991,39 @@ export default function CrmCustomersClient() {
         }
 
         @media (max-width: 1200px) {
-          .hero, .command-grid, .search-shell { grid-template-columns: 1fr; }
+          .pax-hero, .command-grid, .search-shell { grid-template-columns: 1fr; }
           .action-grid, .advanced-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         }
         @media (max-width: 900px) {
           .phase-strip, .grid, .hero-summary, .action-grid, .advanced-grid { grid-template-columns: 1fr; }
+          .donut-secondary, .owner-layout, .executive-main { grid-template-columns: 1fr; }
         }
         @media (max-width: 720px) {
-          .hero, .surface, .modal-box { padding: 16px; border-radius: 20px; }
+          .pax-hero, .surface, .modal-box { padding: 16px; border-radius: 20px; }
         }
       `}</style>
 
-      <section className="hero">
-        <div className="hero-copy" />
+      <CustomersHero
+        stats={stats}
+        completionRate={completionRate}
+        kunyeDonutStyle={kunyeDonutStyle}
+        kasaDonutStyle={kasaDonutStyle}
+        accountDonutStyle={accountDonutStyle}
+        kasaBreakdown={kasaBreakdown}
+        topSectors={topSectors}
+        sectorMax={sectorMax}
+        visibleOwnerBars={visibleOwnerBars}
+        fieldOwnerMax={fieldOwnerMax}
+        fieldAccountCount={fieldAccountCount}
+      />
 
-        <div className="hero-metrics">
-          <div className="hero-summary">
-            <div className="executive-card">
-              <div className="executive-head">
-                <div>
-                  <div className="executive-kicker">Müşteri Durumu</div>
-                  <div className="executive-value">{stats.total}</div>
-                  <div className="executive-sub">Toplam portföy ve künye kalitesi tek bakışta görünür.</div>
-                </div>
-                <Building2 size={18} strokeWidth={1.6} />
-              </div>
-
-              <div className="executive-main">
-                <div className="split-stats">
-                  <div className="split-row tooltip-anchor" data-tip="Künye bilgisi tamam olan müşteri sayısı.">
-                    <span className="split-dot" style={{ background: '#22c55e' }} />
-                    <span>Tamam</span>
-                    <strong>{stats.kunyeVar}</strong>
-                  </div>
-                  <div className="split-row tooltip-anchor" data-tip="Kısmen dolu, aksiyon gerektiren künye sayısı.">
-                    <span className="split-dot" style={{ background: '#f59e0b' }} />
-                    <span>Eksik</span>
-                    <strong>{stats.kunyeEksik}</strong>
-                  </div>
-                  <div className="split-row tooltip-anchor" data-tip="Henüz künye bilgisi hiç girilmemiş müşteri sayısı.">
-                    <span className="split-dot" style={{ background: '#94a3b8' }} />
-                    <span>Yok</span>
-                    <strong>{stats.kunyeYok}</strong>
-                  </div>
-                </div>
-                <div className="donut-wrap tooltip-anchor" data-tip="Künye kalite dağılımı: tamam, eksik ve yok kırılımını gösterir.">
-                  <div className="donut" style={kunyeDonutStyle}>
-                    <div className="donut-center">
-                      <div>
-                        <strong>{completionRate}%</strong>
-                        <span>Tamam</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="micro-cards">
-                <div className="micro-card tooltip-anchor" data-tip="Eksik ve yok künye toplamının portföye oranı.">
-                  <span>Risk oranı</span>
-                  <strong>{riskRate}%</strong>
-                </div>
-                <div className="micro-card tooltip-anchor" data-tip="Künye bilgisi tamamen dolu müşteri oranı.">
-                  <span>Tamamlanma</span>
-                  <strong>{completionRate}%</strong>
-                </div>
-              </div>
-            </div>
-
-            <div className="executive-card is-risk">
-              <div className="executive-head">
-                <div>
-                  <div className="executive-kicker">Sektör Dağılımı</div>
-                  <div className="executive-value">{stats.sectors}</div>
-                  <div className="executive-sub">Portföyün hangi sektörlerde yoğunlaştığını yatay kırılım ile izle.</div>
-                </div>
-                <Layers3 size={18} strokeWidth={1.6} />
-              </div>
-
-              <div className="sector-bars">
-                {topSectors.map((item) => (
-                  <div key={item.label} className="bar-row tooltip-anchor" data-tip={`${item.label}: ${item.value} müşteri`}>
-                    <span className="bar-label">{item.label}</span>
-                    <div className="bar-track"><span style={{ width: `${(item.value / sectorMax) * 100}%` }} /></div>
-                    <span className="bar-value">{item.value}</span>
-                  </div>
-                ))}
-              </div>
-
-              <div className="micro-cards">
-                <div className="micro-card tooltip-anchor" data-tip="Portföyde en yüksek müşteri adedine sahip sektör.">
-                  <span>En büyük sektör</span>
-                  <strong style={{ fontSize: 14, lineHeight: 1.25 }}>{topSectors[0]?.label ?? '-'}</strong>
-                </div>
-                <div className="micro-card tooltip-anchor" data-tip="İlk üç sektörün toplam portföy içindeki payı.">
-                  <span>İlk 3 payı</span>
-                  <strong>{top3SectorShare}%</strong>
-                </div>
-              </div>
-            </div>
-
-            <div className="executive-card">
-              <div className="executive-head">
-                <div>
-                  <div className="executive-kicker">Account Yapısı</div>
-                  <div className="executive-value">{stats.accounts}</div>
-                  <div className="executive-sub">Dağılımı, yükü ve öne çıkan account yapısını aynı kartta gör.</div>
-                </div>
-                <Users size={18} strokeWidth={1.6} />
-              </div>
-
-              <div className="owner-layout">
-                <div className="owner-bars">
-                  {topOwners.map((item) => (
-                    <div key={item.label} className="bar-row tooltip-anchor" data-tip={`${item.label}: ${item.value} müşteri`} style={{ gridTemplateColumns: 'minmax(90px, 124px) minmax(0, 1fr) auto' }}>
-                      <span className="bar-label">{item.label}</span>
-                      <div className="bar-track"><span style={{ width: `${(item.value / ownerMax) * 100}%` }} /></div>
-                      <span className="bar-value">{item.value}</span>
-                    </div>
-                  ))}
-                </div>
-                <div className="donut-wrap tooltip-anchor" data-tip="Account sorumlularına göre müşteri yükü dağılımı.">
-                  <div className="donut" style={accountDonutStyle}>
-                    <div className="donut-center">
-                      <div>
-                        <strong>{stats.accounts}</strong>
-                        <span>Account</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="micro-cards">
-                <div className="micro-card tooltip-anchor" data-tip="En yüksek müşteri yükünü taşıyan account sahibi.">
-                  <span>En büyük account</span>
-                  <strong style={{ fontSize: 14, lineHeight: 1.25 }}>{topOwners[0]?.label ?? '-'}</strong>
-                </div>
-                <div className="micro-card tooltip-anchor" data-tip="Lider account sahibinin toplam portföy içindeki payı.">
-                  <span>Lider payı</span>
-                  <strong>{accountShare}%</strong>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="surface">
+            <section className="surface">
         <div className="search-shell">
           <label className="field">
             <span className="field-label">Arama</span>
             <div className="search-input">
               <Search size={16} strokeWidth={1.7} />
-              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Müşteri, sektör, account veya entegrasyon ara" />
+              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Müşteri, sektör, account, faz veya entegrasyon ara" />
             </div>
           </label>
 
@@ -1138,6 +1121,36 @@ export default function CrmCustomersClient() {
             </label>
 
             <label className="field">
+              <span className="field-label">Kasa firması</span>
+              <select className="select" value={kasaFilter} onChange={(e) => setKasaFilter(e.target.value)}>
+                <option value="">Tüm kasa firmaları</option>
+                {kasaOptions.map((name) => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
+              </select>
+            </label>
+
+            <label className="field">
+              <span className="field-label">Firma Durumu</span>
+              <select className="select" value={firmaDurumuFilter} onChange={(e) => setFirmaDurumuFilter(e.target.value)}>
+                <option value="">Tüm durumlar</option>
+                {FIRMA_DURUMU_OPTIONS.map((name) => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
+              </select>
+            </label>
+
+            <label className="field">
+              <span className="field-label">Yönetim Tipi</span>
+              <select className="select" value={yonetimTipiFilter} onChange={(e) => setYonetimTipiFilter(e.target.value)}>
+                <option value="">Tüm tipler</option>
+                {YONETIM_TIPI_OPTIONS.map((name) => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
+              </select>
+            </label>
+
+            <label className="field">
               <span className="field-label">Sayfa boyutu</span>
               <select className="select" value={String(pageSize)} onChange={(e) => setPageSize(Number(e.target.value))}>
                 {PAGE_SIZE_OPTIONS.map((size) => (
@@ -1149,7 +1162,7 @@ export default function CrmCustomersClient() {
             <div className="field">
               <span className="field-label">Görünüm özeti</span>
               <div className="select" style={{ display: 'flex', alignItems: 'center', fontWeight: 800 }}>
-                {total} müşteri · Sayfa {currentPage}/{totalPages}
+                {visibleTotal} görünen · Toplam {total} · Sayfa {currentPage}/{totalPages}
               </div>
             </div>
           </div>
@@ -1160,10 +1173,10 @@ export default function CrmCustomersClient() {
         <section className="result-bar">
           <div className="result-copy">
             <div className="result-metric">
-              <strong>{total}</strong>
-              <span>Sonuç kümesi</span>
+              <strong>{visibleTotal}</strong>
+              <span>Görünen müşteri</span>
             </div>
-            <div className="section-note">Şu an görünüm, aksiyon modu ve filtrelerin birleşiminden oluşuyor.</div>
+            <div className="section-note">Şu an görünüm, aksiyon modu ve filtrelerin birleşiminden oluşuyor. Toplam havuz: {total}</div>
           </div>
           <div className="token-row">
             {activeFilterTokens.map((item) => (
@@ -1182,8 +1195,7 @@ export default function CrmCustomersClient() {
         <div className="section-head">
           <div>
             <div className="section-kicker">Execution Layer</div>
-            <div className="section-title">Müşteri listesi ve hızlı aksiyonlar</div>
-            <div className="section-note">Karar yukarıda verilir, uygulama burada yapılır. Detay ve düzenleme aksiyonu sade tutuldu.</div>
+            <div className="section-title">Müşteri listesi</div>
           </div>
           <button className="primary" onClick={openCreate}>
             <Plus size={16} strokeWidth={1.7} /> Müşteri ekle
@@ -1194,44 +1206,75 @@ export default function CrmCustomersClient() {
           <table>
             <thead>
               <tr>
-                {['Müşteri Adı', 'Sektör', 'Account', 'Kasa Firması', 'Künye', 'Entegrasyon'].map((h) => (
-                  <th key={h}>{h}</th>
-                ))}
+                <th>Müşteri Adı</th>
+                <th className="phase-column">Faz</th>
+                <th>Sektör</th>
+                <th>Account</th>
+                <th>Kasa Firması</th>
+                <th className="kunye-column">Künye</th>
+                <th>Entegrasyon</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => (
+              {visibleRows.map((r) => (
                 <tr key={r.musteri_id}>
                   <td>
-                    <Link className="name" href={`/crm/${r.musteri_id}`}>{r.musteri}</Link>
-                    <div className="muted">
-                      {r.aktif_faz_no != null ? `FAZ ${r.aktif_faz_no}` : 'Faz bilgisi yok'}
-                      {r.aktif_faz_adi ? ` · ${r.aktif_faz_adi}` : ''}
+                    <div style={{ display: 'grid', gap: 8 }}>
+                      <Link className="name" href={`/crm/${r.musteri_id}`}>{r.musteri}</Link>
+                      {(() => {
+                        const segmentation = deriveCustomerSegmentation(r.aktif_faz_no);
+                        const firmaTone = customerStatusTone(segmentation.firmaDurumu);
+                        const yonetimTone = managementTypeTone(segmentation.yonetimTipi);
+                        return (
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                            <span className="pill" style={{ background: firmaTone.bg, color: firmaTone.color, border: `1px solid ${firmaTone.border}` }}>
+                              {segmentation.firmaDurumu}
+                            </span>
+                            <span className="pill" style={{ background: yonetimTone.bg, color: yonetimTone.color, border: `1px solid ${yonetimTone.border}` }}>
+                              {segmentation.yonetimTipi}
+                            </span>
+                          </div>
+                        );
+                      })()}
                     </div>
+                  </td>
+                  <td className="phase-column">
+                    {(() => {
+                      const displayedPhase = getDisplayedPhase(r);
+                      if (displayedPhase.phaseNo == null) return null;
+                      const phaseMeta = getPhaseMeta(displayedPhase.phaseNo);
+                      return (
+                        <div style={{ display: 'grid', gap: 6, justifyItems: 'start' }}>
+                          <span className="pill phase-pill" style={phaseMeta.style}>
+                            {phaseMeta.label} · Faz {displayedPhase.phaseNo}
+                          </span>
+                        </div>
+                      );
+                    })()}
                   </td>
                   <td>{r.sektor ?? '-'}</td>
                   <td>{r.sorumlu ?? '-'}</td>
                   <td>{r.kasa_firmasi ?? '-'}</td>
-                  <td>
-                    <span className="pill" style={statusTone(r.kunye_durumu)}>
+                  <td className="kunye-column">
+                    <span className="pill kunye-pill" style={statusTone(r.kunye_durumu)}>
                       {presentKunyeStatus(r.kunye_durumu)}
                     </span>
                   </td>
                   <td>{r.entegrasyon_tipi ?? '-'}</td>
                 </tr>
               ))}
-              {!loading && !rows.length ? (
-                <tr><td colSpan={6} className="muted" style={{ padding: 18 }}>Kayıt bulunamadı.</td></tr>
+              {!loading && !visibleRows.length ? (
+                <tr><td colSpan={7} className="muted" style={{ padding: 18 }}>Kayıt bulunamadı.</td></tr>
               ) : null}
               {loading ? (
-                <tr><td colSpan={6} className="muted" style={{ padding: 18 }}>Yükleniyor...</td></tr>
+                <tr><td colSpan={7} className="muted" style={{ padding: 18 }}>Yükleniyor...</td></tr>
               ) : null}
             </tbody>
           </table>
         </div>
 
         <div className="pager">
-          <div className="section-note">Toplam {total} kayıt · Sayfa {currentPage} / {totalPages}</div>
+          <div className="section-note">Görünen {visibleTotal} müşteri · Toplam havuz {total} · Sayfa {currentPage} / {totalPages}</div>
           <div className="pager-buttons">
             <button className="ghost" disabled={currentPage <= 1 || loading} onClick={() => setPage((p) => Math.max(1, p - 1))}>Önceki</button>
             <button className="ghost" disabled={currentPage >= totalPages || loading} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>Sonraki</button>

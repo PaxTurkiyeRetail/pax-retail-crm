@@ -1,6 +1,8 @@
 'use client';
+import '@/styles/weekly-activities.css';
 
 import { useEffect, useMemo, useState } from 'react';
+import { formatDate } from '@/lib/utils';
 
 type Kpis = {
   totalActivities: number;
@@ -121,9 +123,6 @@ function thisWeekRange() {
   };
 }
 
-function formatDate(value: string) {
-  return new Date(value).toLocaleDateString('tr-TR');
-}
 
 export default function WeeklyActivitiesReportPage() {
   const defaults = useMemo(() => thisWeekRange(), []);
@@ -153,7 +152,7 @@ export default function WeeklyActivitiesReportPage() {
       if (phase) params.set('phase', phase.replace('FAZ ', ''));
       if (waiting) params.set('waiting', waiting);
       if (status) params.set('status', status);
-      const res = await fetch(`/api/reports/weekly-activities?${params.toString()}`, { cache: 'no-store' });
+      const res = await fetch(`/api/reports/weekly-activities?${params.toString()}`, { next: { revalidate: 30 } });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
         setMsg(json?.message || 'Rapor yüklenemedi.');
@@ -194,43 +193,13 @@ export default function WeeklyActivitiesReportPage() {
   };
 
   return (
-    <main className="page">
-      <style jsx>{`
-        .page { display:grid; gap:14px; }
-        .hero, .surface, .card { border:1px solid #d7e3ef; background:#fff; border-radius:22px; box-shadow:0 16px 36px rgba(8,28,66,.05); }
-        .hero, .surface { padding:18px; }
-        .hero { display:flex; justify-content:space-between; align-items:flex-end; gap:12px; flex-wrap:wrap; background:linear-gradient(135deg, rgba(6,40,93,.98) 0%, rgba(10,79,163,.95) 100%); color:#fff; }
-        .title { margin:0; font-size:30px; }
-        .sub { color:rgba(255,255,255,.82); font-size:13px; margin-top:6px; max-width:72ch; }
-        .stats { display:grid; grid-template-columns:repeat(5, minmax(0,1fr)); gap:10px; }
-        .card { padding:14px; }
-        .card-label { color:#64748b; font-size:12px; }
-        .card-value { color:#0f172a; font-size:22px; font-weight:900; margin-top:4px; }
-        .card-hint { color:#64748b; font-size:12px; margin-top:6px; }
-        .filters-grid { display:grid; grid-template-columns:repeat(5, minmax(0,1fr)); gap:10px; }
-        .field { display:grid; gap:6px; }
-        .field-label { font-size:11px; font-weight:900; color:#64748b; text-transform:uppercase; letter-spacing:.04em; }
-        .input, .button { min-height:42px; border-radius:14px; border:1px solid #d5dee8; padding:0 13px; background:#fff; width:100%; }
-        .button { font-weight:800; cursor:pointer; }
-        .filter-actions, .tabs { display:flex; gap:10px; flex-wrap:wrap; margin-top:10px; }
-        .tab { min-height:40px; border-radius:999px; border:1px solid #d5dee8; background:#fff; padding:0 14px; font-weight:800; cursor:pointer; }
-        .tab.active { background:#0f172a; color:#fff; border-color:#0f172a; }
-        .table-wrap { overflow:auto; border:1px solid #e2e8f0; border-radius:16px; }
-        table { width:100%; border-collapse:collapse; min-width:1100px; }
-        th { text-align:left; font-size:11px; color:#64748b; padding:10px 12px; border-bottom:1px solid #e2e8f0; background:#f8fafc; }
-        td { padding:10px 12px; border-bottom:1px solid #eef2f7; font-size:13px; color:#0f172a; }
-        .pill { display:inline-flex; align-items:center; min-height:28px; padding:0 10px; border-radius:999px; font-size:11px; font-weight:900; background:#eff6ff; color:#1d4ed8; }
-        .message { color:#b91c1c; background:#fff1f2; border:1px solid #fecdd3; padding:10px 12px; border-radius:12px; font-size:13px; }
-        @media (max-width: 1400px) { .stats, .filters-grid { grid-template-columns:repeat(3, minmax(0,1fr)); } }
-        @media (max-width: 920px) { .stats, .filters-grid { grid-template-columns:1fr; } }
-      `}</style>
+    <main className="pax-page-container">
 
-      <section className="hero">
-        <div>
-          <h1 className="title">Haftalık Aktivite Raporu</h1>
-          <div className="sub">Kişi bazlı ve ekip bazlı aktivite yoğunluğu, teknik aktivite kırılımı ve firma bazlı temas özeti tek sayfada. Teknik Ziyaret ve Teknik Online rapora dahil edildi.</div>
-        </div>
-      </section>
+      <div className="pax-hero">
+        <span className="pax-hero-eyebrow">Rapor Merkezi · Aktivite Analizi</span>
+        <h1 className="pax-hero-title">Haftalık Aktivite Raporu</h1>
+        <p className="pax-hero-description">Kişi bazlı ve ekip bazlı aktivite yoğunluğu, teknik aktivite kırılımı ve firma bazlı temas özeti tek sayfada.</p>
+      </div>
 
       <section className="stats">
         {kpiCards.map((item) => <div key={item.label} className="card"><div className="card-label">{item.label}</div><div className="card-value">{item.value}</div><div className="card-hint">{item.hint}</div></div>)}

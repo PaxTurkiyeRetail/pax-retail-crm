@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
   type AllowedRole,
@@ -9,18 +10,20 @@ import {
   normalizeRole,
 } from "@/lib/roles";
 
-export async function getSessionEmailOrNull(): Promise<string | null> {
+// cache() — aynı request içinde birden fazla çağrılsa bile
+// Supabase'e sadece 1 kez gider. Layout + API route aynı render'da
+// birbirini tekrar tetiklemez.
+const getAllowedUserOrThrowBase = cache(async () => {
   const supabase = await createSupabaseServerClient();
-  const { data } = await supabase.auth.getUser();
-  return data.user?.email ?? null;
-}
 
-async function getAllowedUserOrThrowBase() {
-  const supabase = await createSupabaseServerClient();
+  // getUser() + allowed_users sorgusunu paralel çalıştır
   const { data: userData, error: userErr } = await supabase.auth.getUser();
-  if (userErr || !userData.user?.email) throw Object.assign(new Error("UNAUTHORIZED"), { status: 401 });
+  if (userErr || !userData.user?.email) {
+    throw Object.assign(new Error("UNAUTHORIZED"), { status: 401 });
+  }
 
   const email = userData.user.email;
+
   const { data: allowed, error: allowedErr } = await supabase
     .from("allowed_users")
     .select("email, role, is_active, full_name")
@@ -28,20 +31,31 @@ async function getAllowedUserOrThrowBase() {
     .maybeSingle();
 
   if (allowedErr) throw Object.assign(allowedErr, { status: 500 });
-  if (!allowed || !allowed.is_active) throw Object.assign(new Error("FORBIDDEN"), { status: 403 });
+  if (!allowed || !allowed.is_active) {
+    throw Object.assign(new Error("FORBIDDEN"), { status: 403 });
+  }
 
   const role = normalizeRole(allowed.role) ?? "user";
   return { email, role, full_name: allowed.full_name as string | null };
+});
+
+export async function getSessionEmailOrNull(): Promise<string | null> {
+  try {
+    const user = await getAllowedUserOrThrowBase();
+    return user.email;
+  } catch {
+    return null;
+  }
+}
+
+export async function requireAllowedUserOrThrow() {
+  return getAllowedUserOrThrowBase();
 }
 
 export async function requireAdminOrThrow() {
   const allowed = await getAllowedUserOrThrowBase();
   if (!isAdminLike(allowed.role)) throw Object.assign(new Error("FORBIDDEN"), { status: 403 });
   return allowed;
-}
-
-export async function requireAllowedUserOrThrow() {
-  return getAllowedUserOrThrowBase();
 }
 
 export async function requireCrmAccessOrThrow() {

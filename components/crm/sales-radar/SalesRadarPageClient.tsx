@@ -1,7 +1,9 @@
 "use client";
+import '@/styles/sales-radar.css';
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
+import { formatDate } from '@/lib/utils';
 
 type CrmRow = {
   musteri_id: string;
@@ -70,8 +72,8 @@ export default function SalesRadarPageClient() {
       try {
         setLoading(true);
         const [crmRes, actRes] = await Promise.all([
-          fetch('/api/crm/list?lite=1&pageSize=500', { cache: 'no-store' }),
-          fetch('/api/reports/weekly-activities', { cache: 'no-store' }),
+          fetch('/api/crm/list?lite=1&pageSize=500', { next: { revalidate: 30 } }),
+          fetch('/api/reports/weekly-activities', { next: { revalidate: 30 } }),
         ]);
         const crmJson = await crmRes.json().catch(() => ({ rows: [] }));
         const actJson = await actRes.json().catch(() => ({ list: [] }));
@@ -123,72 +125,8 @@ export default function SalesRadarPageClient() {
 
   return (
     <main className="radar-shell">
-      <style jsx>{`
-        .radar-shell {
-          display: grid;
-          gap: 20px;
-          color: #0f172a;
-        }
-        .surface {
-          background: #fff;
-          border: 1px solid #e8edf5;
-          border-radius: 24px;
-          box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
-        }
-        .hero { padding: 28px; display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
-        .eyebrow {
-          display: inline-flex; align-items: center; padding: 0 12px; min-height: 32px; border-radius: 999px;
-          background: #eef2ff; color: #3730a3; font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
-        }
-        .title { margin: 12px 0 8px; font-size: 34px; line-height: 1.05; letter-spacing: -.03em; }
-        .sub { max-width: 780px; color: #64748b; font-size: 15px; line-height: 1.65; }
-        .hero-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-        .secondary, .primary { min-height: 44px; border-radius: 14px; padding: 0 16px; display: inline-flex; align-items: center; border: 1px solid #e8edf5; text-decoration: none; font-weight: 600; }
-        .secondary { color: #0f172a; background: #fff; }
-        .primary { color: #fff; background: #111827; border-color: #111827; }
-        .stats-row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 16px; }
-        .card { padding: 20px; }
-        .kicker { color: #94a3b8; font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
-        .value { margin-top: 14px; font-size: 34px; font-weight: 700; letter-spacing: -.03em; }
-        .hint { margin-top: 8px; color: #64748b; font-size: 14px; }
-        .filters { padding: 22px; display: grid; gap: 16px; }
-        .filters-grid { display: grid; grid-template-columns: 2fr repeat(4, minmax(0, 1fr)); gap: 12px; }
-        input, select { height: 44px; border-radius: 14px; border: 1px solid #e8edf5; padding: 0 14px; font-size: 14px; color: #0f172a; background: #fff; }
-        .layout { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(280px, .7fr); gap: 20px; }
-        .table-card { overflow: hidden; }
-        .table-head { padding: 22px 22px 0; }
-        .table-wrap { overflow-x: auto; padding: 18px 22px 22px; }
-        table { width: 100%; border-collapse: collapse; min-width: 1080px; }
-        th, td { padding: 14px 12px; border-bottom: 1px solid #eff3f8; text-align: left; }
-        thead th { background: #f8fafc; color: #94a3b8; font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
-        tbody tr:hover { background: #fbfdff; }
-        tbody tr:last-child td { border-bottom: 0; }
-        .customer { display: grid; gap: 4px; }
-        .customer strong { font-size: 14px; }
-        .subtle { color: #64748b; font-size: 13px; }
-        .badge { display: inline-flex; border-radius: 999px; border: 1px solid transparent; padding: 6px 10px; font-size: 12px; font-weight: 600; }
-        .lead { background: #f4f1ff; color: #6d28d9; border-color: #ede9fe; }
-        .contact { background: #eef8ff; color: #0369a1; border-color: #e0f2fe; }
-        .opportunity { background: #fff8eb; color: #b45309; border-color: #fef3c7; }
-        .pilot { background: #fff1f2; color: #be123c; border-color: #ffe4e6; }
-        .rollout { background: #ecfdf5; color: #047857; border-color: #d1fae5; }
-        .risk-low { background: #f8fafc; color: #475569; border-color: #e2e8f0; }
-        .risk-mid { background: #fff8eb; color: #b45309; border-color: #fef3c7; }
-        .risk-high { background: #fff1f2; color: #be123c; border-color: #ffe4e6; }
-        .score { min-width: 92px; }
-        .score-line { margin-top: 8px; height: 6px; border-radius: 999px; background: #e2e8f0; overflow: hidden; }
-        .score-line span { display: block; height: 100%; border-radius: inherit; background: #94a3b8; }
-        .side { display: grid; gap: 16px; }
-        .mini { padding: 18px; }
-        .mini-list { display: grid; gap: 10px; margin-top: 14px; }
-        .mini-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; border-radius: 16px; border: 1px solid #eff3f8; background: #fbfcfe; }
-        .loading { padding: 28px; border: 1px dashed #e8edf5; border-radius: 20px; background: #fff; color: #64748b; }
-        @media (max-width: 1280px) { .stats-row { grid-template-columns: repeat(2, minmax(0, 1fr)); } .layout { grid-template-columns: 1fr; } }
-        @media (max-width: 900px) { .filters-grid { grid-template-columns: 1fr; } }
-        @media (max-width: 720px) { .hero, .card, .filters, .mini { padding: 18px; } .title { font-size: 28px; } .stats-row { grid-template-columns: 1fr; } }
-      `}</style>
 
-      <section className="surface hero">
+      <section className="pax-hero hero">
         <div>
           <span className="eyebrow">Kurumsal CRM</span>
           <h1 className="title">Sales Radar</h1>
@@ -419,12 +357,6 @@ function isWithinThisWeek(value?: string | null) {
   return diff >= 0 && diff <= 7 * 24 * 60 * 60 * 1000;
 }
 
-function formatDate(value?: string | null) {
-  if (!value) return '-';
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return '-';
-  return d.toLocaleDateString('tr-TR');
-}
 
 function fromNowLabel(value?: string | null) {
   if (!value) return 'Aktivite yok';

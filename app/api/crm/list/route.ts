@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 import { requireCrmAccessOrThrow } from '@/lib/authz';
 import { getKunyeStatus, mapKunyeDbToUi, normalizeKunyeStatusFilter } from '@/lib/kunye';
+import { appendLastStayedPhase } from '@/lib/crm-phase-history';
 
 function normalizeSearchText(value: string | null | undefined) {
   return String(value ?? '')
@@ -25,6 +26,15 @@ function parsePositiveInt(value: string | null, fallback: number) {
   return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
 }
 
+function phaseSearchText(phaseNo: number | null | undefined, phaseName: string | null | undefined) {
+  if (phaseNo != null && phaseNo >= 1 && phaseNo <= 4) return `Fırsat ${phaseName ?? ''} Faz ${phaseNo}`;
+  if (phaseNo != null && phaseNo >= 5 && phaseNo <= 9) return `İlk Temas ${phaseName ?? ''} Faz ${phaseNo}`;
+  if (phaseNo != null && phaseNo >= 10 && phaseNo <= 14) return `Business ${phaseName ?? ''} Faz ${phaseNo}`;
+  if (phaseNo != null && phaseNo >= 15 && phaseNo <= 23) return `Operasyon ${phaseName ?? ''} Faz ${phaseNo}`;
+  if (phaseNo != null && phaseNo >= 24 && phaseNo <= 25) return `Yayılım ${phaseName ?? ''} Faz ${phaseNo}`;
+  return `${phaseName ?? ''} Yazılım`;
+}
+
 export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
@@ -33,6 +43,7 @@ export async function GET(request: Request) {
     const owner = String(url.searchParams.get('owner') ?? '').trim();
     const sector = String(url.searchParams.get('sector') ?? '').trim();
     const integration = String(url.searchParams.get('integration') ?? '').trim();
+    const kasaFirmasi = String(url.searchParams.get('kasa_firmasi') ?? '').trim();
     const kunyeStatus = normalizeKunyeStatusFilter(url.searchParams.get('kunye_status'));
     const fazNoRaw = String(url.searchParams.get('faz_no') ?? '').trim();
     const fazNo = fazNoRaw ? Number(fazNoRaw) : NaN;
@@ -106,8 +117,13 @@ export async function GET(request: Request) {
           row.entegrasyon_tipi,
           row.kasa_firmasi,
           row.kunye_durumu,
+          phaseSearchText(row.aktif_faz_no, row.aktif_faz_adi),
         ].some((value) => normalizeSearchText(value).includes(needle));
       });
+    }
+
+    if (kasaFirmasi) {
+      enriched = enriched.filter((row: any) => String(row.kasa_firmasi ?? '').trim() === kasaFirmasi);
     }
 
     if (kunyeStatus) {
@@ -116,8 +132,9 @@ export async function GET(request: Request) {
 
     const filteredTotal = enriched.length;
     const pagedRows = lite ? enriched.slice(0, pageSize) : enriched.slice(from, to);
+    const rowsWithLastStayedPhase = await appendLastStayedPhase(pagedRows);
 
-    return NextResponse.json({ rows: pagedRows, total: filteredTotal || (count ?? 0), page, pageSize });
+    return NextResponse.json({ rows: rowsWithLastStayedPhase, total: filteredTotal || (count ?? 0), page, pageSize });
   } catch (e: any) {
     return NextResponse.json({ message: 'Yetkisiz' }, { status: e?.status || 401 });
   }

@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PAX Retail · Nova Core · V2</title>
+  <script src="https://cdn.tailwindcss.com">
+    const storyButtons = document.querySelectorAll('.story-card');
+    const storyPanels = document.querySelectorAll('.story-panel');
+    storyButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const target = btn.dataset.story;
+        storyButtons.forEach(b => b.classList.remove('active'));
+        storyPanels.forEach(p => p.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById(target).classList.add('active');
+      });
+    });
+
+    const hubNodes = document.querySelectorAll('.hub-node');
+    const detailPanels = document.querySelectorAll('.detail-panel');
+    hubNodes.forEach(node => {
+      node.addEventListener('click', () => {
+        const target = 'detail-' + node.dataset.detail;
+        hubNodes.forEach(n => n.classList.remove('hub-node-active'));
+        detailPanels.forEach(p => p.classList.remove('active'));
+        node.classList.add('hub-node-active');
+        document.getElementById(target).classList.add('active');
+      });
+    });
+
+  </script>
+  <style>
+    :root{
+      --bg1:#f8fafc;
+      --bg2:#eef2ff;
+      --card:rgba(255,255,255,.86);
+      --line:rgba(226,232,240,.9);
+      --shadow:0 18px 48px rgba(15,23,42,.08);
+    }
+    html{scroll-behavior:smooth}
+    body{
+      background:
+        radial-gradient(circle at top left, rgba(34,197,94,.10), transparent 24%),
+        radial-gradient(circle at top right, rgba(59,130,246,.10), transparent 24%),
+        radial-gradient(circle at bottom right, rgba(168,85,247,.08), transparent 20%),
+        linear-gradient(to bottom, var(--bg1), var(--bg2));
+    }
+    .glass{
+      background:linear-gradient(180deg, rgba(255,255,255,.92), rgba(255,255,255,.84));
+      backdrop-filter:blur(14px);
+      border:1px solid rgba(255,255,255,.78);
+      box-shadow:var(--shadow);
+      border-radius:28px;
+    }
+    .subcard{
+      border-radius:22px;
+      border:1px solid rgba(226,232,240,.95);
+      background:rgba(248,250,252,.82);
+    }
+    .pill{
+      display:inline-flex;align-items:center;gap:.45rem;border-radius:999px;padding:.45rem .8rem;
+      font-size:.72rem;line-height:1;font-weight:700;letter-spacing:.12em;text-transform:uppercase;
+    }
+    .section-kicker{
+      font-size:.72rem;line-height:1;text-transform:uppercase;letter-spacing:.18em;color:#94a3b8;
+      margin-bottom:.7rem;font-weight:700;
+    }
+    .tab-btn.active{background:#0f172a;color:#fff;border-color:#0f172a;box-shadow:0 10px 28px rgba(15,23,42,.18)}
+    .tab-panel{display:none}.tab-panel.active{display:block}
+    .mini{min-height:145px}
+    .metric{min-height:110px}
+    .stage::after{content:"→";position:absolute;right:-17px;top:50%;transform:translateY(-50%);color:#94a3b8;font-weight:700;font-size:18px}
+    .sales-stage::after{content:"→";position:absolute;right:-16px;top:50%;transform:translateY(-50%);color:#94a3b8;font-weight:700}
+    @media (max-width:1280px){.stage::after,.sales-stage::after{display:none}}
+    .ring {
+      position: relative; width: min(980px, 100%); aspect-ratio: 1 / 1; margin: 0 auto;
+    }
+    .ring-center{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:230px;height:230px}
+    .ring-node{position:absolute;width:148px;height:148px;transform:translate(-50%,-50%)}
+    .ring-satellite{position:absolute;width:82px;height:82px;transform:translate(-50%,-50%)}
+    @media (max-width:900px){
+      .ring{display:none}
+      .ring-mobile{display:grid}
+    }
+    @media (min-width:901px){
+      .ring-mobile{display:none}
+    }
+  
+    .story-card.active{background:#0f172a;color:#fff;border-color:#0f172a;box-shadow:0 14px 34px rgba(15,23,42,.18)}
+    .story-card.active .text-slate-900,.story-card.active .text-slate-500{color:#fff !important}
+    .story-panel{display:none}.story-panel.active{display:block}
+    .interactive-hub{position:relative;min-height:560px;border-radius:28px;border:1px solid rgba(226,232,240,.9);background:radial-gradient(circle at center, rgba(255,255,255,.98) 0%, rgba(241,245,249,.92) 54%, rgba(238,242,255,.82) 100%);overflow:hidden}
+    .interactive-hub::before{content:"";position:absolute;inset:8% 8%;border-radius:999px;border:1px dashed rgba(148,163,184,.28)}
+    .interactive-hub::after{content:"";position:absolute;inset:18% 18%;border-radius:999px;border:1px dashed rgba(99,102,241,.18)}
+    .hub-center{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:220px;height:220px;display:flex;align-items:center;justify-content:center}
+    .hub-node{position:absolute;transform:translate(-50%,-50%);width:132px;height:132px;border-radius:999px;border-width:1px;display:flex;align-items:center;justify-content:center;text-align:center;padding:14px;font-weight:700;box-shadow:0 16px 36px rgba(15,23,42,.12);transition:all .22s ease;background:#fff}
+    .hub-node:hover{transform:translate(-50%,-50%) scale(1.04)}
+    .hub-node-active{box-shadow:0 18px 42px rgba(15,23,42,.2), 0 0 0 6px rgba(15,23,42,.06)}
+    .detail-panel{display:none}.detail-panel.active{display:block}
+    @media (max-width:1024px){.interactive-hub{min-height:420px}.hub-center{width:150px;height:150px}.hub-node{width:92px;height:92px;font-size:12px;padding:8px}}
+    @media (max-width:640px){.interactive-hub{display:none}}
+    .interactive-mobile-grid{display:none}
+    @media (max-width:640px){.interactive-mobile-grid{display:grid}}
+
+  </style>
+</head>
+<body class="min-h-screen text-slate-900">
+  <div class="max-w-7xl mx-auto px-5 md:px-8 py-8 md:py-10">
+    <header class="glass p-6 md:p-8 mb-6">
+      <div class="flex flex-col xl:flex-row xl:items-end xl:justify-between gap-6">
+        <div class="max-w-4xl">
+          <div class="pill bg-white/90 border border-slate-200 text-slate-600 mb-4">Nova Core · PAX Retail Strateji Yapısı · V2</div>
+          <h1 class="text-3xl md:text-5xl font-bold tracking-tight leading-tight">
+            PAX Retail için <span class="text-emerald-700">insan + AI</span> birlikte çalışan,
+            <span class="text-indigo-700">CEO sunumuna uygun</span> birleşik yapı
+          </h1>
+          <p class="text-sm md:text-base text-slate-600 mt-4 leading-7 max-w-3xl">
+            Bu sürüm; vizyonu, mevcut organizasyonu, AI program ekosistemini, 52 agent yapısını, hibrit çalışma modelini,
+            canlı ekosistem görünümünü ve satış sürecini tek hikâye içinde birleştirir.
+          </p>
+        </div>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 shrink-0">
+          <div class="subcard metric p-4 text-center"><div class="text-[11px] uppercase tracking-[.16em] text-slate-400">Tab</div><div class="text-3xl font-semibold mt-2">6</div><div class="text-xs text-slate-500 mt-1">Tek akış</div></div>
+          <div class="subcard metric p-4 text-center bg-violet-50/70 border-violet-100"><div class="text-[11px] uppercase tracking-[.16em] text-violet-600">AI Agent</div><div class="text-3xl font-semibold mt-2">52</div><div class="text-xs text-slate-500 mt-1">Dijital iş gücü</div></div>
+          <div class="subcard metric p-4 text-center bg-emerald-50/70 border-emerald-100"><div class="text-[11px] uppercase tracking-[.16em] text-emerald-600">Ekosistem</div><div class="text-3xl font-semibold mt-2">Canlı</div><div class="text-xs text-slate-500 mt-1">Bağlı yapı</div></div>
+          <div class="subcard metric p-4 text-center bg-blue-50/70 border-blue-100"><div class="text-[11px] uppercase tracking-[.16em] text-blue-600">Model</div><div class="text-3xl font-semibold mt-2">Hibrit</div><div class="text-xs text-slate-500 mt-1">Yönetilebilir büyüme</div></div>
+        </div>
+      </div>
+    </header>
+
+    <nav class="glass p-3 md:p-4 sticky top-4 z-30 mb-6">
+      <div class="grid grid-cols-2 lg:grid-cols-6 gap-2">
+        <button class="tab-btn active rounded-2xl border border-slate-200 px-3 py-3 text-sm font-semibold text-slate-700 transition" data-tab="tab1">1. Vizyon</button>
+        <button class="tab-btn rounded-2xl border border-slate-200 px-3 py-3 text-sm font-semibold text-slate-700 transition" data-tab="tab2">2. Mevcut Yapı</button>
+        <button class="tab-btn rounded-2xl border border-slate-200 px-3 py-3 text-sm font-semibold text-slate-700 transition" data-tab="tab3">3. AI Programlar</button>
+        <button class="tab-btn rounded-2xl border border-slate-200 px-3 py-3 text-sm font-semibold text-slate-700 transition" data-tab="tab4">4. AI Agentlar</button>
+        <button class="tab-btn rounded-2xl border border-slate-200 px-3 py-3 text-sm font-semibold text-slate-700 transition" data-tab="tab5">5. Hibrit Model</button>
+        <button class="tab-btn rounded-2xl border border-slate-200 px-3 py-3 text-sm font-semibold text-slate-700 transition" data-tab="tab6">6. Kazanım</button>
+      </div>
+    </nav>
+
+    <main class="space-y-6">
+      <section id="tab1" class="tab-panel active space-y-6">
+        <div class="glass p-6 md:p-8">
+          <div class="section-kicker">1. Tab · Vizyon</div>
+          <div class="grid lg:grid-cols-[1.15fr_.85fr] gap-6 items-start">
+            <div>
+              <h2 class="text-2xl md:text-4xl font-bold tracking-tight leading-tight">
+                Biz burada yalnızca birkaç AI aracı kullanmayı değil,
+                <span class="text-emerald-700">PAX Retail için yeni bir çalışma modeli</span>
+                kurmayı amaçlıyoruz.
+              </h2>
+              <p class="text-sm md:text-base text-slate-600 mt-4 leading-7 max-w-3xl">
+                Amaç; sınırlı insan kaynağı ile daha büyük satış kapasitesi üretmek, günlük operasyonu daha görünür hale getirmek,
+                tekrar eden işleri AI ile disipline etmek ve yönetim katmanında daha net karar alabilmektir.
+                Bu nedenle yaklaşımımız araç bazlı değil, işletim modeli bazlıdır.
+              </p>
+            </div>
+            <div class="subcard p-5 bg-slate-950 text-white border-slate-900">
+              <div class="text-[11px] uppercase tracking-[.16em] text-slate-300 mb-2">Ana karar cümlesi</div>
+              <div class="text-xl font-semibold leading-8">PAX Retail’in bir sonraki büyüme eşiği, insan ekibin yanına kontrollü çalışan bir AI organizasyon katmanı eklemektir.</div>
+            </div>
+          </div>
+        </div>
+        <div class="grid lg:grid-cols-3 gap-4">
+          <div class="glass p-5 border-l-[6px] border-l-emerald-500"><div class="section-kicker">Neyi çözüyoruz</div><div class="text-lg font-semibold mb-3">Kaynak baskısı</div><p class="text-sm text-slate-600 leading-7">Az kişiyle çok fazla müşteri, teklif, entegrasyon, destek ve koordinasyon yükü yönetiliyor.</p></div>
+          <div class="glass p-5 border-l-[6px] border-l-blue-500"><div class="section-kicker">Neyi kuruyoruz</div><div class="text-lg font-semibold mb-3">AI destekli iş gücü</div><p class="text-sm text-slate-600 leading-7">Satış, support, pazarlama, PMO ve yönetim için rol bazlı çalışan agent setleri kuruyoruz.</p></div>
+          <div class="glass p-5 border-l-[6px] border-l-violet-500"><div class="section-kicker">Neyi hedefliyoruz</div><div class="text-lg font-semibold mb-3">Yönetilebilir büyüme</div><p class="text-sm text-slate-600 leading-7">Daha görünür pipeline, daha disiplinli operasyon, daha güçlü forecast ve daha net yönetim görünürlüğü.</p></div>
+        </div>
+      </section>
+
+      <section id="tab2" class="tab-panel space-y-6">
+        <div class="glass p-6 md:p-8">
+          <div class="section-kicker">2. Tab · Mevcut Yapı</div>
+          <div class="grid lg:grid-cols-[1.1fr_.9fr] gap-6 items-start">
+            <div>
+              <h2 class="text-2xl md:text-4xl font-bold tracking-tight leading-tight">Bugünkü yapı, <span class="text-blue-700">küçük ama çapraz rolleri güçlü</span> bir ekip ile büyük operasyonu taşıyor.</h2>
+              <p class="text-sm md:text-base text-slate-600 mt-4 leading-7 max-w-3xl">Mevcut organizasyonda her bir kişi çoğu zaman birden fazla alana dokunuyor. Bu da aynı anda esneklik ve yük oluşturuyor. Bu tabloyu görünür hale getirmek hibrit modele geçişin en kritik başlangıç noktasıdır.</p>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div class="subcard p-4 text-center"><div class="text-[11px] uppercase tracking-[.16em] text-slate-400">Satış</div><div class="text-3xl font-semibold mt-2">2+1</div><div class="text-xs text-slate-500 mt-1">Stajyer destekli</div></div>
+              <div class="subcard p-4 text-center"><div class="text-[11px] uppercase tracking-[.16em] text-slate-400">Support</div><div class="text-3xl font-semibold mt-2">2</div><div class="text-xs text-slate-500 mt-1">Teknik omurga</div></div>
+              <div class="subcard p-4 text-center"><div class="text-[11px] uppercase tracking-[.16em] text-slate-400">Pazarlama</div><div class="text-3xl font-semibold mt-2">1+1</div><div class="text-xs text-slate-500 mt-1">AI destekli üretim</div></div>
+              <div class="subcard p-4 text-center"><div class="text-[11px] uppercase tracking-[.16em] text-slate-400">PMO / AI</div><div class="text-3xl font-semibold mt-2">1+1</div><div class="text-xs text-slate-500 mt-1">Takip ve otomasyon</div></div>
+            </div>
+          </div>
+        </div>
+        <div class="grid xl:grid-cols-3 md:grid-cols-2 gap-4">
+          <div class="glass p-5"><div class="flex items-center justify-between mb-4"><div class="font-semibold">Satış</div><span class="pill bg-slate-50 border border-slate-200 text-slate-600">2+1 STJ</span></div><div class="space-y-3 text-sm text-slate-700"><div class="flex justify-between gap-4"><span>Ömer Canatar</span><span class="text-slate-500">Key Account Manager</span></div><div class="flex justify-between gap-4"><span>Furkan Kızılkurt</span><span class="text-slate-500">Technical Account Manager</span></div><div class="flex justify-between gap-4"><span>Can Önder</span><span class="text-slate-500">Satış Stajyeri</span></div></div><div class="mt-4 pt-4 border-t border-slate-200 text-xs text-slate-500">CRM · Saha takip · yeni müşteri kazanımı</div></div>
+          <div class="glass p-5"><div class="flex items-center justify-between mb-4"><div class="font-semibold">Retail Support / POM</div><span class="pill bg-blue-50 border border-blue-100 text-blue-700">Çapraz</span></div><div class="space-y-3 text-sm text-slate-700"><div class="flex justify-between gap-4"><span>İshak Çelik</span><span class="text-slate-500">Support + POM</span></div><div class="flex justify-between gap-4"><span>Taha Bitim</span><span class="text-slate-500">Support + AI köprüsü</span></div></div><div class="mt-4 pt-4 border-t border-slate-200 text-xs text-slate-500">JIRA · ITSM · rollout koordinasyonu</div></div>
+          <div class="glass p-5"><div class="flex items-center justify-between mb-4"><div class="font-semibold">Pazarlama / AI / PMO</div><span class="pill bg-violet-50 border border-violet-100 text-violet-700">Çapraz</span></div><div class="space-y-3 text-sm text-slate-700"><div class="flex justify-between gap-4"><span>Mete Özdemir</span><span class="text-slate-500">Marketing</span></div><div class="flex justify-between gap-4"><span>Dilara</span><span class="text-slate-500">AI destekli içerik</span></div><div class="flex justify-between gap-4"><span>Eda Kılıç</span><span class="text-slate-500">PMO & AI Automation</span></div></div><div class="mt-4 pt-4 border-t border-slate-200 text-xs text-slate-500">İçerik · kampanya · takip ritmi · otomasyon</div></div>
+        </div>
+        <div class="glass p-6">
+          <div class="section-kicker">Destek katmanları</div>
+          <div class="grid md:grid-cols-2 xl:grid-cols-4 gap-4">
+            <div class="subcard p-5"><div class="font-semibold">PAX Türkiye Yazılım & Product</div><div class="text-sm text-slate-500 mt-2">Yusuf · Erhan Şen · Buğra Karakaya</div></div>
+            <div class="subcard p-5"><div class="font-semibold">Finans</div><div class="text-sm text-slate-500 mt-2">Kazım Özköroğlu · Buğra Erdem</div></div>
+            <div class="subcard p-5"><div class="font-semibold">Bilişim Sistemleri</div><div class="text-sm text-slate-500 mt-2">Murat Asil</div></div>
+            <div class="subcard p-5"><div class="font-semibold">İK / Depo</div><div class="text-sm text-slate-500 mt-2">Ezgi Koparan · Zeynep Oymak · Erkan Uzun</div></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="tab3" class="tab-panel space-y-6">
+        <div class="glass p-6 md:p-8">
+          <div class="section-kicker">3. Tab · AI Programlar</div>
+          <div class="grid lg:grid-cols-[1.1fr_.9fr] gap-6 items-start">
+            <div>
+              <h2 class="text-2xl md:text-4xl font-bold tracking-tight leading-tight">Burada tek bir AI yok. <span class="text-indigo-700">Birbirini tamamlayan katmanlı bir AI ekosistemi</span> var.</h2>
+              <p class="text-sm md:text-base text-slate-600 mt-4 leading-7 max-w-3xl">Core LLM tarafı düşünür, agent mantığı karar verir, otomasyon katmanı işi yürütür, kurumsal AI günlük operasyonu destekler, kreatif AI içerik üretir, development AI ise ürün ve yazılım geliştirmeyi hızlandırır.</p>
+            </div>
+            <div class="subcard p-5 bg-slate-950 text-white border-slate-900"><div class="text-[11px] uppercase tracking-[.16em] text-slate-300 mb-2">Özet</div><div class="text-lg font-semibold leading-8">Tek bir araç değil, birlikte çalışan bütünsel bir AI organizasyonu kuruyoruz.</div></div>
+          </div>
+        </div>
+        <div class="grid xl:grid-cols-5 md:grid-cols-2 gap-4">
+          <div class="glass p-5"><div class="section-kicker">Core LLM</div><div class="font-semibold mb-3">Beyin Katmanı</div><div class="space-y-2 text-sm text-slate-600"><div>ChatGPT</div><div>Claude</div><div>Google Gemini</div></div></div>
+          <div class="glass p-5"><div class="section-kicker">Agent & Automation</div><div class="font-semibold mb-3">Karar ve Aksiyon</div><div class="space-y-2 text-sm text-slate-600"><div>n8n</div><div>LumeFlow</div></div></div>
+          <div class="glass p-5"><div class="section-kicker">Kurumsal AI</div><div class="font-semibold mb-3">Günlük İş Hızı</div><div class="space-y-2 text-sm text-slate-600"><div>Microsoft 365 Copilot</div><div>SharePoint AI Search</div></div></div>
+          <div class="glass p-5"><div class="section-kicker">Kreatif AI</div><div class="font-semibold mb-3">İçerik & Görsel</div><div class="space-y-2 text-sm text-slate-600"><div>Canva AI</div><div>Kling AI</div><div>Google Imagen</div></div></div>
+          <div class="glass p-5"><div class="section-kicker">Development AI</div><div class="font-semibold mb-3">Kod & Ürün</div><div class="space-y-2 text-sm text-slate-600"><div>GitHub Copilot</div><div>Verdent AI</div><div>Windsurf</div></div></div>
+        </div>
+        <div class="glass p-6">
+          <div class="section-kicker">Ekosistem nasıl çalışıyor</div>
+          <div class="grid xl:grid-cols-5 gap-4">
+            <div class="subcard p-5 relative stage"><div class="text-xs uppercase tracking-[.16em] text-blue-600 mb-2">01</div><div class="font-semibold mb-2">Core LLM</div><div class="text-sm text-slate-600">Düşünür, analiz eder, öneri üretir.</div></div>
+            <div class="subcard p-5 relative stage"><div class="text-xs uppercase tracking-[.16em] text-violet-600 mb-2">02</div><div class="font-semibold mb-2">Agent Logic</div><div class="text-sm text-slate-600">Karar yapısı ve senaryo kurgulanır.</div></div>
+            <div class="subcard p-5 relative stage"><div class="text-xs uppercase tracking-[.16em] text-rose-600 mb-2">03</div><div class="font-semibold mb-2">Automation</div><div class="text-sm text-slate-600">Kararlar gerçek aksiyona çevrilir.</div></div>
+            <div class="subcard p-5 relative stage"><div class="text-xs uppercase tracking-[.16em] text-amber-600 mb-2">04</div><div class="font-semibold mb-2">Kurumsal Sistemler</div><div class="text-sm text-slate-600">Bilgiye erişim ve günlük iş akışı desteklenir.</div></div>
+            <div class="subcard p-5"><div class="text-xs uppercase tracking-[.16em] text-emerald-600 mb-2">05</div><div class="font-semibold mb-2">Üretim & Geliştirme</div><div class="text-sm text-slate-600">İçerik, çıktı ve ürün üretimi hızlanır.</div></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="tab4" class="tab-panel space-y-6">
+        <div class="glass p-6 md:p-8">
+          <div class="section-kicker">4. Tab · AI Agentlar</div>
+          <div class="grid lg:grid-cols-[1.1fr_.9fr] gap-6 items-start">
+            <div>
+              <h2 class="text-2xl md:text-4xl font-bold tracking-tight leading-tight">52 agent, tek bir araç değil; <span class="text-violet-700">rollere dağıtılmış dijital iş gücü</span> yapısıdır.</h2>
+              <p class="text-sm md:text-base text-slate-600 mt-4 leading-7 max-w-3xl">Bu agentlar satış büyümesi, teknik destek, pazarlama, PMO, finans, hukuk ve agent yönetimi olarak gruplanır. Amaç, insan ekibi tamamlayan ve görünürlüğü artıran bir arka operasyon gücü kurmaktır.</p>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div class="subcard p-4 text-center bg-emerald-50/70 border-emerald-100"><div class="text-[11px] uppercase tracking-[.16em] text-emerald-600">Satış</div><div class="text-3xl font-semibold mt-2">12</div></div>
+              <div class="subcard p-4 text-center bg-blue-50/70 border-blue-100"><div class="text-[11px] uppercase tracking-[.16em] text-blue-600">Teknik</div><div class="text-3xl font-semibold mt-2">10</div></div>
+              <div class="subcard p-4 text-center bg-fuchsia-50/70 border-fuchsia-100"><div class="text-[11px] uppercase tracking-[.16em] text-fuchsia-600">Marketing</div><div class="text-3xl font-semibold mt-2">8</div></div>
+              <div class="subcard p-4 text-center bg-violet-50/70 border-violet-100"><div class="text-[11px] uppercase tracking-[.16em] text-violet-600">PMO / Ops</div><div class="text-3xl font-semibold mt-2">8</div></div>
+            </div>
+          </div>
+        </div>
+        <div class="grid xl:grid-cols-3 md:grid-cols-2 gap-4 text-sm">
+          <div class="glass p-5 bg-emerald-50/70 border border-emerald-100"><div class="flex justify-between mb-3"><div class="font-semibold text-emerald-800">Satış AI Ajanları</div><div class="font-semibold">12</div></div><div class="grid grid-cols-2 gap-x-4 gap-y-2 text-slate-600"><div>Lead Bulucu</div><div>Müşteri Araştırma</div><div>Pipeline Takip</div><div>Teklif Hazırlayıcı</div><div>Takip Hatırlatıcı</div><div>Fırsat Skorlama</div><div>Müşteri Segmentasyon</div><div>Satış Tahmin</div><div>Rakip Analizi</div><div>Toplantı Hazırlık</div><div>CRM Güncelleme</div><div>Satış Raporlama</div></div></div>
+          <div class="glass p-5 bg-blue-50/70 border border-blue-100"><div class="flex justify-between mb-3"><div class="font-semibold text-blue-800">Teknik & Support</div><div class="font-semibold">10</div></div><div class="grid grid-cols-2 gap-x-4 gap-y-2 text-slate-600"><div>Teknik Ön Analiz</div><div>Hata Özetleyici</div><div>Kurulum Kontrol</div><div>Bilgi Bankası</div><div>Log Analizi</div><div>Versiyon Takip</div><div>Deployment Kontrol</div><div>API Test</div><div>Entegrasyon İzleme</div><div>Performans Analizi</div></div></div>
+          <div class="glass p-5 bg-fuchsia-50/70 border border-fuchsia-100"><div class="flex justify-between mb-3"><div class="font-semibold text-fuchsia-800">Marketing</div><div class="font-semibold">8</div></div><div class="grid grid-cols-2 gap-x-4 gap-y-2 text-slate-600"><div>İçerik Planlayıcı</div><div>Metin Yazarı</div><div>Görsel Brief</div><div>Etkinlik Destek</div><div>Talep Analizi</div><div>Sosyal Medya Planlama</div><div>Kampanya Analizi</div><div>SEO İçerik</div></div></div>
+          <div class="glass p-5 bg-violet-50/70 border border-violet-100"><div class="flex justify-between mb-3"><div class="font-semibold text-violet-800">PMO & Operasyon</div><div class="font-semibold">8</div></div><div class="grid grid-cols-2 gap-x-4 gap-y-2 text-slate-600"><div>Görev Takip</div><div>SLA İzleme</div><div>Toplantı Notları</div><div>Bağımlılık Uyarı</div><div>Yönetici Özeti</div><div>İş Akışı Kontrol</div><div>Ritim Yönetimi</div><div>Performans Takip</div></div></div>
+          <div class="glass p-5 bg-amber-50/70 border border-amber-100"><div class="flex justify-between mb-3"><div class="font-semibold text-amber-800">Finans & Hukuk</div><div class="font-semibold">8</div></div><div class="grid grid-cols-2 gap-x-4 gap-y-2 text-slate-600"><div>Gelir Takip</div><div>Kârlılık Analiz</div><div>Bütçe Kontrol</div><div>Forecast Finans</div><div>Sözleşme Takip</div><div>Risk Analiz</div><div>SLA Uyum</div><div>Doküman Oluşturma</div></div></div>
+          <div class="glass p-5 bg-slate-100 border border-slate-200"><div class="flex justify-between mb-3"><div class="font-semibold text-slate-800">Agent Yönetimi</div><div class="font-semibold">6</div></div><div class="grid grid-cols-2 gap-x-4 gap-y-2 text-slate-600"><div>Agent Performans</div><div>Agent Denetim</div><div>Agent Gelişim</div><div>Görev Dağıtım</div><div>Uyum Kontrol</div><div>Log & İzleme</div></div></div>
+        </div>
+      </section>
+
+      <section id="tab5" class="tab-panel space-y-6">
+        <div class="glass p-6 md:p-8">
+          <div class="section-kicker">5. Tab · Interactive Hibrit Model</div>
+          <div class="grid lg:grid-cols-[1.1fr_.9fr] gap-6 items-start">
+            <div>
+              <h2 class="text-2xl md:text-4xl font-bold tracking-tight leading-tight">Show’u bozmadan, <span class="text-indigo-700">bastıkça derinleşen</span> bir PAX Retail OS anlatımı</h2>
+              <p class="text-sm md:text-base text-slate-600 mt-4 leading-7 max-w-3xl">Bu alan tek seferde her şeyi göstermiyor. Önce aktif ilişki katmanını, sonra insan + AI çalışma mantığını, ardından satıştan operasyona akışı ve en sonda büyük ekosistem görünümünü açıyoruz. Böylece yapı izlenmiyor; keşfediliyor.</p>
+            </div>
+            <div class="subcard p-5 bg-slate-950 text-white border-slate-900">
+              <div class="text-[11px] uppercase tracking-[.16em] text-slate-300 mb-2">Tab 5 mantığı</div>
+              <div class="text-lg font-semibold leading-8">Önce temas ettiğimiz canlı ağ, en sonda ise bunun arkasındaki büyük organizasyon görünür hale geliyor.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="glass p-4 md:p-5">
+          <div class="grid md:grid-cols-4 gap-3">
+            <button class="story-card active rounded-[22px] border border-slate-200 bg-white px-4 py-4 text-left transition" data-story="story1">
+              <div class="text-[11px] uppercase tracking-[.16em] text-emerald-600 mb-2">Level 1</div>
+              <div class="font-semibold text-slate-900">Aktif İlişki Katmanı</div>
+              <div class="text-sm text-slate-500 mt-2">Bugün canlı ekipler ve aktif temas ağımız</div>
+            </button>
+            <button class="story-card rounded-[22px] border border-slate-200 bg-white px-4 py-4 text-left transition" data-story="story2">
+              <div class="text-[11px] uppercase tracking-[.16em] text-blue-600 mb-2">Level 2</div>
+              <div class="font-semibold text-slate-900">Hibrit Çalışma</div>
+              <div class="text-sm text-slate-500 mt-2">İnsan tarafı ve AI tarafının iş bölümü</div>
+            </button>
+            <button class="story-card rounded-[22px] border border-slate-200 bg-white px-4 py-4 text-left transition" data-story="story3">
+              <div class="text-[11px] uppercase tracking-[.16em] text-amber-600 mb-2">Level 3</div>
+              <div class="font-semibold text-slate-900">Operasyon Akışı</div>
+              <div class="text-sm text-slate-500 mt-2">Satıştan rollout’a uzanan gerçek süreç</div>
+            </button>
+            <button class="story-card rounded-[22px] border border-slate-200 bg-white px-4 py-4 text-left transition" data-story="story4">
+              <div class="text-[11px] uppercase tracking-[.16em] text-violet-600 mb-2">Final Reveal</div>
+              <div class="font-semibold text-slate-900">Büyük Ekosistem</div>
+              <div class="text-sm text-slate-500 mt-2">Toplam organizasyonun büyük resmi</div>
+            </button>
+          </div>
+        </div>
+
+        <div id="story1" class="story-panel active space-y-6">
+          <div class="glass p-6 md:p-8">
+            <div class="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4 mb-5">
+              <div>
+                <div class="section-kicker">Aktif İlişki ve Çalışma Katmanı</div>
+                <h3 class="text-2xl md:text-3xl font-bold tracking-tight">Bugün gerçekten temas ettiğimiz ve yönettiğimiz canlı ağ</h3>
+              </div>
+              <div class="text-sm text-slate-500 max-w-xl">Aşağıdaki kartlara bastıkça yalnızca o ilişkinin detayları açılır. Böylece show bozulmadan katman katman ilerlenir.</div>
+            </div>
+
+            <div class="grid lg:grid-cols-[1.05fr_.95fr] gap-6 items-start">
+              <div class="interactive-hub">
+                <div class="hub-center rounded-full border border-indigo-200/70 bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-900 text-white shadow-[0_30px_80px_rgba(30,41,59,0.22)]">
+                  <div class="text-center px-4">
+                    <div class="text-3xl font-bold tracking-tight">PAX</div>
+                    <div class="text-[12px] font-semibold uppercase tracking-[0.34em] text-indigo-200 mt-1">Retail</div>
+                    <div class="text-[11px] uppercase tracking-[0.25em] text-indigo-300/90 mt-2">Aktif Ağ</div>
+                  </div>
+                </div>
+                <button class="hub-node hub-node-active bg-emerald-100 border-emerald-400 text-slate-900" data-detail="sales" style="left:50%; top:14%;">Satış</button>
+                <button class="hub-node bg-violet-100 border-violet-400 text-slate-900" data-detail="partners" style="left:79%; top:30%;">İş Ortaklıkları</button>
+                <button class="hub-node bg-sky-100 border-sky-400 text-slate-900" data-detail="support" style="left:84%; top:58%;">Retail Support</button>
+                <button class="hub-node bg-pink-100 border-pink-400 text-slate-900" data-detail="marketing" style="left:21%; top:30%;">Marketing</button>
+                <button class="hub-node bg-orange-100 border-orange-400 text-slate-900" data-detail="ai" style="left:50%; top:86%;">AI Fabrikası</button>
+                <button class="hub-node bg-cyan-100 border-cyan-400 text-slate-900" data-detail="pmo" style="left:16%; top:58%;">PMO / POM</button>
+              </div>
+
+              <div class="space-y-4">
+                <div class="detail-panel active" id="detail-sales">
+                  <div class="subcard p-5 border-l-[6px] border-l-emerald-500">
+                    <div class="text-[11px] uppercase tracking-[.16em] text-emerald-600 mb-2">Satış</div>
+                    <div class="text-xl font-semibold">Gelir üreten ana temas alanı</div>
+                    <p class="text-sm text-slate-600 leading-7 mt-3">Ömer, Furkan ve satış stajyeri yapısı; direk müşteriler, PF ilişkileri ve teklif süreci burada birleşiyor.</p>
+                    <div class="grid sm:grid-cols-2 gap-3 mt-4 text-sm text-slate-600">
+                      <div class="subcard p-4 bg-emerald-50/70 border-emerald-100"><div class="font-semibold mb-1">Temas Noktaları</div><div>Direk müşteriler · Aköde · Param · Ödeal</div></div>
+                      <div class="subcard p-4 bg-emerald-50/70 border-emerald-100"><div class="font-semibold mb-1">Bağlı Yapılar</div><div>CRM · Teklif disiplini · Follow-up · Forecast</div></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="detail-panel" id="detail-partners">
+                  <div class="subcard p-5 border-l-[6px] border-l-violet-500">
+                    <div class="text-[11px] uppercase tracking-[.16em] text-violet-600 mb-2">İş Ortaklıkları</div>
+                    <div class="text-xl font-semibold">Entegrasyon ve yayılım katmanı</div>
+                    <p class="text-sm text-slate-600 leading-7 mt-3">Nebim, Toshiba, Tera ve Logo benzeri yapılar; ticari genişleme ile teknik uyumluluğun birleştiği katmandır.</p>
+                    <div class="grid sm:grid-cols-2 gap-3 mt-4 text-sm text-slate-600">
+                      <div class="subcard p-4 bg-violet-50/70 border-violet-100"><div class="font-semibold mb-1">Öncelik</div><div>Partner yönetimi · entegrasyon uyumu · yayılım</div></div>
+                      <div class="subcard p-4 bg-violet-50/70 border-violet-100"><div class="font-semibold mb-1">Bağlı Ekip</div><div>Satış + Teknik + dış yazılım bağımlılıkları</div></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="detail-panel" id="detail-support">
+                  <div class="subcard p-5 border-l-[6px] border-l-sky-500">
+                    <div class="text-[11px] uppercase tracking-[.16em] text-sky-600 mb-2">Retail Support</div>
+                    <div class="text-xl font-semibold">Canlı saha ve operasyon sürekliliği</div>
+                    <p class="text-sm text-slate-600 leading-7 mt-3">İshak ve Taha tarafı; müşteri geçişleri, ticket yapısı, sorunların görünürlüğü ve stabilizasyon burada taşınır.</p>
+                    <div class="grid sm:grid-cols-2 gap-3 mt-4 text-sm text-slate-600">
+                      <div class="subcard p-4 bg-sky-50/70 border-sky-100"><div class="font-semibold mb-1">Temas Alanı</div><div>Banka müşterileri · iş ortağı müşterileri · canlı destek</div></div>
+                      <div class="subcard p-4 bg-sky-50/70 border-sky-100"><div class="font-semibold mb-1">Bağlı Yapılar</div><div>ITSM · rollout · saha geri bildirimi</div></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="detail-panel" id="detail-marketing">
+                  <div class="subcard p-5 border-l-[6px] border-l-pink-500">
+                    <div class="text-[11px] uppercase tracking-[.16em] text-pink-600 mb-2">Marketing</div>
+                    <div class="text-xl font-semibold">Talep üretimi ve görünürlük katmanı</div>
+                    <p class="text-sm text-slate-600 leading-7 mt-3">LinkedIn, etkinlikler ve başarı hikâyeleri ile satış motorunu besleyen düzenli içerik akışı burada oluşur.</p>
+                    <div class="grid sm:grid-cols-2 gap-3 mt-4 text-sm text-slate-600">
+                      <div class="subcard p-4 bg-pink-50/70 border-pink-100"><div class="font-semibold mb-1">Kanallar</div><div>LinkedIn · etkinlik · başarı hikâyesi</div></div>
+                      <div class="subcard p-4 bg-pink-50/70 border-pink-100"><div class="font-semibold mb-1">Bağlı Yapılar</div><div>Mete · Dilara · campaign flow</div></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="detail-panel" id="detail-ai">
+                  <div class="subcard p-5 border-l-[6px] border-l-orange-500">
+                    <div class="text-[11px] uppercase tracking-[.16em] text-orange-600 mb-2">AI Fabrikası</div>
+                    <div class="text-xl font-semibold">Arka planda çalışan dijital iş gücü</div>
+                    <p class="text-sm text-slate-600 leading-7 mt-3">CRM agent, content agent, research agent ve operasyon agentları; insan ekiplerin verimliliğini ve hızını artırır.</p>
+                    <div class="grid sm:grid-cols-2 gap-3 mt-4 text-sm text-slate-600">
+                      <div class="subcard p-4 bg-orange-50/70 border-orange-100"><div class="font-semibold mb-1">Ana Rol</div><div>Analiz · taslak · takip · erken uyarı</div></div>
+                      <div class="subcard p-4 bg-orange-50/70 border-orange-100"><div class="font-semibold mb-1">Bağlı Yapılar</div><div>n8n · CRM · PMO · raporlama</div></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="detail-panel" id="detail-pmo">
+                  <div class="subcard p-5 border-l-[6px] border-l-cyan-500">
+                    <div class="text-[11px] uppercase tracking-[.16em] text-cyan-600 mb-2">PMO / POM</div>
+                    <div class="text-xl font-semibold">Kontrol, ritim ve görünürlük köprüsü</div>
+                    <p class="text-sm text-slate-600 leading-7 mt-3">Görev takibi, toplantı çıktıları, raporlama ve operasyon ritmi; yapının dağılmadan ilerlemesini sağlar.</p>
+                    <div class="grid sm:grid-cols-2 gap-3 mt-4 text-sm text-slate-600">
+                      <div class="subcard p-4 bg-cyan-50/70 border-cyan-100"><div class="font-semibold mb-1">Kontrol Başlıkları</div><div>Planlama · takip · raporlama · bağımlılık</div></div>
+                      <div class="subcard p-4 bg-cyan-50/70 border-cyan-100"><div class="font-semibold mb-1">Bağlı Ekip</div><div>Eda · İshak · Taha · yönetim görünürlüğü</div></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="glass p-6 md:p-8">
+            <div class="section-kicker">Geçiş</div>
+            <div class="grid lg:grid-cols-[1.15fr_.85fr] gap-6 items-start">
+              <div>
+                <h3 class="text-2xl font-semibold tracking-tight mb-3">Bu görünüm günlük çalışma ağını gösteriyor.</h3>
+                <p class="text-sm text-slate-600 leading-7">Ancak bunun arkasında insan ve AI arasında daha net bir iş bölümü, sahada çalışan gerçek bir akış ve tüm bunları taşıyan daha büyük bir ekosistem bulunuyor. Şimdi o derinliğe geçiyoruz.</p>
+              </div>
+              <div class="subcard p-5 bg-indigo-50/70 border-indigo-100"><div class="text-sm font-semibold text-indigo-800">İlk ekran ilişkileri gösterir. Sonraki ekranlar mantığı ve ölçeği gösterir.</div></div>
+            </div>
+          </div>
+        </div>
+
+        <div id="story2" class="story-panel space-y-6">
+          <div class="glass p-6 md:p-8">
+            <div class="section-kicker">Hibrit Çalışma Mantığı</div>
+            <div class="grid md:grid-cols-2 gap-6">
+              <div class="subcard p-6 border-l-[6px] border-l-emerald-500 bg-emerald-50/60">
+                <div class="text-lg font-semibold text-slate-900 mb-3">İnsan tarafı</div>
+                <ul class="space-y-3 text-sm text-slate-600 leading-7 list-disc pl-5">
+                  <li>İlişki kurar ve müzakere eder</li>
+                  <li>Önceliklendirir ve karar verir</li>
+                  <li>Sahiplik alır ve kapatır</li>
+                  <li>Müşteri güvenini yönetir</li>
+                  <li>Sahadaki gri alanları çözer</li>
+                </ul>
+              </div>
+              <div class="subcard p-6 border-l-[6px] border-l-blue-500 bg-blue-50/60">
+                <div class="text-lg font-semibold text-slate-900 mb-3">AI tarafı</div>
+                <ul class="space-y-3 text-sm text-slate-600 leading-7 list-disc pl-5">
+                  <li>Veriyi toplar, düzenler ve özetler</li>
+                  <li>Hatırlatır ve takip eder</li>
+                  <li>Erken uyarı verir ve risk işaretler</li>
+                  <li>Taslak üretir ve standardizasyon sağlar</li>
+                  <li>Görünürlüğü artırır ve raporlar</li>
+                </ul>
+              </div>
+            </div>
+            <div class="grid xl:grid-cols-4 gap-4 mt-6">
+              <div class="subcard p-5 relative stage"><div class="text-xs uppercase tracking-[.16em] text-emerald-600 mb-2">01</div><div class="font-semibold mb-2">İnsan Teması</div><div class="text-sm text-slate-600">Satış, destek veya yönetim sahada ilişkiyi kurar.</div></div>
+              <div class="subcard p-5 relative stage"><div class="text-xs uppercase tracking-[.16em] text-blue-600 mb-2">02</div><div class="font-semibold mb-2">AI İşleme</div><div class="text-sm text-slate-600">Notlar, sinyaller, riskler ve görevler düzenlenir.</div></div>
+              <div class="subcard p-5 relative stage"><div class="text-xs uppercase tracking-[.16em] text-violet-600 mb-2">03</div><div class="font-semibold mb-2">Kontrol & Takip</div><div class="text-sm text-slate-600">PMO ve agentlar gecikme, bağımlılık ve aksiyonu görünür kılar.</div></div>
+              <div class="subcard p-5"><div class="text-xs uppercase tracking-[.16em] text-amber-600 mb-2">04</div><div class="font-semibold mb-2">Karar & İlerleme</div><div class="text-sm text-slate-600">İnsan ekip aksiyon alır ve süreci ilerletir.</div></div>
+            </div>
+          </div>
+        </div>
+
+        <div id="story3" class="story-panel space-y-6">
+          <div class="glass p-6 md:p-8">
+            <div class="section-kicker">Satıştan Operasyona Akış</div>
+            <div class="grid lg:grid-cols-[1.1fr_.9fr] gap-6 items-start mb-6">
+              <div>
+                <h3 class="text-2xl md:text-3xl font-bold tracking-tight">Gerçek süreç, fikirden değil <span class="text-amber-700">işleyişten</span> okunur.</h3>
+                <p class="text-sm text-slate-600 leading-7 mt-3">Bu akış müşteri kazanımından stabilizasyona kadar satış ve operasyon disiplininin nasıl ilerlediğini gösterir.</p>
+              </div>
+              <div class="subcard p-5 bg-amber-50/70 border-amber-100"><div class="text-[11px] uppercase tracking-[.16em] text-amber-700 mb-2">Retail Sales Discipline</div><div class="text-sm text-slate-700 leading-7">Her müşteri teması sonrası en geç 24 saat içinde CRM kaydı ve kısa özet zorunludur. Kayıt yoksa takip yoktur.</div></div>
+            </div>
+            <div class="grid sm:grid-cols-2 xl:grid-cols-6 gap-4 mb-6">
+              <div class="subcard p-4 text-center"><div class="text-[11px] uppercase tracking-[.16em] text-slate-400">Toplam Adım</div><div class="text-3xl font-semibold mt-2">25</div></div>
+              <div class="subcard p-4 text-center"><div class="text-[11px] uppercase tracking-[.16em] text-slate-400">Sunum</div><div class="text-3xl font-semibold mt-2">10</div></div>
+              <div class="subcard p-4 text-center"><div class="text-[11px] uppercase tracking-[.16em] text-slate-400">Sözleşme</div><div class="text-3xl font-semibold mt-2">7</div></div>
+              <div class="subcard p-4 text-center"><div class="text-[11px] uppercase tracking-[.16em] text-slate-400">Operasyon Dk.</div><div class="text-3xl font-semibold mt-2">7</div></div>
+              <div class="subcard p-4 text-center"><div class="text-[11px] uppercase tracking-[.16em] text-slate-400">Cihaz Portföyü</div><div class="text-3xl font-semibold mt-2">11</div></div>
+              <div class="subcard p-4 text-center"><div class="text-[11px] uppercase tracking-[.16em] text-slate-400">Mail Şablonu</div><div class="text-3xl font-semibold mt-2">3</div></div>
+            </div>
+            <div class="grid xl:grid-cols-5 gap-4">
+              <div class="subcard p-5 relative sales-stage border-l-[5px] border-l-blue-500"><div class="text-xs uppercase tracking-[.16em] text-blue-600 mb-2">4 adım</div><div class="font-semibold mb-3">Lead & Keşif</div><div class="space-y-2 text-sm text-slate-600"><div>01 Lead Oluşumu</div><div>02 İlk Temas</div><div>03 İlk Müşteri Görüşmesi</div><div>04 Lead Validasyonu</div></div></div>
+              <div class="subcard p-5 relative sales-stage border-l-[5px] border-l-violet-500"><div class="text-xs uppercase tracking-[.16em] text-violet-600 mb-2">5 adım</div><div class="font-semibold mb-3">Çözüm Konumlandırma</div><div class="space-y-2 text-sm text-slate-600"><div>05 Şirket Sunumu</div><div>06 Donanım Sunumu</div><div>07 TMS Sunumu</div><div>08 PAX Platform</div><div>09 Operasyon Analizi</div></div></div>
+              <div class="subcard p-5 relative sales-stage border-l-[5px] border-l-amber-500"><div class="text-xs uppercase tracking-[.16em] text-amber-600 mb-2">5 adım</div><div class="font-semibold mb-3">Ticari Süreç</div><div class="space-y-2 text-sm text-slate-600"><div>10 Teklif Hazırlama</div><div>11 Konsinye</div><div>12 Pilot / POC</div><div>13 Uçtan Uca Test</div><div>14 Mutabakat & Sözleşme</div></div></div>
+              <div class="subcard p-5 relative sales-stage border-l-[5px] border-l-emerald-500"><div class="text-xs uppercase tracking-[.16em] text-emerald-600 mb-2">7 adım</div><div class="font-semibold mb-3">Teslimat & Aktivasyon</div><div class="space-y-2 text-sm text-slate-600"><div>15 Sipariş</div><div>16 Depo Planlama</div><div>17 Sevkiyat</div><div>18 Kurulum Eğitimi</div><div>19 ITSM</div><div>20 TMS</div><div>21 PAX Platform</div></div></div>
+              <div class="subcard p-5 border-l-[5px] border-l-slate-500"><div class="text-xs uppercase tracking-[.16em] text-slate-600 mb-2">4 adım</div><div class="font-semibold mb-3">Operasyon & Büyüme</div><div class="space-y-2 text-sm text-slate-600"><div>22 ITSM Devri</div><div>23 Stabilizasyon</div><div>24 Rollout</div><div>25 Referans & Verimlilik</div></div></div>
+            </div>
+          </div>
+        </div>
+
+        <div id="story4" class="story-panel space-y-6">
+          <div class="glass p-6 md:p-8">
+            <div class="section-kicker">Final Reveal · PAX Retail OS – Büyük Resim</div>
+            <div class="grid lg:grid-cols-[1.1fr_.9fr] gap-6 items-start mb-6">
+              <div>
+                <h3 class="text-2xl md:text-3xl font-bold tracking-tight">Az önce gördüğümüz tüm yapıların toplamı: <span class="text-violet-700">ölçeklenebilir hibrit organizasyon</span></h3>
+                <p class="text-sm text-slate-600 leading-7 mt-3">Bu final görünüm; çekirdek ekip, AI agentlar, uzman destek, kurumsal destek ve canlı ilişki ağının tek organizasyon mantığında birleştiğini gösterir.</p>
+              </div>
+              <div class="subcard p-5 bg-slate-950 text-white border-slate-900"><div class="text-[11px] uppercase tracking-[.16em] text-slate-300 mb-2">Final cümlesi</div><div class="text-lg font-semibold leading-8">Bu yapı birkaç ekranın toplamı değil; PAX Retail’in yeni işletim sistemidir.</div></div>
+            </div>
+
+            <div class="grid xl:grid-cols-4 md:grid-cols-2 gap-4 mb-6">
+              <div class="subcard p-5 bg-emerald-50/70 border-emerald-100"><div class="font-semibold mb-2">PAX Retail Çekirdek Yapı</div><div class="text-sm text-slate-600 leading-7">Satış · Retail Support · Marketing · PMO · POM</div></div>
+              <div class="subcard p-5 bg-violet-50/70 border-violet-100"><div class="font-semibold mb-2">AI Organizasyon Katmanı</div><div class="text-sm text-slate-600 leading-7">52 agent · otomasyon · raporlama · kontrol</div></div>
+              <div class="subcard p-5 bg-sky-50/70 border-sky-100"><div class="font-semibold mb-2">PAX Türkiye Uzman Desteği</div><div class="text-sm text-slate-600 leading-7">Yusuf · Erhan Şen · Buğra Karakaya</div></div>
+              <div class="subcard p-5 bg-amber-50/70 border-amber-100"><div class="font-semibold mb-2">Axela Kurumsal Desteği</div><div class="text-sm text-slate-600 leading-7">Finans · IT · İK · Satış Deposu</div></div>
+            </div>
+
+            <div class="grid xl:grid-cols-5 gap-4">
+              <div class="subcard p-5 relative stage"><div class="text-xs uppercase tracking-[.16em] text-emerald-600 mb-2">Katman 1</div><div class="font-semibold mb-2">Gerçek Ekip</div><div class="text-sm text-slate-600">İlişki, sahiplik ve karar</div></div>
+              <div class="subcard p-5 relative stage"><div class="text-xs uppercase tracking-[.16em] text-violet-600 mb-2">Katman 2</div><div class="font-semibold mb-2">AI Agentlar</div><div class="text-sm text-slate-600">Takip, özet, analiz ve taslak</div></div>
+              <div class="subcard p-5 relative stage"><div class="text-xs uppercase tracking-[.16em] text-cyan-600 mb-2">Katman 3</div><div class="font-semibold mb-2">Kontrol Katmanı</div><div class="text-sm text-slate-600">PMO, POM, görünürlük ve ritim</div></div>
+              <div class="subcard p-5 relative stage"><div class="text-xs uppercase tracking-[.16em] text-sky-600 mb-2">Katman 4</div><div class="font-semibold mb-2">Uzman Destek</div><div class="text-sm text-slate-600">Product, yazılım ve entegrasyon</div></div>
+              <div class="subcard p-5"><div class="text-xs uppercase tracking-[.16em] text-amber-600 mb-2">Katman 5</div><div class="font-semibold mb-2">Kurumsal Destek</div><div class="text-sm text-slate-600">Finans, IT, İK, depo ve ölçeklenme altyapısı</div></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+<section id="tab6" class="tab-panel space-y-6">
+        <div class="glass p-6 md:p-8">
+          <div class="section-kicker">6. Tab · Kazanım</div>
+          <div class="grid lg:grid-cols-[1.1fr_.9fr] gap-6 items-start">
+            <div>
+              <h2 class="text-2xl md:text-4xl font-bold tracking-tight leading-tight">Bu yapıya geçtiğimizde yalnızca iş hızlanmaz; <span class="text-emerald-700">kurumsal kapasite artar.</span></h2>
+              <p class="text-sm md:text-base text-slate-600 mt-4 leading-7 max-w-3xl">Kazanım sadece otomasyon değildir. Asıl değer; görünürlük, standardizasyon, takip gücü, forecast doğruluğu, kurumsal hafıza ve yönetilebilir büyümedir.</p>
+            </div>
+            <div class="subcard p-5 bg-slate-950 text-white border-slate-900"><div class="text-[11px] uppercase tracking-[.16em] text-slate-300 mb-2">Karar cümlesi</div><div class="text-lg font-semibold leading-8">Bu model, insan ekibi küçültmek için değil; aynı ekiple daha büyük ve daha kontrollü kapasite yaratmak için tasarlanmıştır.</div></div>
+          </div>
+        </div>
+        <div class="grid xl:grid-cols-3 md:grid-cols-2 gap-4">
+          <div class="glass p-5 border-l-[6px] border-l-emerald-500"><div class="font-semibold mb-3">Satış tarafında</div><p class="text-sm text-slate-600 leading-7">Daha görünür pipeline, daha disiplinli teklif süreci, daha güçlü follow-up ve daha iyi forecast.</p></div>
+          <div class="glass p-5 border-l-[6px] border-l-blue-500"><div class="font-semibold mb-3">Operasyon tarafında</div><p class="text-sm text-slate-600 leading-7">Daha düzenli support, daha kontrollü rollout, daha net görev dağılımı ve gecikme yönetimi.</p></div>
+          <div class="glass p-5 border-l-[6px] border-l-violet-500"><div class="font-semibold mb-3">Yönetim tarafında</div><p class="text-sm text-slate-600 leading-7">Daha ölçülebilir performans, daha güçlü kontrol mekanizması ve daha erken uyarı sistemi.</p></div>
+          <div class="glass p-5 border-l-[6px] border-l-amber-500"><div class="font-semibold mb-3">Kurumsal tarafta</div><p class="text-sm text-slate-600 leading-7">Bilginin kişilere bağlı kalmaması, standartların sistem içinde üretilmesi ve kurumsal hafızanın güçlenmesi.</p></div>
+          <div class="glass p-5 border-l-[6px] border-l-rose-500"><div class="font-semibold mb-3">Finansal tarafta</div><p class="text-sm text-slate-600 leading-7">Aynı insan kaynağı ile daha fazla çıktı, daha kontrollü maliyet ve daha net kapasite planı.</p></div>
+          <div class="glass p-5 border-l-[6px] border-l-slate-500"><div class="font-semibold mb-3">Stratejik tarafta</div><p class="text-sm text-slate-600 leading-7">PAX Retail’in ölçeklenebilir, gösterilebilir ve çoğaltılabilir bir işletim modeline kavuşması.</p></div>
+        </div>
+        <div class="glass p-6">
+          <div class="section-kicker">Yönetici sunumu için kapanış</div>
+          <div class="grid lg:grid-cols-[1.1fr_.9fr] gap-6 items-start">
+            <div>
+              <h3 class="text-2xl font-semibold tracking-tight mb-3">Bu yapının özeti</h3>
+              <p class="text-sm text-slate-600 leading-7">PAX Retail’in gelecekteki büyüme modeli; mevcut insan organizasyonunu koruyup güçlendiren, AI ile desteklenen, agentlarla ölçeklenen, ekosistem mantığı ile yönetilen ve gerçek satış akışı ile sahaya bağlanan hibrit bir işletim modelidir.</p>
+            </div>
+            <div class="rounded-2xl bg-emerald-50 border border-emerald-100 p-5">
+              <div class="text-xs uppercase tracking-[.16em] text-emerald-600 mb-2">Son cümle</div>
+              <div class="text-lg font-semibold leading-8">İçeride hibrit çalışan ekip, dışarıda görünür bağımlılık katmanı, arkada güçlü AI operasyonu: PAX Retail’in yeni ölçeklenme modeli budur.</div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const buttons = document.querySelectorAll('.tab-btn');
+    const panels = document.querySelectorAll('.tab-panel');
+    buttons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const target = btn.dataset.tab;
+        buttons.forEach(b => b.classList.remove('active'));
+        panels.forEach(p => p.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById(target).classList.add('active');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      });
+    });
+  
+    const storyButtons = document.querySelectorAll('.story-card');
+    const storyPanels = document.querySelectorAll('.story-panel');
+    storyButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const target = btn.dataset.story;
+        storyButtons.forEach(b => b.classList.remove('active'));
+        storyPanels.forEach(p => p.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById(target).classList.add('active');
+      });
+    });
+
+    const hubNodes = document.querySelectorAll('.hub-node');
+    const detailPanels = document.querySelectorAll('.detail-panel');
+    hubNodes.forEach(node => {
+      node.addEventListener('click', () => {
+        const target = 'detail-' + node.dataset.detail;
+        hubNodes.forEach(n => n.classList.remove('hub-node-active'));
+        detailPanels.forEach(p => p.classList.remove('active'));
+        node.classList.add('hub-node-active');
+        document.getElementById(target).classList.add('active');
+      });
+    });
+
+  </script>
+</body>
+</html>

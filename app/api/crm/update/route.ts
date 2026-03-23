@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import { isAdminLike, requireCrmAccessOrThrow } from '@/lib/authz';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 import { ENTEGRASYON_OPTIONS, HAVUZ_ACCOUNT_NAME } from '@/lib/crm';
@@ -118,5 +119,6 @@ export async function POST(req: Request) {
     .eq('id', musteriId);
 
   if (error) return NextResponse.json({ message: error.message }, { status: 400 });
+  revalidatePath('/crm/customers');
   return NextResponse.json({ ok: true, message: 'Müşteri kaydı güncellendi.' });
 }

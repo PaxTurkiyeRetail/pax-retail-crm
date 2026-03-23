@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { requireCrmAccessOrThrow } from "@/lib/authz";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { ENTEGRASYON_OPTIONS, HAVUZ_ACCOUNT_NAME } from "@/lib/crm";

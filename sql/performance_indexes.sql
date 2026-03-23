@@ -1,0 +1,10 @@
+create index if not exists idx_musteriler_sorumlu on public.musteriler (sorumlu);
+create index if not exists idx_musteriler_musteri_lower on public.musteriler (lower(musteri));
+create index if not exists idx_musteri_pipeline_faz on public.musteri_pipeline (aktif_faz_no, updated_at desc);
+create index if not exists idx_musteri_pipeline_owner on public.musteri_pipeline (owner);
+create index if not exists idx_pipeline_eventleri_musteri_created on public.pipeline_eventleri (musteri_id, created_at desc);
+create index if not exists idx_pipeline_eventleri_musteri_faz_created on public.pipeline_eventleri (musteri_id, faz_no, created_at desc);
+create index if not exists idx_pipeline_eventleri_created_by_created on public.pipeline_eventleri (created_by, created_at desc);
+create index if not exists idx_pipeline_eventleri_durum_hedef on public.pipeline_eventleri (durum, hedef_tarihi);
+create index if not exists idx_pipeline_eventleri_partner_owner on public.pipeline_eventleri (partner_owner);
+create index if not exists idx_musteriler_sektor_enteg on public.musteriler (sektor, entegrasyon_tipi);\ncreate index if not exists idx_musteriler_sorumlu_sektor on public.musteriler (sorumlu, sektor);\ncreate index if not exists idx_pipeline_eventleri_faz_durum_created on public.pipeline_eventleri (faz_no, durum, created_at desc);\ncreate index if not exists idx_pipeline_eventleri_hedef_created on public.pipeline_eventleri (hedef_tarihi, created_at desc);

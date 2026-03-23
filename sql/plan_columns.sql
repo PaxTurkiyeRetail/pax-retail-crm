@@ -1,0 +1,3 @@
+-- Eski plan kolonları bu sürümde artık kullanılmıyor.
+-- Sonraki iş akışı pipeline_eventleri.hedef_tarihi ve durum alanlarıyla yönetiliyor.
+-- Bu dosya sadece bilgi amaçlı bırakıldı.

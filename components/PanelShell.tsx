@@ -2,20 +2,11 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import LogoutButton from '@/components/LogoutButton';
-import {
-  BarChart3,
-  Building2,
-  ChevronLeft,
-  ChevronRight,
-  ClipboardCheck,
-  LayoutGrid,
-  Menu,
-  Target,
-  Users,
-} from 'lucide-react';
 import { canViewActivities, canViewCRM, canViewReports, canViewUsers, isAdminLike, type AllowedRole } from '@/lib/roles';
+import '@/styles/globals.css';
+import '@/styles/sidebar.css';
 
 function roleLabel(role: AllowedRole) {
   if (role === 'super_admin') return 'Super Admin';
@@ -25,612 +16,256 @@ function roleLabel(role: AllowedRole) {
   return 'Kullanıcı';
 }
 
-type IconKey = 'dashboard' | 'activity' | 'customers' | 'approval' | 'weekly' | 'management' | 'salesRadar' | 'users';
-type NavItem = { href: string; label: string; iconKey: IconKey; exact?: boolean; badge?: string };
-type NavNode = NavItem;
-type NavGroup = { title: string; items: NavNode[] };
+type IconKey = 'dashboard' | 'activity' | 'customers' | 'quotes' | 'approval' | 'weekly' | 'management' | 'salesRadar' | 'salesProcess' | 'users' | 'tracker' | 'guide' | 'me' | 'novaCore' | 'requests' | 'requestsDash' | 'personStats';
+type NavItem = { href: string; label: string; iconKey: IconKey; exact?: boolean };
+type NavGroup = { title: string; items: NavItem[] };
 
-function isItemActive(pathname: string, item: { href: string; exact?: boolean }) {
+function isActive(pathname: string, item: NavItem) {
   if (item.exact) return pathname === item.href;
   return pathname === item.href || pathname.startsWith(`${item.href}/`);
 }
 
-function IconBase({ children }: { children: React.ReactNode }) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="18"
-      height="18"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      {children}
-    </svg>
-  );
+function getInitials(name: string) {
+  return name.split(' ').filter(Boolean).slice(0, 2).map(n => n[0]).join('').toUpperCase();
 }
 
-function ActivityFieldIcon() {
-  return (
-    <IconBase>
-      <path d="M7 4h8l2 2v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z" />
-      <path d="M9 9h6" />
-      <path d="M9 13h3" />
-      <path d="M15.5 14.5l1.5 1.5 3-3" />
-    </IconBase>
-  );
+/* ── Inline SVG icons ── */
+const SVG = { fill: 'none', stroke: 'currentColor', strokeWidth: '1.75', strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
+
+function NavIcon({ k }: { k: IconKey }) {
+  const p = { ...SVG, width: 16, height: 16, viewBox: '0 0 24 24' };
+  if (k === 'dashboard') return <svg {...p}><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>;
+  if (k === 'activity') return <svg {...p}><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>;
+  if (k === 'customers') return <svg {...p}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>;
+  if (k === 'quotes') return <svg {...p}><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="14 3 14 9 20 9"/><path d="M8 13h8"/><path d="M8 17h6"/></svg>;
+  if (k === 'approval') return <svg {...p}><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>;
+  if (k === 'weekly') return <svg {...p}><path d="M3 3v18h18"/><path d="m7 16 4-4 4 4 4-7"/></svg>;
+  if (k === 'management') return <svg {...p}><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>;
+  if (k === 'salesRadar') return <svg {...p}><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>;
+  if (k === 'salesProcess') return <svg {...p}><path d="M4 6h16"/><path d="M4 12h10"/><path d="M4 18h7"/><path d="m15 15 3 3 5-6"/></svg>;
+  if (k === 'tracker') return <svg {...p}><path d="M9 3h6"/><path d="M10 8h4"/><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 12h8"/><path d="M8 16h5"/></svg>;
+  if (k === 'guide') return <svg {...p}><path d="M12 6.5a3.5 3.5 0 1 0 0 7"/><path d="M12 6.5c1.4 0 2.5.5 3.3 1.4"/><path d="M12 13.5c-1.4 0-2.5-.5-3.3-1.4"/><path d="M5 4h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"/></svg>;
+  if (k === 'me') return <svg {...p}><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>;
+  if (k === 'novaCore') return <svg {...p}><path d="M12 2 4 6v6c0 5 3.4 8.8 8 10 4.6-1.2 8-5 8-10V6l-8-4Z"/><path d="M9 12h6"/><path d="M12 9v6"/></svg>;
+  if (k === 'requests') return <svg {...p}><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6"/><path d="M9 16h4"/></svg>;
+  if (k === 'personStats') return <svg {...p}><circle cx="9" cy="7" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/><path d="M19 8v6"/><path d="M22 11h-6"/></svg>;
+  if (k === 'requestsDash') return <svg {...p}><path d="M3 3v18h18"/><rect x="7" y="12" width="3" height="6" rx="0.5"/><rect x="13" y="8" width="3" height="10" rx="0.5"/><rect x="10" y="5" width="3" height="13" rx="0.5"/></svg>;
+  return <svg {...p}><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>;
 }
 
-function WeeklyActivityIcon() {
-  return (
-    <IconBase>
-      <path d="M4 20h16" />
-      <path d="M7 16v-3" />
-      <path d="M12 16V8" />
-      <path d="M17 16v-5" />
-      <path d="M6 7h12" />
-    </IconBase>
-  );
-}
+function IconChevronLeft() { return <svg width="14" height="14" {...SVG} viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>; }
+function IconChevronRight() { return <svg width="14" height="14" {...SVG} viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>; }
+function IconMenu() { return <svg width="17" height="17" {...SVG} viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>; }
+function IconSun() { return <svg width="15" height="15" {...SVG} viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>; }
+function IconMoon() { return <svg width="15" height="15" {...SVG} viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>; }
 
-function NavIcon({ iconKey }: { iconKey: IconKey }) {
-  const props = { size: 18, strokeWidth: 1.5 };
-  if (iconKey === 'dashboard') return <LayoutGrid {...props} />;
-  if (iconKey === 'activity') return <ActivityFieldIcon />;
-  if (iconKey === 'customers') return <Building2 {...props} />;
-  if (iconKey === 'approval') return <ClipboardCheck {...props} />;
-  if (iconKey === 'weekly') return <WeeklyActivityIcon />;
-  if (iconKey === 'management') return <BarChart3 {...props} />;
-  if (iconKey === 'salesRadar') return <Target {...props} />;
-  return <Users {...props} />;
-}
-
-export default function PanelShell({ role, fullName, email, children }: { role: AllowedRole; fullName?: string | null; email?: string | null; children: React.ReactNode }) {
+export default function PanelShell({ role, fullName, email, children }: {
+  role: AllowedRole; fullName?: string | null; email?: string | null; children: React.ReactNode;
+}) {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
-  
-  useEffect(() => {
-    setMenuOpen(false);
-  }, [pathname]);
+  const [dark, setDark] = useState(false);
 
+  // Load persisted prefs
   useEffect(() => {
     try {
-      setCollapsed(window.localStorage.getItem('pax-sidebar-collapsed') === '1');
+      setCollapsed(localStorage.getItem('pax-collapsed') === '1');
+      const savedTheme = localStorage.getItem('pax-theme');
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      const isDark = savedTheme ? savedTheme === 'dark' : prefersDark;
+      setDark(isDark);
     } catch {}
   }, []);
 
+  // Apply theme to <html>
   useEffect(() => {
-    try {
-      window.localStorage.setItem('pax-sidebar-collapsed', collapsed ? '1' : '0');
-    } catch {}
-  }, [collapsed]);
+    document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+    try { localStorage.setItem('pax-theme', dark ? 'dark' : 'light'); } catch {}
+  }, [dark]);
+
+  // Close menu on route change
+  useEffect(() => { setMenuOpen(false); }, [pathname]);
+
+  const toggleCollapse = useCallback(() => {
+    setCollapsed(v => {
+      const next = !v;
+      try { localStorage.setItem('pax-collapsed', next ? '1' : '0'); } catch {}
+      return next;
+    });
+  }, []);
+
+  const toggleTheme = useCallback(() => setDark(v => !v), []);
 
   const groups = useMemo<NavGroup[]>(() => {
-    const overview: NavNode[] = [];
-    const operations: NavNode[] = [];
-    const insights: NavNode[] = [];
-    const system: NavNode[] = [];
+    const overview: NavItem[] = [];
+    const operations: NavItem[] = [];
+    const insights: NavItem[] = [];
+    const system: NavItem[] = [];
 
+    const isAdmin = isAdminLike(role);
+
+    // GENEL
     if (canViewCRM(role)) overview.push({ href: '/crm', label: 'Dashboard', iconKey: 'dashboard', exact: true });
-    if (canViewActivities(role)) operations.push({ href: '/crm/activities', label: 'Aktiviteler', iconKey: 'activity' });
-    if (canViewCRM(role)) operations.push({ href: '/crm/customers', label: 'Müşteriler', iconKey: 'customers' });
-    if (canViewReports(role)) {
-      insights.push({ href: '/crm/reports/weekly-activities', label: 'Haftalık Aktiviteler', iconKey: 'weekly' });
-      insights.push({ href: '/crm/reports/management', label: 'Yönetim Raporu', iconKey: 'management' });
-      insights.push({ href: '/crm/sales-radar', label: 'Sales Radar', iconKey: 'salesRadar' });
+    
+    // Kullanıcılar için "Benim Ekranım" GENEL altında
+    if (!isAdmin && canViewCRM(role)) {
+      overview.push({ href: '/crm/me', label: 'Benim Ekranım', iconKey: 'me' });
     }
-    if (isAdminLike(role)) system.push({ href: '/crm/approvals', label: 'Onaylar', iconKey: 'approval' });
+
+    // OPERASYON
+    if (canViewCRM(role)) operations.push({ href: '/crm/customers', label: 'Müşteriler', iconKey: 'customers' });
+    if (canViewActivities(role)) operations.push({ href: '/crm/activities', label: 'Aktiviteler', iconKey: 'activity' });
+    if (canViewCRM(role)) operations.push({ href: '/crm/quotes', label: 'Teklifler', iconKey: 'quotes' });
+    
+    // Onaylar - sadece admin'de OPERASYON altında
+    if (isAdmin) operations.push({ href: '/crm/approvals', label: 'Onaylar', iconKey: 'approval' });
+
+    // REQUESTS
+    operations.push({ href: '/requests', label: 'Talepler', iconKey: 'requests' });
+
+    // ANALİZ
+    // Kişi Ekranları - sadece admin'de
+    if (isAdmin && canViewCRM(role)) {
+      insights.push({ href: '/crm/me', label: 'Kişi Ekranları', iconKey: 'me' });
+    }
+    
+    if (canViewReports(role)) {
+      insights.push({ href: '/crm/sales-radar', label: 'Sales Radar', iconKey: 'salesRadar' });
+      insights.push({ href: '/crm/reports/weekly-activities', label: 'Haftalık Aktiviteler', iconKey: 'weekly' });
+      
+      // Yönetim Raporu - sadece admin'de
+      if (isAdmin) {
+        insights.push({ href: '/crm/reports/management', label: 'Yönetim Raporu', iconKey: 'management' });
+      }
+    }
+
+    // SİSTEM
+    // Satış Süreci - herkes görür, SİSTEM altında
+    if (canViewCRM(role)) system.push({ href: '/crm/sales-process', label: 'Satış Süreci', iconKey: 'salesProcess' });
+    
+    // Nova Core - herkes görür
+    if (canViewCRM(role)) system.push({ href: '/crm/nova-core', label: 'Nova Core', iconKey: 'novaCore' });
+    
+    // Sistem Gereksinimleri - sadece admin
+    if (isAdmin && canViewCRM(role)) system.push({ href: '/crm/system-tracker', label: 'Sistem Gereksinimleri', iconKey: 'tracker' });
+    
+    // Müşteri Durumu Rehberi - sadece admin
+    if (isAdmin && canViewCRM(role)) system.push({ href: '/crm/customer-status-guide', label: 'Müşteri Durumu Rehberi', iconKey: 'guide' });
+    
+    // Kullanıcılar - sadece admin
     if (canViewUsers(role)) system.push({ href: '/admin/users', label: 'Kullanıcılar', iconKey: 'users' });
 
     return [
-      { title: 'Genel Bakış', items: overview },
-      { title: 'Operasyonlar', items: operations },
-      { title: 'Analizler', items: insights },
+      { title: 'Genel', items: overview },
+      { title: 'Operasyon', items: operations },
+      { title: 'Analiz', items: insights },
       { title: 'Sistem', items: system },
-    ].filter((g) => g.items.length > 0);
+    ].filter(g => g.items.length > 0);
   }, [role]);
 
-  const displayName = (fullName ?? '').trim() || 'Çağdaş Şen';
+  const displayName = (fullName ?? '').trim() || 'Demo Kullanıcı';
+  const displaySub = email?.trim() || roleLabel(role);
+  const initials = getInitials(displayName);
+
+  const sidebarClass = ['pax-sidebar', collapsed ? 'collapsed' : '', menuOpen ? 'mobile-open' : ''].filter(Boolean).join(' ');
 
   return (
-    <div className="panel-shell">
-      <style jsx>{`
-        .panel-shell {
-          min-height: 100vh;
-          color: #0f172a;
-          background:
-            radial-gradient(circle at top left, rgba(79, 70, 229, 0.05), transparent 22%),
-            linear-gradient(180deg, #f8faff 0%, #f4f6fb 100%);
-        }
-        .layout {
-          min-height: 100vh;
-          display: grid;
-          grid-template-columns: ${collapsed ? '92px' : '272px'} minmax(0, 1fr);
-          gap: 24px;
-          padding: 18px;
-          transition: grid-template-columns 180ms ease;
-        }
-        .sidebar {
-          position: sticky;
-          top: 18px;
-          display: flex;
-          flex-direction: column;
-          min-height: calc(100vh - 36px);
-          max-height: calc(100vh - 36px);
-          padding: 18px 14px 14px;
-          background: #ffffff;
-          border: 1px solid #e9eef7;
-          border-radius: 26px;
-          box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03), 0 8px 24px rgba(15, 23, 42, 0.03);
-          overflow: hidden;
-          z-index: 40;
-        }
-        .sidebar-top {
-          display: grid;
-          grid-template-columns: 1fr auto;
-          align-items: center;
-          gap: 12px;
-          margin-bottom: 18px;
-        }
-        .brand {
-          min-width: 0;
-          flex: 1;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 0;
-          min-height: 72px;
-          padding: 2px 0;
-        }
-        .brand-mark{display:none;}
-        .brand-logo{
-          width: 100%;
-          max-width: 190px;
-          height: auto;
-          max-height: 64px;
-          object-fit: contain;
-          object-position: center;
-          display:block;
-        }
-        .brand-copy { display: none; }
-
-        .sidebar :global(a),
-        .sidebar :global(a:hover),
-        .sidebar :global(a:focus),
-        .sidebar :global(a:visited) { text-decoration: none !important; }
-.toggle-btn {
-          width: 36px;
-          height: 36px;
-          border-radius: 12px;
-          border: 1px solid #e7ebf3;
-          background: #ffffff;
-          color: #64748b;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          cursor: pointer;
-          flex: 0 0 auto;
-        }
-        .toggle-btn:hover { background: #f5f7fb; color: #0f172a; }
-        .nav-scroll {
-          margin-top: 12px;
-          overflow: auto;
-          padding-right: 2px;
-          flex: 1;
-        }
-        .nav-group + .nav-group { margin-top: 24px; }
-        .group-title {
-          margin: 0 10px 10px;
-          color: #94a3b8;
-          font-size: 11px;
-          font-weight: 700;
-          text-transform: uppercase;
-          letter-spacing: 0.14em;
-        }
-        .nav {
-          display: grid;
-          gap: 4px;
-        }
-        .nav-block { display: grid; gap: 4px; }
-        .nav-link,
-        .nav-trigger {
-          position: relative;
-          display: flex;
-          align-items: center;
-          gap: 16px;
-          height: 46px;
-          min-height: 46px;
-          padding: 0 14px 0 16px;
-          border-radius: 14px;
-          color: #1f2937;
-          text-decoration: none !important;
-          line-height: 1;
-          border: 1px solid transparent;
-          background: transparent;
-          cursor: pointer;
-          transition: background 180ms ease, color 180ms ease, border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
-          text-align: left;
-          width: 100%;
-          overflow: hidden;
-        }
-        .nav-link::before,
-        .nav-trigger::before {
-          content: '';
-          position: absolute;
-          left: 0;
-          top: 6px;
-          bottom: 6px;
-          width: 5px;
-          border-radius: 0 999px 999px 0;
-          background: transparent;
-          opacity: 0;
-          transition: opacity 180ms ease, background 180ms ease, box-shadow 180ms ease;
-        }
-        .nav-link:hover,
-        .nav-trigger:hover {
-          background: #f8fafc;
-          border-color: #e2e8f0;
-          color: #0f172a;
-          box-shadow: none;
-          transform: none;
-        }
-        .nav-link.active,
-        .nav-trigger.active {
-          background: linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%);
-          border-color: #93c5fd;
-          color: #1d4ed8;
-          font-weight: 800;
-          box-shadow:
-            inset 0 0 0 1px rgba(59, 130, 246, 0.22),
-            0 8px 18px rgba(37, 99, 235, 0.10);
-        }
-        .nav-link.active::before,
-        .nav-trigger.active::before {
-          opacity: 1;
-          background: linear-gradient(180deg, #2563eb 0%, #1d4ed8 100%);
-          box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.22);
-        }
-        .nav-icon {
-          width: 24px;
-          height: 24px;
-          min-width: 24px;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          align-self: center;
-          color: #64748b;
-          flex: 0 0 auto;
-          transform: translateY(2px);
-          transition: color 180ms ease, transform 180ms ease;
-        }
-        .nav-icon :global(svg) {
-          width: 18px;
-          height: 18px;
-          display: block;
-          flex: 0 0 auto;
-          transform: translateY(0);
-        }
-        .nav-link:hover .nav-icon,
-        .nav-trigger:hover .nav-icon {
-          color: #475569;
-          transform: translateY(3px) scale(1.03);
-        }
-        .nav-link.active .nav-icon,
-        .nav-trigger.active .nav-icon {
-          color: #2563eb;
-          transform: translateY(2px) scale(1.03);
-          filter: drop-shadow(0 1px 0 rgba(255,255,255,0.45));
-        }
-        .nav-label {
-          min-width: 0;
-          position: relative;
-          top: 0;
-          display: inline-flex;
-          align-items: center;
-          min-height: 24px;
-          font-size: 14px;
-          font-weight: 650;
-          line-height: 1;
-          transform: translateY(0);
-          text-decoration: none !important;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          flex: 1;
-          transition: color 180ms ease, transform 180ms ease;
-        }
-        .nav-badge {
-          margin-left: auto;
-          min-height: 20px;
-          padding: 0 7px;
-          border-radius: 999px;
-          display: inline-flex;
-          align-items: center;
-          font-size: 10px;
-          font-weight: 700;
-          letter-spacing: 0.08em;
-          text-transform: uppercase;
-          color: #4f46e5;
-          background: #ffffff;
-          border: 1px solid #dfe3ff;
-          flex: 0 0 auto;
-        }
-        .nav-caret {
-          color: #94a3b8;
-          transition: transform 140ms ease, color 140ms ease;
-          flex: 0 0 auto;
-        }
-        .nav-caret.open { transform: rotate(180deg); }
-        .nav-trigger:hover .nav-caret { color: #64748b; }
-        .nav-trigger.active .nav-caret { color: #6366f1; }
-        .nav-link:focus-visible,
-        .nav-trigger:focus-visible {
-          outline: none;
-          border-color: #c7d2fe;
-          box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.14);
-        }
-        .nav-link:hover .nav-label,
-        .nav-trigger:hover .nav-label {
-          transform: translateX(1px);
-        }
-        .nav-link.active .nav-label,
-        .nav-trigger.active .nav-label {
-          color: #1d4ed8;
-        }
-        .subnav {
-          margin-left: 32px;
-          padding-left: 12px;
-          border-left: 1px solid #e8edf6;
-          display: grid;
-          gap: 3px;
-        }
-        .subnav-link {
-          position: relative;
-          display: flex;
-          align-items: center;
-          min-height: 34px;
-          padding: 6px 10px;
-          border-radius: 10px;
-          color: #475569;
-          text-decoration: none !important;
-          line-height: 1;
-          font-size: 13px;
-          font-weight: 500;
-          transition: background 140ms ease, color 140ms ease;
-        }
-        .subnav-link::before {
-          content: '';
-          position: absolute;
-          left: -11px;
-          top: 8px;
-          bottom: 8px;
-          width: 2px;
-          border-radius: 999px;
-          background: transparent;
-        }
-        .subnav-link:hover {
-          background: #f8fafc;
-          color: #0f172a;
-        }
-        .subnav-link.active {
-          color: #4338ca;
-          background: #f8faff;
-          font-weight: 600;
-        }
-        .subnav-link.active::before { background: #4f46e5; }
-        .sidebar-footer {
-          margin-top: 12px;
-          padding-top: 14px;
-          border-top: 1px solid #eef2f7;
-          display: grid;
-          gap: 6px;
-          flex: 0 0 auto;
-        }
-        .profile-card {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          padding: 9px 12px;
-          border-radius: 14px;
-          background: #fbfcfe;
-          border: 1px solid #edf1f7;
-          transition: background 140ms ease, border-color 140ms ease;
-        }
-        .profile-card:hover {
-          background: #ffffff;
-          border-color: #e3eaf5;
-        }
-        .avatar {
-          width: 34px;
-          height: 34px;
-          border-radius: 12px;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          background: #eef2ff;
-          color: #4f46e5;
-          border: 1px solid #dfe3ff;
-          flex: 0 0 auto;
-        }
-        .profile-copy { min-width: 0; }
-        .profile-name {
-          font-size: 13px;
-          font-weight: 600;
-          color: #0f172a;
-          line-height: 1.2;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-        .profile-role {
-          margin-top: 1px;
-          font-size: 11px;
-          font-weight: 500;
-          color: #7c86a1;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-        .logout-wrap :global(button) {
-          width: 100%;
-          min-height: 48px;
-          border-radius: 16px;
-          border: 1px solid #dbe3ee !important;
-          background: #ffffff !important;
-          color: #334155;
-          font-size: 14px;
-          font-weight: 800;
-          cursor: pointer;
-          justify-content: center;
-          padding: 0 14px;
-          box-shadow: 0 6px 18px rgba(15, 23, 42, 0.05);
-        }
-        .logout-wrap :global(button:hover) { background: #f8fafc !important; color: #0f172a; }
-        .logout-wrap :global(svg) {
-          width: 20px;
-          height: 20px;
-        }
-        .main { min-width: 0; padding: 4px 6px 24px 0; }
-        .main-inner { width: min(100%, 1680px); margin: 0 auto; }
-        .mobile-topbar { display: none; }
-        .collapsed .brand-copy,
-        .collapsed .group-title,
-        .collapsed .nav-label,
-        .collapsed .nav-badge,
-        .collapsed .nav-caret,
-        .collapsed .subnav,
-        .collapsed .profile-copy,
-        .collapsed .logout-wrap {
-          display: none;
-        }
-        .collapsed .brand,
-        .collapsed .profile-card,
-        .collapsed .nav-link,
-        .collapsed .nav-trigger {
-          justify-content: center;
-        }
-        .collapsed .sidebar { padding-left: 10px; padding-right: 10px; }
-        .collapsed .brand {
-          padding-left: 0;
-          padding-right: 0;
-          min-height: 56px;
-        }
-        .collapsed .brand-logo {
-          width: 42px;
-          max-width: 42px;
-          max-height: 42px;
-        }
-        .collapsed .nav-link,
-        .collapsed .nav-trigger { padding-left: 0; padding-right: 0; }
-        .collapsed .nav-link::before,
-        .collapsed .nav-trigger::before,
-        .collapsed .subnav-link::before { display: none; }
-        @media (max-width: 1024px) {
-          .layout { grid-template-columns: 1fr; padding: 14px; }
-          .mobile-topbar {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 10px;
-            position: sticky;
-            top: 0;
-            z-index: 50;
-            padding: 10px 0 14px;
-          }
-          .mobile-brand {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 12px 14px;
-            border-radius: 16px;
-            background: rgba(255, 255, 255, 0.9);
-            border: 1px solid #e9eef7;
-          }
-          .mobile-title { font-size: 16px; font-weight: 700; color: #0f172a; }
-          .menu-mobile-btn {
-            width: 44px;
-            height: 46px;
-            border-radius: 14px;
-            border: 1px solid #e7ebf3;
-            background: #ffffff;
-            color: #475569;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-          }
-          .sidebar {
-            position: fixed;
-            inset: 76px 14px 14px 14px;
-            min-height: auto;
-            max-height: none;
-            transform: translateY(${menuOpen ? '0' : '8px'}) scale(${menuOpen ? '1' : '0.98'});
-            opacity: ${menuOpen ? 1 : 0};
-            pointer-events: ${menuOpen ? 'auto' : 'none'};
-            transition: opacity 160ms ease, transform 160ms ease;
-          }
-          .main { padding: 0; }
-        }
-      `}</style>
-
-      <div className="layout">
-        <div className="mobile-topbar">
-          <div className="mobile-brand">
-            
-            <div className="mobile-title">PAX Retail CRM</div>
-          </div>
-          <button className="menu-mobile-btn" onClick={() => setMenuOpen((v) => !v)} aria-label="Menüyü aç">
-            <Menu size={18} strokeWidth={1.5} />
+    <div className="pax-shell">
+      {/* Mobile topbar */}
+      <div className="pax-mobile-bar">
+        <div className="pax-mobile-brand">
+          <div className="pax-mobile-mark">P</div>
+          <img src="/pax-logo.svg" alt="PAX Türkiye" className="pax-mobile-logo" draggable={false} />
+        </div>
+        <div className="pax-mobile-actions">
+          <button className="pax-mobile-theme-btn" onClick={toggleTheme} aria-label="Tema değiştir" title={dark ? 'Açık tema' : 'Koyu tema'}>
+            {dark ? <IconSun /> : <IconMoon />}
+          </button>
+          <button className="pax-mobile-menu-btn" onClick={() => setMenuOpen(v => !v)} aria-label="Menü">
+            <IconMenu />
           </button>
         </div>
-        <aside className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
-          <div className="sidebar-top">
-            <div className="brand">
-              <img src="/pax-turkiye-logo-renkli.svg" alt="PAX Türkiye" className="brand-logo" />
-            </div>
-            <button className="toggle-btn" onClick={() => setCollapsed((v) => !v)} aria-label={collapsed ? 'Sidebar genişlet' : 'Sidebar daralt'}>
-              {collapsed ? <ChevronRight size={18} strokeWidth={1.5} /> : <ChevronLeft size={18} strokeWidth={1.5} />}
-            </button>
-          </div>
-
-          <div className="nav-scroll">
-            {groups.map((group) => (
-              <section className="nav-group" key={group.title}>
-                <div className="group-title">{group.title}</div>
-                <nav className="nav">
-                  {group.items.map((item) => {
-                    const active = isItemActive(pathname, item);
-
-                    return (
-                      <Link key={item.href} href={item.href} aria-current={active ? 'page' : undefined} className={`nav-link ${active ? 'active' : ''}`}>
-                        <span className="nav-icon"><NavIcon iconKey={item.iconKey} /></span>
-                        <span className="nav-label">{item.label}</span>
-                        {item.badge ? <span className="nav-badge">{item.badge}</span> : null}
-                      </Link>
-                    );
-                  })}
-                </nav>
-              </section>
-            ))}
-          </div>
-
-          <div className="sidebar-footer">
-            <div className="profile-card">
-              <span className="avatar"><Users size={18} strokeWidth={1.5} /></span>
-              <div className="profile-copy">
-                <div className="profile-name">{displayName}</div>
-                <div className="profile-role">{roleLabel(role)}</div>
-              </div>
-            </div>
-            <div className="logout-wrap"><LogoutButton /></div>
-          </div>
-        </aside>
-        <main className="main"><div className="main-inner">{children}</div></main>
       </div>
+
+      {/* Overlay */}
+      <div
+        className={`pax-overlay${menuOpen ? ' visible' : ''}`}
+        onClick={() => setMenuOpen(false)}
+        aria-hidden="true"
+      />
+
+      {/* Sidebar */}
+      <aside className={sidebarClass}>
+        {/* Header */}
+        <div className="pax-sidebar-header">
+          <div className="pax-brand">
+            {/* Collapsed: sadece P ikonu, expanded: tam logo */}
+            <div className="pax-brand-mark" aria-hidden={!collapsed}>P</div>
+            <div className="pax-brand-logo">
+              <img
+                src="/pax-logo.svg"
+                alt="PAX Türkiye"
+                className="pax-logo-img"
+                draggable={false}
+              />
+              <div className="pax-brand-badge">CRM · Pro</div>
+            </div>
+          </div>
+          <button className="pax-toggle" onClick={toggleCollapse} aria-label={collapsed ? 'Genişlet' : 'Daralt'}>
+            {collapsed ? <IconChevronRight /> : <IconChevronLeft />}
+          </button>
+        </div>
+
+        {/* Nav */}
+        <div className="pax-nav-area">
+          {groups.map(group => (
+            <div className="pax-nav-section" key={group.title}>
+              <div className="pax-section-label">{group.title}</div>
+              <nav className="pax-nav-list">
+                {group.items.map(item => (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={`pax-nav-link${isActive(pathname, item) ? ' active' : ''}`}
+                    title={collapsed ? item.label : undefined}
+                    aria-current={isActive(pathname, item) ? 'page' : undefined}
+                  >
+                    <span className="pax-nav-icon"><NavIcon k={item.iconKey} /></span>
+                    <span className="pax-nav-label">{item.label}</span>
+                  </Link>
+                ))}
+              </nav>
+            </div>
+          ))}
+        </div>
+
+        {/* Separator */}
+        <div className="pax-sep" />
+
+        {/* Theme toggle button */}
+        <button className="pax-theme-btn" onClick={toggleTheme} title={dark ? 'Açık temaya geç' : 'Koyu temaya geç'}>
+          <span className="pax-theme-icon">{dark ? <IconSun /> : <IconMoon />}</span>
+          <span className="pax-theme-label">{dark ? 'Açık Tema' : 'Koyu Tema'}</span>
+        </button>
+
+        {/* Footer */}
+        <div className="pax-sidebar-footer">
+          <div className="pax-profile">
+            <div className="pax-avatar">{initials || 'U'}</div>
+            <div className="pax-profile-info">
+              <div className="pax-profile-name">{displayName}</div>
+              <div className="pax-profile-sub">{displaySub}</div>
+            </div>
+          </div>
+          <LogoutButton />
+        </div>
+      </aside>
+
+      {/* Main */}
+      <main className="pax-main">
+        <div className="pax-main-inner">{children}</div>
+      </main>
     </div>
   );
 }

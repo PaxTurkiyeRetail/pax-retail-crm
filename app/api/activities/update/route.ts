@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import { requireAllowedUserOrThrow } from '@/lib/authz';
 import { isAdminLike } from '@/lib/roles';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
@@ -79,5 +80,6 @@ export async function POST(req: Request) {
   const { error: updateErr } = await admin.from('pipeline_eventleri').update(payload).eq('id', activity_id);
   if (updateErr) return NextResponse.json({ message: updateErr.message }, { status: 400 });
 
+  revalidatePath('/crm/activities');
   return NextResponse.json({ ok: true });
 }

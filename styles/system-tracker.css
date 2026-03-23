@@ -1,0 +1,131 @@
+/* SystemTrackerClient — styles */
+
+.tracker-page {
+  display: grid;
+  gap: 18px;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 0 4px 20px;
+}
+/* hero layout — uses pax-hero from globals.css */
+.eyebrow {
+  position: relative; z-index: 1;
+  display: inline-flex; align-items: center; margin: 0 0 12px;
+  padding: 5px 12px; border-radius: 999px;
+  background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.15);
+  color: rgba(255,255,255,0.9); font-size: 11px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase;
+}
+h1 {
+  position: relative; z-index: 1;
+  margin: 0 0 10px;
+  font-size: clamp(22px, 2.8vw, 32px);
+  line-height: 1.05; letter-spacing: -0.04em; font-weight: 900; color: white;
+}
+.sub,
+.summary {
+  color: var(--text-2);
+  line-height: 1.65;
+}
+.sub {
+  position: relative; z-index: 1;
+  max-width: 680px;
+  margin-top: 0;
+  color: rgba(255,255,255,0.74);
+  font-size: 13px;
+  line-height: 1.65;
+}
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  padding: 20px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  overflow: hidden;
+}
+.card-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+.card-head-copy {
+  min-width: 0;
+}
+.module {
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-3);
+  margin-bottom: 6px;
+}
+h3 {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.28;
+  color: var(--text);
+}
+.badge {
+  border: 1px solid;
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.summary {
+  margin: 14px 0 0;
+}
+.meta-stack {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+  flex: 1;
+  align-content: start;
+}
+.card-foot {
+  margin-top: 16px;
+  font-size: 12px;
+  color: var(--text-4);
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+@media (min-width: 768px) {
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (min-width: 1280px) {
+  .grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.meta {
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 14px 14px 14px 16px;
+  background: var(--surface-2);
+  min-height: 120px;
+}
+.meta-title {
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-3);
+  margin-bottom: 8px;
+}
+ul {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--text-2);
+  line-height: 1.55;
+  display: grid;
+  gap: 6px;
+}

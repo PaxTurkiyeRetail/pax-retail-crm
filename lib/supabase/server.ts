@@ -1,5 +1,6 @@
-import { cookies } from "next/headers";
-import { createServerClient } from "@supabase/ssr";
+import { cookies } from 'next/headers';
+import { createServerClient } from '@supabase/ssr';
+import { getSupabasePublicEnv } from '@/lib/supabase/config';
 
 type CookieToSet = {
   name: string;
@@ -10,20 +11,14 @@ type CookieToSet = {
     expires?: Date;
     httpOnly?: boolean;
     maxAge?: number;
-    sameSite?: "lax" | "strict" | "none" | boolean;
+    sameSite?: 'lax' | 'strict' | 'none' | boolean;
     secure?: boolean;
-    priority?: "low" | "medium" | "high";
+    priority?: 'low' | 'medium' | 'high';
   };
 };
 
 export async function createSupabaseServerClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!url || !anon) {
-    throw new Error("Missing Supabase env vars");
-  }
-
+  const { url, anon } = getSupabasePublicEnv();
   const cookieStore = await cookies();
 
   return createServerClient(url, anon, {
@@ -36,7 +31,9 @@ export async function createSupabaseServerClient() {
           cookiesToSet.forEach(({ name, value, options }) => {
             cookieStore.set(name, value, options);
           });
-        } catch {}
+        } catch {
+          // Server Component render aşamasında set engellenebilir.
+        }
       },
     },
   });

@@ -1,0 +1,1 @@
+V5.15.1 patch: Dashboard and Benim Ekranım compact layout fix applied.\n

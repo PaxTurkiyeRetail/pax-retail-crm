@@ -1,0 +1,63 @@
+/* page styles */
+
+.cards-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+.report-card {
+  display: block;
+  border-radius: 24px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  overflow: hidden;
+  text-decoration: none;
+  transition: box-shadow 0.18s, transform 0.18s;
+  box-shadow: var(--shadow-sm);
+}
+.report-card:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
+.card-accent-bar { height: 5px; width: 100%; }
+.card-body { padding: 22px; display: grid; gap: 14px; }
+.card-badge {
+  display: inline-flex; align-items: center;
+  padding: 4px 12px; border-radius: 999px;
+  font-size: 11px; font-weight: 800; border: 1px solid;
+}
+.card-title { font-size: 20px; font-weight: 900; letter-spacing: -0.03em; color: var(--text); }
+.card-text { font-size: 13px; color: var(--text-3); line-height: 1.6; }
+.card-points { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.card-point {
+  border-radius: 14px; border: 1px solid var(--border);
+  background: var(--surface-2); padding: 10px 12px;
+  font-size: 12px; font-weight: 600; color: var(--text-2);
+}
+.card-footer {
+  display: flex; align-items: center; justify-content: space-between;
+  border-radius: 14px; border: 1px solid var(--border);
+  background: var(--surface-2); padding: 12px 16px;
+}
+.card-footer-lbl { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: var(--text-3); }
+.card-footer-sub { font-size: 13px; font-weight: 600; color: var(--text-2); margin-top: 2px; }
+.card-open-btn {
+  display: inline-flex; align-items: center;
+  padding: 7px 16px; border-radius: 999px;
+  font-size: 12px; font-weight: 800; color: white;
+}
+.hero-stats { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 20px; position: relative; z-index: 1; }
+.hero-stat-mini {
+  padding: 12px 18px; border-radius: 16px;
+  background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.15);
+  backdrop-filter: blur(8px);
+}
+.hero-stat-mini-lbl { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; opacity: 0.7; }
+.hero-stat-mini-val { font-size: 22px; font-weight: 900; letter-spacing: -0.03em; margin-top: 4px; }
+@media (max-width: 900px) {
+  .cards-grid { grid-template-columns: 1fr; }
+  .card-points { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 640px) {
+  .card-points { grid-template-columns: 1fr; }
+}
