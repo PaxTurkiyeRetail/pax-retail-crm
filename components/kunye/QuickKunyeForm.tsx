@@ -83,7 +83,23 @@ type QuickKunyeFormProps = {
 
 export default function QuickKunyeForm({ musteriId, musteriAdi, existingData }: QuickKunyeFormProps) {
   const router = useRouter();
-  const [form, setForm] = useState<KunyeFormData>({ ...EMPTY_FORM, ...existingData });
+  const [form, setForm] = useState<KunyeFormData>({
+    ...EMPTY_FORM,
+    ...existingData,
+    firma_adi: String(existingData?.firma_adi ?? musteriAdi ?? ''),
+    bankalar: Array.isArray(existingData?.bankalar)
+      ? existingData!.bankalar
+      : String(existingData?.bankalar ?? '')
+          .split(',')
+          .map(v => v.trim())
+          .filter(Boolean),
+    pos_mulkiyet_bankalari: Array.isArray(existingData?.pos_mulkiyet_bankalari)
+      ? existingData!.pos_mulkiyet_bankalari
+      : String(existingData?.pos_mulkiyet_bankalari ?? '')
+          .split(',')
+          .map(v => v.trim())
+          .filter(Boolean),
+  });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
@@ -95,6 +111,27 @@ export default function QuickKunyeForm({ musteriId, musteriAdi, existingData }: 
     bankacilik: false,
     memnuniyet: false
   });
+
+
+  useEffect(() => {
+    setForm({
+      ...EMPTY_FORM,
+      ...existingData,
+      firma_adi: String(existingData?.firma_adi ?? musteriAdi ?? ''),
+      bankalar: Array.isArray(existingData?.bankalar)
+        ? existingData.bankalar
+        : String(existingData?.bankalar ?? '')
+            .split(',')
+            .map(v => v.trim())
+            .filter(Boolean),
+      pos_mulkiyet_bankalari: Array.isArray(existingData?.pos_mulkiyet_bankalari)
+        ? existingData.pos_mulkiyet_bankalari
+        : String(existingData?.pos_mulkiyet_bankalari ?? '')
+            .split(',')
+            .map(v => v.trim())
+            .filter(Boolean),
+    });
+  }, [existingData, musteriAdi]);
 
   const toggleSection = (section: string) => {
     setOpenSections(prev => ({ ...prev, [section]: !prev[section] }));
@@ -120,12 +157,26 @@ export default function QuickKunyeForm({ musteriId, musteriAdi, existingData }: 
     setError('');
 
     try {
+      const payload = {
+        ...form,
+        firma_adi: musteriAdi,
+        reyon_odeme_yazilimi: reyonVisible ? form.reyon_odeme_yazilimi : '',
+        reyon_cihaz_modeli: reyonVisible ? form.reyon_cihaz_modeli : '',
+        reyon_cihaz_sayisi: reyonVisible ? form.reyon_cihaz_sayisi : '',
+        reyon_alim_yili: reyonVisible ? form.reyon_alim_yili : '',
+        el_terminali_modeli: elTerminaliVisible ? form.el_terminali_modeli : '',
+        el_terminali_yazilimi: elTerminaliVisible ? form.el_terminali_yazilimi : '',
+        el_terminali_adedi: elTerminaliVisible ? form.el_terminali_adedi : '',
+        el_terminali_alim_yili: elTerminaliVisible ? form.el_terminali_alim_yili : '',
+        pos_mulkiyet_bankalari: posMulkiyetBankalarVisible ? form.pos_mulkiyet_bankalari : [],
+      };
+
       const res = await fetch('/api/kunye', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           musteriId: musteriId,
-          ...form
+          ...payload
         })
       });
 
@@ -135,6 +186,7 @@ export default function QuickKunyeForm({ musteriId, musteriAdi, existingData }: 
         throw new Error(data.message || 'Kayıt başarısız');
       }
 
+      router.refresh();
       router.push(`/crm/${musteriId}`);
     } catch (err: any) {
       setError(err.message || 'Bir hata oluştu');
@@ -196,9 +248,9 @@ export default function QuickKunyeForm({ musteriId, musteriAdi, existingData }: 
               <input
                 type="text"
                 value={form.firma_adi}
-                onChange={(e) => updateForm('firma_adi', e.target.value)}
+                readOnly
                 className="pax-input"
-                style={{ width: '100%', minHeight: 48, fontSize: 16 }}
+                style={{ width: '100%', minHeight: 48, fontSize: 16, background: 'var(--panel-soft)' }}
               />
             </div>
 
@@ -347,6 +399,7 @@ export default function QuickKunyeForm({ musteriId, musteriAdi, existingData }: 
                     style={{ width: '100%', minHeight: 48, fontSize: 16 }}
                   >
                     <option value="">Seçin...</option>
+                    <option value="ÖKC">ÖKC</option>
                     <option value="Ingenico">Ingenico</option>
                     <option value="Verifone">Verifone</option>
                     <option value="PAX">PAX</option>
