@@ -34,7 +34,7 @@ export default function UsersClient() {
     setLoading(true);
     setErr(null);
     try {
-      const r = await fetch('/api/admin/users', { next: { revalidate: 30 } });
+      const r = await fetch('/api/admin/users', { cache: 'no-store' });
       if (!r.ok) {
         const j = await r.json().catch(() => ({}));
         throw new Error(j?.message || 'Liste alınamadı');

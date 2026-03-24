@@ -1,496 +1,279 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
-type TeamMember = {
-  id: string;
-  name: string;
-  role: string;
-  team: string;
-  customers: number;
-  opportunities: number;
-  proposals: number;
-  weeklyActivities: number;
-  replyRate: number;
-  avgReplyHours: number;
-  riskCount: number;
-  targetProgress: number;
-  focus: string;
+type CrmStats = {
+  total: number;
+  sectors: number;
+  accounts: number;
+  kasaFirmasi: number;
+  entegrasyonYapisi: number;
+  kunyeVar: number;
+  kunyeEksik: number;
+  kunyeYok: number;
+  byPhase: Array<{ label: string; value: number }>;
+  byOwner: Array<{ label: string; value: number }>;
+  bySector: Array<{ label: string; value: number }>;
+  missingBreakdown: {
+    firma_adi: number;
+    magaza_veya_franchise: number;
+    pos_modeli: number;
+    toplam_pos_adedi: number;
+  };
 };
 
-const members: TeamMember[] = [
-  { id: "omer", name: "Ömer Canatar", role: "Key Account Manager", team: "Satış", customers: 26, opportunities: 14, proposals: 8, weeklyActivities: 23, replyRate: 71, avgReplyHours: 8, riskCount: 3, targetProgress: 64, focus: "Yeni müşteri kazanım" },
-  { id: "furkan", name: "Furkan Kızılkurt", role: "Technical Account Manager", team: "Satış & Teknik", customers: 18, opportunities: 11, proposals: 6, weeklyActivities: 19, replyRate: 76, avgReplyHours: 7, riskCount: 2, targetProgress: 58, focus: "Pilot ve geçiş yönetimi" },
-  { id: "mete", name: "Mete Özdemir", role: "Marketing", team: "Pazarlama", customers: 0, opportunities: 0, proposals: 0, weeklyActivities: 16, replyRate: 82, avgReplyHours: 6, riskCount: 1, targetProgress: 61, focus: "Talep üretimi ve görünürlük" },
-  { id: "eda", name: "Eda Kılıç", role: "PMO & AI Automation", team: "PMO", customers: 0, opportunities: 0, proposals: 0, weeklyActivities: 28, replyRate: 88, avgReplyHours: 5, riskCount: 1, targetProgress: 73, focus: "Takip ritmi ve otomasyon" },
-];
+type SellerSummary = {
+  sellerOptions: string[];
+  selectedSeller: string;
+  kpi: {
+    total: number;
+    kunyeTamam: number;
+    kunyeEksik: number;
+    kunyeYok: number;
+    activeCustomers: number;
+    withPhase: number;
+    withoutPhase: number;
+    phaseCoveragePct: number;
+    kunyeCompletionPct: number;
+    recentActivityGap: number;
+  };
+  phaseSummary: Array<{ label: string; value: number }>;
+};
 
-const weeklyFlow = [
-  { day: "Pzt", value: 24 },
-  { day: "Sal", value: 31 },
-  { day: "Çar", value: 18 },
-  { day: "Per", value: 27 },
-  { day: "Cum", value: 22 },
-  { day: "Cmt", value: 7 },
-  { day: "Paz", value: 3 },
-];
+const EMPTY_STATS: CrmStats = {
+  total: 0, sectors: 0, accounts: 0, kasaFirmasi: 0, entegrasyonYapisi: 0,
+  kunyeVar: 0, kunyeEksik: 0, kunyeYok: 0,
+  byPhase: [], byOwner: [], bySector: [],
+  missingBreakdown: { firma_adi: 0, magaza_veya_franchise: 0, pos_modeli: 0, toplam_pos_adedi: 0 },
+};
+
+const EMPTY_SELLER: SellerSummary = {
+  sellerOptions: [],
+  selectedSeller: "",
+  kpi: { total: 0, kunyeTamam: 0, kunyeEksik: 0, kunyeYok: 0, activeCustomers: 0, withPhase: 0, withoutPhase: 0, phaseCoveragePct: 0, kunyeCompletionPct: 0, recentActivityGap: 0 },
+  phaseSummary: [],
+};
 
 export default function CrmDashboardClient() {
-  const [selected, setSelected] = useState<string>("all");
+  const [stats, setStats] = useState<CrmStats>(EMPTY_STATS);
+  const [sellerData, setSellerData] = useState<SellerSummary>(EMPTY_SELLER);
+  const [selectedSeller, setSelectedSeller] = useState<string>("all");
+  const [statsLoading, setStatsLoading] = useState(true);
+  const [sellerLoading, setSellerLoading] = useState(true);
 
-  const totals = useMemo(() => {
-    return members.reduce(
-      (acc, member) => {
-        acc.customers += member.customers;
-        acc.opportunities += member.opportunities;
-        acc.proposals += member.proposals;
-        acc.activities += member.weeklyActivities;
-        acc.risks += member.riskCount;
-        return acc;
-      },
-      { customers: 0, opportunities: 0, proposals: 0, activities: 0, risks: 0 },
-    );
+  // Genel CRM istatistikleri
+  useEffect(() => {
+    setStatsLoading(true);
+    fetch("/api/crm/stats", { cache: "no-store" })
+      .then((res) => res.ok ? res.json() : EMPTY_STATS)
+      .then(setStats)
+      .catch(() => {})
+      .finally(() => setStatsLoading(false));
   }, []);
 
-  const selectedMember = members.find((member) => member.id === selected) ?? null;
+  // Satıcı bazlı veriler — seçim değişince yeniden çek
+  useEffect(() => {
+    setSellerLoading(true);
+    const params = new URLSearchParams();
+    if (selectedSeller && selectedSeller !== "all") params.set("seller", selectedSeller);
+    fetch(`/api/reports/seller-summary${params.toString() ? `?${params.toString()}` : ""}`, { cache: "no-store" })
+      .then((res) => res.ok ? res.json() : EMPTY_SELLER)
+      .then((data) => setSellerData({ ...EMPTY_SELLER, ...data }))
+      .catch(() => {})
+      .finally(() => setSellerLoading(false));
+  }, [selectedSeller]);
 
   return (
-    <div style={{ display: 'grid', gap: 24 }}>
-      {/* Hero Header - Standart */}
+    <div style={{ display: "grid", gap: 24 }}>
+      {/* Hero Header */}
       <div className="pax-hero">
         <span className="pax-hero-eyebrow">CRM Ana Ekran · Yönetim Komuta Merkezi</span>
-        <h1 className="pax-hero-title">
-          Büyük resmi, ekipleri ve kişileri aynı akışta gör.
-        </h1>
+        <h1 className="pax-hero-title">Büyük resmi, ekipleri ve kişileri aynı akışta gör.</h1>
         <p className="pax-hero-description">
-          Bu ekran senin ana yönetim ekranın. Üstte şirketin genel resmi, ortada ekip katmanı, 
-          altta kişi bazlı kokpit özeti var.
+          Bu ekran senin ana yönetim ekranın. Üstte şirketin genel resmi, ortada satıcı katmanı,
+          altta faz ve künye dağılımı var.
         </p>
-
         <div className="pax-hero-stats">
           <div className="pax-hero-stat">
             <div className="pax-hero-stat-label">Toplam Müşteri</div>
-            <div className="pax-hero-stat-value">{totals.customers}</div>
+            <div className="pax-hero-stat-value">{statsLoading ? "…" : stats.total}</div>
           </div>
           <div className="pax-hero-stat">
-            <div className="pax-hero-stat-label">Açık Fırsat</div>
-            <div className="pax-hero-stat-value">{totals.opportunities}</div>
+            <div className="pax-hero-stat-label">Künye Tamam</div>
+            <div className="pax-hero-stat-value">{statsLoading ? "…" : stats.kunyeVar}</div>
           </div>
           <div className="pax-hero-stat">
-            <div className="pax-hero-stat-label">Aktif Teklif</div>
-            <div className="pax-hero-stat-value">{totals.proposals}</div>
+            <div className="pax-hero-stat-label">Künye Eksik</div>
+            <div className="pax-hero-stat-value">{statsLoading ? "…" : stats.kunyeEksik}</div>
           </div>
           <div className="pax-hero-stat">
-            <div className="pax-hero-stat-label">Riskli Başlık</div>
-            <div className="pax-hero-stat-value">{totals.risks}</div>
+            <div className="pax-hero-stat-label">Sorumlu Sayısı</div>
+            <div className="pax-hero-stat-value">{statsLoading ? "…" : stats.accounts}</div>
           </div>
         </div>
       </div>
 
       {/* Stats Grid */}
       <div className="pax-grid-4">
-        <div className="pax-card" style={{ textAlign: 'center' }}>
-          <div className="pax-label" style={{ marginBottom: 12 }}>Fırsat Havuzu</div>
-          <div style={{ fontSize: 32, fontWeight: 800, color: 'var(--text)', marginBottom: 8 }}>
-            {totals.opportunities}
+        {[
+          { label: "Toplam Firma", value: stats.total, sub: "Tüm portföy" },
+          { label: "Sektör Çeşitliliği", value: stats.sectors, sub: "Farklı sektör" },
+          { label: "Künye Eksik/Yok", value: stats.kunyeEksik + stats.kunyeYok, sub: "Aksiyon gerekli" },
+          { label: "Entegrasyon Tipi", value: stats.entegrasyonYapisi, sub: "Farklı yapı" },
+        ].map((item) => (
+          <div key={item.label} className="pax-card" style={{ textAlign: "center" }}>
+            <div className="pax-label" style={{ marginBottom: 12 }}>{item.label}</div>
+            <div style={{ fontSize: 32, fontWeight: 800, color: "var(--text)", marginBottom: 8 }}>
+              {statsLoading ? "…" : item.value}
+            </div>
+            <div style={{ fontSize: 12, color: "var(--text-3)" }}>{item.sub}</div>
           </div>
-          <div style={{ fontSize: 12, color: 'var(--text-3)' }}>Yeni kazanım odağı</div>
-        </div>
-        <div className="pax-card" style={{ textAlign: 'center' }}>
-          <div className="pax-label" style={{ marginBottom: 12 }}>Canlı Portföy</div>
-          <div style={{ fontSize: 32, fontWeight: 800, color: 'var(--text)', marginBottom: 8 }}>
-            {totals.customers}
-          </div>
-          <div style={{ fontSize: 12, color: 'var(--text-3)' }}>Elde tutma + büyütme</div>
-        </div>
-        <div className="pax-card" style={{ textAlign: 'center' }}>
-          <div className="pax-label" style={{ marginBottom: 12 }}>Haftalık Aktivite</div>
-          <div style={{ fontSize: 32, fontWeight: 800, color: 'var(--text)', marginBottom: 8 }}>
-            {totals.activities}
-          </div>
-          <div style={{ fontSize: 12, color: 'var(--text-3)' }}>Ekip toplam aksiyon</div>
-        </div>
-        <div className="pax-card" style={{ textAlign: 'center' }}>
-          <div className="pax-label" style={{ marginBottom: 12 }}>Aktif Teklif</div>
-          <div style={{ fontSize: 32, fontWeight: 800, color: 'var(--text)', marginBottom: 8 }}>
-            {totals.proposals}
-          </div>
-          <div style={{ fontSize: 12, color: 'var(--text-3)' }}>Takip disiplini gerekli</div>
-        </div>
+        ))}
       </div>
 
-      {/* Main Content */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1.15fr 0.85fr', gap: 24 }}>
-        {/* Yönetim Özeti */}
+      {/* Main 2-col */}
+      <div style={{ display: "grid", gridTemplateColumns: "1.15fr 0.85fr", gap: 24 }}>
+        {/* Portföy Özeti */}
         <div className="pax-card">
           <div className="pax-page-header" style={{ marginBottom: 20 }}>
-            <div className="pax-page-title" style={{ fontSize: 16 }}>Yönetim Özeti</div>
-            <div className="pax-page-sub">Satış, müşteri ve aksiyon görünümü</div>
+            <div className="pax-page-title" style={{ fontSize: 16 }}>Portföy Özeti</div>
+            <div className="pax-page-sub">Künye durumu ve faz dağılımı</div>
           </div>
-          
           <div className="pax-grid-3">
-            <div style={{ 
-              background: '#f0fdf4', 
-              border: '1px solid #86efac', 
-              borderRadius: 'var(--radius-lg)', 
-              padding: 16 
-            }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: '#15803d', marginBottom: 12 }}>
-                Kazanım Tarafı
-              </div>
-              <div style={{ display: 'grid', gap: 12, fontSize: 13, color: 'var(--text-2)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Yeni fırsat</span><strong>9</strong>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Pilotta</span><strong>5</strong>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Teklif bekleyen</span><strong>6</strong>
-                </div>
+            <div style={{ background: "#f0fdf4", border: "1px solid #86efac", borderRadius: "var(--radius-lg)", padding: 16 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "#15803d", marginBottom: 12 }}>Künye Durumu</div>
+              <div style={{ display: "grid", gap: 10, fontSize: 13, color: "var(--text-2)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between" }}><span>Tamam</span><strong>{stats.kunyeVar}</strong></div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}><span>Eksik</span><strong>{stats.kunyeEksik}</strong></div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}><span>Yok</span><strong>{stats.kunyeYok}</strong></div>
               </div>
             </div>
-
-            <div style={{ 
-              background: '#eff6ff', 
-              border: '1px solid #93c5fd', 
-              borderRadius: 'var(--radius-lg)', 
-              padding: 16 
-            }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: '#1e40af', marginBottom: 12 }}>
-                Müşteri Portföyü
-              </div>
-              <div style={{ display: 'grid', gap: 12, fontSize: 13, color: 'var(--text-2)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Gelişen</span><strong>8</strong>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Riskli</span><strong>4</strong>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Pasif</span><strong>3</strong>
-                </div>
+            <div style={{ background: "#eff6ff", border: "1px solid #93c5fd", borderRadius: "var(--radius-lg)", padding: 16 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "#1e40af", marginBottom: 12 }}>Eksik Alanlar</div>
+              <div style={{ display: "grid", gap: 10, fontSize: 13, color: "var(--text-2)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between" }}><span>POS modeli</span><strong>{stats.missingBreakdown.pos_modeli}</strong></div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}><span>POS adedi</span><strong>{stats.missingBreakdown.toplam_pos_adedi}</strong></div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}><span>Mağaza/Franchise</span><strong>{stats.missingBreakdown.magaza_veya_franchise}</strong></div>
               </div>
             </div>
-
-            <div style={{ 
-              background: '#fffbeb', 
-              border: '1px solid #fcd34d', 
-              borderRadius: 'var(--radius-lg)', 
-              padding: 16 
-            }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: '#92400e', marginBottom: 12 }}>
-                Haftalık Ritim
-              </div>
-              <div style={{ display: 'grid', gap: 12, fontSize: 13, color: 'var(--text-2)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Toplam aktivite</span><strong>{totals.activities}</strong>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Teklif takibi</span><strong>{totals.proposals}</strong>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Kritik başlık</span><strong>{totals.risks}</strong>
-                </div>
+            <div style={{ background: "#fffbeb", border: "1px solid #fcd34d", borderRadius: "var(--radius-lg)", padding: 16 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "#92400e", marginBottom: 12 }}>Portföy Yapısı</div>
+              <div style={{ display: "grid", gap: 10, fontSize: 13, color: "var(--text-2)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between" }}><span>Sektör sayısı</span><strong>{stats.sectors}</strong></div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}><span>Sorumlu sayısı</span><strong>{stats.accounts}</strong></div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}><span>Kasa firması</span><strong>{stats.kasaFirmasi}</strong></div>
               </div>
             </div>
           </div>
 
-          <div style={{ marginTop: 24 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-2)', marginBottom: 16 }}>
-              Haftalık Aktivite Akışı
-            </div>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', height: 140 }}>
-              {weeklyFlow.map((item) => {
-                const maxVal = Math.max(...weeklyFlow.map(d => d.value));
-                const heightPct = (item.value / maxVal) * 100;
-                return (
-                  <div key={item.day} style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center' }}>
-                    <div style={{ 
-                      height: `${heightPct}%`,
-                      width: '100%',
-                      background: 'var(--accent)',
-                      borderRadius: 'var(--radius-sm)',
-                      minHeight: 12,
-                      transition: 'all 200ms'
-                    }} />
-                    <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-3)' }}>
-                      {item.day}
+          {stats.byPhase.length > 0 && (
+            <div style={{ marginTop: 24 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-2)", marginBottom: 16 }}>Faz Dağılımı</div>
+              <div style={{ display: "grid", gap: 8 }}>
+                {stats.byPhase.slice(0, 8).map((item) => {
+                  const maxVal = Math.max(...stats.byPhase.slice(0, 8).map((d) => d.value));
+                  return (
+                    <div key={item.label} style={{ display: "grid", gridTemplateColumns: "110px 1fr 32px", gap: 8, alignItems: "center" }}>
+                      <div style={{ fontSize: 12, color: "var(--text-3)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.label}</div>
+                      <div style={{ height: 8, background: "var(--surface-2)", borderRadius: 999, overflow: "hidden" }}>
+                        <div style={{ height: "100%", width: `${(item.value / maxVal) * 100}%`, background: "var(--accent)", borderRadius: 999 }} />
+                      </div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-2)", textAlign: "right" }}>{item.value}</div>
                     </div>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-2)' }}>
-                      {item.value}
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
-        {/* Kişi Seçimi */}
+        {/* Satıcı Bazlı */}
         <div className="pax-card">
-          <div className="pax-page-header" style={{ marginBottom: 20 }}>
-            <div className="pax-page-title" style={{ fontSize: 16 }}>Kişi Seçimi</div>
-            <div className="pax-page-sub">Kişisel ekranları izle</div>
+          <div className="pax-page-header" style={{ marginBottom: 16 }}>
+            <div className="pax-page-title" style={{ fontSize: 16 }}>Satıcı Bazlı Özet</div>
+            <div className="pax-page-sub">Seçerek detay gör</div>
           </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8, marginBottom: 16 }}>
-            <button
-              onClick={() => setSelected("all")}
-              className={`pax-btn ${selected === "all" ? 'pax-btn-primary' : 'pax-btn-secondary'}`}
-              style={{ fontSize: 12 }}
-            >
-              Tümü
-            </button>
-            {members.map((member) => (
-              <button
-                key={member.id}
-                onClick={() => setSelected(member.id)}
-                className={`pax-btn ${selected === member.id ? 'pax-btn-primary' : 'pax-btn-secondary'}`}
-                style={{ fontSize: 12 }}
-              >
-                {member.name.split(" ")[0]}
-              </button>
+          <select
+            value={selectedSeller}
+            onChange={(e) => setSelectedSeller(e.target.value)}
+            className="pax-input"
+            style={{ fontSize: 13, marginBottom: 16 }}
+          >
+            <option value="all">Tüm Satıcılar</option>
+            {sellerData.sellerOptions.map((name) => (
+              <option key={name} value={name}>{name}</option>
             ))}
-          </div>
+          </select>
 
-          <div style={{ 
-            background: 'var(--surface-2)', 
-            border: '1px dashed var(--border)',
-            borderRadius: 'var(--radius-md)',
-            padding: 16,
-            fontSize: 12,
-            color: 'var(--text-3)',
-            lineHeight: 1.5
-          }}>
-            Bu blok şu an UI-first demo mantığıyla çalışır. Gerçek kullanıcı hesabı, teklif, müşteri, aktivite ve mail verileri backend bağlandığında kullanıcı bazlı gerçek verilerle beslenecek.
-          </div>
+          {sellerLoading ? (
+            <div style={{ fontSize: 13, color: "var(--text-3)", padding: "20px 0", textAlign: "center" }}>Yükleniyor…</div>
+          ) : (
+            <div style={{ display: "grid", gap: 10 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                {[
+                  { label: "Toplam Firma", value: sellerData.kpi.total },
+                  { label: "Aktif Firma", value: sellerData.kpi.activeCustomers },
+                  { label: "Faz Kapsaması", value: `%${sellerData.kpi.phaseCoveragePct}` },
+                  { label: "Künye Tamamlanma", value: `%${sellerData.kpi.kunyeCompletionPct}` },
+                ].map((item) => (
+                  <div key={item.label} style={{ background: "var(--surface-2)", borderRadius: "var(--radius-md)", padding: 14, textAlign: "center" }}>
+                    <div style={{ fontSize: 11, color: "var(--text-3)", marginBottom: 4 }}>{item.label}</div>
+                    <div style={{ fontSize: 22, fontWeight: 800, color: "var(--text)" }}>{item.value}</div>
+                  </div>
+                ))}
+              </div>
+              {(sellerData.kpi.withoutPhase > 0 || sellerData.kpi.kunyeEksik + sellerData.kpi.kunyeYok > 0) && (
+                <div style={{ background: "#fffbeb", border: "1px solid #fcd34d", borderRadius: "var(--radius-md)", padding: 14 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "#92400e", marginBottom: 8 }}>Aksiyon Gerekli</div>
+                  <div style={{ display: "grid", gap: 5, fontSize: 12, color: "#78716c" }}>
+                    {sellerData.kpi.withoutPhase > 0 && <div>• Fazı girilmemiş: <strong>{sellerData.kpi.withoutPhase}</strong> firma</div>}
+                    {(sellerData.kpi.kunyeEksik + sellerData.kpi.kunyeYok) > 0 && <div>• Künyesi eksik/yok: <strong>{sellerData.kpi.kunyeEksik + sellerData.kpi.kunyeYok}</strong> firma</div>}
+                    {sellerData.kpi.recentActivityGap > 0 && <div>• Yakın aktivite yok: <strong>{sellerData.kpi.recentActivityGap}</strong> firma</div>}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Kişi Bazlı Detay */}
-      <div className="pax-card">
-        <div className="pax-page-header">
-          <div className="pax-page-title">
-            {selectedMember ? `${selectedMember.name} · Kişisel Ana Ekran Özeti` : "Kişi Bazlı Genel Görünüm"}
+      {/* Satıcı Bazlı Tablo */}
+      {stats.byOwner.length > 0 && (
+        <div className="pax-card">
+          <div className="pax-page-header">
+            <div className="pax-page-title">Satıcı Bazlı Firma Dağılımı</div>
+            <div className="pax-page-sub">Gerçek veri — vw_crm_musteriler</div>
           </div>
-          <div className="pax-page-sub">
-            {selectedMember ? `${selectedMember.role} · ${selectedMember.team}` : "Tüm ekip üyelerinin kişisel göstergeleri"}
-          </div>
-        </div>
-
-        {selectedMember ? (
-          <div style={{ display: 'grid', gap: 20 }}>
-            {/* Odak Alanı */}
-            <div style={{ 
-              background: '#eef2ff', 
-              border: '1px solid #c7d2fe',
-              borderRadius: 'var(--radius-md)',
-              padding: 16,
-              fontSize: 13,
-              color: 'var(--text-2)'
-            }}>
-              <strong style={{ color: 'var(--text)' }}>Odak alanı:</strong> {selectedMember.focus}
-            </div>
-
-            {/* Stats */}
-            <div className="pax-grid-4">
-              <div className="pax-card" style={{ textAlign: 'center', padding: 16 }}>
-                <div className="pax-label" style={{ marginBottom: 8 }}>Müşteri</div>
-                <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--text)', marginBottom: 4 }}>
-                  {selectedMember.customers}
-                </div>
-                <div style={{ fontSize: 11, color: 'var(--text-3)' }}>Sorumlu portföy</div>
-              </div>
-              <div className="pax-card" style={{ textAlign: 'center', padding: 16 }}>
-                <div className="pax-label" style={{ marginBottom: 8 }}>Fırsat</div>
-                <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--text)', marginBottom: 4 }}>
-                  {selectedMember.opportunities}
-                </div>
-                <div style={{ fontSize: 11, color: 'var(--text-3)' }}>Açık iş hacmi</div>
-              </div>
-              <div className="pax-card" style={{ textAlign: 'center', padding: 16 }}>
-                <div className="pax-label" style={{ marginBottom: 8 }}>Teklif</div>
-                <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--text)', marginBottom: 4 }}>
-                  {selectedMember.proposals}
-                </div>
-                <div style={{ fontSize: 11, color: 'var(--text-3)' }}>Aktif ticari dosya</div>
-              </div>
-              <div className="pax-card" style={{ textAlign: 'center', padding: 16 }}>
-                <div className="pax-label" style={{ marginBottom: 8 }}>Risk</div>
-                <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--text)', marginBottom: 4 }}>
-                  {selectedMember.riskCount}
-                </div>
-                <div style={{ fontSize: 11, color: 'var(--text-3)' }}>Öncelik isteyen başlık</div>
-              </div>
-            </div>
-
-            {/* Hedef & İletişim */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-              <div className="pax-card" style={{ padding: 20 }}>
-                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', marginBottom: 16 }}>
-                  Hedef & Gerçekleşen
-                </div>
-                <div style={{ marginBottom: 16 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 8 }}>
-                    <span style={{ color: 'var(--text-2)' }}>Hedef ilerleme</span>
-                    <strong style={{ color: 'var(--text)' }}>{selectedMember.targetProgress}%</strong>
-                  </div>
-                  <div style={{ 
-                    height: 8, 
-                    background: 'var(--surface-2)', 
-                    borderRadius: 999,
-                    overflow: 'hidden'
-                  }}>
-                    <div style={{ 
-                      height: '100%',
-                      width: `${selectedMember.targetProgress}%`,
-                      background: '#10b981',
-                      borderRadius: 999,
-                      transition: 'width 300ms'
-                    }} />
-                  </div>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                  <div style={{ background: 'var(--surface-2)', borderRadius: 'var(--radius-md)', padding: 16 }}>
-                    <div style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 8 }}>Haftalık aktivite</div>
-                    <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--text)' }}>
-                      {selectedMember.weeklyActivities}
-                    </div>
-                  </div>
-                  <div style={{ background: 'var(--surface-2)', borderRadius: 'var(--radius-md)', padding: 16 }}>
-                    <div style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 8 }}>Ort. cevap süresi</div>
-                    <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--text)' }}>
-                      {selectedMember.avgReplyHours} sa
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="pax-card" style={{ padding: 20 }}>
-                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', marginBottom: 16 }}>
-                  Mail & İletişim Analitiği
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                  <div style={{ background: 'var(--surface-2)', borderRadius: 'var(--radius-md)', padding: 16 }}>
-                    <div style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 8 }}>Cevaplanma oranı</div>
-                    <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--text)' }}>
-                      %{selectedMember.replyRate}
-                    </div>
-                  </div>
-                  <div style={{ background: 'var(--surface-2)', borderRadius: 'var(--radius-md)', padding: 16 }}>
-                    <div style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 8 }}>Ortalama cevap</div>
-                    <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--text)' }}>
-                      {selectedMember.avgReplyHours} sa
-                    </div>
-                  </div>
-                  <div style={{ background: 'var(--surface-2)', borderRadius: 'var(--radius-md)', padding: 16 }}>
-                    <div style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 8 }}>Takip yoğunluğu</div>
-                    <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--text)' }}>
-                      {Math.max(3, selectedMember.proposals + 2)}
-                    </div>
-                  </div>
-                  <div style={{ background: 'var(--surface-2)', borderRadius: 'var(--radius-md)', padding: 16 }}>
-                    <div style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 8 }}>Cevapsız başlık</div>
-                    <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--text)' }}>
-                      {Math.max(1, selectedMember.riskCount)}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Riskler & AI */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-              <div style={{ 
-                background: '#fffbeb', 
-                border: '1px solid #fcd34d',
-                borderRadius: 'var(--radius-lg)',
-                padding: 20
-              }}>
-                <div style={{ fontSize: 14, fontWeight: 700, color: '#92400e', marginBottom: 16 }}>
-                  Benim Risklerim
-                </div>
-                <ul style={{ display: 'grid', gap: 12, fontSize: 13, color: '#78716c', listStyle: 'none' }}>
-                  <li>• 7 gündür temas bekleyen {Math.max(1, selectedMember.riskCount)} müşteri</li>
-                  <li>• Follow-up gerektiren {Math.max(2, selectedMember.proposals)} teklif</li>
-                  <li>• Öncelik verilmesi gereken 1 kritik müşteri başlığı</li>
-                </ul>
-              </div>
-
-              <div style={{ 
-                background: '#eff6ff', 
-                border: '1px solid #93c5fd',
-                borderRadius: 'var(--radius-lg)',
-                padding: 20
-              }}>
-                <div style={{ fontSize: 14, fontWeight: 700, color: '#1e40af', marginBottom: 16 }}>
-                  AI Destek Katmanı
-                </div>
-                <ul style={{ display: 'grid', gap: 12, fontSize: 13, color: '#64748b', listStyle: 'none' }}>
-                  <li>• Follow-up Agent</li>
-                  <li>• Teklif Hazırlayıcı</li>
-                  <li>• Müşteri Segmentasyon Agent</li>
-                  <li>• Yönetici Özeti / Haftalık Özet Agent</li>
-                </ul>
-              </div>
-            </div>
-          </div>
-        ) : (
           <div className="pax-table-wrap">
             <table className="pax-table">
               <thead>
-                <tr>
-                  <th>Kişi</th>
-                  <th>Rol</th>
-                  <th>Takım</th>
-                  <th>Müşteri</th>
-                  <th>Fırsat</th>
-                  <th>Teklif</th>
-                  <th>Aktivite</th>
-                  <th>Risk</th>
-                  <th>Hedef</th>
-                </tr>
+                <tr><th>Satıcı</th><th>Firma Sayısı</th><th>Dağılım</th></tr>
               </thead>
               <tbody>
-                {members.map((member) => (
-                  <tr key={member.id}>
-                    <td style={{ fontWeight: 700 }}>{member.name}</td>
-                    <td>{member.role}</td>
-                    <td>{member.team}</td>
-                    <td>{member.customers}</td>
-                    <td>{member.opportunities}</td>
-                    <td>{member.proposals}</td>
-                    <td>{member.weeklyActivities}</td>
-                    <td>{member.riskCount}</td>
-                    <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 170 }}>
-                        <div style={{ 
-                          flex: 1,
-                          height: 8,
-                          background: 'var(--surface-2)',
-                          borderRadius: 999,
-                          overflow: 'hidden'
-                        }}>
-                          <div style={{
-                            height: '100%',
-                            width: `${member.targetProgress}%`,
-                            background: 'var(--accent)',
-                            borderRadius: 999
-                          }} />
+                {stats.byOwner.map((row) => {
+                  const maxVal = Math.max(...stats.byOwner.map((d) => d.value));
+                  return (
+                    <tr key={row.label}>
+                      <td style={{ fontWeight: 700 }}>{row.label}</td>
+                      <td>{row.value}</td>
+                      <td>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 160 }}>
+                          <div style={{ flex: 1, height: 8, background: "var(--surface-2)", borderRadius: 999, overflow: "hidden" }}>
+                            <div style={{ height: "100%", width: `${(row.value / maxVal) * 100}%`, background: "var(--accent)", borderRadius: 999 }} />
+                          </div>
+                          <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-3)", minWidth: 32, textAlign: "right" }}>
+                            %{Math.round((row.value / stats.total) * 100)}
+                          </span>
                         </div>
-                        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-2)' }}>
-                          {member.targetProgress}%
-                        </span>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

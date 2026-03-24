@@ -339,3 +339,5 @@
 @media (max-width: 480px) {
   .pax-main-inner { padding: 12px; }
 }
+
+.pax-nav-badge{margin-left:auto;border-radius:999px;padding:2px 8px;font-size:10px;font-weight:800;letter-spacing:.04em;text-transform:uppercase}.pax-nav-badge.beta{background:#fff1e6;color:#c2410c;border:1px solid #fdba74}

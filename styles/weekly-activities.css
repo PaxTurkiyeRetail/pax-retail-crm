@@ -1,25 +1,229 @@
-/* page styles */
+/* =============================================
+   Weekly Activities Report — weekly-activities.css
+   Tüm class'lar wa- prefix'li (çakışma yok)
+   ============================================= */
 
-.surface, .card { border:1px solid var(--border); background:var(--surface); border-radius:22px; box-shadow:var(--shadow-sm); }
-.surface { padding:20px; }
-.stats { display:grid; grid-template-columns:repeat(5, minmax(0,1fr)); gap:10px; }
-.card { padding:14px; }
-.card-label { color:var(--text-3); font-size:12px; }
-.card-value { color:var(--text); font-size:22px; font-weight:900; margin-top:4px; }
-.card-hint { color:var(--text-3); font-size:12px; margin-top:6px; }
-.filters-grid { display:grid; grid-template-columns:repeat(5, minmax(0,1fr)); gap:10px; }
-.field { display:grid; gap:6px; }
-.field-label { font-size:11px; font-weight:900; color:var(--text-3); text-transform:uppercase; letter-spacing:.04em; }
-.input, .button { min-height:42px; border-radius:14px; border:1px solid var(--border); padding:0 13px; background:var(--surface); color:var(--text); width:100%; }
-.button { font-weight:800; cursor:pointer; }
-.filter-actions, .tabs { display:flex; gap:10px; flex-wrap:wrap; margin-top:10px; }
-.tab { min-height:40px; border-radius:999px; border:1px solid var(--border); background:var(--surface); color:var(--text); padding:0 14px; font-weight:800; cursor:pointer; }
-.tab.active { background:var(--text); color:var(--surface); border-color:var(--text); }
-.table-wrap { overflow:auto; border:1px solid var(--border); border-radius:16px; }
-table { width:100%; border-collapse:collapse; min-width:1100px; }
-th { text-align:left; font-size:11px; color:var(--text-3); padding:10px 12px; border-bottom:1px solid var(--border); background:var(--surface-2); }
-td { padding:10px 12px; border-bottom:1px solid var(--border); font-size:13px; color:var(--text); }
-.pill { display:inline-flex; align-items:center; min-height:28px; padding:0 10px; border-radius:999px; font-size:11px; font-weight:900; background:var(--accent-soft); color:var(--accent); }
-.message { color:#b91c1c; background:#fff1f2; border:1px solid #fecdd3; padding:10px 12px; border-radius:12px; font-size:13px; }
-@media (max-width: 900px) { .stats, .filters-grid { grid-template-columns:repeat(2, minmax(0,1fr)); } }
-@media (max-width: 640px) { .stats, .filters-grid { grid-template-columns:1fr; } table { min-width:800px; } }
+.wa-page { display: grid; gap: 20px; padding-bottom: 40px; }
+
+/* ── KPI KARTI GRID ── */
+.wa-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.wa-kpi-card {
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 16px;
+  padding: 14px 16px;
+}
+
+.wa-kpi-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-3, #6b7280);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  margin-bottom: 6px;
+}
+
+.wa-kpi-value {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--text, #111827);
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+.wa-kpi-hint {
+  font-size: 11px;
+  color: var(--text-3, #9ca3af);
+}
+
+/* ── FİLTRE PANEL ── */
+.wa-filter-panel {
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 16px;
+  padding: 18px 20px;
+}
+
+.wa-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.wa-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.wa-field-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-3, #6b7280);
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+
+.wa-input {
+  height: 38px;
+  border-radius: 10px;
+  border: 1px solid var(--border, #d1d5db);
+  padding: 0 10px;
+  background: var(--surface-2, #f9fafb);
+  color: var(--text, #111827);
+  font-size: 13px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.wa-filter-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12px;
+  gap: 12px;
+}
+
+.wa-record-count {
+  font-size: 13px;
+  color: var(--text-3, #6b7280);
+}
+
+.wa-record-count strong {
+  color: var(--text, #111827);
+  font-weight: 700;
+}
+
+.wa-btn-clear {
+  height: 36px;
+  padding: 0 16px;
+  border-radius: 10px;
+  border: 1px solid var(--border, #d1d5db);
+  background: var(--surface, #fff);
+  color: var(--text-2, #374151);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 120ms;
+}
+
+.wa-btn-clear:hover { background: var(--surface-2, #f3f4f6); }
+
+/* ── TAB BAR ── */
+.wa-tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.wa-tab {
+  height: 38px;
+  padding: 0 16px;
+  border-radius: 10px;
+  border: 1px solid var(--border, #e5e7eb);
+  background: var(--surface, #fff);
+  color: var(--text-2, #374151);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 120ms;
+  white-space: nowrap;
+}
+
+.wa-tab:hover:not(.wa-tab-active) { background: var(--surface-2, #f9fafb); }
+
+.wa-tab.wa-tab-active {
+  background: var(--text, #111827);
+  color: #fff;
+  border-color: var(--text, #111827);
+}
+
+/* ── MESAJ / ALERT ── */
+.wa-message {
+  padding: 11px 14px;
+  border-radius: 10px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+  font-size: 13px;
+}
+
+/* ── TABLO PANEL ── */
+.wa-table-panel {
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.wa-table-wrap { overflow-x: auto; }
+
+.wa-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 900px;
+  font-size: 13px;
+}
+
+.wa-table th {
+  padding: 9px 12px;
+  text-align: left;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: var(--text-3, #6b7280);
+  border-bottom: 1px solid var(--border, #e5e7eb);
+  background: var(--surface-2, #f9fafb);
+  white-space: nowrap;
+}
+
+.wa-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border, #f3f4f6);
+  color: var(--text, #111827);
+  vertical-align: middle;
+}
+
+.wa-table tr:last-child td { border-bottom: none; }
+.wa-table tr:hover td { background: var(--surface-2, #f9fafb); }
+
+.wa-table td.wa-bold { font-weight: 700; }
+.wa-table td.wa-muted { color: var(--text-2, #6b7280); font-size: 12px; }
+
+.wa-empty-td {
+  text-align: center !important;
+  padding: 32px !important;
+  color: var(--text-3, #9ca3af);
+}
+
+/* Kanal pill */
+.wa-pill {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 9px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  background: var(--surface-2, #f3f4f6);
+  color: var(--text-2, #374151);
+  border: 1px solid var(--border, #e5e7eb);
+  white-space: nowrap;
+}
+
+/* Responsive */
+@media (max-width: 1100px) {
+  .wa-kpi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .wa-filter-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (max-width: 720px) {
+  .wa-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .wa-filter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

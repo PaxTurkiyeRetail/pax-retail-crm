@@ -124,7 +124,7 @@ export default function ActivitiesPage() {
 
   useEffect(() => {
     const loadOptions = async () => {
-      const res = await fetch('/api/activities/options', { next: { revalidate: 300 } });
+      const res = await fetch('/api/activities/options', { cache: 'no-store' });
       const payload = await res.json().catch(() => ({}));
       if (res.ok) setOptions({ ...EMPTY_OPTIONS, ...(payload ?? {}) });
     };
@@ -156,8 +156,8 @@ export default function ActivitiesPage() {
       try {
         // Sayfalı liste + analytics fetch'leri paralel çalışır
         const [listRes, analyticsRes] = await Promise.all([
-          fetch(`/api/activities/list?${buildParams({ page: String(page), pageSize: String(pageSize) }).toString()}`, { next: { revalidate: 30 } }),
-          fetch(`/api/activities/list?${buildParams({ page: '1', pageSize: '500' }).toString()}`, { next: { revalidate: 30 } }),
+          fetch(`/api/activities/list?${buildParams({ page: String(page), pageSize: String(pageSize) }).toString()}`, { cache: 'no-store' }),
+          fetch(`/api/activities/list?${buildParams({ page: '1', pageSize: '500' }).toString()}`, { cache: 'no-store' }),
         ]);
         const [listPayload, analyticsPayload] = await Promise.all([
           listRes.json().catch(() => ({})),

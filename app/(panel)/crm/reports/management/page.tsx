@@ -52,7 +52,7 @@ export default function ManagementReportPage() {
     setLoading(true);
     setMsg(null);
     try {
-      const res = await fetch('/api/reports/management', { next: { revalidate: 30 } });
+      const res = await fetch('/api/reports/management', { cache: 'no-store' });
       const payload = await res.json().catch(() => ({}));
       if (!res.ok) {
         setMsg(payload?.message || 'Rapor yüklenemedi');
