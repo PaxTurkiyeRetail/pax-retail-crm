@@ -132,26 +132,33 @@ export default function QuickActivityClient() {
       const payload = {
         musteri_id: musteriId,
         faz_no: fazNo,
-        event_type: aktiviteTipi,
-        durum: fazDurum,
-        aksiyon: bekleyenTaraf,
+        kanal: aktiviteTipi,
+        faz_durum: fazDurum,
+        bekleyen_taraf: bekleyenTaraf,
         notlar: notlar.trim(),
-        plan_enabled: sonrakiAksiyonVar,
         ...(sonrakiAksiyonVar && {
-          plan_tarih: sonrakiTarih,
-          plan_aktivite: sonrakiTip,
-          plan_not: sonrakiNot.trim(),
-          plan_hedef_faz_no: fazNo
+          plan: {
+            hedef_tarihi: sonrakiTarih,
+            hedef_aktivite: sonrakiTip,
+            hedef_not: sonrakiNot.trim(),
+            hedef_faz_no: fazNo,
+          }
         })
       };
 
-      const res = await fetch('/api/crm/activity/create', {
+      const res = await fetch('/api/activities/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
 
-      const data = await res.json();
+      const text = await res.text();
+      let data: any = {};
+      try {
+        data = text ? JSON.parse(text) : {};
+      } catch {
+        throw new Error('Sunucudan beklenmeyen cevap geldi. Aktivite kayıt endpointi JSON dönmüyor.');
+      }
 
       if (!res.ok) {
         throw new Error(data.message || 'Kayıt başarısız');

@@ -4,20 +4,34 @@ import { revalidatePath } from 'next/cache';
 import { requireAllowedUserOrThrow } from '@/lib/authz';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 
+type ActivityKanal = 'Online Toplantı' | 'Yerinde Ziyaret' | 'Telefon' | 'E-posta' | 'Teknik Ziyaret' | 'Teknik Online' | 'Diğer';
+type ActivityDurum = 'Devam ediyor' | 'Devam Ediyor' | 'Tamamlandı' | 'İhtiyaç duyulmadı' | 'İhtiyaç Duyulmadı' | 'Başlamadı' | null;
+type WaitingSide = 'Müşteri' | 'Müşteri IT' | 'Müşteri (Finance Owner)' | 'PAX RS(Support)' | null;
+
 type Body = {
   activity_id?: string | null;
   musteri_id?: string;
-  kanal?: 'Online Toplantı' | 'Yerinde Ziyaret' | 'Telefon' | 'E-posta' | 'Teknik Ziyaret' | 'Teknik Online' | 'Diğer';
+  kanal?: ActivityKanal;
+  event_type?: ActivityKanal;
   notlar?: string | null;
   faz_no?: number | null;
-  faz_durum?: 'Devam ediyor' | 'Devam Ediyor' | 'Tamamlandı' | 'İhtiyaç duyulmadı' | 'İhtiyaç Duyulmadı' | 'Başlamadı' | null;
-  bekleyen_taraf?: 'Müşteri' | 'Müşteri IT' | 'Müşteri (Finance Owner)' | 'PAX RS(Support)' | null;
+  faz_durum?: ActivityDurum;
+  durum?: ActivityDurum;
+  bekleyen_taraf?: WaitingSide;
+  bekleyenTaraf?: WaitingSide;
+  partner_owner?: WaitingSide;
+  aksiyon?: WaitingSide;
   plan?: {
     hedef_tarihi: string;
-    hedef_aktivite?: 'Online Toplantı' | 'Yerinde Ziyaret' | 'Telefon' | 'E-posta' | 'Teknik Ziyaret' | 'Teknik Online' | 'Diğer';
+    hedef_aktivite?: ActivityKanal;
     hedef_not?: string | null;
     hedef_faz_no?: number | null;
   } | null;
+  plan_enabled?: boolean;
+  plan_tarih?: string | null;
+  plan_aktivite?: ActivityKanal | null;
+  plan_not?: string | null;
+  plan_hedef_faz_no?: number | null;
 };
 
 const EMPTY_WAITING_SIDE_MESSAGE = 'Bekleyen Taraf boş olamaz. Lütfen seçim yapın; eski kayıt varsa backend fallback alacaktır.';
@@ -38,12 +52,29 @@ export async function POST(req: Request) {
   const created_by = (me.full_name ?? '').trim();
   if (!created_by) return NextResponse.json({ message: 'allowed_users.full_name boş olamaz' }, { status: 400 });
 
-  const kanal = (body.kanal ?? 'Diğer') as NonNullable<Body['kanal']>;
+  const kanal = ((body.kanal ?? body.event_type ?? 'Diğer') as ActivityKanal);
   const notlar = (body.notlar ?? '').toString().trim() || null;
   const faz_no = body.faz_no ?? null;
-  const faz_durum = normalizeDurum(body.faz_durum ?? null) as Body['faz_durum'];
-  const explicitBekleyenTaraf = body.bekleyen_taraf ? String(body.bekleyen_taraf).trim() : null;
-  const nextActivity = body.plan ?? null;
+  const faz_durum = normalizeDurum((body.faz_durum ?? body.durum ?? null) as ActivityDurum) as ActivityDurum;
+  const explicitBekleyenTarafRaw =
+    body.bekleyen_taraf ??
+    body.bekleyenTaraf ??
+    body.partner_owner ??
+    body.aksiyon ??
+    null;
+  const explicitBekleyenTaraf = explicitBekleyenTarafRaw ? String(explicitBekleyenTarafRaw).trim() : null;
+
+  const nextActivity = body.plan ?? (
+    body.plan_enabled && body.plan_tarih
+      ? {
+          hedef_tarihi: String(body.plan_tarih).trim(),
+          hedef_aktivite: (body.plan_aktivite ?? 'Diğer') as ActivityKanal,
+          hedef_not: String(body.plan_not ?? '').trim() || null,
+          hedef_faz_no: body.plan_hedef_faz_no ?? faz_no,
+        }
+      : null
+  );
+
   if (faz_no == null) return NextResponse.json({ message: 'faz_no gerekli' }, { status: 400 });
 
   const admin = createSupabaseAdminClient();
@@ -58,38 +89,23 @@ export async function POST(req: Request) {
     admin.from('pipeline_eventleri').select('iteration_no').eq('musteri_id', musteri_id).eq('faz_no', faz_no).order('created_at', { ascending: false }).limit(1).maybeSingle(),
     admin.from('musteri_pipeline').select('musteri_id,aktif_faz_no,durum,owner,partner_owner').eq('musteri_id', musteri_id).maybeSingle(),
     admin.from('faz_tanimlari').select('owner').eq('faz_no', faz_no).maybeSingle(),
-    admin
-      .from('pipeline_eventleri')
-      .select('partner_owner')
-      .eq('musteri_id', musteri_id)
-      .eq('faz_no', faz_no)
-      .not('partner_owner', 'is', null)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-    admin
-      .from('pipeline_eventleri')
-      .select('partner_owner')
-      .eq('musteri_id', musteri_id)
-      .not('partner_owner', 'is', null)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle(),
+    admin.from('pipeline_eventleri').select('partner_owner').eq('musteri_id', musteri_id).eq('faz_no', faz_no).not('partner_owner', 'is', null).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+    admin.from('pipeline_eventleri').select('partner_owner').eq('musteri_id', musteri_id).not('partner_owner', 'is', null).order('created_at', { ascending: false }).limit(1).maybeSingle(),
   ]);
 
   const iteration_no = Number((latestPhaseEvent as any)?.iteration_no ?? 1) || 1;
   const canonicalDurum = normalizeDurum(faz_durum ?? currentPipeline?.durum ?? 'Devam Ediyor') ?? 'Devam Ediyor';
   const fazOwner = String(currentFaz?.owner ?? currentPipeline?.owner ?? '').trim() || null;
-  const resolvedBekleyenTaraf = (
+  const resolvedBekleyenTarafRaw =
     explicitBekleyenTaraf ??
     currentPipeline?.partner_owner ??
     latestPartnerFromSamePhase?.partner_owner ??
     latestPartnerFromCustomer?.partner_owner ??
-    null
-  )?.toString().trim() || null;
+    null;
+  const resolvedBekleyenTaraf = resolvedBekleyenTarafRaw ? String(resolvedBekleyenTarafRaw).trim() : null;
 
   if (!resolvedBekleyenTaraf) {
-    return NextResponse.json({ message: EMPTY_WAITING_SIDE_MESSAGE }, { status: 400 });
+    return NextResponse.json({ message: EMPTY_WAITING_SIDE_MESSAGE, debug: { receivedKeys: Object.keys(body || {}) } }, { status: 400 });
   }
 
   let activityUpdated = false;
@@ -121,6 +137,7 @@ export async function POST(req: Request) {
     if (editErr) return NextResponse.json({ message: editErr.message }, { status: 400 });
     activityUpdated = true;
   }
+
   if (!activityUpdated && faz_durum === 'Tamamlandı') {
     const { data: pending } = await admin
       .from('pipeline_eventleri')

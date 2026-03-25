@@ -1,13 +1,5 @@
-import { createClient } from '@supabase/supabase-js';
-import { getSupabaseServiceRoleEnv } from '@/lib/supabase/config';
+import { createPgSupabaseClient } from '@/lib/supabase/pg-client';
 
 export function createSupabaseAdminClient() {
-  const { url, serviceRole } = getSupabaseServiceRoleEnv();
-
-  return createClient(url, serviceRole, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-    },
-  });
+  return createPgSupabaseClient();
 }

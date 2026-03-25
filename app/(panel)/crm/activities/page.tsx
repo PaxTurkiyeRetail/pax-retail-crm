@@ -69,11 +69,28 @@ function toIsoDate(d: Date) {
   return copy.toISOString().slice(0, 10);
 }
 
+function getSaturdayFridayWeekRange(baseDate = new Date()) {
+  const start = new Date(baseDate);
+  const diffToSaturday = (start.getDay() + 1) % 7;
+  start.setDate(start.getDate() - diffToSaturday);
+  start.setHours(0, 0, 0, 0);
+
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+  end.setHours(23, 59, 59, 999);
+
+  return { start, end };
+}
+
 function getRangeDates(range: TimeRange) {
-  const end = new Date();
   if (range === 'all') return { from: '', to: '' };
+  if (range === 'week') {
+    const { start, end } = getSaturdayFridayWeekRange(new Date());
+    return { from: toIsoDate(start), to: toIsoDate(end) };
+  }
+
+  const end = new Date();
   const start = new Date();
-  if (range === 'week') start.setDate(end.getDate() - 6);
   if (range === 'month') start.setDate(end.getDate() - 29);
   if (range === 'quarter') start.setDate(end.getDate() - 89);
   return { from: toIsoDate(start), to: toIsoDate(end) };
@@ -273,15 +290,18 @@ export default function ActivitiesPage() {
     const startOfToday = new Date(now);
     startOfToday.setHours(0, 0, 0, 0);
 
-    const dayOfWeek = startOfToday.getDay();
-    const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-    const startOfWorkWeek = new Date(startOfToday);
-    startOfWorkWeek.setDate(startOfToday.getDate() + mondayOffset);
+    const { start: currentWeekStart, end: currentWeekEnd } = getSaturdayFridayWeekRange(startOfToday);
+    const previousWeekStart = new Date(currentWeekStart);
+    previousWeekStart.setDate(previousWeekStart.getDate() - 7);
+    previousWeekStart.setHours(0, 0, 0, 0);
+    const previousWeekEnd = new Date(currentWeekStart);
+    previousWeekEnd.setDate(previousWeekEnd.getDate() - 1);
+    previousWeekEnd.setHours(23, 59, 59, 999);
 
-    const weekdayLabels = ['PZT', 'SAL', 'ÇAR', 'PER', 'CUM'];
-    const weekdayBucket = Array.from({ length: 5 }, (_, index) => {
-      const day = new Date(startOfWorkWeek);
-      day.setDate(startOfWorkWeek.getDate() + index);
+    const weekdayLabels = ['CMT', 'PAZ', 'PZT', 'SAL', 'ÇAR', 'PER', 'CUM'];
+    const weekdayBucket = Array.from({ length: 7 }, (_, index) => {
+      const day = new Date(currentWeekStart);
+      day.setDate(currentWeekStart.getDate() + index);
       const key = day.toISOString().slice(0, 10);
       return {
         key,
@@ -290,13 +310,6 @@ export default function ActivitiesPage() {
       };
     });
     const weekdayMap = new Map(weekdayBucket.map((item) => [item.key, item]));
-
-    const currentWeekStart = new Date(startOfToday);
-    currentWeekStart.setDate(startOfToday.getDate() - 6);
-    const previousWeekStart = new Date(startOfToday);
-    previousWeekStart.setDate(startOfToday.getDate() - 13);
-    const previousWeekEnd = new Date(startOfToday);
-    previousWeekEnd.setDate(startOfToday.getDate() - 7);
 
     let currentWeekCount = 0;
     let previousWeekCount = 0;
@@ -310,7 +323,7 @@ export default function ActivitiesPage() {
       if (weekdayMap.has(createdKey)) {
         weekdayMap.get(createdKey)!.count += 1;
       }
-      if (created >= currentWeekStart && created <= now) {
+      if (created >= currentWeekStart && created <= currentWeekEnd) {
         currentWeekCount += 1;
         firmsThisWeek.add(firm);
       }

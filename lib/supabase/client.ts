@@ -1,7 +1,5 @@
-import { createBrowserClient } from '@supabase/ssr';
-import { getSupabasePublicEnv } from '@/lib/supabase/config';
+import { createPgSupabaseClient } from '@/lib/supabase/pg-client';
 
 export function createSupabaseBrowserClient() {
-  const { url, anon } = getSupabasePublicEnv();
-  return createBrowserClient(url, anon);
+  return createPgSupabaseClient();
 }
