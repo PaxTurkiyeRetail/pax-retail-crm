@@ -63,6 +63,13 @@ function money(value: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value || 0);
 }
 
+function normalizeSpecsText(input: unknown) {
+  if (Array.isArray(input)) return input.map((item) => String(item ?? '').trim()).filter(Boolean).join('\n');
+  if (typeof input === 'string') return input;
+  if (input && typeof input === 'object') return Object.values(input as Record<string, unknown>).map((item) => String(item ?? '').trim()).filter(Boolean).join('\n');
+  return '';
+}
+
 export default function QuotesCatalogAdminClient() {
   const [products, setProducts] = useState<Product[]>([]);
   const [rules, setRules] = useState<Rule[]>([]);
@@ -74,9 +81,9 @@ export default function QuotesCatalogAdminClient() {
   const [savingProduct, setSavingProduct] = useState(false);
   const [savingRule, setSavingRule] = useState(false);
 
-  async function load() {
+  async function load(preferredProductId?: string) {
     setLoading(true);
-    const res = await fetch('/api/quotes/catalog/list', { next: { revalidate: 60 } });
+    const res = await fetch('/api/quotes/catalog/list', { cache: 'no-store' });
     const json = await res.json().catch(() => ({}));
     if (!res.ok) {
       setMsg(json?.message || 'Ürün kataloğu alınamadı.');
@@ -87,7 +94,11 @@ export default function QuotesCatalogAdminClient() {
     const nextRules = (json.rules ?? []) as Rule[];
     setProducts(nextProducts);
     setRules(nextRules);
-    setSelectedProductId((current) => current || nextProducts[0]?.id || '');
+    setSelectedProductId((current) => {
+      const preferred = preferredProductId || current;
+      if (preferred && nextProducts.some((item) => item.id === preferred)) return preferred;
+      return nextProducts[0]?.id || '';
+    });
     setLoading(false);
   }
 
@@ -114,7 +125,7 @@ export default function QuotesCatalogAdminClient() {
       is_recurring: selectedProduct.is_recurring,
       billing_period: selectedProduct.billing_period,
       description: selectedProduct.description || '',
-      specsText: (selectedProduct.specs ?? []).join('\n'),
+      specsText: normalizeSpecsText(selectedProduct.specs),
       sort_order: selectedProduct.sort_order,
       is_active: selectedProduct.is_active,
     });
@@ -137,9 +148,19 @@ export default function QuotesCatalogAdminClient() {
         setMsg(json?.message || 'Ürün kaydedilemedi.');
         return;
       }
+      const savedProduct = (json?.product ?? null) as Product | null;
+      if (savedProduct?.id) {
+        setProducts((prev) => {
+          const exists = prev.some((item) => item.id === savedProduct.id);
+          const next = exists
+            ? prev.map((item) => (item.id === savedProduct.id ? savedProduct : item))
+            : [...prev, savedProduct];
+          return [...next].sort((a, b) => (a.sort_order - b.sort_order) || a.name.localeCompare(b.name, 'tr'));
+        });
+        setSelectedProductId(String(savedProduct.id));
+      }
       setMsg('Ürün kaydedildi.');
-      await load();
-      if (json?.product?.id) setSelectedProductId(String(json.product.id));
+      await load(savedProduct?.id ? String(savedProduct.id) : productForm.id);
     } finally {
       setSavingProduct(false);
     }
@@ -170,7 +191,7 @@ export default function QuotesCatalogAdminClient() {
       }
       setMsg('Fiyat baremi kaydedildi.');
       setRuleForm({ min_qty: 1, max_qty: '', unit_price: '' });
-      await load();
+      await load(selectedProductId);
     } finally {
       setSavingRule(false);
     }
@@ -188,7 +209,7 @@ export default function QuotesCatalogAdminClient() {
       return;
     }
     setMsg('Fiyat baremi silindi.');
-    await load();
+    await load(selectedProductId);
   }
 
   return (

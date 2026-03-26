@@ -93,3 +93,5 @@ export async function requireUsersAccessOrThrow() {
   }
   return allowed;
 }
+
+export { isAdminLike } from '@/lib/roles';

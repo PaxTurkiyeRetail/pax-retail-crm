@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
 import { requireAdminOrThrow } from '@/lib/authz';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
+import { normalizeQuoteSpecs } from '@/lib/quotes/catalog';
 
 type Body = {
   id?: string;
@@ -14,7 +15,8 @@ type Body = {
   is_recurring?: boolean;
   billing_period?: 'one_time' | 'monthly';
   description?: string | null;
-  specs?: string[];
+  specs?: unknown;
+  specsText?: string;
   sort_order?: number;
   is_active?: boolean;
 };
@@ -27,6 +29,8 @@ export async function POST(request: Request) {
     const name = String(body.name ?? '').trim();
     if (!code || !name) return NextResponse.json({ message: 'Kod ve ürün adı zorunlu.' }, { status: 400 });
 
+    const normalizedSpecs = normalizeQuoteSpecs(body.specs ?? body.specsText ?? '');
+
     const payload = {
       code,
       name,
@@ -37,7 +41,7 @@ export async function POST(request: Request) {
       is_recurring: Boolean(body.is_recurring),
       billing_period: body.billing_period ?? (body.is_recurring ? 'monthly' : 'one_time'),
       description: String(body.description ?? '').trim() || null,
-      specs: Array.isArray(body.specs) ? body.specs.filter((item) => String(item).trim()).map((item) => String(item).trim()) : [],
+      specs: JSON.stringify(normalizedSpecs),
       sort_order: Number(body.sort_order ?? 100),
       is_active: body.is_active !== false,
     };
@@ -47,11 +51,15 @@ export async function POST(request: Request) {
     if (body.id) {
       const { data, error } = await query.update(payload).eq('id', body.id).select('*').single();
       if (error) return NextResponse.json({ message: error.message }, { status: 400 });
+      revalidatePath('/crm/quotes/catalog');
+      revalidatePath('/crm/quotes/new');
       return NextResponse.json({ ok: true, product: data });
     }
 
     const { data, error } = await query.insert(payload).select('*').single();
     if (error) return NextResponse.json({ message: error.message }, { status: 400 });
+    revalidatePath('/crm/quotes/catalog');
+    revalidatePath('/crm/quotes/new');
     return NextResponse.json({ ok: true, product: data });
   } catch (e: any) {
     return NextResponse.json({ message: e?.message || 'Yetkisiz' }, { status: e?.status || 401 });

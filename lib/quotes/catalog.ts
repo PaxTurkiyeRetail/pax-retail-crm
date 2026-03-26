@@ -23,6 +23,45 @@ export type QuotePricingRule = {
   unit_price: number;
 };
 
+export function normalizeQuoteSpecs(input: unknown): string[] {
+  if (Array.isArray(input)) {
+    return input.map((item) => String(item ?? '').trim()).filter(Boolean);
+  }
+
+  if (typeof input === 'string') {
+    const raw = input.trim();
+    if (!raw) return [];
+
+    if ((raw.startsWith('[') && raw.endsWith(']')) || (raw.startsWith('{') && raw.endsWith('}'))) {
+      try {
+        return normalizeQuoteSpecs(JSON.parse(raw));
+      } catch {
+        // düz metin gibi devam et
+      }
+    }
+
+    return raw
+      .split(/\r?\n|,|\u2022|•|;/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  if (input && typeof input === 'object') {
+    return Object.values(input as Record<string, unknown>)
+      .flatMap((value) => normalizeQuoteSpecs(value))
+      .filter(Boolean);
+  }
+
+  return [];
+}
+
+export function normalizeQuoteProduct<T extends Record<string, any>>(product: T): T & { specs: string[] } {
+  return {
+    ...product,
+    specs: normalizeQuoteSpecs(product?.specs),
+  };
+}
+
 function product(input: Omit<QuoteProduct, 'currency' | 'unit_label'> & Partial<Pick<QuoteProduct, 'currency' | 'unit_label'>>) {
   return {
     currency: 'USD' as const,

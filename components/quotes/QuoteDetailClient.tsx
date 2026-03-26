@@ -3,6 +3,7 @@
 import type { CSSProperties } from 'react';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { formatDate } from '@/lib/utils';
 
@@ -36,6 +37,7 @@ export default function QuoteDetailClient({ quoteId }: { quoteId: string }) {
   const [msg, setMsg] = useState<string | null>(null);
   const [closingReason, setClosingReason] = useState('won');
   const [busy, setBusy] = useState(false);
+  const router = useRouter();
 
   const health = useMemo(() => {
     if (!quote) return 'on_track';
@@ -47,7 +49,10 @@ export default function QuoteDetailClient({ quoteId }: { quoteId: string }) {
 
   const load = async () => {
     setLoading(true);
-    const res = await fetch(`/api/quotes/detail?quoteId=${quoteId}`, { next: { revalidate: 60 } });
+    const res = await fetch(`/api/quotes/detail?quoteId=${quoteId}`, {
+      cache: 'no-store',
+      headers: { 'cache-control': 'no-store' },
+    });
     const json = await res.json().catch(() => ({}));
     if (!res.ok) setMsg(json?.message || 'Teklif bulunamadı.');
     else setQuote(json.quote ?? null);
@@ -61,12 +66,31 @@ export default function QuoteDetailClient({ quoteId }: { quoteId: string }) {
     setMsg(null);
     const res = await fetch('/api/quotes/status', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },
       body: JSON.stringify({ quote_id: quoteId, status, closed_reason: status === 'closed' ? closingReason : null }),
     });
     const json = await res.json().catch(() => ({}));
-    if (!res.ok) setMsg(json?.message || 'Durum güncellenemedi.');
+
+    if (!res.ok) {
+      setMsg(json?.message || 'Durum güncellenemedi.');
+      setBusy(false);
+      return;
+    }
+
+    setQuote((current) => current ? {
+      ...current,
+      status,
+      closed_reason: status === 'closed' ? closingReason : null,
+    } : current);
+
+    if (status === 'sent') {
+      router.refresh();
+      window.location.reload();
+      return;
+    }
+
     await load();
+    router.refresh();
     setBusy(false);
   }
 

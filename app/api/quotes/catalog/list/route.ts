@@ -1,7 +1,11 @@
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 import { NextResponse } from 'next/server';
 import { requireAdminOrThrow } from '@/lib/authz';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 import { isMissingRelationError } from '@/lib/quotes/service';
+import { normalizeQuoteProduct } from '@/lib/quotes/catalog';
 
 export async function GET() {
   try {
@@ -15,7 +19,7 @@ export async function GET() {
       if (isMissingRelationError(productErr ?? ruleErr)) return NextResponse.json({ message: 'quote_module_not_setup' }, { status: 400 });
       return NextResponse.json({ message: (productErr ?? ruleErr)?.message || 'Katalog alınamadı.' }, { status: 400 });
     }
-    return NextResponse.json({ products: products ?? [], rules: rules ?? [] });
+    return NextResponse.json({ products: (products ?? []).map((product) => normalizeQuoteProduct(product)), rules: rules ?? [] }, { headers: { 'Cache-Control': 'no-store, max-age=0' } });
   } catch (e: any) {
     return NextResponse.json({ message: e?.message || 'Yetkisiz' }, { status: e?.status || 401 });
   }

@@ -1,6 +1,6 @@
 import 'server-only';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { STATIC_QUOTE_PRICING_RULES, STATIC_QUOTE_PRODUCTS, type QuotePricingRule, type QuoteProduct } from '@/lib/quotes/catalog';
+import { STATIC_QUOTE_PRICING_RULES, STATIC_QUOTE_PRODUCTS, normalizeQuoteProduct, type QuotePricingRule, type QuoteProduct } from '@/lib/quotes/catalog';
 import { isAdminLike, type AllowedRole } from '@/lib/roles';
 
 export type QuoteLineInput = {
@@ -49,6 +49,26 @@ export function addDaysToIsoDate(isoDate: string, days: number) {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+export function normalizeDateOnly(value: unknown, fallback?: string | null) {
+  if (value == null) return fallback ?? null;
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toISOString().slice(0, 10);
+  }
+
+  const raw = String(value).trim();
+  if (!raw) return fallback ?? null;
+
+  const isoMatch = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (isoMatch) return isoMatch[1];
+
+  const parsed = new Date(raw);
+  if (!Number.isNaN(parsed.getTime())) {
+    return parsed.toISOString().slice(0, 10);
+  }
+
+  return fallback ?? null;
+}
+
 export function formatMoney(value: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value || 0);
 }
@@ -69,7 +89,7 @@ export async function getQuoteCatalog(admin?: SupabaseClient<any, any, any>) {
   }
 
   return {
-    products: (products ?? []) as QuoteProduct[],
+    products: (products ?? []).map((product) => normalizeQuoteProduct(product)) as QuoteProduct[],
     rules: (rules ?? []) as QuotePricingRule[],
     source: 'db' as const,
   };
@@ -177,6 +197,10 @@ export async function createQuoteActivity(args: {
   summaryText: string;
 }) {
   const { admin, customerId, quoteId, quoteNo, ownerName, followUpDate, validUntil, summaryText } = args;
+  const proposalDate = getTurkeyTodayIso();
+  const normalizedFollowUpDate = normalizeDateOnly(followUpDate, addDaysToIsoDate(proposalDate, 30));
+  const normalizedValidUntil = normalizeDateOnly(validUntil, addDaysToIsoDate(proposalDate, 15));
+  const normalizedTargetDate = normalizedValidUntil ?? normalizedFollowUpDate;
   const [{ data: pipeline }, { data: latestPhaseEvent }] = await Promise.all([
     admin.from('musteri_pipeline').select('aktif_faz_no,owner,partner_owner').eq('musteri_id', customerId).maybeSingle(),
     admin.from('pipeline_eventleri').select('faz_no,iteration_no').eq('musteri_id', customerId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
@@ -184,7 +208,7 @@ export async function createQuoteActivity(args: {
 
   const fazNo = Number((pipeline as any)?.aktif_faz_no ?? (latestPhaseEvent as any)?.faz_no ?? 10) || 10;
   const iterationNo = Number((latestPhaseEvent as any)?.iteration_no ?? 1) || 1;
-  const note = `Quote ${quoteNo} paylaşıldı. İçerik: ${summaryText || '-'} | Geçerlilik: ${validUntil}`;
+  const note = `Quote ${quoteNo} paylaşıldı. İçerik: ${summaryText || '-'} | Geçerlilik: ${normalizedValidUntil}`;
 
   const { data, error } = await admin.from('pipeline_eventleri').insert({
     musteri_id: customerId,
@@ -196,7 +220,7 @@ export async function createQuoteActivity(args: {
     owner: String((pipeline as any)?.owner ?? ownerName ?? '').trim() || null,
     partner_owner: String((pipeline as any)?.partner_owner ?? 'Müşteri').trim() || 'Müşteri',
     baslangic_tarihi: null,
-    hedef_tarihi: followUpDate,
+    hedef_tarihi: normalizedTargetDate,
     notlar: note,
     created_by: ownerName,
   }).select('id').single();
