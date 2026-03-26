@@ -11,6 +11,7 @@ import {
 import { db } from '@/lib/db';
 
 export type AllowedUser = {
+  id: string;
   email: string;
   role: string;
   full_name: string | null;
@@ -29,7 +30,7 @@ const getAllowedUserOrThrowBase = cache(async (): Promise<AllowedUser> => {
 
   const result = await db.query(
     `
-      select email, role, is_active, full_name
+      select *
       from allowed_users
       where lower(email) = lower($1)
       limit 1
@@ -43,6 +44,7 @@ const getAllowedUserOrThrowBase = cache(async (): Promise<AllowedUser> => {
   }
 
   return {
+    id: allowed.user_id ?? allowed.id ?? allowed.email,
     email: allowed.email,
     role: normalizeRole(allowed.role) ?? 'user',
     full_name: allowed.full_name,

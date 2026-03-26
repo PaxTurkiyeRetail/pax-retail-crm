@@ -1,7 +1,7 @@
 import { requireAllowedUserOrThrow } from '@/lib/authz';
-import RequestDetail from '@/components/requests/RequestDetail';
+import RequestsHub from '@/components/requests/RequestsHub';
 
-export default async function RequestDetailPage({ params }: { params: { id: string } }) {
+export default async function RequestsPage() {
   const user = await requireAllowedUserOrThrow();
-  return <RequestDetail id={params.id} userRole={user.role} />;
+  return <RequestsHub userRole={user.role} userId={user.id} />;
 }

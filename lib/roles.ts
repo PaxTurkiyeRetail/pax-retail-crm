@@ -19,6 +19,11 @@ export function isAdminLike(role: string | null | undefined): boolean {
   return normalized === 'super_admin' || normalized === 'admin';
 }
 
+export function canManageRequests(role: string | null | undefined): boolean {
+  const normalized = normalizeRole(role);
+  return normalized === 'super_admin' || normalized === 'admin' || normalized === 'account_manager' || normalized === 'itsm';
+}
+
 export function canViewUsers(role: string | null | undefined): boolean {
   const normalized = normalizeRole(role);
   return normalized === 'super_admin' || normalized === 'admin';
@@ -35,6 +40,5 @@ export function canViewActivities(role: string | null | undefined): boolean {
 
 export function canViewReports(role: string | null | undefined): boolean {
   const normalized = normalizeRole(role);
-  // 'user' rolü de kendi satıcı özetini görebilmeli (API tarafında myName'e kilitli)
   return normalized === 'super_admin' || normalized === 'admin' || normalized === 'account_manager' || normalized === 'itsm' || normalized === 'user';
 }

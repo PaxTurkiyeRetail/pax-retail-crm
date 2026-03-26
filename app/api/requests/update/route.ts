@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
 import { requireAllowedUserOrThrow } from '@/lib/authz';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
+import { getAllowedUserNameForRequests } from '@/lib/request-users';
+import { canManageRequests, isAdminLike } from '@/lib/roles';
 
 export async function POST(req: Request) {
   try {
@@ -12,9 +14,14 @@ export async function POST(req: Request) {
 
     if (!id) return NextResponse.json({ message: 'id zorunlu' }, { status: 400 });
 
-    const { data: current, error: fetchError } = await sb
-      .from('requests').select('*').eq('id', id).single();
+    const { data: current, error: fetchError } = await sb.from('requests').select('*').eq('id', id).single();
     if (fetchError) throw fetchError;
+    if (!current) return NextResponse.json({ message: 'Talep bulunamadı' }, { status: 404 });
+
+    const canAccess = isAdminLike(user.role) || current.requester_id === user.id || current.assignee_id === user.id;
+    if (!canAccess) {
+      return NextResponse.json({ message: 'Bu talebe erişimin yok' }, { status: 403 });
+    }
 
     let updateData: Record<string, unknown> = {};
     let eventType = '';
@@ -27,42 +34,39 @@ export async function POST(req: Request) {
       if (newStatus === 'in_progress' && !current.first_response_at) updateData.first_response_at = new Date().toISOString();
       eventType = 'status_changed';
       eventPayload = { from: current.status, to: newStatus };
-    }
-
-    else if (action === 'assign') {
-      let assignee_name = null;
-      if (payload.assignee_id) {
-        const { data: au } = await sb.from('allowed_users').select('full_name').eq('user_id', payload.assignee_id).single();
-        assignee_name = au?.full_name ?? null;
+    } else if (action === 'assign') {
+      if (!canManageRequests(user.role)) {
+        return NextResponse.json({ message: 'Atama yetkin yok' }, { status: 403 });
       }
+      const assigneeId = payload.assignee_id || null;
+      const assigneeName = await getAllowedUserNameForRequests(assigneeId as string | null);
       updateData = {
-        assignee_id: payload.assignee_id || null,
-        assignee_name,
+        assignee_id: assigneeId,
+        assignee_name: assigneeName,
         assignee_source: 'manual',
-        status: payload.assignee_id ? 'assigned' : 'open',
+        status: assigneeId ? 'assigned' : 'open',
       };
       eventType = current.assignee_id ? 'reassigned' : 'assigned';
-      eventPayload = { from: current.assignee_id, to: payload.assignee_id, to_name: assignee_name };
-    }
-
-    else if (action === 'priority') {
+      eventPayload = { from: current.assignee_id, to: assigneeId, to_name: assigneeName };
+    } else if (action === 'priority') {
+      if (!canManageRequests(user.role)) {
+        return NextResponse.json({ message: 'Öncelik değiştirme yetkin yok' }, { status: 403 });
+      }
       updateData = { priority: payload.priority };
       eventType = 'priority_changed';
       eventPayload = { from: current.priority, to: payload.priority };
-    }
-
-    else if (action === 'comment') {
+    } else if (action === 'comment') {
       if (!payload.comment?.trim()) return NextResponse.json({ message: 'Yorum boş olamaz' }, { status: 400 });
-      // Comments only go to events table, no request update needed
       await sb.from('request_events').insert({
-        request_id: id, actor_id: user.id, actor_name: user.full_name,
-        event_type: 'comment', payload: { comment: payload.comment.trim() },
+        request_id: id,
+        actor_id: user.id,
+        actor_name: user.full_name || user.email,
+        event_type: 'comment',
+        payload: { comment: payload.comment.trim() },
       });
       revalidatePath('/requests');
       return NextResponse.json({ ok: true });
-    }
-
-    else {
+    } else {
       return NextResponse.json({ message: 'Bilinmeyen action' }, { status: 400 });
     }
 
@@ -70,8 +74,11 @@ export async function POST(req: Request) {
     if (updateError) throw updateError;
 
     await sb.from('request_events').insert({
-      request_id: id, actor_id: user.id, actor_name: user.full_name,
-      event_type: eventType, payload: eventPayload,
+      request_id: id,
+      actor_id: user.id,
+      actor_name: user.full_name || user.email,
+      event_type: eventType,
+      payload: eventPayload,
     });
 
     revalidatePath('/requests');
