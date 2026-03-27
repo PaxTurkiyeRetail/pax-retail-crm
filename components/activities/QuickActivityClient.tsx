@@ -77,7 +77,7 @@ export default function QuickActivityClient() {
     const loadData = async () => {
       try {
         const [customersRes, fazRes] = await Promise.all([
-          fetch('/api/crm/list?lite=1'),
+          fetch('/api/crm/list?lite=1&pageSize=5000'),
           fetch('/api/faz/list')
         ]);
 

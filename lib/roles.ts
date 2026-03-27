@@ -20,8 +20,7 @@ export function isAdminLike(role: string | null | undefined): boolean {
 }
 
 export function canManageRequests(role: string | null | undefined): boolean {
-  const normalized = normalizeRole(role);
-  return normalized === 'super_admin' || normalized === 'admin' || normalized === 'account_manager' || normalized === 'itsm';
+  return normalizeRole(role) !== null;
 }
 
 export function canViewUsers(role: string | null | undefined): boolean {
