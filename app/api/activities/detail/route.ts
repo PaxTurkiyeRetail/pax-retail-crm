@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server';
 import { requireAllowedUserOrThrow } from '@/lib/authz';
-import { createSupabaseAdminClient } from '@/lib/supabase/admin';
+import { createPgAdminClient } from '@/lib/pg/admin';
 import { activityLabelFromRow, presentDurum } from '@/app/api/activities/_helpers';
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export async function GET(req: Request) {
   try {
@@ -10,10 +13,10 @@ export async function GET(req: Request) {
     const activity_id = (url.searchParams.get('activity_id') ?? '').trim();
     if (!activity_id) return NextResponse.json({ message: 'activity_id gerekli' }, { status: 400 });
 
-    const admin = createSupabaseAdminClient();
+    const admin = createPgAdminClient();
     const { data, error } = await admin
       .from('pipeline_eventleri')
-      .select('id,musteri_id,faz_no,durum,aksiyon,partner_owner,notlar,hedef_tarihi,created_at,created_by')
+      .select('id,musteri_id,faz_no,durum,aksiyon,partner_owner,notlar,hedef_tarihi,created_at,created_by,is_blocked,blocked_note,blocked_at,blocked_by,activity_scope,affects_phase')
       .eq('id', activity_id)
       .single();
 

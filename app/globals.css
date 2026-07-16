@@ -429,3 +429,296 @@ img, svg { display: block; }
   .pax-hero { padding: 20px; border-radius: 20px; }
   .pax-hero-title { font-size: 22px; }
 }
+
+/* ── APP TOAST / INFO BOX ── */
+.app-toast-stack {
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(380px, calc(100vw - 32px));
+  pointer-events: none;
+}
+.app-toast {
+  pointer-events: auto;
+  display: grid;
+  grid-template-columns: 30px 1fr 24px;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 14px 14px;
+  border-radius: 16px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  box-shadow: 0 18px 45px rgba(15,23,42,.18);
+  animation: appToastIn 180ms ease-out;
+}
+.app-toast-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 14px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  border: 1px solid var(--accent-border);
+}
+.app-toast-success .app-toast-icon {
+  background: var(--chip-green-bg);
+  color: var(--chip-green-color);
+  border-color: var(--chip-green-bd);
+}
+.app-toast-error .app-toast-icon {
+  background: var(--chip-red-bg);
+  color: var(--chip-red-color);
+  border-color: var(--chip-red-bd);
+}
+.app-toast-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.app-toast-body strong { font-size: 13.5px; line-height: 1.25; color: var(--text); }
+.app-toast-body span { font-size: 12.5px; line-height: 1.35; color: var(--text-3); }
+.app-toast-close {
+  border: 0;
+  background: transparent;
+  color: var(--text-4);
+  cursor: pointer;
+  font-size: 20px;
+  line-height: 1;
+  padding: 0;
+}
+.app-toast-close:hover { color: var(--text-2); }
+@keyframes appToastIn {
+  from { opacity: 0; transform: translateY(10px) scale(.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ── ADVANCED GLOBAL FEEDBACK ── */
+.app-toast-loading .app-toast-icon {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: var(--accent-border);
+  animation: appToastPulse 900ms ease-in-out infinite;
+}
+.app-toast-warning .app-toast-icon {
+  background: rgba(245, 158, 11, .14);
+  color: #d97706;
+  border-color: rgba(245, 158, 11, .28);
+}
+.app-toast-error {
+  border-color: var(--chip-red-bd);
+}
+.app-toast-success {
+  border-color: var(--chip-green-bd);
+}
+@keyframes appToastPulse {
+  0%, 100% { transform: scale(1); opacity: .8; }
+  50% { transform: scale(1.08); opacity: 1; }
+}
+
+/* ── MOBILE-FIRST UX HARDENING ── */
+:root { --safe-bottom: env(safe-area-inset-bottom, 0px); }
+html, body { max-width: 100%; overflow-x: hidden; }
+button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
+button { touch-action: manipulation; }
+
+.pax-main-inner, .pax-card, .surface, .card, .filters, .table-card, .ph-table-card, .wa-table-panel {
+  min-width: 0;
+}
+
+.table-wrap,
+.pax-table-wrap,
+.pax-table-outer,
+.ph-table-wrap,
+.wa-table-wrap,
+.seller-table-wrap,
+.kasapos-table-wrap,
+.wmp-mini-table,
+[class$="table-wrap"] {
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+}
+
+.table-wrap table,
+.pax-table-wrap table,
+.pax-table-outer table,
+.ph-table-wrap table,
+.wa-table-wrap table,
+.seller-table-wrap table,
+.kasapos-table-wrap table,
+.wmp-mini-table table,
+[class$="table-wrap"] table {
+  border-spacing: 0;
+}
+
+@media (max-width: 768px) {
+  .pax-main button:not(.pax-mobile-menu-btn):not(.pax-mobile-theme-btn):not(.pax-toggle):not(.app-toast-close),
+  .pax-main a[role="button"],
+  .pax-main .pax-btn,
+  .pax-main input,
+  .pax-main select,
+  .pax-main textarea {
+    min-height: 44px;
+  }
+
+  .pax-main input,
+  .pax-main select,
+  .pax-main textarea {
+    font-size: 16px;
+  }
+
+  .pax-card, .surface, .card, .filters, .table-card, .ph-table-card, .wa-table-panel {
+    border-radius: 18px;
+  }
+
+  .pax-hero, .hero, .seller-hero, .wa-hero, .ph-hero {
+    border-radius: 20px !important;
+  }
+
+  .table-wrap,
+  .pax-table-wrap,
+  .pax-table-outer,
+  .ph-table-wrap,
+  .wa-table-wrap,
+  .seller-table-wrap,
+  .kasapos-table-wrap,
+  [class$="table-wrap"] {
+    border-radius: 14px;
+  }
+
+  .table-wrap::before,
+  .pax-table-wrap::before,
+  .pax-table-outer::before,
+  .ph-table-wrap::before,
+  .wa-table-wrap::before,
+  .seller-table-wrap::before,
+  .kasapos-table-wrap::before,
+  [class$="table-wrap"]::before {
+    content: 'Tabloyu yana kaydırabilirsiniz';
+    display: block;
+    position: sticky;
+    left: 0;
+    top: 0;
+    width: max-content;
+    margin: 0 0 8px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    border: 1px solid var(--accent-border);
+    font-size: 11px;
+    font-weight: 800;
+    z-index: 2;
+  }
+}
+
+@media (max-width: 640px) {
+  .app-toast-stack {
+    right: 10px;
+    left: 10px;
+    bottom: calc(10px + var(--safe-bottom));
+    width: auto;
+    gap: 8px;
+  }
+  .app-toast {
+    grid-template-columns: 28px 1fr 28px;
+    padding: 12px;
+    border-radius: 14px;
+    box-shadow: 0 14px 34px rgba(15,23,42,.2);
+  }
+  .app-toast-icon { width: 28px; height: 28px; }
+  .app-toast-body strong { font-size: 13px; }
+  .app-toast-body span { font-size: 12px; }
+
+  .modal-card,
+  .drawer-card,
+  .sheet-card,
+  [role="dialog"] .card {
+    width: calc(100vw - 20px) !important;
+    max-width: calc(100vw - 20px) !important;
+    max-height: calc(100dvh - 24px);
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* Runtime boundary */
+.app-runtime-error {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: var(--app-bg);
+}
+.app-runtime-error-card {
+  width: min(520px, 100%);
+  display: grid;
+  gap: 16px;
+  padding: 22px;
+  border-radius: 22px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-md);
+}
+.app-runtime-error-badge {
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font-weight: 900;
+  background: var(--chip-red-bg);
+  color: var(--chip-red-color);
+  border: 1px solid var(--chip-red-bd);
+}
+.app-runtime-error-card h1 { font-size: 22px; line-height: 1.15; margin: 0 0 6px; color: var(--text); }
+.app-runtime-error-card p { color: var(--text-3); margin: 0; }
+.app-runtime-error-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.app-runtime-error-actions button {
+  min-height: 42px;
+  padding: 0 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-weight: 800;
+  cursor: pointer;
+}
+.app-runtime-error-actions button:first-child {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+/* Global route feedback: sayfa gecislerinde hafif ust bar, layout bloklamaz */
+.app-route-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 9999;
+  height: 3px;
+  width: 100%;
+  pointer-events: none;
+  opacity: 0;
+  transform: scaleX(0);
+  transform-origin: left center;
+  background: linear-gradient(90deg, #1d4ed8, #6366f1, #22c55e);
+  transition: transform 420ms ease, opacity 160ms ease;
+}
+.app-route-progress.active {
+  opacity: 1;
+  transform: scaleX(1);
+}
+
+@media (max-width: 640px) {
+  .pax-card { border-radius: 18px; padding: 14px; }
+  .pax-page-title { font-size: 20px; }
+  .pax-btn, button, a[role='button'] { min-height: 42px; }
+  input, select, textarea { font-size: 16px; }
+}

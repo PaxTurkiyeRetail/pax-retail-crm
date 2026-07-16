@@ -85,7 +85,7 @@ function DonutLike({ title, items }: { title: string; items: SummaryItem[] }) {
 
 export default function SellerSummaryPage() {
   const [payload, setPayload] = useState<Payload>(EMPTY);
-  const [seller, setSeller] = useState('');
+  const [seller, setSeller] = useState('Tüm Satıcılar');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -135,12 +135,12 @@ export default function SellerSummaryPage() {
         <div className="seller-card seller-hero">
           <div className="seller-hero-top">
             <div>
-              <div className="seller-eyebrow">Analiz · Satıcı Özeti</div>
-              <h1>Satıcı faz raporu</h1>
-              <p>Satıcıya ait firma sayısı, künye kalitesi, faz dağılımı, fazı girilmemiş firmalar ve son aktiviteler tek ekranda.</p>
+              <div className="seller-eyebrow">Analiz · Account Özeti</div>
+              <h1>Satışçı / account faz raporu</h1>
+              <p>Müşteri, İş Ortakları ve özel portföy kayıtları dahil tüm sorumluları tek ekranda izler; firma, künye, faz ve aktivite boşluklarını gösterir.</p>
             </div>
             <div className="seller-select-wrap">
-              <label htmlFor="sellerSelect">Satıcı</label>
+              <label htmlFor="sellerSelect">Account / Grup</label>
               <select
                 id="sellerSelect"
                 className="seller-select"
@@ -200,12 +200,7 @@ export default function SellerSummaryPage() {
         <section className="seller-card seller-panel">
           <div className="seller-panel-head">
             <h3>Fazı Girilmemiş Firmalar</h3>
-            {/* Düzeltme: gerçek toplam sayıyı göster, 20 ile sınırlı olduğunu belirt */}
-            <span>
-              {payload.noPhaseTotal > 20
-                ? `${payload.noPhaseRows.length} / ${payload.noPhaseTotal} gösteriliyor`
-                : payload.noPhaseRows.length}
-            </span>
+            <span>{payload.noPhaseTotal}</span>
           </div>
           <div className="seller-table-wrap">
             <table className="seller-table">
@@ -218,11 +213,6 @@ export default function SellerSummaryPage() {
               </tbody>
             </table>
           </div>
-          {payload.noPhaseTotal > 20 && (
-            <div style={{ fontSize: 12, color: 'var(--color-text-tertiary, #888)', padding: '8px 0 0' }}>
-              Tüm listeyi görmek için Satıcı Özeti sayfasını kullanın.
-            </div>
-          )}
         </section>
 
         <section className="seller-card seller-panel">

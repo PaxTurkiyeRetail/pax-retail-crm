@@ -1,11 +1,14 @@
 import { NextResponse } from 'next/server';
 import { requireAllowedUserOrThrow } from '@/lib/authz';
-import { createSupabaseAdminClient } from '@/lib/supabase/admin';
+import { createPgAdminClient } from '@/lib/pg/admin';
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export async function GET(req: Request) {
   try {
     const user = await requireAllowedUserOrThrow();
-    const sb   = createSupabaseAdminClient();
+    const sb   = createPgAdminClient();
     const { searchParams } = new URL(req.url);
     // ?userId=xxx → kişi detay stats. Boşsa → genel dashboard stats.
     const targetUserId = searchParams.get('userId') || null;

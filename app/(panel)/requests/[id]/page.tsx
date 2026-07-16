@@ -1,7 +1,5 @@
-import { requireAllowedUserOrThrow } from '@/lib/authz';
-import RequestDetail from '@/components/requests/RequestDetail';
+import { redirect } from 'next/navigation';
 
-export default async function RequestDetailPage({ params }: { params: { id: string } }) {
-  const user = await requireAllowedUserOrThrow();
-  return <RequestDetail id={params.id} userRole={user.role} />;
+export default function RequestsDisabledPage() {
+  redirect('/crm');
 }

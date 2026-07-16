@@ -2,15 +2,15 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 import { NextResponse } from 'next/server';
-import { requireAdminOrThrow } from '@/lib/authz';
-import { createSupabaseAdminClient } from '@/lib/supabase/admin';
+import { requireAllowedUserOrThrow } from '@/lib/authz';
+import { createPgAdminClient } from '@/lib/pg/admin';
 import { isMissingRelationError } from '@/lib/quotes/service';
 import { normalizeQuoteProduct } from '@/lib/quotes/catalog';
 
 export async function GET() {
   try {
-    await requireAdminOrThrow();
-    const admin = createSupabaseAdminClient();
+    await requireAllowedUserOrThrow();
+    const admin = createPgAdminClient();
     const [{ data: products, error: productErr }, { data: rules, error: ruleErr }] = await Promise.all([
       admin.from('quote_products').select('*').order('sort_order', { ascending: true }).order('name', { ascending: true }),
       admin.from('quote_pricing_rules').select('*').order('min_qty', { ascending: true }),

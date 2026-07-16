@@ -199,8 +199,8 @@ export default function CrmDashboardClient() {
             className="pax-input"
             style={{ fontSize: 13, marginBottom: 16 }}
           >
-            <option value="all">Tüm Satıcılar</option>
-            {sellerData.sellerOptions.map((name) => (
+            <option value="all">Tüm Accountlar</option>
+            {sellerData.sellerOptions.filter((name) => name !== 'Tüm Satıcılar').map((name) => (
               <option key={name} value={name}>{name}</option>
             ))}
           </select>

@@ -1,22 +1,40 @@
 export const DURUM_CANONICAL: Record<string, string> = {
   'Başlamadı': 'Başlamadı',
   'Bekleniyor': 'Bekleniyor',
-  'Devam ediyor': 'Devam Ediyor',
   'Devam Ediyor': 'Devam Ediyor',
   'Tamamlandı': 'Tamamlandı',
-  'İhtiyaç duyulmadı': 'İhtiyaç Duyulmadı',
   'İhtiyaç Duyulmadı': 'İhtiyaç Duyulmadı',
 };
 
+function normalizeDurumKey(value: string) {
+  return value
+    .trim()
+    .toLocaleLowerCase('tr-TR')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/ı/g, 'i')
+    .replace(/ş/g, 's')
+    .replace(/ğ/g, 'g')
+    .replace(/ü/g, 'u')
+    .replace(/ö/g, 'o')
+    .replace(/ç/g, 'c');
+}
+
+const DURUM_CANONICAL_BY_KEY: Record<string, string> = Object.fromEntries(
+  Object.values(DURUM_CANONICAL).map((label) => [normalizeDurumKey(label), label])
+);
+
 export function normalizeDurum(value: string | null | undefined): string | null {
   if (!value) return null;
-  return DURUM_CANONICAL[String(value).trim()] ?? String(value).trim();
+  const trimmed = String(value).trim();
+  if (!trimmed) return null;
+  return DURUM_CANONICAL[trimmed] ?? DURUM_CANONICAL_BY_KEY[normalizeDurumKey(trimmed)] ?? null;
 }
 
 export function presentDurum(value: string | null | undefined): string | null {
   const v = normalizeDurum(value);
   if (!v) return null;
-  if (v === 'Devam Ediyor') return 'Devam ediyor';
+  if (v === 'Devam Ediyor') return 'Devam Ediyor';
   if (v === 'İhtiyaç Duyulmadı') return 'İhtiyaç duyulmadı';
   if (v === 'Bekleniyor') return 'Bekleniyor';
   return v;

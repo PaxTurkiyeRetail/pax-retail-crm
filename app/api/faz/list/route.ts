@@ -1,12 +1,23 @@
 import { NextResponse } from 'next/server';
-import { createSupabaseAdminClient } from '@/lib/supabase/admin';
+import { createPgAdminClient } from '@/lib/pg/admin';
 import { requireAllowedUserOrThrow } from '@/lib/authz';
+import { listPartnerPhaseOptions } from '@/lib/system-parameters';
 
-export async function GET() {
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
+export async function GET(req: Request) {
   try {
     await requireAllowedUserOrThrow();
-    const supabase = createSupabaseAdminClient();
-    const { data, error } = await supabase
+    const url = new URL(req.url);
+    const type = String(url.searchParams.get('type') ?? '').trim();
+    if (type === 'business-partner') {
+      const rows = await listPartnerPhaseOptions();
+      return NextResponse.json({ fazlar: rows ?? [] });
+    }
+
+    const pgClient = createPgAdminClient();
+    const { data, error } = await pgClient
       .from('faz_tanimlari')
       .select('faz_no, asama_adi')
       .order('faz_no', { ascending: true });

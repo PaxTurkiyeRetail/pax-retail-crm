@@ -1,2 +1,5 @@
 import { redirect } from 'next/navigation';
-export default function Page() { redirect('/requests#dashboard'); }
+
+export default function RequestsDisabledPage() {
+  redirect('/crm');
+}

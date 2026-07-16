@@ -1,8 +1,12 @@
 import { NextResponse } from 'next/server';
 import { requireCrmAccessOrThrow, isAdminLike } from '@/lib/authz';
-import { createSupabaseAdminClient } from '@/lib/supabase/admin';
+import { createPgAdminClient } from '@/lib/pg/admin';
 import { getKunyeStatus, mapKunyeDbToUi } from '@/lib/kunye';
 import { appendLastStayedPhase } from '@/lib/crm-phase-history';
+import { isReportOnlyCustomer } from '@/lib/report-only-customers';
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export async function GET(request: Request) {
   try {
@@ -11,7 +15,7 @@ export async function GET(request: Request) {
     const musteriId = String(url.searchParams.get('id') ?? url.searchParams.get('musteriId') ?? '').trim();
     if (!musteriId) return NextResponse.json({ message: 'musteriId gerekli' }, { status: 400 });
 
-    const admin = createSupabaseAdminClient();
+    const admin = createPgAdminClient();
     const { data: musteri, error } = await admin
       .from('musteriler')
       .select('id,musteri,sektor,entegrasyon_tipi,satis_olasiligi,sorumlu')
@@ -20,14 +24,13 @@ export async function GET(request: Request) {
 
     if (error) return NextResponse.json({ message: error.message }, { status: 500 });
     if (!musteri) return NextResponse.json({ message: 'Müşteri bulunamadı.' }, { status: 404 });
-
     const { data: phaseView } = await admin
       .from('vw_crm_musteriler')
       .select('musteri_id,aktif_faz_no,aktif_faz_adi')
       .eq('musteri_id', musteriId)
       .maybeSingle();
 
-    const { data: kunye, error: kunyeError } = await admin.from('musteri_kunye').select('*').eq('musteri_id', musteriId).maybeSingle();
+    const { data: kunye, error: kunyeError } = await admin.from('v_musteri_kunye_status').select('*').eq('musteri_id', musteriId).maybeSingle();
     if (kunyeError && !/relation .* does not exist/i.test(kunyeError.message)) {
       return NextResponse.json({ message: kunyeError.message }, { status: 500 });
     }
@@ -43,7 +46,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       musteri: enrichedCustomer,
       kunye: mappedKunye,
-      kunyeStatus: getKunyeStatus({ ...mappedKunye, firma_adi: musteri.musteri, has_kunye_record: Boolean(mappedKunye) })
+      kunyeStatus: getKunyeStatus({ ...mappedKunye, ...(kunye ?? {}), firma_adi: musteri.musteri, has_kunye_record: Boolean(mappedKunye) })
     });
   } catch (e: any) {
     return NextResponse.json({ message: 'Yetkisiz' }, { status: e?.status || 401 });

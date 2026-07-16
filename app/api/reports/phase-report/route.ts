@@ -1,10 +1,13 @@
 import { NextResponse } from 'next/server';
 import { requireReportsAccessOrThrow } from '@/lib/authz';
-import { createSupabaseAdminClient } from '@/lib/supabase/admin';
+import { createPgAdminClient } from '@/lib/pg/admin';
 import { getKunyeStatus, mapKunyeDbToUi } from '@/lib/kunye';
-import { isAdminLike } from '@/lib/roles';
+import { fetchAllByCustomerIds, fetchAllRows } from '@/lib/reporting';
+import { isReportOnlyCustomer } from '@/lib/report-only-customers';
 
-// Faz grubu tanımları — customer-phase.ts ile tutarlı
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export type MacroGroup = 'Fazsız' | 'Fırsat' | 'İlk Temas' | 'Business' | 'Operasyon' | 'Yayılım';
 
 const MACRO_ORDER: MacroGroup[] = ['Fırsat', 'İlk Temas', 'Business', 'Operasyon', 'Yayılım', 'Fazsız'];
@@ -40,36 +43,30 @@ export type PhaseRow = {
 export type PhaseReportPayload = {
   sellerOptions: string[];
   selectedSeller: string;
-  // tüm satırlar (filtrelenmiş)
   rows: PhaseRow[];
-  // macro gruba göre özet sayılar
   groupSummary: Array<{ group: MacroGroup; total: number; withPhase: number; withoutPhase: number }>;
-  // her macro grup içinde faz numarası bazlı dağılım
   phaseBreakdown: Array<{ group: MacroGroup; faz_no: number | null; faz_adi: string | null; count: number }>;
   totals: { total: number; withPhase: number; withoutPhase: number; phaseCoveragePct: number };
 };
 
 export async function GET(request: Request) {
   try {
-    const me = await requireReportsAccessOrThrow();
-    const admin = createSupabaseAdminClient();
+    await requireReportsAccessOrThrow();
+    const admin = createPgAdminClient();
     const url = new URL(request.url);
 
     const selectedSeller = String(url.searchParams.get('seller') ?? '').trim();
     const filterGroup = String(url.searchParams.get('group') ?? '').trim() as MacroGroup | '';
-    const myName = String(me.full_name ?? '').trim();
-    const adminLike = isAdminLike(me.role);
 
-    // Tüm müşterileri çek
-    const { data: customers, error } = await admin
-      .from('vw_crm_musteriler')
-      .select('musteri_id,musteri,sorumlu,aktif_faz_no,aktif_faz_adi,sektor,entegrasyon_tipi')
-      .order('musteri', { ascending: true })
-      .limit(5000);
+    const customers = await fetchAllRows<any>((from, to) => {
+      return admin
+        .from('vw_crm_musteriler')
+        .select('musteri_id,musteri,sorumlu,aktif_faz_no,aktif_faz_adi,sektor,entegrasyon_tipi')
+        .order('musteri', { ascending: true })
+        .range(from, to);
+    });
 
-    if (error) return NextResponse.json({ message: error.message }, { status: 500 });
-
-    const allRows = (customers ?? []).map((row: any) => ({
+    const allRows = (customers ?? []).filter((row: any) => !isReportOnlyCustomer(row)).map((row: any) => ({
       musteri_id: String(row.musteri_id ?? '').trim(),
       musteri: String(row.musteri ?? '').trim() || '-',
       sorumlu: String(row.sorumlu ?? '').trim() || '-',
@@ -79,32 +76,30 @@ export async function GET(request: Request) {
       entegrasyon_tipi: String(row.entegrasyon_tipi ?? '').trim() || '-',
     }));
 
-    const sellerOptions = uniqueSorted(allRows.map((r) => r.sorumlu));
-    const effectiveSeller = adminLike
-      ? selectedSeller || (sellerOptions.includes(myName) ? myName : sellerOptions[0] ?? '')
-      : myName;
+    const sellerOptions = ['Tüm Satıcılar', ...uniqueSorted(allRows.map((r) => r.sorumlu))];
+    const effectiveSeller = selectedSeller && selectedSeller !== 'Tüm Satıcılar' ? selectedSeller : '';
 
-    // Satıcıya göre filtrele
     let filtered = effectiveSeller ? allRows.filter((r) => r.sorumlu === effectiveSeller) : allRows;
 
-    // Künye durumlarını çek
     const ids = filtered.map((r) => r.musteri_id).filter(Boolean);
     const kunyeMap = new Map<string, any>();
     if (ids.length > 0) {
-      const { data: kunyeler } = await admin
-        .from('musteri_kunye')
-        .select('musteri_id,magaza_sayisi,franchise_sayisi,toplam_pos_adedi,pos_modeli,erp,bankalar,pos_mulkiyet,pos_mulkiyet_bankalari,sabit_kasa_yazilimi,saha_hizmeti_firmasi')
-        .in('musteri_id', ids);
-      for (const row of kunyeler ?? []) {
+      const kunyeler = await fetchAllByCustomerIds<any>(
+        admin,
+        'v_musteri_kunye_status',
+        '*',
+        ids,
+      );
+      for (const row of kunyeler) {
         const key = String((row as any).musteri_id ?? '').trim();
         if (key) kunyeMap.set(key, row);
       }
     }
 
-    // Enrich — macro grup ve künye ekle
     let enriched: PhaseRow[] = filtered.map((row) => {
-      const kunye = mapKunyeDbToUi(kunyeMap.get(row.musteri_id) ?? null);
-      const kunyeStatus = getKunyeStatus({ ...kunye, firma_adi: row.musteri, has_kunye_record: Boolean(kunye) });
+      const rawKunye = kunyeMap.get(row.musteri_id) ?? null;
+      const kunye = mapKunyeDbToUi(rawKunye);
+      const kunyeStatus = getKunyeStatus({ ...kunye, ...(rawKunye ?? {}), firma_adi: row.musteri, has_kunye_record: Boolean(kunye) });
       return {
         ...row,
         macro_group: macroGroup(row.aktif_faz_no),
@@ -112,12 +107,10 @@ export async function GET(request: Request) {
       };
     });
 
-    // Grup filtresi (isteğe bağlı)
     if (filterGroup && MACRO_ORDER.includes(filterGroup as MacroGroup)) {
       enriched = enriched.filter((r) => r.macro_group === filterGroup);
     }
 
-    // Grup özeti
     const groupSummary = MACRO_ORDER.map((group) => {
       const groupRows = enriched.filter((r) => r.macro_group === group);
       return {
@@ -128,7 +121,6 @@ export async function GET(request: Request) {
       };
     });
 
-    // Faz numarası bazlı kırılım (her macro grup içinde)
     const phaseBreakdownMap = new Map<string, number>();
     for (const row of enriched) {
       const key = `${row.macro_group}||${row.aktif_faz_no ?? 'null'}||${row.aktif_faz_adi ?? ''}`;
@@ -169,6 +161,6 @@ export async function GET(request: Request) {
       },
     } satisfies PhaseReportPayload);
   } catch (err: any) {
-    return NextResponse.json({ message: 'Yetkisiz' }, { status: err?.status || 401 });
+    return NextResponse.json({ message: err?.message || 'Yetkisiz' }, { status: err?.status || 401 });
   }
 }

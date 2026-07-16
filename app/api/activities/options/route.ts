@@ -1,7 +1,11 @@
 import { NextResponse } from 'next/server';
 import { requireAllowedUserOrThrow } from '@/lib/authz';
-import { createSupabaseAdminClient } from '@/lib/supabase/admin';
+import { createPgAdminClient } from '@/lib/pg/admin';
 import { presentDurum } from '@/app/api/activities/_helpers';
+import { BUSINESS_PARTNER_RESPONSIBLE } from '@/lib/report-only-customers';
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 function uniqueSorted(values: Array<string | null | undefined>) {
   return Array.from(new Set(values.map((item) => String(item ?? '').trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'tr'));
@@ -10,7 +14,7 @@ function uniqueSorted(values: Array<string | null | undefined>) {
 export async function GET() {
   try {
     await requireAllowedUserOrThrow();
-    const admin = createSupabaseAdminClient();
+    const admin = createPgAdminClient();
 
     const [{ data: events }, { data: customers }, { data: users }] = await Promise.all([
       admin
@@ -20,7 +24,7 @@ export async function GET() {
         .limit(1500),
       admin
         .from('musteriler')
-        .select('sorumlu')
+        .select('sorumlu,sektor')
         .limit(1500),
       admin
         .from('allowed_users')
@@ -37,7 +41,7 @@ export async function GET() {
         ...(events ?? []).flatMap((row: any) => [row.owner, row.created_by]),
         ...(users ?? []).map((row: any) => row.full_name),
       ]),
-      responsibleOptions: uniqueSorted((customers ?? []).map((row: any) => row.sorumlu)),
+      responsibleOptions: uniqueSorted([...(customers ?? []).map((row: any) => row.sorumlu), BUSINESS_PARTNER_RESPONSIBLE]),
     });
   } catch (e: any) {
     return NextResponse.json({ message: 'Yetkisiz' }, { status: e?.status || 401 });

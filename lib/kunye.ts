@@ -61,9 +61,9 @@ export function normalizeDelimitedList(value: unknown): string[] | null {
 }
 
 const RANGE_VALUES = ['Kullanılmıyor', 'Yok', '1-25', '26-200', '201-500', '500+'] as const;
-const POS_MARKASI_OPTIONS = ['ÖKC', 'Ingenico', 'Verifone', 'PAX', 'Pavo', 'Hugin', 'Sunmi', 'Diğer'] as const;
-const KASAPOS_OPTIONS = ['Toshiba', 'NCR', 'Encore', 'Enpos', 'Logo', 'Nebim', 'Diğer'] as const;
-const BILGISAYAR_MARKA_OPTIONS = ['HP', 'Dell', 'Lenovo', 'Asus', 'Casper', 'Apple', 'Diğer'] as const;
+const POS_MARKASI_OPTIONS = ['Ingenico', 'Verifone', 'PAX', 'Pavo', 'Hugin', 'Sunmi', 'Profilo', 'Beko', 'Vera', 'Inpos', 'Diğer'] as const;
+const KASAPOS_OPTIONS = ['Toshiba', 'Echopos', 'NCR', 'Encore', 'Enpos', 'Logo', 'Nebim', 'Posback', 'Smartpos', 'Barsoft', 'Protel', 'Avion', 'Inhouse', 'Denpos', 'Diğer'] as const;
+const BILGISAYAR_MARKA_OPTIONS = ['HP', 'Posback', 'Echopos', 'Toshiba', 'Enpos', 'NCR', 'Encore', 'D&N', 'OEM', 'Diğer'] as const;
 const ALIM_YILI_OPTIONS = ['1 yıldan az', '1-3 yıl', '3-5 yıl', '5+ yıl'] as const;
 const MEMNUNIYET_OPTIONS = ['Memnun', 'Orta', 'Memnun Değil'] as const;
 
@@ -146,13 +146,16 @@ function normalizePosMarkasi(value: unknown) {
 
   const normalized = raw.toLocaleLowerCase('tr-TR');
 
-  if (normalized.includes('ökc') || normalized.includes('okc')) return 'ÖKC';
   if (normalized.includes('ingenico')) return 'Ingenico';
   if (normalized.includes('verifone')) return 'Verifone';
   if (normalized.includes('pax')) return 'PAX';
   if (normalized.includes('pavo')) return 'Pavo';
   if (normalized.includes('hugin')) return 'Hugin';
   if (normalized.includes('sunmi')) return 'Sunmi';
+  if (normalized.includes('profilo')) return 'Profilo';
+  if (normalized.includes('beko')) return 'Beko';
+  if (normalized.includes('vera')) return 'Vera';
+  if (normalized.includes('inpos')) return 'Inpos';
 
   const exact = normalizeSelectValue(raw, POS_MARKASI_OPTIONS);
   if (exact) return exact;
@@ -167,11 +170,19 @@ function normalizeKasaposFirmasi(value: unknown) {
   const normalized = raw.toLocaleLowerCase('tr-TR');
 
   if (normalized.includes('toshiba')) return 'Toshiba';
+  if (normalized.includes('echopos') || normalized.includes('echo pos')) return 'Echopos';
   if (normalized.includes('ncr')) return 'NCR';
   if (normalized.includes('encore')) return 'Encore';
   if (normalized.includes('enpos')) return 'Enpos';
   if (normalized.includes('logo')) return 'Logo';
   if (normalized.includes('nebim')) return 'Nebim';
+  if (normalized.includes('posback')) return 'Posback';
+  if (normalized.includes('smartpos')) return 'Smartpos';
+  if (normalized.includes('barsoft')) return 'Barsoft';
+  if (normalized.includes('protel')) return 'Protel';
+  if (normalized.includes('avion')) return 'Avion';
+  if (normalized.includes('inhouse')) return 'Inhouse';
+  if (normalized.includes('denpos')) return 'Denpos';
 
   const exact = normalizeSelectValue(raw, KASAPOS_OPTIONS);
   if (exact) return exact;
@@ -264,9 +275,12 @@ export function normalizeKunyePayload(input: Record<string, unknown>): KunyePayl
     risk: trimOrNull(input.risk),
     entegrasyon_yapisi: trimOrNull(input.entegrasyon_yapisi),
     account: trimOrNull(input.account),
-    problem_1: trimOrNull(input.problem_1),
-    problem_2: trimOrNull(input.problem_2),
-    problem_3: trimOrNull(input.problem_3),
+    problem_1:
+      trimOrNull(input.genel_memnuniyet) && trimOrNull(input.genel_memnuniyet) !== 'Memnun'
+        ? trimOrNull(input.problem_1)
+        : null,
+    problem_2: null,
+    problem_3: null,
     degisim_nedeni: trimOrNull(input.degisim_nedeni),
   };
 }
@@ -408,9 +422,12 @@ export function mapKunyeUiToDb(payload: KunyePayload): Record<string, any> {
     risk: nullableText(payload.risk),
     entegrasyon_yapisi: nullableText(payload.entegrasyon_yapisi),
     account: nullableText(payload.account),
-    problem_1: nullableText(payload.problem_1),
-    problem_2: nullableText(payload.problem_2),
-    problem_3: nullableText(payload.problem_3),
+    problem_1:
+      nullableText(payload.genel_memnuniyet) && nullableText(payload.genel_memnuniyet) !== 'Memnun'
+        ? nullableText(payload.problem_1)
+        : null,
+    problem_2: null,
+    problem_3: null,
     degisim_nedeni: nullableText(payload.degisim_nedeni),
   };
 }

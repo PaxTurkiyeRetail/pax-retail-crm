@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { createPgAdminClient } from "@/lib/pg/admin";
 import { requireCrmAccessOrThrow } from "@/lib/authz";
-import { isAdminLike } from "@/lib/roles";
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 type Body = {
   musteriId: string;
@@ -20,32 +21,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Eksik alan" }, { status: 400 });
     }
 
-    const musteriId = body.musteriId;
-    const supabaseUser = await createSupabaseServerClient();
-
-    if (!isAdminLike(me.role)) {
-      const { data: card, error: cardErr } = await supabaseUser
-        .from("vw_crm_musteriler")
-        .select("musteri_id, sorumlu")
-        .eq("musteri_id", musteriId)
-        .maybeSingle();
-
-      if (cardErr) return NextResponse.json({ error: cardErr.message }, { status: 500 });
-      if (!card) return NextResponse.json({ error: "Kayıt bulunamadı" }, { status: 404 });
-
-      const myName = (me.full_name ?? "").trim();
-      if (card.sorumlu !== myName) return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
-    }
-
-    const admin = createSupabaseAdminClient();
+    const admin = createPgAdminClient();
+    const actor = String(me.full_name ?? me.email ?? "").trim() || null;
 
     const { error } = await admin.from("pipeline_eventleri").insert({
-      musteri_id: musteriId,
+      musteri_id: body.musteriId,
       faz_no: body.fazNo,
       iteration_no: 1,
       event_type: body.eventType,
       notlar: body.notlar ?? null,
       owner: me.email,
+      created_by: actor,
+      created_by_user_id: me.id,
+      created_by_email: me.email,
     });
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });

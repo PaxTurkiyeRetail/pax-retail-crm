@@ -1,14 +1,17 @@
 import { NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
 import { requireAllowedUserOrThrow } from '@/lib/authz';
-import { createSupabaseAdminClient } from '@/lib/supabase/admin';
+import { createPgAdminClient } from '@/lib/pg/admin';
 import { getAllowedUserNameForRequests } from '@/lib/request-users';
 import { canManageRequests } from '@/lib/roles';
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export async function POST(req: Request) {
   try {
     const user = await requireAllowedUserOrThrow();
-    const sb = createSupabaseAdminClient();
+    const sb = createPgAdminClient();
     const body = await req.json();
 
     const { title, description, category_id, priority, assignee_id: rawAssigneeId, due_at, tags } = body;

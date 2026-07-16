@@ -1,8 +1,11 @@
 import { NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
-import { requireAdminOrThrow } from '@/lib/authz';
-import { createSupabaseAdminClient } from '@/lib/supabase/admin';
+import { requireAllowedUserOrThrow } from '@/lib/authz';
+import { createPgAdminClient } from '@/lib/pg/admin';
 import { normalizeQuoteSpecs } from '@/lib/quotes/catalog';
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 type Body = {
   id?: string;
@@ -23,7 +26,7 @@ type Body = {
 
 export async function POST(request: Request) {
   try {
-    await requireAdminOrThrow();
+    await requireAllowedUserOrThrow();
     const body = (await request.json().catch(() => ({}))) as Body;
     const code = String(body.code ?? '').trim().toUpperCase();
     const name = String(body.name ?? '').trim();
@@ -46,7 +49,7 @@ export async function POST(request: Request) {
       is_active: body.is_active !== false,
     };
 
-    const admin = createSupabaseAdminClient();
+    const admin = createPgAdminClient();
     let query = admin.from('quote_products');
     if (body.id) {
       const { data, error } = await query.update(payload).eq('id', body.id).select('*').single();

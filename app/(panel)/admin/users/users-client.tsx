@@ -10,7 +10,46 @@ type AllowedUser = {
   is_active: boolean;
   password?: string;
   password_confirm?: string;
+  weekly_target_sales_physical: number;
+  weekly_target_sales_online: number;
+  weekly_target_sales_phone: number;
+  weekly_target_sales_email: number;
+  weekly_target_technical_physical: number;
+  weekly_target_technical_online: number;
+  weekly_target_unique_customers: number;
+  weekly_target_total_activities: number;
 };
+
+const WEEKLY_TARGET_FIELDS: Array<{ key: keyof Pick<AllowedUser, 'weekly_target_sales_physical' | 'weekly_target_sales_online' | 'weekly_target_sales_phone' | 'weekly_target_sales_email' | 'weekly_target_technical_physical' | 'weekly_target_technical_online' | 'weekly_target_total_activities' | 'weekly_target_unique_customers'>; label: string; short: string }> = [
+  { key: 'weekly_target_sales_physical', label: 'Haftalık Satış Fiziki Hedefi', short: 'Satış Fiziki' },
+  { key: 'weekly_target_sales_online', label: 'Haftalık Satış Online Hedefi', short: 'Satış Online' },
+  { key: 'weekly_target_sales_phone', label: 'Haftalık Satış Telefon Hedefi', short: 'Satış Telefon' },
+  { key: 'weekly_target_sales_email', label: 'Haftalık Satış E-posta Hedefi', short: 'Satış E-posta' },
+  { key: 'weekly_target_technical_physical', label: 'Haftalık Teknik Fiziki Hedefi', short: 'Teknik Fiziki' },
+  { key: 'weekly_target_technical_online', label: 'Haftalık Teknik Online Hedefi', short: 'Teknik Online' },
+  { key: 'weekly_target_total_activities', label: 'Haftalık Toplam Aktivite Hedefi', short: 'Toplam Aktivite' },
+  { key: 'weekly_target_unique_customers', label: 'Haftalık Tekil Firma Hedefi', short: 'Tekil Firma' },
+];
+
+function normalizeWeeklyTargets(user: AllowedUser): AllowedUser {
+  const next = { ...user };
+  for (const field of WEEKLY_TARGET_FIELDS) {
+    next[field.key] = Number(next[field.key] ?? 0) || 0;
+  }
+  return next;
+}
+
+function targetPayload(user: AllowedUser) {
+  return Object.fromEntries(WEEKLY_TARGET_FIELDS.map((field) => [field.key, Number(user[field.key] ?? 0) || 0]));
+}
+
+function targetSummary(user: AllowedUser) {
+  const filled = WEEKLY_TARGET_FIELDS.filter((field) => Number(user[field.key] ?? 0) > 0);
+  if (filled.length === 0) return 'Hedef girilmedi';
+  const total = WEEKLY_TARGET_FIELDS.reduce((sum, field) => sum + (Number(user[field.key] ?? 0) || 0), 0);
+  return `${filled.length} hedef / toplam ${total}`;
+}
+
 
 const ROLE_OPTIONS: AllowedUser['role'][] = ['super_admin', 'admin', 'account_manager', 'itsm'];
 
@@ -32,6 +71,7 @@ export default function UsersClient() {
   const [password, setPassword] = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
   const [busy, setBusy] = useState(false);
+  const [targetModalEmail, setTargetModalEmail] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
@@ -43,7 +83,7 @@ export default function UsersClient() {
         throw new Error(j?.message || 'Liste alınamadı');
       }
       const j = await r.json();
-      setRows((j.users as AllowedUser[]).map((u) => ({ ...u, password: '', password_confirm: '' })));
+      setRows((j.users as AllowedUser[]).map((u) => normalizeWeeklyTargets({ ...u, password: '', password_confirm: '' })));
     } catch (e: any) {
       setErr(e.message || 'Hata');
     } finally {
@@ -115,6 +155,7 @@ export default function UsersClient() {
       full_name: u.full_name ?? '',
       role: u.role,
       password: u.password?.trim() ? u.password : undefined,
+      ...targetPayload(u),
     });
   }
 
@@ -188,6 +229,7 @@ export default function UsersClient() {
                   <th>Rol</th>
                   <th>Yeni Şifre</th>
                   <th>Şifre Tekrar</th>
+                  <th>Haftalık Hedefler</th>
                   <th>Aktif</th>
                   <th></th>
                 </tr>
@@ -200,6 +242,16 @@ export default function UsersClient() {
                     <td><select className="select" value={u.role} onChange={(e) => setRows((s) => s.map((x) => x.email === u.email ? { ...x, role: e.target.value as AllowedUser['role'] } : x))}>{ROLE_OPTIONS.map((r) => <option key={r} value={r}>{roleLabel(r)}</option>)}</select></td>
                     <td><input className="input" type="password" placeholder="Boşsa değişmez" value={u.password ?? ''} onChange={(e) => setRows((s) => s.map((x) => x.email === u.email ? { ...x, password: e.target.value } : x))} /></td>
                     <td><input className="input" type="password" placeholder="Tekrar" value={u.password_confirm ?? ''} onChange={(e) => setRows((s) => s.map((x) => x.email === u.email ? { ...x, password_confirm: e.target.value } : x))} /></td>
+                    <td>
+                      <button
+                        type="button"
+                        className="secondary weekly-target-button"
+                        onClick={() => setTargetModalEmail(u.email)}
+                      >
+                        Hedefleri Düzenle
+                        <span>{targetSummary(u)}</span>
+                      </button>
+                    </td>
                     <td>{u.is_active ? 'true' : 'false'}</td>
                     <td>
                       <div className="actions">
@@ -210,12 +262,62 @@ export default function UsersClient() {
                     </td>
                   </tr>
                 ))}
-                {rows.length === 0 ? <tr><td colSpan={7} style={{ padding: 16, color: '#64748b' }}>Kayıt yok.</td></tr> : null}
+                {rows.length === 0 ? <tr><td colSpan={8} style={{ padding: 16, color: '#64748b' }}>Kayıt yok.</td></tr> : null}
               </tbody>
             </table>
           </div>
         )}
       </section>
+
+      {targetModalEmail ? (() => {
+        const modalUser = rows.find((row) => row.email === targetModalEmail);
+        if (!modalUser) return null;
+
+        return (
+          <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="weekly-target-modal-title">
+            <div className="modal-card weekly-target-modal">
+              <div className="modal-head">
+                <div>
+                  <div id="weekly-target-modal-title" className="modal-title">Haftalık Hedefler</div>
+                  <div className="modal-subtitle">{modalUser.full_name || modalUser.email}</div>
+                </div>
+                <button type="button" className="modal-close" onClick={() => setTargetModalEmail(null)} aria-label="Kapat">×</button>
+              </div>
+
+              <div className="weekly-target-grid">
+                {WEEKLY_TARGET_FIELDS.map((field) => (
+                  <label key={`${modalUser.email}-${field.key}-modal`} className="field">
+                    <span className="label">{field.short}</span>
+                    <input
+                      className="input"
+                      type="number"
+                      min={0}
+                      step={1}
+                      value={Number(modalUser[field.key] ?? 0)}
+                      onChange={(e) => setRows((s) => s.map((x) => x.email === modalUser.email ? { ...x, [field.key]: Math.max(0, Number(e.target.value) || 0) } as AllowedUser : x))}
+                    />
+                  </label>
+                ))}
+              </div>
+
+              <div className="modal-actions">
+                <button type="button" className="secondary" onClick={() => setTargetModalEmail(null)}>Vazgeç</button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  className="primary"
+                  onClick={async () => {
+                    await saveRow(modalUser);
+                    setTargetModalEmail(null);
+                  }}
+                >
+                  {busy ? 'Kaydediliyor...' : 'Hedefleri Kaydet'}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })() : null}
     </div>
   );
 }

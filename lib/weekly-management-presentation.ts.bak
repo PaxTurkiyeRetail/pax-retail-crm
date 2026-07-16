@@ -1,0 +1,651 @@
+import { fetchAllByCustomerIds, fetchAllRows } from '@/lib/reporting';
+import { getCustomerPhaseMeta } from '@/lib/customer-phase';
+import { getKunyeStatus, mapKunyeDbToUi } from '@/lib/kunye';
+import { isMissingRelationError } from '@/lib/quotes/service';
+
+function uniqueSorted(values: Array<string | null | undefined>) {
+  return Array.from(new Set(values.map((item) => String(item ?? '').trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'tr'));
+}
+
+function startOfWeek(date: Date) {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + diff);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function endOfWeek(date: Date) {
+  const d = startOfWeek(date);
+  d.setDate(d.getDate() + 6);
+  d.setHours(23, 59, 59, 999);
+  return d;
+}
+
+function toDateInput(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function parseNumericValue(value: unknown): number | null {
+  if (value == null) return null;
+  const raw = String(value).trim();
+  if (!raw) return null;
+  const normalized = raw.replace(/\s+/g, '').replace(',', '.');
+  if (!/^\d+(\.\d+)?$/.test(normalized)) return null;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function summarizeMap(map: Map<string, number>) {
+  return Array.from(map.entries())
+    .map(([label, value]) => ({ label, value }))
+    .sort((a, b) => b.value - a.value || a.label.localeCompare(b.label, 'tr'));
+}
+
+function cleanText(value: unknown, fallback = '-') {
+  const text = String(value ?? '').replace(/\s+/g, ' ').trim();
+  return text || fallback;
+}
+
+function normalizeDistributionLabel(value: unknown) {
+  const text = String(value ?? '').replace(/\s+/g, ' ').trim();
+  if (!text || text === '-' || /^yok$/i.test(text) || /^belirsiz$/i.test(text)) return '';
+  return text;
+}
+
+function pickDistributionLabel(...values: unknown[]) {
+  for (const value of values) {
+    const normalized = normalizeDistributionLabel(value);
+    if (normalized) return normalized;
+  }
+  return '';
+}
+
+async function loadKunyeRows(admin: any, customerIds: string[]) {
+  if (!customerIds.length) return [];
+
+  const sources = ['v_musteri_kunye_status', 'v_musteri_kunye_form', 'musteri_kunye_v2', 'musteri_kunye'];
+  const merged = new Map<string, any>();
+
+  for (const source of sources) {
+    try {
+      const rows = await fetchAllByCustomerIds<any>(admin, source, '*', customerIds);
+      for (const row of rows) {
+        const key = String((row as any)?.musteri_id ?? '').trim();
+        if (!key) continue;
+        merged.set(key, { ...(merged.get(key) ?? {}), ...(row ?? {}) });
+      }
+    } catch (error) {
+      if (!isMissingRelationError(error)) throw error;
+    }
+  }
+
+  return Array.from(merged.values());
+}
+
+function phaseBucket(phaseNo: number | null | undefined) {
+  const meta = getCustomerPhaseMeta(phaseNo ?? null);
+  const phase = phaseNo == null ? null : Number(phaseNo);
+  const isCompleted = phase != null && phase >= 24;
+  const isActive = phase != null && phase < 24;
+  return {
+    phase,
+    group: meta.groupLabel,
+    isCompleted,
+    isActive,
+  };
+}
+
+function normalizeForSearch(value: unknown) {
+  return String(value ?? '').toLocaleLowerCase('tr').replace(/\s+/g, ' ').trim();
+}
+
+function includesAny(text: string, tokens: string[]) {
+  return tokens.some((token) => text.includes(token));
+}
+
+function detectCategoryFromText(value: string) {
+  const text = normalizeForSearch(value);
+  if (includesAny(text, ['tamam', 'sipariş', 'teslim', 'yaygınlaştır', 'kazan', 'kapandı', 'kapan', 'devreye'])) return 'completed';
+  if (includesAny(text, ['blokaj', 'kritik', 'risk', 'bekli', 'problem', 'muafiyet'])) return 'risk';
+  if (includesAny(text, ['poc', 'pilot', 'test'])) return 'pilot';
+  return 'progress';
+}
+
+function normalizeActivityStatus(value: unknown) {
+  const text = normalizeForSearch(value);
+  if (!text) return '';
+  if (includesAny(text, ['tamamlandı', 'tamamlanan'])) return 'completed';
+  if (includesAny(text, ['devam ediyor', 'devam edıyor', 'devam'])) return 'active';
+  if (includesAny(text, ['ihtiyaç duyulmadı', 'ihtiyac duyulmadi'])) return 'cancelled';
+  if (includesAny(text, ['başlamadı', 'baslamadi'])) return 'not_started';
+  return text;
+}
+
+function applyActivityPhaseToCustomer(customer: PresentationCustomer, activity: ActivityRow | null | undefined): PresentationCustomer {
+  if (!activity) return customer;
+  const phaseNo = activity.phase_no == null ? customer.phase_no : activity.phase_no;
+  const phaseMeta = getCustomerPhaseMeta(phaseNo ?? null);
+  return {
+    ...customer,
+    phase_no: phaseNo,
+    phase_name: phaseNo == null ? customer.phase_name : phaseMeta.label,
+    phase_group: phaseMeta.groupLabel,
+  };
+}
+
+function detectSegment(row: Pick<PresentationCustomer, 'kasapos_firmasi' | 'sabit_bilgisayar_markasi' | 'entegrasyon_tipi'>) {
+  const kasapos = normalizeForSearch(row.kasapos_firmasi);
+  const other = normalizeForSearch(`${row.kasapos_firmasi} ${row.sabit_bilgisayar_markasi} ${row.entegrasyon_tipi}`);
+  if (kasapos.includes('nebim')) return 'Nebim';
+  if (kasapos.includes('toshiba')) return 'Toshiba';
+  if (includesAny(other, ['encore', 'enpos', 'logo', 'microsoft dynamics'])) return 'Encore / EnPOS / Logo / Dynamics';
+  return 'Encore / EnPOS / Logo / Dynamics';
+}
+
+function parseActivityType(aksiyon: unknown, eventType: unknown) {
+  const action = cleanText(aksiyon, '').replace(/^AKTIVITE:/i, '').trim();
+  if (action) return action;
+  return cleanText(eventType, 'Diğer');
+}
+
+function normalizeActivityKind(value: unknown) {
+  const text = normalizeForSearch(value);
+  if (!text) return 'other';
+  if (includesAny(text, ['yerinde ziyaret', 'fizik', 'saha ziyareti'])) return 'face';
+  if (includesAny(text, ['online toplant', 'online görüş', 'teams', 'meet', 'uzaktan'])) return 'online';
+  if (includesAny(text, ['teknik ziyaret', 'teknik destek', 'servis'])) return 'technical';
+  return 'other';
+}
+
+function pickUniqueLatest(rows: ActivityRow[]) {
+  const map = new Map<string, ActivityRow>();
+  for (const row of rows) {
+    if (row.customer && !map.has(row.customer)) map.set(row.customer, row);
+  }
+  return Array.from(map.values());
+}
+
+function pickUniqueEarliest(rows: ActivityRow[]) {
+  const map = new Map<string, ActivityRow>();
+  for (const row of rows.slice().reverse()) {
+    if (row.customer && !map.has(row.customer)) map.set(row.customer, row);
+  }
+  return Array.from(map.values());
+}
+
+function toNarrativeItem(row: ActivityRow, note?: string) {
+  return {
+    customer: row.customer,
+    note: cleanText(note ?? row.notes),
+    owner: row.created_by,
+    phase: row.phase,
+    waiting: row.waiting,
+    created_at: row.created_at,
+  };
+}
+
+function sortByPosThenName(a: PresentationCustomer, b: PresentationCustomer) {
+  return (b.pos_count ?? 0) - (a.pos_count ?? 0) || a.customer.localeCompare(b.customer, 'tr');
+}
+
+export type PresentationCustomer = {
+  musteri_id: string;
+  customer: string;
+  owner: string;
+  sector: string;
+  entegrasyon_tipi: string;
+  phase_no: number | null;
+  phase_name: string | null;
+  phase_group: string;
+  kasapos_firmasi: string;
+  sabit_bilgisayar_markasi: string;
+  pos_markasi: string;
+  store_count: number | null;
+  pos_count: number | null;
+  quote_count: number;
+  total_quote_amount: number;
+  kunye_status: 'Var' | 'Eksik' | 'Yok';
+};
+
+export type ActivityRow = {
+  id: string;
+  musteri_id: string;
+  created_at: string;
+  created_by: string;
+  responsible: string;
+  customer: string;
+  sector: string;
+  integration: string;
+  phase: string;
+  phase_no: number | null;
+  waiting: string;
+  status: string;
+  notes: string;
+  activity_type: string;
+  is_blocked: boolean;
+  blocked_note: string;
+};
+
+export type WeeklyManagementPresentationPayload = {
+  filters: {
+    from: string;
+    to: string;
+    ownerOptions: string[];
+    segmentOptions: string[];
+    selectedOwner: string;
+    selectedSegment: string;
+  };
+  summary: {
+    totalAccounts: number;
+    totalPosDevices: number;
+    activeProjects: number;
+    completedAccounts: number;
+    pipelinePosDevices: number;
+    completedPosDevices: number;
+    weeklyActivities: number;
+    activePeople: number;
+    quoteCount: number;
+    quoteAmount: number;
+    kunyeCoveragePct: number;
+  };
+  phaseSummary: Array<{ label: string; totalAccounts: number; totalPos: number }>;
+  eftPosBrandDistribution: Array<{ label: string; value: number }>;
+  kasaposDistribution: Array<{ label: string; value: number }>;
+  topActiveAccounts: PresentationCustomer[];
+  topCompletedAccounts: PresentationCustomer[];
+  pipelineAccounts: PresentationCustomer[];
+  activePhaseAccounts: PresentationCustomer[];
+  completedPhaseAccounts: PresentationCustomer[];
+  weeklyHighlights: Array<{ customer: string; note: string; owner: string; phase: string; waiting: string; created_at: string }>;
+  weeklyNewContacts: Array<{ customer: string; note: string; owner: string; phase: string; waiting: string; created_at: string }>;
+  weeklyRisks: Array<{ customer: string; note: string; owner: string; phase: string; waiting: string; created_at: string }>;
+  weeklyCompleted: Array<{ customer: string; note: string; owner: string; phase: string; waiting: string; created_at: string }>;
+  segmentBoards: Array<{ segment: string; totalAccounts: number; totalPos: number; activeCount: number; completedCount: number; items: PresentationCustomer[] }>;
+  contactReport: {
+    totals: { faceToFace: number; online: number; technical: number; totalActivities: number; uniqueCustomers: number; firstContactCount: number };
+    owners: Array<{ owner: string; faceToFace: number; online: number; technical: number; totalActivities: number; uniqueCustomers: number; firstContactCount: number }>;
+  };
+  narrative: {
+    title: string;
+    dateRangeLabel: string;
+    executiveSummary: string[];
+    segmentSummaries: Array<{ title: string; bullets: string[] }>;
+    riskSummary: string[];
+  };
+  customers: PresentationCustomer[];
+  activities: ActivityRow[];
+};
+
+type BaseCustomerRow = {
+  musteri_id: string | null;
+  musteri: string | null;
+  sorumlu: string | null;
+  aktif_faz_no: number | null;
+  aktif_faz_adi: string | null;
+  sektor: string | null;
+  entegrasyon_tipi: string | null;
+};
+
+export async function buildWeeklyManagementPresentation(admin: any, options?: { from?: string; to?: string; owner?: string; segment?: string }) {
+  const from = String(options?.from ?? '').trim() || toDateInput(startOfWeek(new Date()));
+  const to = String(options?.to ?? '').trim() || toDateInput(endOfWeek(new Date()));
+  const selectedOwner = String(options?.owner ?? '').trim();
+  const selectedSegment = String(options?.segment ?? '').trim();
+
+  const customers = await fetchAllRows<BaseCustomerRow>((rangeFrom, rangeTo) => {
+    return admin
+      .from('vw_crm_musteriler')
+      .select('musteri_id,musteri,sorumlu,aktif_faz_no,aktif_faz_adi,sektor,entegrasyon_tipi')
+      .order('musteri', { ascending: true })
+      .range(rangeFrom, rangeTo);
+  });
+
+  const normalizedCustomers = (customers ?? []).map((row) => ({
+    musteri_id: cleanText(row.musteri_id, ''),
+    customer: cleanText(row.musteri),
+    owner: cleanText(row.sorumlu),
+    phase_no: row.aktif_faz_no == null ? null : Number(row.aktif_faz_no),
+    phase_name: String(row.aktif_faz_adi ?? '').trim() || null,
+    sector: cleanText(row.sektor),
+    entegrasyon_tipi: cleanText(row.entegrasyon_tipi),
+  })).filter((row) => row.musteri_id);
+
+  const customerIds = normalizedCustomers.map((row) => row.musteri_id);
+  const [kunyeRows, quotes, activities, allActivitiesRaw] = await Promise.all([
+    loadKunyeRows(admin, customerIds),
+    customerIds.length
+      ? fetchAllByCustomerIds<any>(admin, 'quotes', 'id,customer_id,status,closed_reason,total_amount,total_device_count,probability', customerIds, undefined, { idColumn: 'customer_id' })
+      : [],
+    fetchAllRows<any>((rangeFrom, rangeTo) => {
+      return admin
+        .from('pipeline_eventleri')
+        .select('id,musteri_id,faz_no,durum,event_type,aksiyon,owner,partner_owner,notlar,created_at,created_by,is_blocked,blocked_note,musteriler(musteri,sorumlu,sektor,entegrasyon_tipi)')
+        .gte('created_at', `${from}T00:00:00`)
+        .lte('created_at', `${to}T23:59:59`)
+        .order('created_at', { ascending: false })
+        .range(rangeFrom, rangeTo);
+    }),
+    customerIds.length
+      ? fetchAllRows<any>((rangeFrom, rangeTo) => {
+        return admin
+          .from('pipeline_eventleri')
+          .select('id,musteri_id,faz_no,durum,event_type,aksiyon,owner,partner_owner,notlar,created_at,created_by,is_blocked,blocked_note,musteriler(musteri,sorumlu,sektor,entegrasyon_tipi)')
+          .order('created_at', { ascending: false })
+          .range(rangeFrom, rangeTo);
+      })
+      : [],
+  ]);
+
+  const kunyeMap = new Map<string, any>();
+  for (const row of kunyeRows) {
+    const key = String((row as any).musteri_id ?? '').trim();
+    if (key) kunyeMap.set(key, row);
+  }
+
+  const quoteMap = new Map<string, { count: number; totalAmount: number }>();
+  for (const row of quotes) {
+    const key = String((row as any).customer_id ?? '').trim();
+    if (!key) continue;
+    const item = quoteMap.get(key) ?? { count: 0, totalAmount: 0 };
+    item.count += 1;
+    item.totalAmount += Number((row as any).total_amount ?? 0) || 0;
+    quoteMap.set(key, item);
+  }
+
+  let presentationCustomers: PresentationCustomer[] = normalizedCustomers.map((row) => {
+    const rawKunye = kunyeMap.get(row.musteri_id) ?? null;
+    const mapped = rawKunye ? mapKunyeDbToUi(rawKunye) : null;
+    const kunyeStatus = getKunyeStatus({ ...(mapped ?? {}), ...(rawKunye ?? {}), firma_adi: row.customer, has_kunye_record: Boolean(rawKunye) });
+    const quoteSummary = quoteMap.get(row.musteri_id) ?? { count: 0, totalAmount: 0 };
+
+    const kasaposFirmasi = pickDistributionLabel(
+      mapped?.kasapos_firmasi,
+      rawKunye?.kasapos_firmasi,
+      rawKunye?.sabit_kasa_yazilimi,
+    );
+
+    const posMarkasi = pickDistributionLabel(
+      mapped?.pos_markasi,
+      rawKunye?.pos_markasi,
+      rawKunye?.pos_modeli,
+    );
+
+    return {
+      musteri_id: row.musteri_id,
+      customer: row.customer,
+      owner: row.owner,
+      sector: row.sector,
+      entegrasyon_tipi: row.entegrasyon_tipi,
+      phase_no: row.phase_no,
+      phase_name: row.phase_name,
+      phase_group: getCustomerPhaseMeta(row.phase_no).groupLabel,
+      kasapos_firmasi: kasaposFirmasi || '-',
+      sabit_bilgisayar_markasi: cleanText(mapped?.sabit_bilgisayar_markasi ?? rawKunye?.sabit_bilgisayar_markasi),
+      pos_markasi: posMarkasi || '-',
+      store_count: parseNumericValue(mapped?.magaza_sayisi ?? rawKunye?.magaza_sayisi),
+      pos_count: parseNumericValue(mapped?.toplam_pos_adedi ?? rawKunye?.toplam_pos_adedi),
+      quote_count: quoteSummary.count,
+      total_quote_amount: quoteSummary.totalAmount,
+      kunye_status: (kunyeStatus.status as 'Var' | 'Eksik' | 'Yok') ?? 'Yok',
+    };
+  });
+
+  const ownerOptions = uniqueSorted(presentationCustomers.map((row) => row.owner));
+  const segmentOptions = uniqueSorted(presentationCustomers.map((row) => detectSegment(row)));
+
+  if (selectedOwner) presentationCustomers = presentationCustomers.filter((row) => row.owner === selectedOwner);
+  if (selectedSegment) presentationCustomers = presentationCustomers.filter((row) => detectSegment(row) === selectedSegment);
+
+  const visibleCustomerSet = new Set(presentationCustomers.map((row) => row.musteri_id));
+  const mapActivityRow = (row: any): ActivityRow => ({
+    id: String(row.id ?? ''),
+    musteri_id: String(row.musteri_id ?? '').trim(),
+    created_at: String(row.created_at ?? ''),
+    created_by: cleanText(row.created_by ?? row.owner),
+    responsible: cleanText(row?.musteriler?.sorumlu),
+    customer: cleanText(row?.musteriler?.musteri),
+    sector: cleanText(row?.musteriler?.sektor),
+    integration: cleanText(row?.musteriler?.entegrasyon_tipi),
+    phase: row.faz_no == null ? 'Fazsız' : `FAZ ${row.faz_no}`,
+    phase_no: row.faz_no == null ? null : Number(row.faz_no),
+    waiting: cleanText(row.partner_owner),
+    status: cleanText(row.durum),
+    notes: cleanText(row.notlar),
+    activity_type: parseActivityType(row.aksiyon, row.event_type),
+    is_blocked: Boolean(row.is_blocked),
+    blocked_note: cleanText(row.blocked_note, ''),
+  });
+  const visibleActivities: ActivityRow[] = (activities ?? [])
+    .filter((row: any) => visibleCustomerSet.has(String(row.musteri_id ?? '').trim()))
+    .map(mapActivityRow);
+  const allActivities: ActivityRow[] = (allActivitiesRaw ?? [])
+    .filter((row: any) => visibleCustomerSet.has(String(row.musteri_id ?? '').trim()))
+    .map(mapActivityRow);
+
+  const weeklyCustomerIds = uniqueSorted(visibleActivities.map((row) => row.musteri_id));
+  const historicalActivities = weeklyCustomerIds.length
+    ? await fetchAllByCustomerIds<any>(admin, 'pipeline_eventleri', 'musteri_id,created_at', weeklyCustomerIds, (query) => query.lt('created_at', `${from}T00:00:00`), { idColumn: 'musteri_id' })
+    : [];
+  const hasPreviousActivity = new Set(historicalActivities.map((row: any) => String(row.musteri_id ?? '').trim()).filter(Boolean));
+
+  const latestActivitiesByCustomer = pickUniqueLatest(visibleActivities);
+  const earliestActivitiesByCustomer = pickUniqueEarliest(visibleActivities);
+  const latestAllActivitiesByCustomer = pickUniqueLatest(allActivities);
+  const weeklyNewContacts = earliestActivitiesByCustomer
+    .filter((row) => !hasPreviousActivity.has(row.musteri_id))
+    .map((row) => toNarrativeItem(row, row.notes || 'İlk kez aktivite girilen müşteri.'))
+    .slice(0, 20);
+  const newContactSet = new Set(weeklyNewContacts.map((row) => row.customer));
+
+  const completedActivities = pickUniqueLatest(
+    visibleActivities.filter((row) => detectCategoryFromText(`${row.status} ${row.notes}`) === 'completed')
+  );
+  const weeklyCompleted = completedActivities
+    .map((row) => toNarrativeItem(row))
+    .slice(0, 20);
+  const completedSet = new Set(weeklyCompleted.map((row) => row.customer));
+
+  const blockedLatest = pickUniqueLatest(visibleActivities.filter((row) => row.is_blocked || Boolean(row.blocked_note)));
+  const fallbackRiskActivities = pickUniqueLatest(
+    visibleActivities.filter((row) => detectCategoryFromText(`${row.status} ${row.notes} ${row.blocked_note}`) === 'risk')
+  );
+  const weeklyRisks = (blockedLatest.length > 0 ? blockedLatest : fallbackRiskActivities)
+    .map((row) => toNarrativeItem(row, row.blocked_note || row.notes))
+    .slice(0, 20);
+  const riskSet = new Set(weeklyRisks.map((row) => row.customer));
+
+  const highlightActivities = pickUniqueLatest(
+    visibleActivities.filter((row) => {
+      if (newContactSet.has(row.customer) || completedSet.has(row.customer) || riskSet.has(row.customer)) return false;
+      const category = detectCategoryFromText(`${row.status} ${row.notes}`);
+      return category === 'progress' || category === 'pilot';
+    })
+  );
+  const weeklyHighlights = (highlightActivities.length > 0 ? highlightActivities : latestActivitiesByCustomer
+    .filter((row) => !newContactSet.has(row.customer) && !completedSet.has(row.customer) && !riskSet.has(row.customer)))
+    .map((row) => toNarrativeItem(row))
+    .slice(0, 20);
+
+  const phaseSummaryMap = new Map<string, { totalAccounts: number; totalPos: number }>();
+  const eftBrandMap = new Map<string, number>();
+  const kasaposMap = new Map<string, number>();
+  let quoteCount = 0;
+  let quoteAmount = 0;
+  let kunyeComplete = 0;
+
+  for (const row of presentationCustomers) {
+    const phase = phaseBucket(row.phase_no);
+    const phaseItem = phaseSummaryMap.get(phase.group) ?? { totalAccounts: 0, totalPos: 0 };
+    phaseItem.totalAccounts += 1;
+    phaseItem.totalPos += row.pos_count ?? 0;
+    phaseSummaryMap.set(phase.group, phaseItem);
+    const eftLabel = normalizeDistributionLabel(row.pos_markasi);
+    const kasaposLabel = normalizeDistributionLabel(row.kasapos_firmasi);
+    if (eftLabel) eftBrandMap.set(eftLabel, (eftBrandMap.get(eftLabel) ?? 0) + 1);
+    if (kasaposLabel) kasaposMap.set(kasaposLabel, (kasaposMap.get(kasaposLabel) ?? 0) + 1);
+    quoteCount += row.quote_count;
+    quoteAmount += row.total_quote_amount;
+    if (row.kunye_status === 'Var') kunyeComplete += 1;
+  }
+
+  const customerIdMap = new Map(presentationCustomers.map((row) => [row.musteri_id, row]));
+  const pipelineAccounts = [...presentationCustomers]
+    .filter((row) => row.kunye_status === 'Var')
+    .sort(sortByPosThenName);
+
+  const activePhaseAccounts = latestAllActivitiesByCustomer
+    .filter((row) => normalizeActivityStatus(row.status) === 'active')
+    .map((activity) => {
+      const customer = customerIdMap.get(activity.musteri_id);
+      return customer ? applyActivityPhaseToCustomer(customer, activity) : null;
+    })
+    .filter((row): row is PresentationCustomer => Boolean(row))
+    .sort(sortByPosThenName);
+
+  const completedPhaseAccounts = latestAllActivitiesByCustomer
+    .filter((row) => normalizeActivityStatus(row.status) === 'completed')
+    .map((activity) => {
+      const customer = customerIdMap.get(activity.musteri_id);
+      return customer ? applyActivityPhaseToCustomer(customer, activity) : null;
+    })
+    .filter((row): row is PresentationCustomer => Boolean(row))
+    .sort(sortByPosThenName);
+
+  const totalPosDevices = pipelineAccounts.reduce((sum, row) => sum + (row.pos_count ?? 0), 0);
+  const activeProjects = activePhaseAccounts.length;
+  const completedAccounts = completedPhaseAccounts.length;
+  const pipelinePosDevices = activePhaseAccounts.reduce((sum, row) => sum + (row.pos_count ?? 0), 0);
+  const completedPosDevices = completedPhaseAccounts.reduce((sum, row) => sum + (row.pos_count ?? 0), 0);
+
+  const topActiveAccounts = activePhaseAccounts.slice(0, 10);
+  const topCompletedAccounts = completedPhaseAccounts.slice(0, 10);
+
+  const customerMap = new Map(presentationCustomers.map((row) => [row.customer, row]));
+  const segmentBoards = ['Nebim', 'Toshiba', 'Encore / EnPOS / Logo / Dynamics'].map((segment) => {
+    const items = latestActivitiesByCustomer
+      .filter((row) => {
+        const customer = customerMap.get(row.customer);
+        return customer ? detectSegment(customer) === segment : false;
+      })
+      .map((row) => customerMap.get(row.customer)!)
+      .sort(sortByPosThenName)
+      .slice(0, 16);
+    return {
+      segment,
+      totalAccounts: items.length,
+      totalPos: items.reduce((sum, row) => sum + (row.pos_count ?? 0), 0),
+      activeCount: items.filter((row) => phaseBucket(row.phase_no).isActive).length,
+      completedCount: items.filter((row) => phaseBucket(row.phase_no).isCompleted).length,
+      items,
+    };
+  });
+
+  const contactActivities = visibleActivities.filter((row) => normalizeActivityKind(row.activity_type) !== 'other');
+  const ownerContactMap = new Map<string, { owner: string; faceToFace: number; online: number; technical: number; totalActivities: number; uniqueCustomers: Set<string>; firstContactCount: Set<string> }>();
+  const firstVisitCustomerIds = new Set(
+    contactActivities
+      .filter((row) => normalizeActivityKind(row.activity_type) === 'face')
+      .filter((row) => !hasPreviousActivity.has(row.musteri_id))
+      .filter((row) => customerIdMap.get(row.musteri_id)?.kunye_status === 'Var')
+      .map((row) => row.musteri_id)
+  );
+  for (const row of contactActivities) {
+    const owner = cleanText(row.created_by || row.responsible, '-');
+    const item = ownerContactMap.get(owner) ?? { owner, faceToFace: 0, online: 0, technical: 0, totalActivities: 0, uniqueCustomers: new Set<string>(), firstContactCount: new Set<string>() };
+    const kind = normalizeActivityKind(row.activity_type);
+    if (kind === 'face') item.faceToFace += 1;
+    if (kind === 'online') item.online += 1;
+    if (kind === 'technical') item.technical += 1;
+    item.totalActivities += 1;
+    item.uniqueCustomers.add(row.customer);
+    if (firstVisitCustomerIds.has(row.musteri_id)) item.firstContactCount.add(row.customer);
+    ownerContactMap.set(owner, item);
+  }
+  const contactReport = {
+    totals: {
+      faceToFace: contactActivities.filter((row) => normalizeActivityKind(row.activity_type) === 'face').length,
+      online: contactActivities.filter((row) => normalizeActivityKind(row.activity_type) === 'online').length,
+      technical: contactActivities.filter((row) => normalizeActivityKind(row.activity_type) === 'technical').length,
+      totalActivities: contactActivities.length,
+      uniqueCustomers: new Set(contactActivities.map((row) => row.customer)).size,
+      firstContactCount: firstVisitCustomerIds.size,
+    },
+    owners: Array.from(ownerContactMap.values())
+      .map((row) => ({
+        owner: row.owner,
+        faceToFace: row.faceToFace,
+        online: row.online,
+        technical: row.technical,
+        totalActivities: row.totalActivities,
+        uniqueCustomers: row.uniqueCustomers.size,
+        firstContactCount: row.firstContactCount.size,
+      }))
+      .sort((a, b) => b.totalActivities - a.totalActivities || a.owner.localeCompare(b.owner, 'tr')),
+  };
+
+  const dateRangeLabel = `${from.split('-').reverse().join('.')} - ${to.split('-').reverse().join('.')}`;
+  const narrative = {
+    title: `PAX Türkiye CRM Haftalık Yönetim Sunumu ${dateRangeLabel}`,
+    dateRangeLabel,
+    executiveSummary: [
+      `${pipelineAccounts.length} künye tamam müşteri içinde ${activeProjects} devam eden proje ve ${completedAccounts} tamamlanan proje görüntülendi.`,
+      `KasaPos Pipeline Raporu için toplam ${totalPosDevices.toLocaleString('tr-TR')} POS cihaz verisi künye tamam müşterilerden toplandı; bunun ${pipelinePosDevices.toLocaleString('tr-TR')} adedi devam eden fazlarda, ${completedPosDevices.toLocaleString('tr-TR')} adedi tamamlanan fazlarda.`,
+      `Seçili tarih aralığında ${visibleActivities.length} aktivite işlendi; ${new Set(visibleActivities.map((row) => row.created_by)).size} kişi sahada veya uzaktan temas gerçekleştirdi.`,
+      `${weeklyNewContacts.length} müşteri bu hafta ilk kez temas edilen hesap olarak işaretlendi; ${weeklyRisks.length} blokaj / yönetim kararı notu sunuma taşındı.`,
+    ],
+    segmentSummaries: segmentBoards.map((board) => ({
+      title: `${board.segment} kullanan firmalardaki durumlar`,
+      bullets: [
+        `${board.totalAccounts} haftalık aktif hesap ve ${board.totalPos.toLocaleString('tr-TR')} POS hacmi bu bölümde yer alıyor.`,
+        `${board.activeCount} hesap aktif fazlarda, ${board.completedCount} hesap tamamlanan fazlarda bulunuyor.`,
+        ...board.items.slice(0, 3).map((item) => `${item.customer}: ${item.phase_group} · ${item.pos_count ?? 0} POS · ${item.quote_count} teklif.`),
+      ],
+    })),
+    riskSummary: weeklyRisks.slice(0, 5).map((row) => `${row.customer}: ${row.note}`),
+  };
+
+  return {
+    filters: {
+      from,
+      to,
+      ownerOptions,
+      segmentOptions,
+      selectedOwner,
+      selectedSegment,
+    },
+    summary: {
+      totalAccounts: pipelineAccounts.length,
+      totalPosDevices,
+      activeProjects,
+      completedAccounts,
+      pipelinePosDevices,
+      completedPosDevices,
+      weeklyActivities: visibleActivities.length,
+      activePeople: new Set(visibleActivities.map((row) => row.created_by)).size,
+      quoteCount,
+      quoteAmount,
+      kunyeCoveragePct: presentationCustomers.length ? Math.round((kunyeComplete / presentationCustomers.length) * 100) : 0,
+    },
+    phaseSummary: Array.from(phaseSummaryMap.entries())
+      .map(([label, item]) => ({ label, ...item }))
+      .sort((a, b) => b.totalPos - a.totalPos || b.totalAccounts - a.totalAccounts || a.label.localeCompare(b.label, 'tr')),
+    eftPosBrandDistribution: summarizeMap(eftBrandMap).slice(0, 10),
+    kasaposDistribution: summarizeMap(kasaposMap).slice(0, 10),
+    topActiveAccounts,
+    topCompletedAccounts,
+    pipelineAccounts,
+    activePhaseAccounts,
+    completedPhaseAccounts,
+    weeklyHighlights,
+    weeklyNewContacts,
+    weeklyRisks,
+    weeklyCompleted,
+    segmentBoards,
+    contactReport,
+    narrative,
+    customers: presentationCustomers,
+    activities: visibleActivities,
+  } satisfies WeeklyManagementPresentationPayload;
+}

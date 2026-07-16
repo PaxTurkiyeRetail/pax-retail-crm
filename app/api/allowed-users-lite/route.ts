@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { requireCrmAccessOrThrow } from '@/lib/authz';
-import { createSupabaseAdminClient } from '@/lib/supabase/admin';
+import { createPgAdminClient } from '@/lib/pg/admin';
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export async function GET() {
   try {
@@ -9,7 +12,7 @@ export async function GET() {
     return NextResponse.json({ message: 'Yetkisiz' }, { status: e?.status || 401 });
   }
 
-  const admin = createSupabaseAdminClient();
+  const admin = createPgAdminClient();
   const { data, error } = await admin
     .from('allowed_users')
     .select('email, full_name')

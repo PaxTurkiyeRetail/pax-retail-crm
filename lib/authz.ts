@@ -7,13 +7,15 @@ import {
   canViewUsers,
   isAdminLike,
   normalizeRole,
+  type AllowedRole,
 } from '@/lib/roles';
 import { db } from '@/lib/db';
+import { canManageSystemParameters } from '@/lib/technical-owners';
 
 export type AllowedUser = {
   id: string;
   email: string;
-  role: string;
+  role: AllowedRole;
   full_name: string | null;
 };
 
@@ -67,6 +69,14 @@ export async function requireAllowedUserOrThrow() {
 export async function requireAdminOrThrow() {
   const allowed = await getAllowedUserOrThrowBase();
   if (!isAdminLike(allowed.role)) {
+    throw Object.assign(new Error('FORBIDDEN'), { status: 403 });
+  }
+  return allowed;
+}
+
+export async function requireSystemParametersAccessOrThrow() {
+  const allowed = await getAllowedUserOrThrowBase();
+  if (!isAdminLike(allowed.role) && !canManageSystemParameters(allowed)) {
     throw Object.assign(new Error('FORBIDDEN'), { status: 403 });
   }
   return allowed;

@@ -1,9 +1,12 @@
 import { NextResponse } from 'next/server';
 import { requireReportsAccessOrThrow } from '@/lib/authz';
-import { createSupabaseAdminClient } from '@/lib/supabase/admin';
-import { isAdminLike } from '@/lib/roles';
-import { activityLabelFromRow, isDisplayableActivityRow, presentDurum } from '@/app/api/activities/_helpers';
+import { createPgAdminClient } from '@/lib/pg/admin';
+import { activityLabelFromRow, normalizeDurum, presentDurum } from '@/app/api/activities/_helpers';
 import { normalizeChannel, isSalesChannel, isTechnicalChannel } from '@/lib/activity-channels';
+import { fetchAllRows, formatIstanbulDayKey, inclusiveDayCount } from '@/lib/reporting';
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 function startOfWeek(date: Date) {
   const d = new Date(date);
@@ -31,8 +34,7 @@ function uniqueSorted(values: Array<string | null | undefined>) {
 
 export async function GET(req: Request) {
   try {
-    const me = await requireReportsAccessOrThrow();
-    const myName = (me.full_name ?? '').trim();
+    await requireReportsAccessOrThrow();
     const url = new URL(req.url);
     const from = String(url.searchParams.get('from') ?? '').trim() || toDateInput(startOfWeek(new Date()));
     const to = String(url.searchParams.get('to') ?? '').trim() || toDateInput(endOfWeek(new Date()));
@@ -42,27 +44,31 @@ export async function GET(req: Request) {
     const channel = String(url.searchParams.get('channel') ?? '').trim();
     const phase = String(url.searchParams.get('phase') ?? '').trim();
     const waiting = String(url.searchParams.get('waiting') ?? '').trim();
-    const status = String(url.searchParams.get('status') ?? '').trim();
+    const status = normalizeDurum(url.searchParams.get('status')) ?? '';
+    const daySpan = inclusiveDayCount(from, to);
 
-    const admin = createSupabaseAdminClient();
-    let query = admin
-      .from('pipeline_eventleri')
-      .select('id,musteri_id,faz_no,durum,aksiyon,owner,partner_owner,notlar,created_at,created_by,musteriler(musteri,sorumlu,sektor,entegrasyon_tipi)')
-      .gte('created_at', `${from}T00:00:00`)
-      .lte('created_at', `${to}T23:59:59`)
-      .order('created_at', { ascending: false })
-      .limit(5000);
+    const admin = createPgAdminClient();
+    let data = await fetchAllRows<any>((rangeFrom, rangeTo) => {
+      let query = admin
+        .from('pipeline_eventleri')
+        .select('id,musteri_id,faz_no,durum,aksiyon,owner,partner_owner,notlar,created_at,created_by,musteriler(musteri,sorumlu,sektor,entegrasyon_tipi)')
+        .gte('created_at', `${from}T00:00:00`)
+        .lte('created_at', `${to}T23:59:59`)
+        .order('created_at', { ascending: false })
+        .range(rangeFrom, rangeTo);
 
-    if (!isAdminLike(me.role)) query = query.eq('created_by', myName);
-    if (phase) query = query.eq('faz_no', Number(phase));
-    if (waiting) query = query.eq('partner_owner', waiting);
-    if (status) query = query.eq('durum', status);
-
-    const { data, error } = await query;
-    if (error) return NextResponse.json({ message: error.message }, { status: 500 });
+      if (phase) query = query.eq('faz_no', Number(phase));
+      if (waiting) query = query.eq('partner_owner', waiting);
+      if (status) query = query.eq('durum', status);
+      return query;
+    });
 
     let rows = (data ?? [])
-      .filter((row: any) => isDisplayableActivityRow(row))
+      .filter((row: any) => {
+        const rawAction = String(row?.aksiyon ?? '').trim();
+        const normalizedStatus = normalizeDurum(row?.durum);
+        return rawAction.startsWith('AKTIVITE:');
+      })
       .map((row: any) => ({
         id: row.id,
         created_at: row.created_at,
@@ -89,22 +95,24 @@ export async function GET(req: Request) {
     const byDayMap = new Map<string, any>();
 
     for (const row of rows) {
-      const dayKey = new Date(row.created_at).toLocaleDateString('tr-TR', { weekday: 'long', day: '2-digit', month: '2-digit' });
+      const dayKey = formatIstanbulDayKey(row.created_at);
       if (!byPersonMap.has(row.created_by)) {
-        byPersonMap.set(row.created_by, { kisi: row.created_by, total: 0, phone: 0, face: 0, online: 0, technicalVisit: 0, technicalOnline: 0, sales: 0, technical: 0, customers: new Set<string>(), lastActivity: row.created_at, busiestCustomer: new Map<string, number>() });
+        byPersonMap.set(row.created_by, { kisi: row.created_by, total: 0, phone: 0, face: 0, online: 0, technicalVisit: 0, technicalOnline: 0, pom: 0, email: 0, other: 0, sales: 0, technical: 0, customers: new Set<string>(), lastActivity: row.created_at, busiestCustomer: new Map<string, number>() });
       }
       if (!byCustomerMap.has(row.customer)) {
-        byCustomerMap.set(row.customer, { customer: row.customer, responsible: row.responsible, total: 0, phone: 0, face: 0, online: 0, technicalVisit: 0, technicalOnline: 0, lastActivity: row.created_at, lastOwner: row.created_by, lastChannel: row.channel, phase: row.phase, waiting: row.waiting, notes: row.notes });
+        byCustomerMap.set(row.customer, { customer: row.customer, responsible: row.responsible, total: 0, phone: 0, face: 0, online: 0, technicalVisit: 0, technicalOnline: 0, pom: 0, email: 0, other: 0, lastActivity: row.created_at, lastOwner: row.created_by, lastChannel: row.channel, phase: row.phase, waiting: row.waiting, notes: row.notes });
       }
       if (!byDayMap.has(dayKey)) {
-        byDayMap.set(dayKey, { day: dayKey, total: 0, phone: 0, face: 0, online: 0, technicalVisit: 0, technicalOnline: 0, activePeople: new Set<string>(), customers: new Set<string>() });
+        byDayMap.set(dayKey, { day: dayKey, total: 0, phone: 0, face: 0, online: 0, technicalVisit: 0, technicalOnline: 0, pom: 0, email: 0, other: 0, activePeople: new Set<string>(), customers: new Set<string>() });
       }
       const person = byPersonMap.get(row.created_by);
       const customerAgg = byCustomerMap.get(row.customer);
       const day = byDayMap.get(dayKey);
 
       person.total += 1;
+      person.lastActivity = person.lastActivity > row.created_at ? person.lastActivity : row.created_at;
       customerAgg.total += 1;
+      customerAgg.lastActivity = customerAgg.lastActivity > row.created_at ? customerAgg.lastActivity : row.created_at;
       day.total += 1;
       person.customers.add(row.customer);
       day.activePeople.add(row.created_by);
@@ -116,6 +124,9 @@ export async function GET(req: Request) {
       if (row.channel === 'Online Toplantı') { person.online += 1; customerAgg.online += 1; day.online += 1; }
       if (row.channel === 'Teknik Ziyaret') { person.technicalVisit += 1; customerAgg.technicalVisit += 1; day.technicalVisit += 1; }
       if (row.channel === 'Teknik Online') { person.technicalOnline += 1; customerAgg.technicalOnline += 1; day.technicalOnline += 1; }
+      if (row.channel === 'POM') { person.pom += 1; customerAgg.pom += 1; day.pom += 1; }
+      if (row.channel === 'E-posta') { person.email += 1; customerAgg.email += 1; day.email += 1; }
+      if (row.channel === 'Diğer') { person.other += 1; customerAgg.other += 1; day.other += 1; }
       if (isSalesChannel(row.channel)) person.sales += 1;
       if (isTechnicalChannel(row.channel)) person.technical += 1;
     }
@@ -128,12 +139,15 @@ export async function GET(req: Request) {
       online: row.online,
       technicalVisit: row.technicalVisit,
       technicalOnline: row.technicalOnline,
+      pom: row.pom,
+      email: row.email,
+      other: row.other,
       sales: row.sales,
       technical: row.technical,
       customerCount: row.customers.size,
       lastActivity: row.lastActivity,
       busiestCustomer: (Array.from(row.busiestCustomer.entries()) as [string, number][]).sort((a, b) => b[1] - a[1])[0]?.[0] ?? '-',
-      dailyAverage: Number((row.total / 7).toFixed(1)),
+      dailyAverage: Number((row.total / daySpan).toFixed(1)),
     })).sort((a, b) => b.total - a.total);
 
     const byCustomer = Array.from(byCustomerMap.values()).sort((a: any, b: any) => b.total - a.total);
@@ -145,6 +159,9 @@ export async function GET(req: Request) {
       online: row.online,
       technicalVisit: row.technicalVisit,
       technicalOnline: row.technicalOnline,
+      pom: row.pom,
+      email: row.email,
+      other: row.other,
       activePeople: row.activePeople.size,
       customerCount: row.customers.size,
     }));
@@ -158,6 +175,9 @@ export async function GET(req: Request) {
       online: rows.filter((row) => row.channel === 'Online Toplantı').length,
       technicalVisit: rows.filter((row) => row.channel === 'Teknik Ziyaret').length,
       technicalOnline: rows.filter((row) => row.channel === 'Teknik Online').length,
+      pom: rows.filter((row) => row.channel === 'POM').length,
+      email: rows.filter((row) => row.channel === 'E-posta').length,
+      other: rows.filter((row) => row.channel === 'Diğer').length,
       salesActivities: rows.filter((row) => isSalesChannel(row.channel)).length,
       technicalActivities: rows.filter((row) => isTechnicalChannel(row.channel)).length,
       topPerformer: byPerson[0]?.kisi ?? '-',
@@ -183,6 +203,6 @@ export async function GET(req: Request) {
       list: rows,
     });
   } catch (e: any) {
-    return NextResponse.json({ message: 'Yetkisiz' }, { status: e?.status || 401 });
+    return NextResponse.json({ message: e?.message || 'Yetkisiz' }, { status: e?.status || 401 });
   }
 }

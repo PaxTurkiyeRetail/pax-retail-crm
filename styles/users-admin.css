@@ -19,3 +19,75 @@ th { text-align: left; padding: 11px 12px; font-size: 11px; color: var(--text-3)
 td { padding: 11px 12px; border-bottom: 1px solid #eef2f7; font-size: 13px; vertical-align: middle; }
 .actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
 .message { font-size: 13px; color: #b91c1c; background: var(--chip-red-bg); padding: 11px 13px; border-radius: 14px; border: 1px solid var(--chip-red-bd); }
+
+.weekly-target-button {
+  display: inline-grid;
+  gap: 3px;
+  min-width: 150px;
+  text-align: left;
+  line-height: 1.2;
+}
+.weekly-target-button span {
+  font-size: 11px;
+  font-weight: 800;
+  color: #64748b;
+}
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(15, 23, 42, .42);
+  backdrop-filter: blur(4px);
+}
+.modal-card {
+  width: min(620px, 100%);
+  max-height: calc(100vh - 40px);
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  background: #fff;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, .22);
+}
+.weekly-target-modal { padding: 18px; }
+.modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #eef2f7;
+}
+.modal-title { font-size: 20px; font-weight: 950; color: var(--text); }
+.modal-subtitle { margin-top: 4px; font-size: 13px; font-weight: 800; color: #64748b; }
+.modal-close {
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 24px;
+  line-height: 1;
+  color: #334155;
+}
+.weekly-target-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(180px, 1fr));
+  gap: 12px;
+  padding: 16px 0;
+}
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 14px;
+  border-top: 1px solid #eef2f7;
+}
+@media (max-width: 640px) {
+  .weekly-target-grid { grid-template-columns: 1fr; }
+  .modal-actions { flex-direction: column-reverse; }
+  .modal-actions button { width: 100%; }
+}

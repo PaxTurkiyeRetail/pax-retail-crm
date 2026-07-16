@@ -55,7 +55,7 @@ export default function RequestsClient({ userRole, userId, onNewRequest }: { use
 
   useEffect(() => { const t = setTimeout(() => setDQ(q.trim()), 250); return () => clearTimeout(t); }, [q]);
   useEffect(() => { setPage(1); }, [debouncedQ, statusFilter, priorityFilter, slaFilter, assigneeFilter, mineOnly]);
-  useEffect(() => { fetch('/api/requests/options').then(r => r.json()).then(setOptions).catch(()=>{}); }, []);
+  useEffect(() => { fetch('/api/requests/options', { cache: 'no-store' }).then(r => r.json()).then(setOptions).catch(()=>{}); }, []);
 
   const load = useCallback(async () => {
     setLoading(true);

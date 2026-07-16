@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server';
-import { requireCrmAccessOrThrow, isAdminLike } from '@/lib/authz';
-import { createSupabaseAdminClient } from '@/lib/supabase/admin';
+import { requireCrmAccessOrThrow } from '@/lib/authz';
+import { createPgAdminClient } from '@/lib/pg/admin';
 import { formatMoney, getQuoteDetailById, isMissingRelationError } from '@/lib/quotes/service';
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export async function GET(request: Request) {
   try {
@@ -10,16 +13,13 @@ export async function GET(request: Request) {
     const quoteId = String(url.searchParams.get('quoteId') ?? '').trim();
     if (!quoteId) return NextResponse.json({ message: 'quoteId gerekli' }, { status: 400 });
 
-    const admin = createSupabaseAdminClient();
+    const admin = createPgAdminClient();
     const detail = await getQuoteDetailById(admin, quoteId).catch((error) => {
       if (isMissingRelationError(error)) return null;
       throw error;
     });
 
     if (!detail) return NextResponse.json({ message: 'Teklif bulunamadı veya quote module setup eksik.' }, { status: 404 });
-    if (!isAdminLike(me.role) && String(detail.owner_name ?? '').trim() !== String(me.full_name ?? '').trim()) {
-      return NextResponse.json({ message: 'FORBIDDEN' }, { status: 403 });
-    }
 
     const enriched = {
       ...detail,

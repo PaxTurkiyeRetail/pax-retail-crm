@@ -9,8 +9,8 @@ type Props = {
 type MainPhase = { key: string; label: string; start: number; end: number; tone: string; };
 
 const MAIN_PHASES: MainPhase[] = [
-  { key: 'firsat', label: 'Fırsat', start: 1, end: 4, tone: '#7c3aed' },
-  { key: 'ilk-temas', label: 'İlk Temas', start: 5, end: 9, tone: '#2563eb' },
+  { key: 'firsat', label: 'Fırsat İlk Temas', start: 1, end: 4, tone: '#7c3aed' },
+  { key: 'ilk-temas', label: 'Analiz + Sunumlar', start: 5, end: 9, tone: '#2563eb' },
   { key: 'business', label: 'Business', start: 10, end: 14, tone: '#b45309' },
   { key: 'operasyon', label: 'Operasyon', start: 15, end: 23, tone: '#be185d' },
   { key: 'yayilim', label: 'Yayılım', start: 24, end: 25, tone: '#166534' },

@@ -47,7 +47,7 @@ export default function PersonStats() {
   const [loading, setLoading]   = useState(false);
 
   useEffect(() => {
-    fetch('/api/requests/options')
+    fetch('/api/requests/options', { cache: 'no-store' })
       .then(r => r.json())
       .then(d => {
         setPersons(d.users ?? []);

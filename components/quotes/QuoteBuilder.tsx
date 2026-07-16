@@ -41,7 +41,7 @@ export default function QuoteBuilder({ showHero = false }: Props) {
   useEffect(() => {
     const load = async () => {
       try {
-        const res = await fetch('/api/quotes/options', { next: { revalidate: 60 } });
+        const res = await fetch('/api/quotes/options', { cache: 'no-store' });
         const json = await res.json();
         if (!res.ok) throw new Error(json?.message || 'Opsiyonlar alınamadı');
         setProducts(json.products ?? []);

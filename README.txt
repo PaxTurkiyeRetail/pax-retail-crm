@@ -1,6 +1,6 @@
 Bu paket tam kaynak kodun yerine geçmez.
 Elindeki dosya kaynak repo değil, .next build çıktısıydı.
-Bu yüzden yalnızca güvenle yeniden yazılabilen ve Supabase auth kırılımını çözen dosyaları hazırladım.
+Bu yüzden yalnızca güvenle yeniden yazılabilen ve PostgreSQL auth kırılımını çözen dosyaları hazırladım.
 
 Uygulama sırası:
 1) Aşağıdaki dosyaları kendi proje köküne aynı yollarla kopyala.
@@ -18,5 +18,5 @@ Uygulama sırası:
 
 Önemli:
 - Bu paket auth/session tarafını local PostgreSQL'e geçirir.
-- CRM veri route'larında hala Supabase .from(...).select(...) çağrıları varsa onlar ayrıca pg sorgularına çevrilmelidir.
-- lib/supabase/server.ts ve admin.ts dosyaları bilinçli olarak hata fırlatır; kalan Supabase bağımlı route'ları kolay tespit et diye.
+- CRM veri route'larında hala PostgreSQL .from(...).select(...) çağrıları varsa onlar ayrıca pg sorgularına çevrilmelidir.
+- lib/pgClient/server.ts ve admin.ts dosyaları bilinçli olarak hata fırlatır; kalan PostgreSQL bağımlı route'ları kolay tespit et diye.

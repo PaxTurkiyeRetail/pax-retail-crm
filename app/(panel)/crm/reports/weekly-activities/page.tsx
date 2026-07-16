@@ -7,7 +7,7 @@ import { formatDate } from '@/lib/utils';
 type Kpis = {
   totalActivities: number; activePeople: number; distinctCustomers: number;
   phone: number; faceToFace: number; online: number;
-  technicalVisit: number; technicalOnline: number;
+  technicalVisit: number; technicalOnline: number; pom: number; email: number; other: number;
   salesActivities: number; technicalActivities: number;
   topPerformer: string; topCustomer: string;
 };
@@ -20,19 +20,19 @@ type FilterBag = {
 
 type ByPerson = {
   kisi: string; total: number; phone: number; face: number; online: number;
-  technicalVisit: number; technicalOnline: number; sales: number; technical: number;
+  technicalVisit: number; technicalOnline: number; pom: number; email: number; other: number; sales: number; technical: number;
   customerCount: number; lastActivity: string; busiestCustomer: string; dailyAverage: number;
 };
 
 type ByCustomer = {
   customer: string; responsible: string; total: number;
-  phone: number; face: number; online: number; technicalVisit: number; technicalOnline: number;
+  phone: number; face: number; online: number; technicalVisit: number; technicalOnline: number; pom: number; email: number; other: number;
   lastActivity: string; lastOwner: string; lastChannel: string; phase: string; waiting: string; notes: string;
 };
 
 type ByDay = {
   day: string; total: number; phone: number; face: number; online: number;
-  technicalVisit: number; technicalOnline: number; activePeople: number; customerCount: number;
+  technicalVisit: number; technicalOnline: number; pom: number; email: number; other: number; activePeople: number; customerCount: number;
 };
 
 type DetailRow = {
@@ -48,7 +48,7 @@ type Payload = {
 
 const EMPTY: Payload = {
   filters: { from: '', to: '', ownerOptions: [], responsibleOptions: [], customerOptions: [], channelOptions: [], phaseOptions: [], waitingOptions: [], statusOptions: [] },
-  kpis: { totalActivities: 0, activePeople: 0, distinctCustomers: 0, phone: 0, faceToFace: 0, online: 0, technicalVisit: 0, technicalOnline: 0, salesActivities: 0, technicalActivities: 0, topPerformer: '-', topCustomer: '-' },
+  kpis: { totalActivities: 0, activePeople: 0, distinctCustomers: 0, phone: 0, faceToFace: 0, online: 0, technicalVisit: 0, technicalOnline: 0, pom: 0, email: 0, other: 0, salesActivities: 0, technicalActivities: 0, topPerformer: '-', topCustomer: '-' },
   byPerson: [], byCustomer: [], byDay: [], list: [],
 };
 
@@ -119,6 +119,7 @@ export default function WeeklyActivitiesReportPage() {
     { label: 'Online',           value: payload.kpis.online,             hint: 'Online toplantı' },
     { label: 'Teknik Ziyaret',   value: payload.kpis.technicalVisit,     hint: 'Teknik saha' },
     { label: 'Teknik Online',    value: payload.kpis.technicalOnline,    hint: 'Teknik uzaktan' },
+    { label: 'POM',              value: payload.kpis.pom ?? 0,             hint: 'POM' },
     { label: 'En Yoğun Kişi',   value: payload.kpis.topPerformer,       hint: 'Top performer' },
     { label: 'En Yoğun Firma',  value: payload.kpis.topCustomer,        hint: 'En çok aktivite' },
   ];
@@ -238,6 +239,7 @@ export default function WeeklyActivitiesReportPage() {
 
       {msg && <div className="wa-message">{msg}</div>}
 
+     
       {/* Kişi Bazlı */}
       {tab === 'person' && (
         <div className="wa-table-panel">
@@ -245,7 +247,7 @@ export default function WeeklyActivitiesReportPage() {
             <table className="wa-table">
               <thead>
                 <tr>
-                  {['Kişi', 'Toplam', 'Telefon', 'Yüz Yüze', 'Online', 'Teknik Ziyaret', 'Teknik Online', 'Firma Sayısı', 'En Yoğun Firma', 'Ort. Günlük', 'Son Aktivite'].map((h) => (
+                  {['Kişi', 'Toplam', 'Telefon', 'Yüz Yüze', 'Online', 'Teknik Ziyaret', 'Teknik Online', 'POM', 'E-posta', 'Diğer', 'Firma Sayısı', 'En Yoğun Firma', 'Ort. Günlük', 'Son Aktivite'].map((h) => (
                     <th key={h}>{h}</th>
                   ))}
                 </tr>
@@ -260,6 +262,9 @@ export default function WeeklyActivitiesReportPage() {
                     <td>{row.online}</td>
                     <td>{row.technicalVisit}</td>
                     <td>{row.technicalOnline}</td>
+                    <td>{row.pom ?? 0}</td>
+                    <td>{row.email}</td>
+                    <td>{row.other}</td>
                     <td>{row.customerCount}</td>
                     <td>{row.busiestCustomer}</td>
                     <td>{row.dailyAverage}</td>
@@ -267,7 +272,7 @@ export default function WeeklyActivitiesReportPage() {
                   </tr>
                 ))}
                 {!loading && !payload.byPerson.length && (
-                  <tr><td colSpan={11} className="wa-empty-td">Bu dönemde kayıt yok.</td></tr>
+                  <tr><td colSpan={14} className="wa-empty-td">Bu dönemde kayıt yok.</td></tr>
                 )}
               </tbody>
             </table>
@@ -282,7 +287,7 @@ export default function WeeklyActivitiesReportPage() {
             <table className="wa-table">
               <thead>
                 <tr>
-                  {['Firma', 'Sorumlu', 'Toplam', 'Telefon', 'Yüz Yüze', 'Online', 'Teknik Ziyaret', 'Teknik Online', 'Son Aktivite', 'Son Kanal', 'Son Yapan', 'Faz', 'Bekleyen'].map((h) => (
+                  {['Firma', 'Sorumlu', 'Toplam', 'Telefon', 'Yüz Yüze', 'Online', 'Teknik Ziyaret', 'Teknik Online', 'POM', 'E-posta', 'Diğer', 'Son Aktivite', 'Son Kanal', 'Son Yapan', 'Faz', 'Bekleyen'].map((h) => (
                     <th key={h}>{h}</th>
                   ))}
                 </tr>
@@ -298,6 +303,9 @@ export default function WeeklyActivitiesReportPage() {
                     <td>{row.online}</td>
                     <td>{row.technicalVisit}</td>
                     <td>{row.technicalOnline}</td>
+                    <td>{row.pom ?? 0}</td>
+                    <td>{row.email}</td>
+                    <td>{row.other}</td>
                     <td className="wa-muted">{formatDate(row.lastActivity)}</td>
                     <td><span className="wa-pill">{row.lastChannel}</span></td>
                     <td>{row.lastOwner}</td>
@@ -306,7 +314,7 @@ export default function WeeklyActivitiesReportPage() {
                   </tr>
                 ))}
                 {!loading && !payload.byCustomer.length && (
-                  <tr><td colSpan={13} className="wa-empty-td">Bu dönemde kayıt yok.</td></tr>
+                  <tr><td colSpan={16} className="wa-empty-td">Bu dönemde kayıt yok.</td></tr>
                 )}
               </tbody>
             </table>
@@ -321,7 +329,7 @@ export default function WeeklyActivitiesReportPage() {
             <table className="wa-table">
               <thead>
                 <tr>
-                  {['Gün', 'Toplam', 'Telefon', 'Yüz Yüze', 'Online', 'Teknik Ziyaret', 'Teknik Online', 'Aktif Kişi', 'Firma Sayısı'].map((h) => (
+                  {['Gün', 'Toplam', 'Telefon', 'Yüz Yüze', 'Online', 'Teknik Ziyaret', 'Teknik Online', 'POM', 'E-posta', 'Diğer', 'Aktif Kişi', 'Firma Sayısı'].map((h) => (
                     <th key={h}>{h}</th>
                   ))}
                 </tr>
@@ -336,12 +344,15 @@ export default function WeeklyActivitiesReportPage() {
                     <td>{row.online}</td>
                     <td>{row.technicalVisit}</td>
                     <td>{row.technicalOnline}</td>
+                    <td>{row.pom ?? 0}</td>
+                    <td>{row.email}</td>
+                    <td>{row.other}</td>
                     <td>{row.activePeople}</td>
                     <td>{row.customerCount}</td>
                   </tr>
                 ))}
                 {!loading && !payload.byDay.length && (
-                  <tr><td colSpan={9} className="wa-empty-td">Bu dönemde kayıt yok.</td></tr>
+                  <tr><td colSpan={12} className="wa-empty-td">Bu dönemde kayıt yok.</td></tr>
                 )}
               </tbody>
             </table>
@@ -376,7 +387,7 @@ export default function WeeklyActivitiesReportPage() {
                   </tr>
                 ))}
                 {!loading && !payload.list.length && (
-                  <tr><td colSpan={9} className="wa-empty-td">Bu dönemde kayıt yok.</td></tr>
+                  <tr><td colSpan={11} className="wa-empty-td">Bu dönemde kayıt yok.</td></tr>
                 )}
               </tbody>
             </table>

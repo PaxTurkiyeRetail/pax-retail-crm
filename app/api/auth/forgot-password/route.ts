@@ -2,6 +2,9 @@ import crypto from 'crypto';
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 const RESET_TTL_MINUTES = Number(process.env.AUTH_RESET_TTL_MINUTES ?? '30');
 
 export async function POST(req: Request) {

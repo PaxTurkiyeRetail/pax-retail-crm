@@ -3,6 +3,9 @@ import { requireAllowedUserOrThrow } from '@/lib/authz';
 import { db } from '@/lib/db';
 import { listAllowedUsersForRequests } from '@/lib/request-users';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export async function GET() {
   try {
     await requireAllowedUserOrThrow();

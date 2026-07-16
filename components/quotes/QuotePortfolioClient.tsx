@@ -3,7 +3,7 @@
 import type { CSSProperties } from 'react';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { formatDate } from '@/lib/utils';
 
 type QuoteRow = {
@@ -45,7 +45,13 @@ function healthLabel(state: QuoteRow['health_state']) {
   if (state === 'overdue') return 'Gecikti';
   if (state === 'approaching') return 'Yaklaşıyor';
   if (state === 'expired') return 'Süresi doldu';
-  return 'On Track';
+  return 'Normal';
+}
+
+function statusLabel(state: QuoteRow['status']) {
+  if (state === 'sent') return 'Gönderildi';
+  if (state === 'closed') return 'Kapatıldı';
+  return 'Taslak';
 }
 
 export default function QuotePortfolioClient() {
@@ -54,8 +60,12 @@ export default function QuotePortfolioClient() {
   const [q, setQ] = useState('');
   const [status, setStatus] = useState('');
   const [owner, setOwner] = useState('');
+  const [ownerOptions, setOwnerOptions] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [onboarding, setOnboarding] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [total, setTotal] = useState(0);
   const [msg, setMsg] = useState<string | null>(null);
 
   useEffect(() => {
@@ -65,12 +75,14 @@ export default function QuotePortfolioClient() {
       const params = new URLSearchParams();
       if (q.trim()) params.set('q', q.trim());
       if (status) params.set('status', status);
+      params.set('page', String(page));
+      params.set('pageSize', String(pageSize));
       if (owner) params.set('owner', owner);
 
       try {
         const [listRes, statsRes] = await Promise.all([
-          fetch(`/api/quotes/list?${params.toString()}`, { next: { revalidate: 60 } }),
-          fetch('/api/quotes/stats', { next: { revalidate: 60 } }),
+          fetch(`/api/quotes/list?${params.toString()}`, { cache: 'no-store' }),
+          fetch('/api/quotes/stats', { cache: 'no-store' }),
         ]);
         const listJson = await listRes.json().catch(() => ({}));
         const statsJson = await statsRes.json().catch(() => ({}));
@@ -79,6 +91,8 @@ export default function QuotePortfolioClient() {
           setRows([]);
         } else {
           setRows(listJson.rows ?? []);
+          setTotal(Number(listJson.total ?? 0));
+          setOwnerOptions(Array.isArray(listJson.ownerOptions) ? listJson.ownerOptions : []);
           setOnboarding(Boolean(listJson.onboardingNeeded || statsJson.onboardingNeeded));
         }
         if (statsRes.ok) setKpis(statsJson.kpis ?? null);
@@ -87,17 +101,22 @@ export default function QuotePortfolioClient() {
       }
     };
     void load();
-  }, [q, status, owner]);
+  }, [q, status, owner, page, pageSize]);
 
-  const ownerOptions = useMemo(() => Array.from(new Set(rows.map((row) => row.owner_name).filter(Boolean) as string[])).sort((a, b) => a.localeCompare(b, 'tr')), [rows]);
+  useEffect(() => {
+    setPage(1);
+  }, [q, status, owner, pageSize]);
+
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const currentPage = Math.min(page, totalPages);
 
   const cards = [
     { label: 'Toplam Teklif', value: kpis?.total_quotes ?? 0, hint: 'Portföydeki tüm kayıtlar' },
     { label: 'Aktif Teklif', value: kpis?.sent_quotes ?? 0, hint: 'Müşteriyle paylaşılmış açık kayıt' },
-    { label: 'Riskli Takip', value: kpis?.overdue_followups ?? 0, hint: 'Follow‑up tarihi geçmiş' },
-    { label: 'Yaklaşan Expire', value: kpis?.expiring_soon ?? 0, hint: '3 gün içinde sona eren' },
-    { label: 'Toplam Cihaz', value: kpis?.total_devices ?? 0, hint: 'Recurring hariç adet' },
-    { label: 'Weighted Pipeline', value: money(kpis?.weighted_amount ?? 0), hint: 'Probability ile ağırlıklandırılmış' },
+    { label: 'Riskli Takip', value: kpis?.overdue_followups ?? 0, hint: 'Takip tarihi geçmiş' },
+    { label: 'Yaklaşan Bitiş', value: kpis?.expiring_soon ?? 0, hint: '3 gün içinde süresi dolacak' },
+    { label: 'Toplam Cihaz', value: kpis?.total_devices ?? 0, hint: 'Tekrarlayan ürünler hariç adet' },
+    { label: 'Ağırlıklı Potansiyel', value: money(kpis?.weighted_amount ?? 0), hint: 'Olasılığa göre ağırlıklandırılmış' },
   ];
 
   return (
@@ -121,8 +140,8 @@ export default function QuotePortfolioClient() {
 
         {onboarding ? (
           <div style={{ ...surface, borderStyle: 'dashed', borderColor: 'var(--chip-indigo-bd)', background: 'var(--chip-indigo-bg)' }}>
-            <strong>Quote modülü DB setup bekliyor.</strong>
-            <div style={{ marginTop: 6, color: '#4338ca' }}>Önce <code>sql/quote_module_setup.sql</code> dosyasını Supabase SQL Editor’da çalıştır.</div>
+            <strong>Teklif modülü için veritabanı kurulumu bekleniyor.</strong>
+            <div style={{ marginTop: 6, color: '#4338ca' }}>Önce <code>sql/quote_module_setup.sql</code> dosyasını PostgreSQL SQL Editor’da çalıştırın.</div>
           </div>
         ) : null}
 
@@ -139,28 +158,38 @@ export default function QuotePortfolioClient() {
 
       <section style={surface}>
         <div style={{ display: 'grid', gap: 12, gridTemplateColumns: '2fr 1fr 1fr auto' }}>
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Müşteri, quote no, model, satışçı" style={inputStyle} />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Müşteri, teklif no, model veya satışçı ara" style={inputStyle} />
           <select value={status} onChange={(e) => setStatus(e.target.value)} style={inputStyle}>
             <option value="">Tüm Durumlar</option>
-            <option value="draft">Draft</option>
-            <option value="sent">Sent</option>
-            <option value="closed">Closed</option>
+            <option value="draft">Taslak</option>
+            <option value="sent">Gönderildi</option>
+            <option value="closed">Kapatıldı</option>
           </select>
           <select value={owner} onChange={(e) => setOwner(e.target.value)} style={inputStyle}>
             <option value="">Tüm Satışçılar</option>
             {ownerOptions.map((item) => <option key={item} value={item}>{item}</option>)}
           </select>
-          <button onClick={() => { setQ(''); setStatus(''); setOwner(''); }} style={ghostButton}>Temizle</button>
+          <select value={String(pageSize)} onChange={(e) => setPageSize(Number(e.target.value))} style={inputStyle}>
+            {[10, 20, 50, 100].map((size) => <option key={size} value={size}>{size} / sayfa</option>)}
+          </select>
+          <button onClick={() => { setQ(''); setStatus(''); setOwner(''); setPage(1); }} style={ghostButton}>Temizle</button>
         </div>
       </section>
 
       <section style={surface}>
         {msg ? <div style={{ color: 'var(--chip-red-color)', marginBottom: 12 }}>{msg}</div> : null}
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
+          <div style={{ color: 'var(--text-3)', fontSize: 13 }}>Toplam {total} kayıt · Sayfa {currentPage}/{totalPages}</div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button type="button" style={ghostButton} disabled={currentPage <= 1 || loading} onClick={() => setPage((p) => Math.max(1, p - 1))}>Önceki</button>
+            <button type="button" style={ghostButton} disabled={currentPage >= totalPages || loading} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>Sonraki</button>
+          </div>
+        </div>
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1080 }}>
             <thead>
               <tr>
-                {['Teklif', 'Müşteri', 'Satışçı', 'Probability', 'Cihaz / Tutar', 'Geçerlilik', 'Follow‑up', 'Risk', 'Durum'].map((head) => (
+                {['Teklif', 'Müşteri', 'Satışçı', 'Olasılık', 'Cihaz / Tutar', 'Geçerlilik', 'Takip', 'Risk', 'Durum'].map((head) => (
                   <th key={head} style={tableHead}>{head}</th>
                 ))}
               </tr>
@@ -193,7 +222,7 @@ export default function QuotePortfolioClient() {
                   <td style={tableCell}>{formatDate(row.valid_until)}</td>
                   <td style={tableCell}>{formatDate(row.follow_up_date)}</td>
                   <td style={tableCell}><span style={{ ...pillBase, ...(riskPill[row.health_state] ?? riskPill.on_track) }}>{healthLabel(row.health_state)}</span></td>
-                  <td style={tableCell}><span style={{ ...pillBase, ...(statusPill[row.status] ?? statusPill.draft) }}>{row.status.toUpperCase()}{row.closed_reason ? ` · ${row.closed_reason}` : ''}</span></td>
+                  <td style={tableCell}><span style={{ ...pillBase, ...(statusPill[row.status] ?? statusPill.draft) }}>{statusLabel(row.status)}{row.closed_reason ? ` · ${row.closed_reason}` : ''}</span></td>
                 </tr>
               ))}
             </tbody>
@@ -207,8 +236,8 @@ export default function QuotePortfolioClient() {
 const surface: CSSProperties = { background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 22, padding: 16, boxShadow: 'var(--shadow)' };
 const surfaceCard: CSSProperties = { ...surface, padding: 18 };
 const primaryButton: CSSProperties = { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minHeight: 42, padding: '0 16px', borderRadius: 14, background: '#4f46e5', color: 'var(--surface)', textDecoration: 'none', fontWeight: 800 };
-const ghostButton: CSSProperties = { minHeight: 42, padding: '0 14px', borderRadius: 14, border: '1px solid #cbd5e1', background: 'var(--surface)', color: 'var(--text)', fontWeight: 700, cursor: 'pointer' };
-const inputStyle: CSSProperties = { minHeight: 42, borderRadius: 14, border: '1px solid #cbd5e1', padding: '0 12px', background: 'var(--surface)', color: 'var(--text)' };
+const ghostButton: CSSProperties = { minHeight: 42, padding: '0 14px', borderRadius: 14, border: '1px solid #cbd5e1', background: 'var(--surface)', color: 'var(--text)', fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer' };
+const inputStyle: CSSProperties = { minHeight: 42, borderRadius: 14, border: '1px solid #cbd5e1', padding: '0 12px', background: 'var(--surface)', color: 'var(--text)', fontFamily: 'inherit', fontSize: 14 };
 const tableHead: CSSProperties = { textAlign: 'left', padding: '0 12px 10px', color: 'var(--text-3)', fontWeight: 800, fontSize: 12, letterSpacing: '.06em', textTransform: 'uppercase' };
 const tableCell: CSSProperties = { padding: '14px 12px', verticalAlign: 'top', color: 'var(--text)' };
 const pillBase: CSSProperties = { display: 'inline-flex', alignItems: 'center', minHeight: 28, padding: '0 10px', borderRadius: 999, fontWeight: 800, fontSize: 12, border: '1px solid transparent' };

@@ -1,0 +1,486 @@
+/* =========================================================
+   PAX CRM Premium Enterprise Retrofit
+   Goal: every existing CRM/Admin/Requests screen shares the same
+   enterprise SaaS surface, spacing, table, form, badge and mobile rules.
+   ========================================================= */
+
+:root {
+  --pe-bg-noise: radial-gradient(circle at 16% 8%, rgba(99, 102, 241, .12), transparent 28%), radial-gradient(circle at 88% 5%, rgba(168, 85, 247, .10), transparent 24%);
+  --pe-card: rgba(255, 255, 255, .86);
+  --pe-card-solid: #fff;
+  --pe-border: rgba(148, 163, 184, .22);
+  --pe-border-strong: rgba(99, 102, 241, .30);
+  --pe-shadow: 0 18px 55px rgba(15, 23, 42, .075), 0 1px 3px rgba(15, 23, 42, .045);
+  --pe-shadow-hover: 0 26px 80px rgba(15, 23, 42, .12), 0 2px 10px rgba(15, 23, 42, .055);
+  --pe-radius-card: 26px;
+  --pe-radius-inner: 18px;
+  --pe-gradient: linear-gradient(135deg, #111827 0%, #312e81 46%, #7c3aed 100%);
+  --pe-gradient-soft: linear-gradient(135deg, rgba(79, 70, 229, .10), rgba(124, 58, 237, .07));
+}
+
+[data-theme="dark"] {
+  --pe-card: rgba(15, 23, 42, .82);
+  --pe-card-solid: #111827;
+  --pe-border: rgba(255, 255, 255, .09);
+  --pe-border-strong: rgba(129, 140, 248, .34);
+  --pe-shadow: 0 22px 70px rgba(0, 0, 0, .38);
+  --pe-shadow-hover: 0 32px 95px rgba(0, 0, 0, .52);
+}
+
+.pax-main::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: var(--pe-bg-noise);
+  opacity: .85;
+  z-index: -1;
+}
+
+.pax-main-inner {
+  width: 100%;
+}
+
+.pax-main-inner > main,
+.pax-page-container,
+.parameters-workspace,
+.users-page,
+.customers-page,
+.wa-page,
+.ph-page,
+.kasapos-report-page,
+.seller-summary-page,
+.forecast-page,
+.wmp-page,
+.tracker-page,
+.guide-page,
+.radar-shell,
+.advanced-shell,
+.req-hub,
+.phase-shell {
+  display: grid;
+  gap: 20px;
+}
+
+/* Premium hero language for legacy page headers */
+.pax-hero,
+.crm-hero,
+.customers-hero,
+.quotes-hero,
+.activities-hero,
+.hero,
+.kasapos-hero,
+.wa-hero,
+.ph-topbar,
+.kd-hero-grid,
+.ch-card.head,
+.req-card-top,
+.main-head,
+.table-head,
+.parameters-main-head,
+.users-page .pax-hero {
+  position: relative;
+  overflow: hidden;
+}
+
+.pax-hero,
+.crm-hero,
+.customers-hero,
+.quotes-hero,
+.activities-hero,
+.hero,
+.kasapos-hero,
+.wa-hero,
+.ph-topbar,
+.kd-hero-grid {
+  border-radius: 32px !important;
+  border: 1px solid rgba(255, 255, 255, .18) !important;
+  background: var(--pe-gradient) !important;
+  color: #fff !important;
+  box-shadow: 0 28px 80px rgba(49, 46, 129, .26) !important;
+}
+
+.pax-hero::before,
+.crm-hero::before,
+.customers-hero::before,
+.quotes-hero::before,
+.activities-hero::before,
+.hero::before,
+.kasapos-hero::before,
+.wa-hero::before,
+.ph-topbar::before,
+.kd-hero-grid::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 90% 8%, rgba(255,255,255,.26), transparent 24%), radial-gradient(circle at 8% 12%, rgba(129,140,248,.38), transparent 28%);
+  pointer-events: none;
+}
+
+.pax-hero > *,
+.crm-hero > *,
+.customers-hero > *,
+.quotes-hero > *,
+.activities-hero > *,
+.hero > *,
+.kasapos-hero > *,
+.wa-hero > *,
+.ph-topbar > *,
+.kd-hero-grid > * {
+  position: relative;
+  z-index: 1;
+}
+
+.pax-main-inner h1,
+.pax-main-inner h2,
+.pax-main-inner h3 {
+  letter-spacing: -.03em;
+}
+
+.pax-hero h1,
+.crm-hero h1,
+.customers-hero h1,
+.quotes-hero h1,
+.activities-hero h1,
+.hero h1,
+.kasapos-hero h1,
+.wa-hero h1,
+.ph-topbar h1,
+.kd-hero-grid h1,
+.pax-hero-title {
+  color: #fff !important;
+  font-weight: 950 !important;
+}
+
+.pax-hero p,
+.crm-hero p,
+.customers-hero p,
+.quotes-hero p,
+.activities-hero p,
+.hero p,
+.kasapos-hero p,
+.wa-hero p,
+.ph-topbar p,
+.kd-hero-grid p,
+.pax-hero-description {
+  color: rgba(255, 255, 255, .78) !important;
+}
+
+/* Universal card/panel upgrade */
+.pax-main-inner :is(
+  .card,
+  .surface,
+  .panel,
+  .pax-card,
+  .crm-card,
+  .customer-card,
+  .quote-card,
+  .activity-card,
+  .main-card,
+  .table-card,
+  .sub-card,
+  .stat-card,
+  .modal-card,
+  .modal-box,
+  .det-card,
+  .req-card,
+  .wa-table-panel,
+  .wa-filter-panel,
+  .wa-kpi-card,
+  .ph-table-card,
+  .ph-group-card,
+  .ph-info-banner,
+  .kasapos-kpi-card,
+  .kasapos-filter-surface,
+  .kd-card,
+  .ch-card,
+  .rr-box,
+  .mom-box,
+  .risk-box,
+  .parameters-card,
+  .parameters-main-card,
+  .parameters-aside,
+  .parameters-metric,
+  .parameters-modal,
+  .users-card,
+  .settings-module-card,
+  .settings-control-panel,
+  .settings-switch-card,
+  .seller-card,
+  .seller-panel,
+  .wmp-filter-card,
+  .wmp-kpi-card,
+  .wmp-slide-card,
+  .wmp-segment-card,
+  .forecast-card,
+  .premium-filter-card,
+  .premium-drawer-card,
+  .premium-table-card,
+  .premium-mini-card,
+  .premium-kpi-card,
+  .seg-editor,
+  .box-list,
+  .result-copy,
+  .command-shell,
+  .command-side,
+  .action-stack,
+  .leader-list
+) {
+  background: var(--pe-card) !important;
+  border: 1px solid var(--pe-border) !important;
+  border-radius: var(--pe-radius-card) !important;
+  box-shadow: var(--pe-shadow) !important;
+  backdrop-filter: blur(16px) saturate(140%);
+}
+
+.pax-main-inner :is(.card,.surface,.panel,.pax-card,.crm-card,.customer-card,.quote-card,.activity-card,.settings-module-card,.kd-card,.ch-card,.req-card,.wmp-slide-card):hover {
+  border-color: var(--pe-border-strong) !important;
+  box-shadow: var(--pe-shadow-hover) !important;
+}
+
+/* KPI/stat surfaces */
+.pax-main-inner :is(.pax-hero-stat,.stat-mini,.mini-item,.result-metric,.rr-box,.mom-box,.kd-card,.ch-card,.seller-kpi-card,.kasapos-kpi-card,.wa-kpi-card,.ph-kpi-item) {
+  background: color-mix(in srgb, var(--pe-card-solid) 72%, transparent) !important;
+  border: 1px solid var(--pe-border) !important;
+  border-radius: 20px !important;
+  box-shadow: 0 12px 34px rgba(15, 23, 42, .065) !important;
+}
+
+/* Tables */
+.pax-main-inner :is(.table-wrap,.pax-table-wrap,.parameters-table-wrap,.seller-table-wrap,.wa-table-wrap,.ph-table-wrap,.kasapos-table-wrap,.premium-table-wrap) {
+  border: 1px solid var(--pe-border);
+  border-radius: 20px;
+  overflow: auto;
+  background: color-mix(in srgb, var(--pe-card-solid) 74%, transparent);
+  -webkit-overflow-scrolling: touch;
+}
+
+.pax-main-inner table {
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+  width: 100%;
+}
+
+.pax-main-inner table th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: color-mix(in srgb, var(--surface-2) 88%, transparent) !important;
+  color: var(--text-3) !important;
+  font-size: 11px !important;
+  font-weight: 950 !important;
+  letter-spacing: .09em !important;
+  text-transform: uppercase !important;
+  border-bottom: 1px solid var(--pe-border) !important;
+}
+
+.pax-main-inner table td {
+  border-bottom: 1px solid rgba(148, 163, 184, .14) !important;
+}
+
+.pax-main-inner table tbody tr:hover td {
+  background: rgba(99, 102, 241, .045) !important;
+}
+
+/* Forms */
+.pax-main-inner :is(input, select, textarea, .pax-input, .wa-input, .ph-input, .ph-select, .seller-select, .command-search, .command-select) {
+  min-height: 42px;
+  border-radius: 14px !important;
+  border: 1px solid rgba(148, 163, 184, .30) !important;
+  background: color-mix(in srgb, var(--surface) 90%, transparent) !important;
+  color: var(--text) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .48);
+}
+
+.pax-main-inner textarea {
+  padding-top: 10px !important;
+  padding-bottom: 10px !important;
+}
+
+.pax-main-inner :is(input, select, textarea, .pax-input, .wa-input, .ph-input, .ph-select, .seller-select):focus {
+  outline: none !important;
+  border-color: rgba(99, 102, 241, .62) !important;
+  box-shadow: 0 0 0 4px rgba(99, 102, 241, .16) !important;
+}
+
+.pax-main-inner :is(.field-label,.pax-label,.wa-field-label,.ph-field span,.parameters-kicker,.kicker,.eyebrow,.section-kicker,.panel-kicker,.det-kicker,.kd-eyebrow,.forecast-eyebrow,.seller-eyebrow,.wmp-eyebrow) {
+  color: var(--premium-accent) !important;
+  font-weight: 950 !important;
+  letter-spacing: .10em !important;
+  text-transform: uppercase !important;
+}
+
+/* Buttons */
+.pax-main-inner :is(.pax-btn,.premium-btn,.wa-btn-clear,.pager-btn,.weekly-target-button,.link-btn,.new-btn,.seg-save,.seg-cancel,button) {
+  border-radius: 14px;
+  font-weight: 850;
+}
+
+.pax-main-inner :is(.pax-btn-primary,.premium-btn.primary,.primary,.btn-hero,.new-btn,.seg-save) {
+  background: linear-gradient(135deg, #4f46e5, #7c3aed) !important;
+  border-color: rgba(99, 102, 241, .36) !important;
+  color: #fff !important;
+  box-shadow: 0 14px 34px rgba(79, 70, 229, .22) !important;
+}
+
+.pax-main-inner :is(.pax-btn-secondary,.premium-btn.secondary,.secondary,.ghost,.btn-ghost,.seg-cancel,.pager-btn) {
+  background: color-mix(in srgb, var(--surface) 86%, transparent) !important;
+  border-color: var(--pe-border) !important;
+  color: var(--text-2) !important;
+}
+
+.pax-main-inner :is(.pax-btn,.premium-btn,button):hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.pax-main-inner :is(.pax-btn,.premium-btn,button):disabled {
+  opacity: .52;
+  cursor: not-allowed;
+}
+
+/* Badges/chips/pills */
+.pax-main-inner :is(.badge,.pill,.chip,.status-chip,.phase-pill,.kunye-pill,.forecast-soft-chip,.kd-badge,.td-faz-badge,.date-chip,.sla-inline,.settings-type-badge,.parameters-status,.wa-pill,.activity-pill,.activity-pill-fixed) {
+  border-radius: 999px !important;
+  border: 1px solid var(--pe-border);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .32);
+  font-weight: 850;
+}
+
+/* Filter/action strips */
+.pax-main-inner :is(.filters,.filter-row,.filters-grid,.toolbar,.command-bar,.command-toolbar,.wa-filter-grid,.kasapos-filters-grid,.ph-topbar-right,.parameters-form,.weekly-target-grid,.seller-actions,.wmp-actions) {
+  background: color-mix(in srgb, var(--pe-card-solid) 72%, transparent);
+  border: 1px solid var(--pe-border);
+  border-radius: 22px;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, .045);
+}
+
+/* Modals */
+.modal-backdrop,
+.parameters-modal-backdrop {
+  background: rgba(15, 23, 42, .54) !important;
+  backdrop-filter: blur(8px) saturate(130%);
+}
+
+/* Embedded HTML pages get the same premium frame */
+.pax-main-inner iframe,
+.pax-main-inner .embedded-html-frame {
+  border: 1px solid var(--pe-border) !important;
+  border-radius: 26px !important;
+  box-shadow: var(--pe-shadow) !important;
+  background: var(--surface);
+}
+
+/* Navigation polish */
+.pax-sidebar {
+  width: 248px;
+  min-width: 248px;
+}
+
+.pax-sidebar.collapsed {
+  width: 64px;
+  min-width: 64px;
+}
+
+.pax-nav-link,
+.pax-subnav-link {
+  font-weight: 780;
+}
+
+.pax-nav-link.active,
+.pax-subnav-link.active {
+  color: #4f46e5 !important;
+}
+
+[data-theme="dark"] .pax-nav-link.active,
+[data-theme="dark"] .pax-subnav-link.active {
+  color: #c4b5fd !important;
+}
+
+/* Mobile: premium card-first structure */
+@media (max-width: 920px) {
+  .pax-main-inner {
+    padding: 16px 12px 34px !important;
+  }
+
+  .pax-main-inner > main,
+  .pax-page-container,
+  .parameters-workspace,
+  .users-page,
+  .customers-page,
+  .wa-page,
+  .ph-page,
+  .kasapos-report-page,
+  .seller-summary-page,
+  .forecast-page,
+  .wmp-page,
+  .tracker-page,
+  .guide-page,
+  .radar-shell,
+  .advanced-shell,
+  .req-hub,
+  .phase-shell {
+    gap: 14px;
+  }
+
+  .pax-hero,
+  .crm-hero,
+  .customers-hero,
+  .quotes-hero,
+  .activities-hero,
+  .hero,
+  .kasapos-hero,
+  .wa-hero,
+  .ph-topbar,
+  .kd-hero-grid {
+    border-radius: 24px !important;
+    padding: 20px !important;
+  }
+
+  .pax-main-inner :is(.card,.surface,.panel,.pax-card,.crm-card,.customer-card,.quote-card,.activity-card,.main-card,.table-card,.sub-card,.stat-card,.modal-card,.modal-box,.det-card,.req-card,.parameters-main-card,.parameters-aside,.users-card,.settings-module-card,.seller-card,.wmp-slide-card,.forecast-card,.premium-filter-card,.premium-drawer-card,.premium-table-card,.premium-mini-card,.premium-kpi-card) {
+    border-radius: 20px !important;
+    padding: 14px;
+  }
+
+  .pax-main-inner table {
+    min-width: 720px;
+  }
+
+  .pax-main-inner :is(.filters,.filter-row,.filters-grid,.toolbar,.command-bar,.command-toolbar,.parameters-form,.seller-actions,.wmp-actions) {
+    display: grid;
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .pax-main-inner :is(.pax-btn,.premium-btn,button) {
+    min-height: 40px;
+  }
+}
+
+@media (max-width: 560px) {
+  .pax-topbar-title small {
+    display: none;
+  }
+
+  .pax-main-inner :is(.pax-hero-stats,.stats-row,.settings-overview,.parameters-metrics,.premium-kpi-grid,.seller-kpi-grid,.wmp-kpi-grid,.wa-kpi-grid,.kasapos-kpi-grid,.kd-cards,.ch-split-stats) {
+    grid-template-columns: 1fr !important;
+  }
+
+  .pax-main-inner :is(.pax-btn,.premium-btn) {
+    width: 100%;
+  }
+}
+
+@media print {
+  .pax-main::before,
+  .pax-topbar,
+  .pax-sidebar,
+  .pax-mobile-bar,
+  .pax-overlay {
+    display: none !important;
+  }
+
+  .pax-main-inner :is(.card,.surface,.panel,.pax-card,.premium-table-card,.premium-kpi-card,.wmp-slide-card) {
+    box-shadow: none !important;
+    background: #fff !important;
+  }
+}

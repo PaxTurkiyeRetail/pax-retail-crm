@@ -12,7 +12,7 @@ export default function LogoutButton() {
   }
 
   return (
-    <button type="button" onClick={handleLogout}>
+    <button type="button" className="pax-logout-btn" onClick={handleLogout}>
       Çıkış Yap
     </button>
   );

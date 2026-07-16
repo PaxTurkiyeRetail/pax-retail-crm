@@ -1,10 +1,14 @@
 import { NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
-import { requireCrmAccessOrThrow, isAdminLike } from '@/lib/authz';
-import { createSupabaseAdminClient } from '@/lib/supabase/admin';
+import { requireCrmAccessOrThrow } from '@/lib/authz';
+import { createPgAdminClient } from '@/lib/pg/admin';
 import { getKunyeStatus, mapKunyeDbToUi, mapKunyeUiToDb, normalizeKunyePayload } from '@/lib/kunye';
+import { isReportOnlyCustomer } from '@/lib/report-only-customers';
 
-async function getCustomer(admin: ReturnType<typeof createSupabaseAdminClient>, musteriId: string) {
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
+async function getCustomer(admin: ReturnType<typeof createPgAdminClient>, musteriId: string) {
   const { data, error } = await admin
     .from('musteriler')
     .select('id,musteri,sektor,sorumlu')
@@ -22,19 +26,28 @@ export async function GET(request: Request) {
     const musteriId = String(url.searchParams.get('musteriId') ?? '').trim();
     if (!musteriId) return NextResponse.json({ message: 'musteriId gerekli' }, { status: 400 });
 
-    const admin = createSupabaseAdminClient();
+    const admin = createPgAdminClient();
     const musteri = await getCustomer(admin, musteriId);
     if (!musteri) return NextResponse.json({ message: 'Müşteri bulunamadı.' }, { status: 404 });
 
+    if (isReportOnlyCustomer(musteri)) {
+      return NextResponse.json({
+        kunye: null,
+        status: { status: 'Kapsam Dışı', missing: 0, total: 0, missingFields: [] },
+        kunyeDisabled: true,
+        message: 'Bu müşteri İş Ortağı kapsamındadır; künye açılmaz.',
+      });
+    }
+
     const { data, error } = await admin
-      .from('v_musteri_kunye_form')
+      .from('v_musteri_kunye_status')
       .select('*')
       .eq('musteri_id', musteriId)
       .maybeSingle();
 
     if (error) {
       return NextResponse.json(
-        { message: `v_musteri_kunye_form view bulunamadı veya okunamadı: ${error.message}` },
+        { message: `v_musteri_kunye_status view bulunamadı veya okunamadı: ${error.message}` },
         { status: 500 },
       );
     }
@@ -48,6 +61,7 @@ export async function GET(request: Request) {
       kunye: mappedKunye,
       status: getKunyeStatus({
         ...mappedKunye,
+        ...(data ?? {}),
         firma_adi: mappedKunye?.firma_adi ?? musteri.musteri ?? null,
         has_kunye_record: Boolean(mappedKunye?.has_kunye_record),
       }),
@@ -64,12 +78,15 @@ export async function POST(req: Request) {
     const musteriId = String(body.musteriId ?? '').trim();
     if (!musteriId) return NextResponse.json({ message: 'musteriId gerekli' }, { status: 400 });
 
-    const admin = createSupabaseAdminClient();
+    const admin = createPgAdminClient();
     const musteri = await getCustomer(admin, musteriId);
     if (!musteri) return NextResponse.json({ message: 'Müşteri bulunamadı.' }, { status: 404 });
 
-    if (!isAdminLike(me.role) && String(musteri.sorumlu ?? '').trim() !== String(me.full_name ?? '').trim()) {
-      return NextResponse.json({ message: 'Bu müşteriyi düzenleme yetkin yok.' }, { status: 403 });
+    if (isReportOnlyCustomer(musteri)) {
+      return NextResponse.json(
+        { message: 'Bu müşteri İş Ortağı kapsamındadır; künye kaydı açılamaz.' },
+        { status: 409 },
+      );
     }
 
     const payload = normalizeKunyePayload({
@@ -80,6 +97,8 @@ export async function POST(req: Request) {
     const record = {
       musteri_id: musteriId,
       ...mapKunyeUiToDb(payload),
+      updated_by: String(me.full_name ?? me.email ?? "").trim() || null,
+      updated_at: new Date().toISOString(),
     };
 
     const { error } = await admin.from('musteri_kunye_v2').upsert(record, { onConflict: 'musteri_id' });

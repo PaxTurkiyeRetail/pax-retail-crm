@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
-import { requireAdminOrThrow } from '@/lib/authz';
-import { createSupabaseAdminClient } from '@/lib/supabase/admin';
+import { requireAllowedUserOrThrow } from '@/lib/authz';
+import { createPgAdminClient } from '@/lib/pg/admin';
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 type Body = {
   product_id?: string;
@@ -12,7 +15,7 @@ type Body = {
 
 export async function POST(request: Request) {
   try {
-    await requireAdminOrThrow();
+    await requireAllowedUserOrThrow();
     const body = (await request.json().catch(() => ({}))) as Body;
     const productId = String(body.product_id ?? '').trim();
     const minQty = Number(body.min_qty ?? 0);
@@ -24,7 +27,7 @@ export async function POST(request: Request) {
     if (maxQty != null && (!Number.isFinite(maxQty) || maxQty < minQty)) return NextResponse.json({ message: 'Max adet min adetten küçük olamaz.' }, { status: 400 });
     if (!Number.isFinite(unitPrice) || unitPrice < 0) return NextResponse.json({ message: 'Birim fiyat geçersiz.' }, { status: 400 });
 
-    const admin = createSupabaseAdminClient();
+    const admin = createPgAdminClient();
     const { data: existing } = await admin
       .from('quote_pricing_rules')
       .select('id')

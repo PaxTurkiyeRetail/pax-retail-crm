@@ -3,6 +3,34 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
+
+type KunyeOption = { label: string; value: string };
+type KunyeOptionMap = Record<string, KunyeOption[]>;
+
+const FALLBACK_KUNYE_OPTIONS: KunyeOptionMap = {
+  kunye_magaza_sayisi: ['1-25', '26-200', '201-500', '500+'].map((value) => ({ label: value, value })),
+  kunye_franchise_sayisi: ['Yok', '1-25', '26-200', '201-500', '500+'].map((value) => ({ label: value, value })),
+  kunye_sabit_kasa_adedi: ['Kullanılmıyor', '1-25', '26-200', '201-500', '500+'].map((value) => ({ label: value, value })),
+  kunye_kasapos_firmasi: ['Nebim', 'Toshiba', 'Echopos', 'NCR', 'Encore', 'Enpos', 'Logo', 'Posback', 'Smartpos', 'Barsoft', 'Protel', 'Avion', 'Inhouse', 'Denpos', 'Diğer'].map((value) => ({ label: value, value })),
+  kunye_pos_modeli: ['ÖKC', 'EFT'].map((value) => ({ label: value, value })),
+  kunye_pos_markasi: ['Ingenico', 'Verifone', 'PAX', 'Pavo', 'Hugin', 'Sunmi', 'Profilo', 'Beko', 'Vera', 'Inpos', 'Diğer'].map((value) => ({ label: value, value })),
+  kunye_alim_yili: ['1 yıldan az', '1-3 yıl', '3-5 yıl', '5+ yıl'].map((value) => ({ label: value, value })),
+  kunye_bilgisayar_markasi: ['HP', 'Posback', 'Echopos', 'Toshiba', 'Enpos', 'NCR', 'Encore', 'D&N', 'OEM', 'Diğer'].map((value) => ({ label: value, value })),
+  kunye_evet_hayir: ['Hayır', 'Evet'].map((value) => ({ label: value, value })),
+  kunye_odeme_yazilimi: ['Logo', 'Nebim', 'Genius', 'NCR', 'Tera', 'Enpos', 'In House', 'Diğer'].map((value) => ({ label: value, value })),
+  kunye_reyon_cihaz_modeli: ['Zebra', 'Honeywell', 'Datalogic', 'Newland', 'Sunmi', 'PAX', 'Diğer'].map((value) => ({ label: value, value })),
+  kunye_el_terminali_modeli: ['Honeywell', 'iData', 'Disc', 'Zebra', 'Newland', 'Point Mobile', 'Urovo', 'Telefon', 'Diğer'].map((value) => ({ label: value, value })),
+  kunye_erp: ['Logo', 'Nebim', 'Genius', 'NCR', 'Tera', 'Enpos', 'Mikro', 'Posback', 'SAP', 'AXAPTA', 'Oracle', 'Uyumsoft', 'Giz', 'In House', 'Diğer'].map((value) => ({ label: value, value })),
+  kunye_banka: ['Akbank', 'Garanti BBVA', 'İş Bankası', 'Yapı Kredi', 'Halkbank', 'VakıfBank', 'Ziraat Bankası', 'QNB', 'TEB', 'DenizBank', 'AktifBank'].map((value) => ({ label: value, value })),
+  kunye_pos_mulkiyet: ['Kendisi', 'Banka', 'Bankada'].map((value) => ({ label: value, value })),
+  kunye_saha_hizmeti_firmasi: ['Bilinmiyor', 'Teknoser', 'IBM', 'Payser', 'Diğer'].map((value) => ({ label: value, value })),
+  kunye_memnuniyet: ['Memnun', 'Orta', 'Memnun Değil'].map((value) => ({ label: value, value })),
+};
+
+function getOptions(options: KunyeOptionMap, key: string) {
+  return options[key]?.length ? options[key] : FALLBACK_KUNYE_OPTIONS[key] ?? [];
+}
+
 type KunyeFormData = {
   firma_adi: string;
   magaza_sayisi: string;
@@ -100,6 +128,7 @@ export default function QuickKunyeForm({ musteriId, musteriAdi, existingData }: 
           .map(v => v.trim())
           .filter(Boolean),
   });
+  const [parameterOptions, setParameterOptions] = useState<KunyeOptionMap>(FALLBACK_KUNYE_OPTIONS);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
@@ -112,6 +141,21 @@ export default function QuickKunyeForm({ musteriId, musteriAdi, existingData }: 
     memnuniyet: false
   });
 
+
+
+  useEffect(() => {
+    let alive = true;
+    fetch('/api/parameters/kunye', { cache: 'no-store' })
+      .then(async (res) => {
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.message || 'Parametreler alınamadı');
+        if (alive && data.options) setParameterOptions({ ...FALLBACK_KUNYE_OPTIONS, ...data.options });
+      })
+      .catch(() => {
+        if (alive) setParameterOptions(FALLBACK_KUNYE_OPTIONS);
+      });
+    return () => { alive = false; };
+  }, []);
 
   useEffect(() => {
     setForm({
@@ -169,6 +213,9 @@ export default function QuickKunyeForm({ musteriId, musteriAdi, existingData }: 
         el_terminali_adedi: elTerminaliVisible ? form.el_terminali_adedi : '',
         el_terminali_alim_yili: elTerminaliVisible ? form.el_terminali_alim_yili : '',
         pos_mulkiyet_bankalari: posMulkiyetBankalarVisible ? form.pos_mulkiyet_bankalari : [],
+        problem_1: form.genel_memnuniyet && form.genel_memnuniyet !== 'Memnun' ? form.problem_1 : '',
+        problem_2: '',
+        problem_3: '',
       };
 
       const res = await fetch('/api/kunye', {
@@ -199,6 +246,8 @@ export default function QuickKunyeForm({ musteriId, musteriAdi, existingData }: 
   const reyonVisible = form.reyon_kullaniliyor === 'Evet';
   const elTerminaliVisible = form.el_terminali_kullaniliyor === 'Evet';
   const posMulkiyetBankalarVisible = form.pos_mulkiyet === 'Banka';
+  const opt = (key: string) => getOptions(parameterOptions, key);
+
 
   return (
     <form onSubmit={handleSubmit} className="pax-page-container">
@@ -266,10 +315,7 @@ export default function QuickKunyeForm({ musteriId, musteriAdi, existingData }: 
                 style={{ width: '100%', minHeight: 48, fontSize: 16 }}
               >
                 <option value="">Seçin...</option>
-                <option value="1-25">1-25</option>
-                <option value="26-200">26-200</option>
-                <option value="201-500">201-500</option>
-                <option value="500+">500+</option>
+                {opt('kunye_magaza_sayisi').map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
               </select>
             </div>
 
@@ -285,11 +331,7 @@ export default function QuickKunyeForm({ musteriId, musteriAdi, existingData }: 
                 style={{ width: '100%', minHeight: 48, fontSize: 16 }}
               >
                 <option value="">Seçin...</option>
-                <option value="Yok">Yok</option>
-                <option value="1-25">1-25</option>
-                <option value="26-200">26-200</option>
-                <option value="201-500">201-500</option>
-                <option value="500+">500+</option>
+                {opt('kunye_franchise_sayisi').map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
               </select>
             </div>
           </div>
@@ -333,11 +375,7 @@ export default function QuickKunyeForm({ musteriId, musteriAdi, existingData }: 
                 style={{ width: '100%', minHeight: 48, fontSize: 16 }}
               >
                 <option value="">Seçin...</option>
-                <option value="Kullanılmıyor">Kullanılmıyor</option>
-                <option value="1-25">1-25</option>
-                <option value="26-200">26-200</option>
-                <option value="201-500">201-500</option>
-                <option value="500+">500+</option>
+                {opt('kunye_sabit_kasa_adedi').map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
               </select>
             </div>
 
@@ -355,13 +393,7 @@ export default function QuickKunyeForm({ musteriId, musteriAdi, existingData }: 
                     style={{ width: '100%', minHeight: 48, fontSize: 16 }}
                   >
                     <option value="">Seçin...</option>
-                    <option value="Nebim">Nebim</option>
-                    <option value="Toshiba">Toshiba</option>
-                    <option value="NCR">NCR</option>
-                    <option value="Encore">Encore</option>
-                    <option value="Enpos">Enpos</option>
-                    <option value="Logo">Logo</option>
-                    <option value="Diğer">Diğer</option>
+                    {opt('kunye_kasapos_firmasi').map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
                   </select>
                 </div>
 
@@ -377,20 +409,14 @@ export default function QuickKunyeForm({ musteriId, musteriAdi, existingData }: 
                     style={{ width: '100%', minHeight: 48, fontSize: 16 }}
                   >
                     <option value="">Seçin...</option>
-                    <option value="ÖKC">ÖKC</option>
-                    <option value="EFT">EFT</option>
+                    {opt('kunye_pos_modeli').map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
                   </select>
                 </div>
 
                 {/* POS Markası - YENİ ALAN */}
-                <div style={{ 
-                  background: 'rgba(255, 193, 7, 0.1)', 
-                  padding: 12, 
-                  borderRadius: 'var(--radius-md)',
-                  border: '2px dashed rgba(255, 193, 7, 0.4)'
-                }}>
+                <div>
                   <label className="pax-label" style={{ display: 'block', marginBottom: 8 }}>
-                    POS Markası ⚠️ YENİ ALAN
+                    POS Markası
                   </label>
                   <select
                     value={form.pos_markasi}
@@ -399,14 +425,7 @@ export default function QuickKunyeForm({ musteriId, musteriAdi, existingData }: 
                     style={{ width: '100%', minHeight: 48, fontSize: 16 }}
                   >
                     <option value="">Seçin...</option>
-                    <option value="ÖKC">ÖKC</option>
-                    <option value="Ingenico">Ingenico</option>
-                    <option value="Verifone">Verifone</option>
-                    <option value="PAX">PAX</option>
-                    <option value="Pavo">Pavo</option>
-                    <option value="Hugin">Hugin</option>
-                    <option value="Sunmi">Sunmi</option>
-                    <option value="Diğer">Diğer</option>
+                    {opt('kunye_pos_markasi').map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
                   </select>
                 </div>
 
@@ -426,14 +445,9 @@ export default function QuickKunyeForm({ musteriId, musteriAdi, existingData }: 
                 </div>
 
                 {/* POS Alım Yılı - YENİ ALAN */}
-                <div style={{ 
-                  background: 'rgba(255, 193, 7, 0.1)', 
-                  padding: 12, 
-                  borderRadius: 'var(--radius-md)',
-                  border: '2px dashed rgba(255, 193, 7, 0.4)'
-                }}>
+                <div>
                   <label className="pax-label" style={{ display: 'block', marginBottom: 8 }}>
-                    POS Cihazları Alım Yılı ⚠️ YENİ ALAN
+                    POS Cihazları Alım Yılı
                   </label>
                   <select
                     value={form.pos_alim_yili}
@@ -442,22 +456,14 @@ export default function QuickKunyeForm({ musteriId, musteriAdi, existingData }: 
                     style={{ width: '100%', minHeight: 48, fontSize: 16 }}
                   >
                     <option value="">Seçin...</option>
-                    <option value="1 yıldan az">1 yıldan az</option>
-                    <option value="1-3 yıl">1-3 yıl</option>
-                    <option value="3-5 yıl">3-5 yıl</option>
-                    <option value="5+ yıl">5+ yıl</option>
+                    {opt('kunye_alim_yili').map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
                   </select>
                 </div>
 
                 {/* Sabit Bilgisayar Markası - YENİ ALAN */}
-                <div style={{ 
-                  background: 'rgba(255, 193, 7, 0.1)', 
-                  padding: 12, 
-                  borderRadius: 'var(--radius-md)',
-                  border: '2px dashed rgba(255, 193, 7, 0.4)'
-                }}>
+                <div>
                   <label className="pax-label" style={{ display: 'block', marginBottom: 8 }}>
-                    Sabit Bilgisayar Markası ⚠️ YENİ ALAN
+                    Sabit Bilgisayar Markası
                   </label>
                   <select
                     value={form.sabit_bilgisayar_markasi}
@@ -466,13 +472,7 @@ export default function QuickKunyeForm({ musteriId, musteriAdi, existingData }: 
                     style={{ width: '100%', minHeight: 48, fontSize: 16 }}
                   >
                     <option value="">Seçin...</option>
-                    <option value="HP">HP</option>
-                    <option value="Dell">Dell</option>
-                    <option value="Lenovo">Lenovo</option>
-                    <option value="Asus">Asus</option>
-                    <option value="Casper">Casper</option>
-                    <option value="Apple">Apple</option>
-                    <option value="Diğer">Diğer</option>
+                    {opt('kunye_bilgisayar_markasi').map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
                   </select>
                 </div>
               </>
@@ -507,14 +507,9 @@ export default function QuickKunyeForm({ musteriId, musteriAdi, existingData }: 
         {openSections.reyon && (
           <div style={{ padding: '0 16px 16px', display: 'grid', gap: 16 }}>
             {/* Reyon Kullanılıyor mu - YENİ ALAN */}
-            <div style={{ 
-              background: 'rgba(255, 193, 7, 0.1)', 
-              padding: 12, 
-              borderRadius: 'var(--radius-md)',
-              border: '2px dashed rgba(255, 193, 7, 0.4)'
-            }}>
+            <div>
               <label className="pax-label" style={{ display: 'block', marginBottom: 8 }}>
-                Reyon Cihazı Kullanıyor mu? ⚠️ YENİ ALAN
+                Reyon Cihazı Kullanıyor mu?
               </label>
               <select
                 value={form.reyon_kullaniliyor}
@@ -522,8 +517,7 @@ export default function QuickKunyeForm({ musteriId, musteriAdi, existingData }: 
                 className="pax-input"
                 style={{ width: '100%', minHeight: 48, fontSize: 16 }}
               >
-                <option value="Hayır">Hayır</option>
-                <option value="Evet">Evet</option>
+                {opt('kunye_evet_hayir').map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
               </select>
             </div>
 
@@ -541,26 +535,14 @@ export default function QuickKunyeForm({ musteriId, musteriAdi, existingData }: 
                     style={{ width: '100%', minHeight: 48, fontSize: 16 }}
                   >
                     <option value="">Seçin...</option>
-                    <option value="Logo">Logo</option>
-                    <option value="Nebim">Nebim</option>
-                    <option value="Genius">Genius</option>
-                    <option value="NCR">NCR</option>
-                    <option value="Tera">Tera</option>
-                    <option value="Enpos">Enpos</option>
-                    <option value="In House">In House</option>
-                    <option value="Diğer">Diğer</option>
+                    {opt('kunye_odeme_yazilimi').map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
                   </select>
                 </div>
 
                 {/* Reyon Cihaz Modeli - YENİ ALAN */}
-                <div style={{ 
-                  background: 'rgba(255, 193, 7, 0.1)', 
-                  padding: 12, 
-                  borderRadius: 'var(--radius-md)',
-                  border: '2px dashed rgba(255, 193, 7, 0.4)'
-                }}>
+                <div>
                   <label className="pax-label" style={{ display: 'block', marginBottom: 8 }}>
-                    Reyon Cihazı Modeli ⚠️ YENİ ALAN
+                    Reyon Cihazı Modeli
                   </label>
                   <select
                     value={form.reyon_cihaz_modeli}
@@ -569,13 +551,7 @@ export default function QuickKunyeForm({ musteriId, musteriAdi, existingData }: 
                     style={{ width: '100%', minHeight: 48, fontSize: 16 }}
                   >
                     <option value="">Seçin...</option>
-                    <option value="Zebra">Zebra</option>
-                    <option value="Honeywell">Honeywell</option>
-                    <option value="Datalogic">Datalogic</option>
-                    <option value="Newland">Newland</option>
-                    <option value="Sunmi">Sunmi</option>
-                    <option value="PAX">PAX</option>
-                    <option value="Diğer">Diğer</option>
+                    {opt('kunye_reyon_cihaz_modeli').map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
                   </select>
                 </div>
 
@@ -595,14 +571,9 @@ export default function QuickKunyeForm({ musteriId, musteriAdi, existingData }: 
                 </div>
 
                 {/* Reyon Alım Yılı - YENİ ALAN */}
-                <div style={{ 
-                  background: 'rgba(255, 193, 7, 0.1)', 
-                  padding: 12, 
-                  borderRadius: 'var(--radius-md)',
-                  border: '2px dashed rgba(255, 193, 7, 0.4)'
-                }}>
+                <div>
                   <label className="pax-label" style={{ display: 'block', marginBottom: 8 }}>
-                    Reyon/Saha Cihazları Alım Yılı ⚠️ YENİ ALAN
+                    Reyon/Saha Cihazları Alım Yılı
                   </label>
                   <select
                     value={form.reyon_alim_yili}
@@ -611,10 +582,7 @@ export default function QuickKunyeForm({ musteriId, musteriAdi, existingData }: 
                     style={{ width: '100%', minHeight: 48, fontSize: 16 }}
                   >
                     <option value="">Seçin...</option>
-                    <option value="1 yıldan az">1 yıldan az</option>
-                    <option value="1-3 yıl">1-3 yıl</option>
-                    <option value="3-5 yıl">3-5 yıl</option>
-                    <option value="5+ yıl">5+ yıl</option>
+                    {opt('kunye_alim_yili').map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
                   </select>
                 </div>
               </>
@@ -649,14 +617,9 @@ export default function QuickKunyeForm({ musteriId, musteriAdi, existingData }: 
         {openSections.el_terminali && (
           <div style={{ padding: '0 16px 16px', display: 'grid', gap: 16 }}>
             {/* El Terminali Kullanılıyor mu - YENİ ALAN */}
-            <div style={{ 
-              background: 'rgba(255, 193, 7, 0.1)', 
-              padding: 12, 
-              borderRadius: 'var(--radius-md)',
-              border: '2px dashed rgba(255, 193, 7, 0.4)'
-            }}>
+            <div>
               <label className="pax-label" style={{ display: 'block', marginBottom: 8 }}>
-                El Terminali Kullanıyor mu? ⚠️ YENİ ALAN
+                El Terminali Kullanıyor mu?
               </label>
               <select
                 value={form.el_terminali_kullaniliyor}
@@ -664,8 +627,7 @@ export default function QuickKunyeForm({ musteriId, musteriAdi, existingData }: 
                 className="pax-input"
                 style={{ width: '100%', minHeight: 48, fontSize: 16 }}
               >
-                <option value="Hayır">Hayır</option>
-                <option value="Evet">Evet</option>
+                {opt('kunye_evet_hayir').map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
               </select>
             </div>
 
@@ -683,24 +645,14 @@ export default function QuickKunyeForm({ musteriId, musteriAdi, existingData }: 
                     style={{ width: '100%', minHeight: 48, fontSize: 16 }}
                   >
                     <option value="">Seçin...</option>
-                    <option value="Zebra">Zebra</option>
-                    <option value="Newland">Newland</option>
-                    <option value="Point Mobile">Point Mobile</option>
-                    <option value="Urovo">Urovo</option>
-                    <option value="Telefon">Telefon</option>
-                    <option value="Diğer">Diğer</option>
+                    {opt('kunye_el_terminali_modeli').map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
                   </select>
                 </div>
 
                 {/* El Terminali Yazılımı - YENİ ALAN */}
-                <div style={{ 
-                  background: 'rgba(255, 193, 7, 0.1)', 
-                  padding: 12, 
-                  borderRadius: 'var(--radius-md)',
-                  border: '2px dashed rgba(255, 193, 7, 0.4)'
-                }}>
+                <div>
                   <label className="pax-label" style={{ display: 'block', marginBottom: 8 }}>
-                    El Terminali Yazılımı ⚠️ YENİ ALAN
+                    El Terminali Yazılımı
                   </label>
                   <select
                     value={form.el_terminali_yazilimi}
@@ -709,14 +661,7 @@ export default function QuickKunyeForm({ musteriId, musteriAdi, existingData }: 
                     style={{ width: '100%', minHeight: 48, fontSize: 16 }}
                   >
                     <option value="">Seçin...</option>
-                    <option value="Logo">Logo</option>
-                    <option value="Nebim">Nebim</option>
-                    <option value="Genius">Genius</option>
-                    <option value="NCR">NCR</option>
-                    <option value="Tera">Tera</option>
-                    <option value="Enpos">Enpos</option>
-                    <option value="In House">In House</option>
-                    <option value="Diğer">Diğer</option>
+                    {opt('kunye_odeme_yazilimi').map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
                   </select>
                 </div>
 
@@ -736,14 +681,9 @@ export default function QuickKunyeForm({ musteriId, musteriAdi, existingData }: 
                 </div>
 
                 {/* El Terminali Alım Yılı - YENİ ALAN */}
-                <div style={{ 
-                  background: 'rgba(255, 193, 7, 0.1)', 
-                  padding: 12, 
-                  borderRadius: 'var(--radius-md)',
-                  border: '2px dashed rgba(255, 193, 7, 0.4)'
-                }}>
+                <div>
                   <label className="pax-label" style={{ display: 'block', marginBottom: 8 }}>
-                    El Terminali Alım Yılı ⚠️ YENİ ALAN
+                    El Terminali Alım Yılı
                   </label>
                   <select
                     value={form.el_terminali_alim_yili}
@@ -752,10 +692,7 @@ export default function QuickKunyeForm({ musteriId, musteriAdi, existingData }: 
                     style={{ width: '100%', minHeight: 48, fontSize: 16 }}
                   >
                     <option value="">Seçin...</option>
-                    <option value="1 yıldan az">1 yıldan az</option>
-                    <option value="1-3 yıl">1-3 yıl</option>
-                    <option value="3-5 yıl">3-5 yıl</option>
-                    <option value="5+ yıl">5+ yıl</option>
+                    {opt('kunye_alim_yili').map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
                   </select>
                 </div>
               </>
@@ -801,18 +738,7 @@ export default function QuickKunyeForm({ musteriId, musteriAdi, existingData }: 
                 style={{ width: '100%', minHeight: 48, fontSize: 16 }}
               >
                 <option value="">Seçin...</option>
-                <option value="Logo">Logo</option>
-                <option value="Nebim">Nebim</option>
-                <option value="Genius">Genius</option>
-                <option value="NCR">NCR</option>
-                <option value="Tera">Tera</option>
-                <option value="Enpos">Enpos</option>
-                <option value="SAP">SAP</option>
-                <option value="Oracle">Oracle</option>
-                <option value="Uyumsoft">Uyumsoft</option>
-                <option value="Giz">Giz</option>
-                <option value="In House">In House</option>
-                <option value="Diğer">Diğer</option>
+                {opt('kunye_erp').map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
               </select>
             </div>
           </div>
@@ -856,7 +782,7 @@ export default function QuickKunyeForm({ musteriId, musteriAdi, existingData }: 
                 maxHeight: 200,
                 overflow: 'auto'
               }}>
-                {['Akbank', 'Garanti BBVA', 'İş Bankası', 'Yapı Kredi', 'Halkbank', 'VakıfBank', 'Ziraat Bankası', 'QNB', 'TEB', 'DenizBank'].map(banka => (
+                {opt('kunye_banka').map((item) => { const banka = item.value; return (
                   <label key={banka} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', cursor: 'pointer' }}>
                     <input
                       type="checkbox"
@@ -866,7 +792,7 @@ export default function QuickKunyeForm({ musteriId, musteriAdi, existingData }: 
                     />
                     <span style={{ fontSize: 14 }}>{banka}</span>
                   </label>
-                ))}
+                ); })}
               </div>
             </div>
 
@@ -882,9 +808,7 @@ export default function QuickKunyeForm({ musteriId, musteriAdi, existingData }: 
                 style={{ width: '100%', minHeight: 48, fontSize: 16 }}
               >
                 <option value="">Seçin...</option>
-                <option value="Kendisi">Kendisi</option>
-                <option value="Banka">Banka</option>
-                <option value="Bankada">Bankada</option>
+                {opt('kunye_pos_mulkiyet').map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
               </select>
             </div>
 
@@ -901,7 +825,7 @@ export default function QuickKunyeForm({ musteriId, musteriAdi, existingData }: 
                   maxHeight: 200,
                   overflow: 'auto'
                 }}>
-                  {['Akbank', 'Garanti BBVA', 'İş Bankası', 'Yapı Kredi', 'Halkbank', 'VakıfBank', 'Ziraat Bankası', 'QNB', 'TEB', 'DenizBank'].map(banka => (
+                  {opt('kunye_banka').map((item) => { const banka = item.value; return (
                     <label key={banka} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', cursor: 'pointer' }}>
                       <input
                         type="checkbox"
@@ -911,7 +835,7 @@ export default function QuickKunyeForm({ musteriId, musteriAdi, existingData }: 
                       />
                       <span style={{ fontSize: 14 }}>{banka}</span>
                     </label>
-                  ))}
+                  ); })}
                 </div>
               </div>
             )}
@@ -928,11 +852,7 @@ export default function QuickKunyeForm({ musteriId, musteriAdi, existingData }: 
                 style={{ width: '100%', minHeight: 48, fontSize: 16 }}
               >
                 <option value="">Seçin...</option>
-                <option value="Bilinmiyor">Bilinmiyor</option>
-                <option value="Teknoser">Teknoser</option>
-                <option value="IBM">IBM</option>
-                <option value="Payser">Payser</option>
-                <option value="Diğer">Diğer</option>
+                {opt('kunye_saha_hizmeti_firmasi').map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
               </select>
             </div>
           </div>
@@ -976,56 +896,26 @@ export default function QuickKunyeForm({ musteriId, musteriAdi, existingData }: 
                 style={{ width: '100%', minHeight: 48, fontSize: 16 }}
               >
                 <option value="">Seçin...</option>
-                <option value="Memnun">Memnun</option>
-                <option value="Orta">Orta</option>
-                <option value="Memnun Değil">Memnun Değil</option>
+                {opt('kunye_memnuniyet').map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
               </select>
             </div>
 
-            {/* Problem 1 */}
-            <div>
-              <label className="pax-label" style={{ display: 'block', marginBottom: 8 }}>
-                Problem 1
-              </label>
-              <textarea
-                value={form.problem_1}
-                onChange={(e) => updateForm('problem_1', e.target.value)}
-                className="pax-input"
-                rows={3}
-                placeholder="İlk problem..."
-                style={{ width: '100%', fontSize: 16, resize: 'vertical', padding: 12 }}
-              />
-            </div>
-
-            {/* Problem 2 */}
-            <div>
-              <label className="pax-label" style={{ display: 'block', marginBottom: 8 }}>
-                Problem 2
-              </label>
-              <textarea
-                value={form.problem_2}
-                onChange={(e) => updateForm('problem_2', e.target.value)}
-                className="pax-input"
-                rows={3}
-                placeholder="İkinci problem..."
-                style={{ width: '100%', fontSize: 16, resize: 'vertical', padding: 12 }}
-              />
-            </div>
-
-            {/* Problem 3 */}
-            <div>
-              <label className="pax-label" style={{ display: 'block', marginBottom: 8 }}>
-                Problem 3
-              </label>
-              <textarea
-                value={form.problem_3}
-                onChange={(e) => updateForm('problem_3', e.target.value)}
-                className="pax-input"
-                rows={3}
-                placeholder="Üçüncü problem..."
-                style={{ width: '100%', fontSize: 16, resize: 'vertical', padding: 12 }}
-              />
-            </div>
+            {/* Problem */}
+            {form.genel_memnuniyet && form.genel_memnuniyet !== 'Memnun' && (
+              <div>
+                <label className="pax-label" style={{ display: 'block', marginBottom: 8 }}>
+                  Problem
+                </label>
+                <textarea
+                  value={form.problem_1}
+                  onChange={(e) => updateForm('problem_1', e.target.value)}
+                  className="pax-input"
+                  rows={3}
+                  placeholder="Problem..."
+                  style={{ width: '100%', fontSize: 16, resize: 'vertical', padding: 12 }}
+                />
+              </div>
+            )}
 
             {/* Değişim Nedeni */}
             <div>

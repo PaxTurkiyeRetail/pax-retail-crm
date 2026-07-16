@@ -1,11 +1,14 @@
 import { NextResponse } from 'next/server';
 import { requireAdminOrThrow } from '@/lib/authz';
-import { createSupabaseAdminClient } from '@/lib/supabase/admin';
+import { createPgAdminClient } from '@/lib/pg/admin';
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export async function GET() {
   try {
     await requireAdminOrThrow();
-    const admin = createSupabaseAdminClient();
+    const admin = createPgAdminClient();
     const { data, error } = await admin
       .from('musteri_account_change_requests')
       .select('*')
@@ -30,7 +33,7 @@ export async function POST(req: Request) {
     if (!requestId) return NextResponse.json({ message: 'requestId gerekli' }, { status: 400 });
     if (!['approve', 'reject'].includes(action)) return NextResponse.json({ message: 'Geçersiz aksiyon' }, { status: 400 });
 
-    const admin = createSupabaseAdminClient();
+    const admin = createPgAdminClient();
     const { data: row, error: rowError } = await admin
       .from('musteri_account_change_requests')
       .select('*')

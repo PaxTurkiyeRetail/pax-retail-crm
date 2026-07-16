@@ -72,8 +72,8 @@ export default function SalesRadarPageClient() {
       try {
         setLoading(true);
         const [crmRes, actRes] = await Promise.all([
-          fetch('/api/crm/list?lite=1&pageSize=500', { next: { revalidate: 30 } }),
-          fetch('/api/reports/weekly-activities', { next: { revalidate: 30 } }),
+          fetch('/api/crm/list?lite=1&pageSize=500', { cache: 'no-store' }),
+          fetch('/api/reports/weekly-activities', { cache: 'no-store' }),
         ]);
         const crmJson = await crmRes.json().catch(() => ({ rows: [] }));
         const actJson = await actRes.json().catch(() => ({ list: [] }));

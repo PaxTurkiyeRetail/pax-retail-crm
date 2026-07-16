@@ -1,11 +1,21 @@
 import { NextResponse } from 'next/server';
 import { requireReportsAccessOrThrow } from '@/lib/authz';
-import { createSupabaseAdminClient } from '@/lib/supabase/admin';
+import { createPgAdminClient } from '@/lib/pg/admin';
 import { getKunyeStatus, mapKunyeDbToUi } from '@/lib/kunye';
-import { isAdminLike } from '@/lib/roles';
+import { fetchAllByCustomerIds, fetchAllRows } from '@/lib/reporting';
+import { reportOnlyCustomerKind } from '@/lib/report-only-customers';
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 function uniqueSorted(values: Array<string | null | undefined>) {
   return Array.from(new Set(values.map((item) => String(item ?? '').trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'tr'));
+}
+
+
+function sellerReportOwner(row: { musteri?: unknown; sorumlu?: unknown; sektor?: unknown }) {
+  if (reportOnlyCustomerKind(row) === 'business-partner') return 'İş Ortakları';
+  return String(row.sorumlu ?? '').trim() || '-';
 }
 
 function macroPhaseName(phaseNo: number | null | undefined) {
@@ -26,55 +36,59 @@ function summarize(values: string[]) {
 
 export async function GET(request: Request) {
   try {
-    const me = await requireReportsAccessOrThrow();
-    const admin = createSupabaseAdminClient();
+    await requireReportsAccessOrThrow();
+    const admin = createPgAdminClient();
     const url = new URL(request.url);
     const selectedSeller = String(url.searchParams.get('seller') ?? '').trim();
-    const myName = String(me.full_name ?? '').trim();
-    const adminLike = isAdminLike(me.role);
 
-    const { data: customers, error: customerError } = await admin
-      .from('vw_crm_musteriler')
-      .select('musteri_id,musteri,sorumlu,aktif_faz_no,aktif_faz_adi,sektor,entegrasyon_tipi')
-      .order('musteri', { ascending: true })
-      .limit(5000);
+    const customers = await fetchAllRows<any>((from, to) => {
+      return admin
+        .from('vw_crm_musteriler')
+        .select('musteri_id,musteri,sorumlu,aktif_faz_no,aktif_faz_adi,sektor,entegrasyon_tipi')
+        .order('musteri', { ascending: true })
+        .range(from, to);
+    });
 
-    if (customerError) {
-      return NextResponse.json({ message: customerError.message }, { status: 500 });
-    }
+    const allRows = (customers ?? []).map((row: any) => {
+      const musteri = String(row.musteri ?? '').trim() || '-';
+      const sektor = String(row.sektor ?? '').trim() || '-';
+      const rawSorumlu = String(row.sorumlu ?? '').trim();
+      const sorumlu = sellerReportOwner({ musteri, sorumlu: rawSorumlu, sektor });
+      return {
+        musteri_id: String(row.musteri_id ?? '').trim(),
+        musteri,
+        sorumlu,
+        aktif_faz_no: row.aktif_faz_no == null ? null : Number(row.aktif_faz_no),
+        aktif_faz_adi: String(row.aktif_faz_adi ?? '').trim() || null,
+        sektor,
+        entegrasyon_tipi: String(row.entegrasyon_tipi ?? '').trim() || '-',
+        kayit_tipi: reportOnlyCustomerKind({ musteri, sorumlu: rawSorumlu, sektor }) === 'business-partner' ? 'İş Ortağı' : 'Müşteri',
+      };
+    });
 
-    const allRows = (customers ?? []).map((row: any) => ({
-      musteri_id: String(row.musteri_id ?? '').trim(),
-      musteri: String(row.musteri ?? '').trim() || '-',
-      sorumlu: String(row.sorumlu ?? '').trim() || '-',
-      aktif_faz_no: row.aktif_faz_no == null ? null : Number(row.aktif_faz_no),
-      aktif_faz_adi: String(row.aktif_faz_adi ?? '').trim() || null,
-      sektor: String(row.sektor ?? '').trim() || '-',
-      entegrasyon_tipi: String(row.entegrasyon_tipi ?? '').trim() || '-',
-    }));
-
-    const sellerOptions = uniqueSorted(allRows.map((row) => row.sorumlu));
-    const effectiveSeller = adminLike ? (selectedSeller || (sellerOptions.includes(myName) ? myName : sellerOptions[0] ?? '')) : myName;
+    const sellerOptions = ['Tüm Satıcılar', ...uniqueSorted(allRows.map((row) => row.sorumlu))];
+    const effectiveSeller = selectedSeller && selectedSeller !== 'Tüm Satıcılar' ? selectedSeller : '';
     const sellerRows = effectiveSeller ? allRows.filter((row) => row.sorumlu === effectiveSeller) : allRows;
     const ids = sellerRows.map((row) => row.musteri_id).filter(Boolean);
 
     const kunyeMap = new Map<string, any>();
     if (ids.length > 0) {
-      const { data: kunyeler, error: kunyeError } = await admin
-        .from('musteri_kunye')
-        .select('musteri_id,magaza_sayisi,franchise_sayisi,toplam_pos_adedi,pos_modeli,erp,bankalar,pos_mulkiyet,pos_mulkiyet_bankalari,sabit_kasa_yazilimi,saha_hizmeti_firmasi')
-        .in('musteri_id', ids);
-      if (!kunyeError) {
-        for (const row of kunyeler ?? []) {
-          const key = String((row as any).musteri_id ?? '').trim();
-          if (key) kunyeMap.set(key, row);
-        }
+      const kunyeler = await fetchAllByCustomerIds<any>(
+        admin,
+        'v_musteri_kunye_status',
+        '*',
+        ids,
+      );
+      for (const row of kunyeler) {
+        const key = String((row as any).musteri_id ?? '').trim();
+        if (key) kunyeMap.set(key, row);
       }
     }
 
     const enriched = sellerRows.map((row) => {
-      const kunye = mapKunyeDbToUi(kunyeMap.get(row.musteri_id) ?? null);
-      const kunyeStatus = getKunyeStatus({ ...kunye, firma_adi: row.musteri, has_kunye_record: Boolean(kunye) });
+      const rawKunye = kunyeMap.get(row.musteri_id) ?? null;
+      const kunye = mapKunyeDbToUi(rawKunye);
+      const kunyeStatus = getKunyeStatus({ ...kunye, ...(rawKunye ?? {}), firma_adi: row.musteri, has_kunye_record: Boolean(kunye) });
       return {
         ...row,
         macro_faz: macroPhaseName(row.aktif_faz_no),
@@ -85,48 +99,48 @@ export async function GET(request: Request) {
 
     let recentActivities: any[] = [];
     let activeCustomerIdSet = new Set<string>();
-    const activeCustomerIds = ids.slice(0, 1000);
 
-    if (activeCustomerIds.length > 0) {
-      // Son 90 gün içinde aktivite olan müşterileri bul (activeCustomers için)
+    if (ids.length > 0) {
       const ninetyDaysAgo = new Date();
       ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
 
-      const { data: activeData } = await admin
-        .from('pipeline_eventleri')
-        .select('musteri_id')
-        .in('musteri_id', activeCustomerIds)
-        .gte('created_at', ninetyDaysAgo.toISOString());
-
+      const activeData = await fetchAllByCustomerIds<any>(
+        admin,
+        'pipeline_eventleri',
+        'musteri_id,created_at',
+        ids,
+        (query) => query.gte('created_at', ninetyDaysAgo.toISOString()).order('created_at', { ascending: false }),
+      );
       activeCustomerIdSet = new Set(
-        (activeData ?? []).map((row: any) => String(row.musteri_id ?? '').trim()).filter(Boolean)
+        activeData.map((row: any) => String(row.musteri_id ?? '').trim()).filter(Boolean),
       );
 
-      // Son aktiviteler listesi için ayrıca çek (UI tablosu için)
-      const { data: activityData } = await admin
-        .from('pipeline_eventleri')
-        .select('id,musteri_id,faz_no,created_at,created_by,notlar,musteriler(musteri,sorumlu)')
-        .in('musteri_id', activeCustomerIds)
-        .order('created_at', { ascending: false })
-        .limit(20);
+      const activityData = await fetchAllByCustomerIds<any>(
+        admin,
+        'pipeline_eventleri',
+        'id,musteri_id,faz_no,created_at,created_by,notlar,musteriler(musteri,sorumlu)',
+        ids,
+        (query) => query.order('created_at', { ascending: false }),
+      );
 
-      recentActivities = (activityData ?? []).map((row: any) => ({
-        id: String(row.id ?? ''),
-        tarih: String(row.created_at ?? ''),
-        musteri: String(row?.musteriler?.musteri ?? '').trim() || '-',
-        sorumlu: String(row?.musteriler?.sorumlu ?? '').trim() || '-',
-        aktiviteyi_giren: String(row.created_by ?? '').trim() || '-',
-        faz: row.faz_no == null ? 'Fazsız' : `FAZ ${row.faz_no}`,
-        not: String(row.notlar ?? '').trim() || '-',
-      }));
+      recentActivities = activityData
+        .sort((a: any, b: any) => new Date(String(b.created_at ?? '')).getTime() - new Date(String(a.created_at ?? '')).getTime())
+        .slice(0, 20)
+        .map((row: any) => ({
+          id: String(row.id ?? ''),
+          tarih: String(row.created_at ?? ''),
+          musteri: String(row?.musteriler?.musteri ?? '').trim() || '-',
+          sorumlu: String(row?.musteriler?.sorumlu ?? '').trim() || '-',
+          aktiviteyi_giren: String(row.created_by ?? '').trim() || '-',
+          faz: row.faz_no == null ? 'Fazsız' : `FAZ ${row.faz_no}`,
+          not: String(row.notlar ?? '').trim() || '-',
+        }));
     }
 
     const total = enriched.length;
     const withPhase = enriched.filter((row) => row.aktif_faz_no != null).length;
     const withoutPhase = total - withPhase;
-    // activeCustomers: son 90 gün içinde aktivite olan müşteri sayısı (doğru hesaplama)
     const activeCustomers = activeCustomerIdSet.size;
-    // recentActivityGap: hiç yakın aktivitesi olmayan müşteri sayısı
     const recentActivityGap = ids.filter((id) => !activeCustomerIdSet.has(id)).length;
 
     const kpi = {
@@ -144,6 +158,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       sellerOptions,
+      coverageNote: 'Müşteri, İş Ortakları ve sorumlusu bulunan tüm portföy kayıtları dahildir.',
       selectedSeller: effectiveSeller,
       kpi,
       phaseSummary: summarize(enriched.map((row) => row.macro_faz)),
@@ -155,12 +170,11 @@ export async function GET(request: Request) {
       ],
       noPhaseRows: enriched
         .filter((row) => row.aktif_faz_no == null)
-        .slice(0, 20)
         .map((row) => ({ musteri: row.musteri, sorumlu: row.sorumlu, kunye: row.kunye_durumu, sektor: row.sektor })),
       noPhaseTotal: enriched.filter((row) => row.aktif_faz_no == null).length,
       recentActivities,
     });
   } catch (error: any) {
-    return NextResponse.json({ message: 'Yetkisiz' }, { status: error?.status || 401 });
+    return NextResponse.json({ message: error?.message || 'Yetkisiz' }, { status: error?.status || 401 });
   }
 }

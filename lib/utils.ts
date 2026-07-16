@@ -24,6 +24,21 @@ export function formatDateTime(value?: string | null): string {
   return d.toLocaleString('tr-TR');
 }
 
+
+/**
+ * Date input icin local YYYY-MM-DD formatina cevirir.
+ * Invalid date -> bos string
+ */
+export function toLocalDateInputValue(value?: Date | string | null): string {
+  if (!value) return '';
+  const d = value instanceof Date ? new Date(value) : new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 /**
  * Array/string listeden unique, boş olmayan seçenekler döner.
  */

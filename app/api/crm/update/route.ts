@@ -1,8 +1,11 @@
 import { NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
-import { isAdminLike, requireCrmAccessOrThrow } from '@/lib/authz';
-import { createSupabaseAdminClient } from '@/lib/supabase/admin';
+import { requireCrmAccessOrThrow } from '@/lib/authz';
+import { createPgAdminClient } from '@/lib/pg/admin';
 import { ENTEGRASYON_OPTIONS, HAVUZ_ACCOUNT_NAME } from '@/lib/crm';
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 type Body = {
   musteriId?: string;
@@ -39,7 +42,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ message: 'Geçersiz entegrasyon tipi.' }, { status: 400 });
   }
 
-  const admin = createSupabaseAdminClient();
+  const admin = createPgAdminClient();
   const { data: currentRow, error: currentRowError } = await admin
     .from('musteriler')
     .select('id,musteri,sorumlu')
@@ -49,73 +52,15 @@ export async function POST(req: Request) {
   if (currentRowError) return NextResponse.json({ message: currentRowError.message }, { status: 500 });
   if (!currentRow) return NextResponse.json({ message: 'Müşteri bulunamadı.' }, { status: 404 });
 
-  if (sorumlu && sorumlu !== HAVUZ_ACCOUNT_NAME) {
-    const { data: allowedUser, error: allowedUserError } = await admin
-      .from('allowed_users')
-      .select('full_name')
-      .eq('is_active', true)
-      .eq('full_name', sorumlu)
-      .maybeSingle();
+  // Sorumlu değişikliğinde aktif kullanıcı listesiyle engelleme yapmıyoruz.
+  // CRM ekranındaki mevcut/filtrelenmiş sorumlu isimleri veya manuel taşınmış hesaplar kaydedilebilir.
 
-    if (allowedUserError) return NextResponse.json({ message: allowedUserError.message }, { status: 500 });
-    if (!allowedUser) return NextResponse.json({ message: 'Seçilen sorumlu aktif kullanıcı listesinde bulunamadı.' }, { status: 400 });
-  }
-
-  const requestedOwner = sorumlu || String(currentRow.sorumlu ?? '').trim() || null;
-  const currentOwner = String(currentRow.sorumlu ?? '').trim() || null;
-  const ownerChanged = requestedOwner !== currentOwner;
-
-  if (ownerChanged && !isAdminLike(me.role)) {
-    const { data: existingPending, error: existingPendingError } = await admin
-      .from('musteri_account_change_requests')
-      .select('id')
-      .eq('musteri_id', musteriId)
-      .eq('status', 'pending')
-      .maybeSingle();
-
-    if (existingPendingError) return NextResponse.json({ message: existingPendingError.message }, { status: 500 });
-
-    if (existingPending?.id) {
-      const { error: requestUpdateError } = await admin
-        .from('musteri_account_change_requests')
-        .update({
-          musteri,
-          current_account: currentOwner,
-          requested_account: requestedOwner,
-          requested_by: me.full_name ?? me.email,
-          review_note: null,
-          reviewed_by: null,
-          reviewed_at: null,
-          created_at: new Date().toISOString(),
-        })
-        .eq('id', existingPending.id);
-      if (requestUpdateError) return NextResponse.json({ message: requestUpdateError.message }, { status: 400 });
-    } else {
-      const { error: requestInsertError } = await admin
-        .from('musteri_account_change_requests')
-        .insert({
-          musteri_id: musteriId,
-          musteri,
-          current_account: currentOwner,
-          requested_account: requestedOwner,
-          requested_by: me.full_name ?? me.email,
-          status: 'pending',
-        });
-      if (requestInsertError) return NextResponse.json({ message: requestInsertError.message }, { status: 400 });
-    }
-
-    const { error: updateBaseError } = await admin
-      .from('musteriler')
-      .update({ musteri, sektor, entegrasyon_tipi, satis_olasiligi })
-      .eq('id', musteriId);
-
-    if (updateBaseError) return NextResponse.json({ message: updateBaseError.message }, { status: 400 });
-    return NextResponse.json({ ok: true, approvalRequired: true, message: 'Sorumlu değişikliği onaya gönderildi.' });
-  }
+  const requestedOwner = sorumlu || String(currentRow.sorumlu ?? "").trim() || null;
+  const actorName = String(me.full_name ?? me.email ?? "").trim() || null;
 
   const { error } = await admin
     .from('musteriler')
-    .update({ musteri, sektor, entegrasyon_tipi, satis_olasiligi, sorumlu: requestedOwner })
+    .update({ musteri, sektor, entegrasyon_tipi, satis_olasiligi, sorumlu: requestedOwner, updated_by: actorName, updated_at: new Date().toISOString() })
     .eq('id', musteriId);
 
   if (error) return NextResponse.json({ message: error.message }, { status: 400 });

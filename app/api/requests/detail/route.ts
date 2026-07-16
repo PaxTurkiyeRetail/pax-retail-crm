@@ -1,11 +1,13 @@
 import { NextResponse } from 'next/server';
 import { requireAllowedUserOrThrow } from '@/lib/authz';
 import { db } from '@/lib/db';
-import { isAdminLike } from '@/lib/roles';
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export async function GET(req: Request) {
   try {
-    const user = await requireAllowedUserOrThrow();
+    await requireAllowedUserOrThrow();
     const { searchParams } = new URL(req.url);
     const id = searchParams.get('id');
 
@@ -14,11 +16,6 @@ export async function GET(req: Request) {
     }
 
     const params: unknown[] = [id];
-    let accessSql = '';
-    if (!isAdminLike(user.role)) {
-      params.push(user.id);
-      accessSql = ' and (r.requester_id = $2 or r.assignee_id = $2)';
-    }
 
     const requestResult = await db.query(
       `
@@ -30,7 +27,7 @@ export async function GET(req: Request) {
           end as request_categories
         from public.requests r
         left join public.request_categories c on c.id = r.category_id
-        where r.id = $1${accessSql}
+        where r.id = $1
         limit 1
       `,
       params,

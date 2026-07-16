@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server';
-import { revalidatePath } from 'next/cache';
 import { requireAllowedUserOrThrow } from '@/lib/authz';
-import { createSupabaseAdminClient } from '@/lib/supabase/admin';
-import { isAdminLike } from '@/lib/roles';
+import { createPgAdminClient } from '@/lib/pg/admin';
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export async function GET(req: Request) {
   try {
     const user = await requireAllowedUserOrThrow();
-    const sb = createSupabaseAdminClient();
+    const sb = createPgAdminClient();
     const { searchParams: p } = new URL(req.url);
 
     const page     = Math.max(1, Number(p.get('page') || 1));
@@ -28,15 +29,12 @@ export async function GET(req: Request) {
         request_categories(name, color)
       `, { count: 'exact' });
 
-    // Role-based visibility: non-admin sees only own requests OR assigned to them
-    if (!isAdminLike(user.role)) {
+    if (mine) {
       query = query.or(`requester_id.eq.${user.id},assignee_id.eq.${user.id}`);
     }
-
-    if (mine)     query = query.or(`requester_id.eq.${user.id},assignee_id.eq.${user.id}`);
-    if (status)   query = query.eq('status', status);
-    if (priority) query = query.eq('priority', priority);
-    if (sla)      query = query.eq('sla_status', sla);
+    if (status)   query = query.ilike('status', status.replace(/[\%_]/g, ' ').trim());
+    if (priority) query = query.ilike('priority', priority.replace(/[\%_]/g, ' ').trim());
+    if (sla)      query = query.ilike('sla_status', sla.replace(/[\%_]/g, ' ').trim());
     if (assignee) query = query.eq('assignee_id', assignee);
     if (q)        query = query.ilike('title', `%${q}%`);
 

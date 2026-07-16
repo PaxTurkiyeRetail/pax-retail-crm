@@ -1,12 +1,11 @@
 "use client";
 import '@/styles/system-tracker.css';
-import '@/styles/system-tracker.css';
 
 import { SYSTEM_REQUIREMENT_LIST } from "@/lib/system-requirements";
 
 const statusLabel = {
   mock: "Mock Mode",
-  db: "DB Gerekli",
+  db: "DB Bağlantısı",
   automation: "Otomasyon",
   ready: "Hazır",
   schema: "Schema Check",

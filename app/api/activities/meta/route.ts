@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { requireAllowedUserOrThrow } from '@/lib/authz';
-import { createSupabaseAdminClient } from '@/lib/supabase/admin';
+import { createPgAdminClient } from '@/lib/pg/admin';
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export async function GET(req: Request) {
   try {
@@ -14,7 +17,7 @@ export async function GET(req: Request) {
       return NextResponse.json({ message: 'musteri_id ve faz_no gerekli' }, { status: 400 });
     }
 
-    const admin = createSupabaseAdminClient();
+    const admin = createPgAdminClient();
 
     const { data: phaseStatus } = await admin
       .from('pipeline_eventleri')

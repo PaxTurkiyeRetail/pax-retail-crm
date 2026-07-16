@@ -1,0 +1,75 @@
+{
+  "stats": {
+    "ts": 189,
+    "apiRoutes": 60,
+    "pages": 38,
+    "clientFetches": 71
+  },
+  "findings": [
+    {
+      "level": "warn",
+      "file": "app/api/activities/customers/route.ts",
+      "message": "Yüksek limit var; filtre/pagination büyüdükçe yavaşlayabilir."
+    },
+    {
+      "level": "warn",
+      "file": "app/api/crm/account-change-requests/route.ts",
+      "message": "select(*) kullanımı var; liste ekranlarında kolon seçimi daraltılabilir."
+    },
+    {
+      "level": "warn",
+      "file": "app/api/crm/detail/route.ts",
+      "message": "select(*) kullanımı var; liste ekranlarında kolon seçimi daraltılabilir."
+    },
+    {
+      "level": "warn",
+      "file": "app/api/crm/list/route.ts",
+      "message": "select(*) kullanımı var; liste ekranlarında kolon seçimi daraltılabilir."
+    },
+    {
+      "level": "warn",
+      "file": "app/api/crm/timeline/route.ts",
+      "message": "select(*) kullanımı var; liste ekranlarında kolon seçimi daraltılabilir."
+    },
+    {
+      "level": "warn",
+      "file": "app/api/kunye/route.ts",
+      "message": "select(*) kullanımı var; liste ekranlarında kolon seçimi daraltılabilir."
+    },
+    {
+      "level": "warn",
+      "file": "app/api/quotes/catalog/list/route.ts",
+      "message": "select(*) kullanımı var; liste ekranlarında kolon seçimi daraltılabilir."
+    },
+    {
+      "level": "warn",
+      "file": "app/api/quotes/catalog/product-upsert/route.ts",
+      "message": "select(*) kullanımı var; liste ekranlarında kolon seçimi daraltılabilir."
+    },
+    {
+      "level": "warn",
+      "file": "app/api/quotes/catalog/rule-upsert/route.ts",
+      "message": "select(*) kullanımı var; liste ekranlarında kolon seçimi daraltılabilir."
+    },
+    {
+      "level": "warn",
+      "file": "app/api/quotes/list/route.ts",
+      "message": "Yüksek limit var; filtre/pagination büyüdükçe yavaşlayabilir."
+    },
+    {
+      "level": "warn",
+      "file": "app/api/quotes/stats/route.ts",
+      "message": "Yüksek limit var; filtre/pagination büyüdükçe yavaşlayabilir."
+    },
+    {
+      "level": "warn",
+      "file": "app/api/requests/update/route.ts",
+      "message": "select(*) kullanımı var; liste ekranlarında kolon seçimi daraltılabilir."
+    },
+    {
+      "level": "warn",
+      "file": "lib/quotes/service.ts",
+      "message": "select(*) kullanımı var; liste ekranlarında kolon seçimi daraltılabilir."
+    }
+  ]
+}

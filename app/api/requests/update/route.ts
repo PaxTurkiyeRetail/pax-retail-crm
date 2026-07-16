@@ -1,14 +1,17 @@
 import { NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
 import { requireAllowedUserOrThrow } from '@/lib/authz';
-import { createSupabaseAdminClient } from '@/lib/supabase/admin';
+import { createPgAdminClient } from '@/lib/pg/admin';
 import { getAllowedUserNameForRequests } from '@/lib/request-users';
-import { canManageRequests, isAdminLike } from '@/lib/roles';
+import { canManageRequests } from '@/lib/roles';
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export async function POST(req: Request) {
   try {
     const user = await requireAllowedUserOrThrow();
-    const sb = createSupabaseAdminClient();
+    const sb = createPgAdminClient();
     const body = await req.json();
     const { id, action, ...payload } = body;
 
@@ -17,11 +20,6 @@ export async function POST(req: Request) {
     const { data: current, error: fetchError } = await sb.from('requests').select('*').eq('id', id).single();
     if (fetchError) throw fetchError;
     if (!current) return NextResponse.json({ message: 'Talep bulunamadı' }, { status: 404 });
-
-    const canAccess = isAdminLike(user.role) || current.requester_id === user.id || current.assignee_id === user.id;
-    if (!canAccess) {
-      return NextResponse.json({ message: 'Bu talebe erişimin yok' }, { status: 403 });
-    }
 
     let updateData: Record<string, unknown> = {};
     let eventType = '';

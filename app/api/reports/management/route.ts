@@ -1,10 +1,14 @@
 import { NextResponse } from 'next/server';
 import { requireReportsAccessOrThrow } from '@/lib/authz';
-import { isAdminLike } from '@/lib/roles';
-import { createSupabaseAdminClient } from '@/lib/supabase/admin';
+import { createPgAdminClient } from '@/lib/pg/admin';
 import { getKunyeStatus, mapKunyeDbToUi } from '@/lib/kunye';
 import { activityLabelFromRow, isDisplayableActivityRow, presentDurum } from '@/app/api/activities/_helpers';
 import { getSlaState } from '@/lib/sla';
+import { fetchAllByCustomerIds, fetchAllRows } from '@/lib/reporting';
+import { isReportOnlyCustomer } from '@/lib/report-only-customers';
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 type BaseRow = {
   musteri_id: string | null;
@@ -28,37 +32,37 @@ function summarize(rows: any[], key: string, limit = 5) {
 
 export async function GET() {
   try {
-    const me = await requireReportsAccessOrThrow();
+    await requireReportsAccessOrThrow();
+    const admin = createPgAdminClient();
 
-    const myName = (me.full_name ?? '').trim();
+    const data = await fetchAllRows<BaseRow>((from, to) => {
+      return admin
+        .from('vw_crm_musteriler')
+        .select('musteri_id,musteri,sektor,entegrasyon_tipi,aktif_faz_no,aktif_faz_adi,sorumlu,son_not,bekleyen_taraf')
+        .order('musteri', { ascending: true })
+        .range(from, to);
+    });
 
-    const admin = createSupabaseAdminClient();
-    let q = admin
-      .from('vw_crm_musteriler')
-      .select('musteri_id,musteri,sektor,entegrasyon_tipi,aktif_faz_no,aktif_faz_adi,sorumlu,son_not,bekleyen_taraf')
-      .order('musteri', { ascending: true });
-
-
-    const { data, error } = await q;
-    if (error) return NextResponse.json({ message: error.message }, { status: 500 });
-
-    const baseRows = (data ?? []) as BaseRow[];
+    const baseRows = ((data ?? []) as BaseRow[]).filter((row: any) => !isReportOnlyCustomer(row));
     const ids = baseRows.map((r) => r.musteri_id).filter(Boolean) as string[];
     const kunyeMap = new Map<string, any>();
     const latestActivityMap = new Map<string, any>();
 
     if (ids.length) {
-      const [{ data: kunyeler }, { data: activities }] = await Promise.all([
-        admin
-          .from('musteri_kunye')
-          .select('musteri_id,sabit_kasa_yazilimi,magaza_sayisi,franchise_sayisi,toplam_pos_adedi,erp,pos_modeli,bankalar,pos_mulkiyet')
-          .in('musteri_id', ids),
-        admin
-          .from('pipeline_eventleri')
-          .select('musteri_id,durum,aksiyon,owner,partner_owner,created_at,hedef_tarihi,notlar')
-          .in('musteri_id', ids)
-          .order('created_at', { ascending: false })
-          .limit(2000),
+      const [kunyeler, activities] = await Promise.all([
+        fetchAllByCustomerIds<any>(
+          admin,
+          'v_musteri_kunye_status',
+          '*',
+          ids,
+        ),
+        fetchAllByCustomerIds<any>(
+          admin,
+          'pipeline_eventleri',
+          'musteri_id,durum,aksiyon,owner,partner_owner,created_at,hedef_tarihi,notlar',
+          ids,
+          (query) => query.order('created_at', { ascending: false }),
+        ),
       ]);
 
       (kunyeler ?? []).forEach((row: any) => kunyeMap.set(row.musteri_id, row));
@@ -77,8 +81,9 @@ export async function GET() {
       const aktifFazNo = r.aktif_faz_no ?? null;
       const mevcutFaz = aktifFazNo != null ? `FAZ ${aktifFazNo}` : '-';
       const bekleyenTaraf = ((r.bekleyen_taraf ?? '').trim()) || '-';
-      const kunye = r.musteri_id ? mapKunyeDbToUi(kunyeMap.get(r.musteri_id) ?? null) : null;
-      const kunyeDurum = getKunyeStatus({ ...kunye, firma_adi: r.musteri, has_kunye_record: Boolean(kunye) }).status;
+      const rawKunye = r.musteri_id ? (kunyeMap.get(r.musteri_id) ?? null) : null;
+      const kunye = mapKunyeDbToUi(rawKunye);
+      const kunyeDurum = getKunyeStatus({ ...kunye, ...(rawKunye ?? {}), firma_adi: r.musteri, has_kunye_record: Boolean(kunye) }).status;
       const latestActivity = r.musteri_id ? latestActivityMap.get(r.musteri_id) ?? null : null;
       const slaState = getSlaState(latestActivity?.hedef_tarihi ?? null, latestActivity?.activity_status ?? null);
       return {
@@ -116,6 +121,6 @@ export async function GET() {
       },
     });
   } catch (e: any) {
-    return NextResponse.json({ message: 'Yetkisiz' }, { status: e?.status || 401 });
+    return NextResponse.json({ message: e?.message || 'Yetkisiz' }, { status: e?.status || 401 });
   }
 }

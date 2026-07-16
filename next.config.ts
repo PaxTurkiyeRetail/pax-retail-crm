@@ -5,12 +5,10 @@ const nextConfig: NextConfig = {
   eslint: { ignoreDuringBuilds: true },
   typescript: { ignoreBuildErrors: true },
 
-  // Supabase paketlerini optimize et
-  experimental: {
-    optimizePackageImports: ["@supabase/ssr", "@supabase/supabase-js"],
-  },
+  poweredByHeader: false,
+  compress: true,
 
-  // Statik dosyalar için agresif cache
+  // Statik dosyalar agresif cache, API cevapları ise CRM verisi olduğu için no-store.
   async headers() {
     return [
       {
@@ -22,9 +20,9 @@ const nextConfig: NextConfig = {
         headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }],
       },
       {
-        // API route'ları için cache control
+        // DB verisi anlık değiştiği için ara cache kapalı tutulur.
         source: "/api/:path*",
-        headers: [{ key: "Cache-Control", value: "s-maxage=30, stale-while-revalidate=59" }],
+        headers: [{ key: "Cache-Control", value: "no-store, max-age=0" }],
       },
     ];
   },

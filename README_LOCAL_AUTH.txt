@@ -1,11 +1,11 @@
-Bu paket Supabase auth bağımlılığını PostgreSQL tabanlı local auth katmanına çevirir.
+Bu paket PostgreSQL auth bağımlılığını PostgreSQL tabanlı local auth katmanına çevirir.
 
 Özet:
 - allowed_users tablosu kullanıcı kaynağı olarak kullanılır.
 - password_hash kolonu bcrypt hash saklar.
 - user_sessions tablosu cookie session saklar.
 - password_reset_tokens tablosu şifre sıfırlama tokenlarını saklar.
-- lib/supabase/* dosyaları artık PostgreSQL üstünde çalışan bir uyumluluk katmanıdır.
+- lib/pgClient/* dosyaları artık PostgreSQL üstünde çalışan bir uyumluluk katmanıdır.
 
 Yapılacaklar:
 1) npm install
@@ -20,5 +20,5 @@ Yapılacaklar:
 - /reset-password?token=... ile yeni şifre verilir
 
 Not:
-- Veri erişimi için route'lar hâlâ Supabase benzeri zincir çağrıları kullanıyor olabilir; bunlar artık lib/supabase/pg-client.ts içindeki PostgreSQL uyumluluk katmanına yönlenir.
+- Veri erişimi için route'lar hâlâ PostgreSQL benzeri zincir çağrıları kullanıyor olabilir; bunlar artık lib/pgClient/pg-client.ts içindeki PostgreSQL uyumluluk katmanına yönlenir.
 - Daha karmaşık PostgREST özellikleri gerekiyorsa ilgili route özel SQL ile ayrıca iyileştirilmelidir.

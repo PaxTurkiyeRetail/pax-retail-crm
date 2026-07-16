@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
+import AppRuntimeShell from '@/components/AppRuntimeShell';
 
 export const metadata: Metadata = {
   title: 'PAX CRM',
@@ -14,7 +15,9 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="tr">
-      <body>{children}</body>
+      <body>
+        <AppRuntimeShell>{children}</AppRuntimeShell>
+      </body>
     </html>
   );
 }

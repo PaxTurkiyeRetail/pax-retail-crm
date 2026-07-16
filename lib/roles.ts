@@ -8,9 +8,13 @@ export type AllowedRole =
 export function normalizeRole(role: string | null | undefined): AllowedRole | null {
   if (!role) return null;
   const value = String(role).trim().toLowerCase();
-  if (value === 'super_admin' || value === 'account_manager' || value === 'itsm' || value === 'admin' || value === 'user') {
-    return value as AllowedRole;
-  }
+  const normalized = value.replace(/[\s-]+/g, '_');
+
+  if (normalized === 'super_admin' || normalized === 'superadmin') return 'super_admin';
+  if (normalized === 'account_manager' || normalized === 'accountmanager') return 'account_manager';
+  if (normalized === 'itsm') return 'itsm';
+  if (normalized === 'admin' || normalized === 'administrator') return 'admin';
+  if (normalized === 'user' || normalized === 'kullanici' || normalized === 'kullanıcı') return 'user';
   return null;
 }
 
@@ -40,4 +44,9 @@ export function canViewActivities(role: string | null | undefined): boolean {
 export function canViewReports(role: string | null | undefined): boolean {
   const normalized = normalizeRole(role);
   return normalized === 'super_admin' || normalized === 'admin' || normalized === 'account_manager' || normalized === 'itsm' || normalized === 'user';
+}
+
+export function canCreateTechnicalActivities(role: string | null | undefined): boolean {
+  const normalized = normalizeRole(role);
+  return normalized === 'super_admin' || normalized === 'admin' || normalized === 'itsm';
 }

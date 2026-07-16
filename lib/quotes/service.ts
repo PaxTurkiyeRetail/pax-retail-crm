@@ -1,7 +1,7 @@
 import 'server-only';
-import type { SupabaseClient } from '@supabase/supabase-js';
+import type { PgClient } from '@/lib/pg/client';
 import { STATIC_QUOTE_PRICING_RULES, STATIC_QUOTE_PRODUCTS, normalizeQuoteProduct, type QuotePricingRule, type QuoteProduct } from '@/lib/quotes/catalog';
-import { isAdminLike, type AllowedRole } from '@/lib/roles';
+import { type AllowedRole } from '@/lib/roles';
 
 export type QuoteLineInput = {
   product_id: string;
@@ -73,7 +73,7 @@ export function formatMoney(value: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value || 0);
 }
 
-export async function getQuoteCatalog(admin?: SupabaseClient<any, any, any>) {
+export async function getQuoteCatalog(admin?: PgClient) {
   if (!admin) return { products: STATIC_QUOTE_PRODUCTS, rules: STATIC_QUOTE_PRICING_RULES, source: 'static' as const };
 
   const [{ data: products, error: productErr }, { data: rules, error: ruleErr }] = await Promise.all([
@@ -89,7 +89,7 @@ export async function getQuoteCatalog(admin?: SupabaseClient<any, any, any>) {
   }
 
   return {
-    products: (products ?? []).map((product) => normalizeQuoteProduct(product)) as QuoteProduct[],
+    products: (products ?? []).map((product: any) => normalizeQuoteProduct(product)) as QuoteProduct[],
     rules: (rules ?? []) as QuotePricingRule[],
     source: 'db' as const,
   };
@@ -140,8 +140,20 @@ export function buildQuoteSummaryText(items: Array<{ product_name: string; quant
   return items.slice(0, 3).map((item) => `${item.quantity} ${item.product_name}`).join(', ');
 }
 
+
+export function buildQuoteActivityNote(args: {
+  quoteNo: string;
+  summaryText: string;
+  validUntil?: string | null;
+}) {
+  const quoteNo = String(args.quoteNo ?? '').trim() || '-';
+  const summaryText = String(args.summaryText ?? '').trim() || '-';
+  const validUntil = normalizeDateOnly(args.validUntil, null);
+  return `Quote ${quoteNo} paylaşıldı. İçerik: ${summaryText} | Geçerlilik: ${validUntil ?? '-'}`;
+}
+
 export async function ensureCustomerAccessOrThrow(args: {
-  admin: SupabaseClient<any, any, any>;
+  admin: PgClient;
   customerId: string;
   role: AllowedRole;
   fullName: string | null | undefined;
@@ -156,18 +168,11 @@ export async function ensureCustomerAccessOrThrow(args: {
   if (error) throw error;
   if (!customer) throw Object.assign(new Error('Müşteri bulunamadı'), { status: 404 });
 
-  if (!isAdminLike(role)) {
-    const owner = String(customer.sorumlu ?? '').trim();
-    const actor = String(fullName ?? '').trim();
-    if (!owner || !actor || owner !== actor) {
-      throw Object.assign(new Error('FORBIDDEN'), { status: 403 });
-    }
-  }
 
   return customer;
 }
 
-export async function getNextQuoteNumber(admin: SupabaseClient<any, any, any>) {
+export async function getNextQuoteNumber(admin: PgClient) {
   const year = Number(getTurkeyTodayIso().slice(0, 4));
   const { data, error } = await admin
     .from('quotes')
@@ -187,16 +192,18 @@ export async function getNextQuoteNumber(admin: SupabaseClient<any, any, any>) {
 }
 
 export async function createQuoteActivity(args: {
-  admin: SupabaseClient<any, any, any>;
+  admin: PgClient;
   customerId: string;
   quoteId: string;
   quoteNo: string;
   ownerName: string;
+  ownerUserId?: string | null;
+  ownerEmail?: string | null;
   followUpDate: string;
   validUntil: string;
   summaryText: string;
 }) {
-  const { admin, customerId, quoteId, quoteNo, ownerName, followUpDate, validUntil, summaryText } = args;
+  const { admin, customerId, quoteId, quoteNo, ownerName, ownerUserId, ownerEmail, followUpDate, validUntil, summaryText } = args;
   const proposalDate = getTurkeyTodayIso();
   const normalizedFollowUpDate = normalizeDateOnly(followUpDate, addDaysToIsoDate(proposalDate, 30));
   const normalizedValidUntil = normalizeDateOnly(validUntil, addDaysToIsoDate(proposalDate, 15));
@@ -223,6 +230,8 @@ export async function createQuoteActivity(args: {
     hedef_tarihi: normalizedTargetDate,
     notlar: note,
     created_by: ownerName,
+    created_by_user_id: ownerUserId ?? null,
+    created_by_email: ownerEmail ?? null,
   }).select('id').single();
 
   if (error) throw error;
@@ -231,7 +240,7 @@ export async function createQuoteActivity(args: {
   return (data as any)?.id as string | null;
 }
 
-export async function getQuoteDetailById(admin: SupabaseClient<any, any, any>, quoteId: string) {
+export async function getQuoteDetailById(admin: PgClient, quoteId: string) {
   const { data: quote, error } = await admin
     .from('quotes')
     .select('*')

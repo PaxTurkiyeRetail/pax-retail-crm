@@ -23,7 +23,7 @@ export default function CrmApprovalsClient() {
   async function loadRows() {
     setLoading(true);
     try {
-      const res = await fetch('/api/crm/account-change-requests', { next: { revalidate: 30 } });
+      const res = await fetch('/api/crm/account-change-requests', { cache: 'no-store' });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
         setMsg(json?.message || 'Onay kayıtları alınamadı.');

@@ -1,4 +1,4 @@
-# Supabase CRM Panel (Allowlist + Admin)
+# PostgreSQL CRM Panel (Allowlist + Admin)
 
 ## Kurulum
 1) `.env` oluştur:
@@ -22,12 +22,12 @@ npm run dev
 - `/admin/users` -> admin korumalı
 - Admin panel kullanıcı ekler/siler/pasife çeker (service role ile Auth + allowed_users)
 
-> NOT: `SUPABASE_SERVICE_ROLE_KEY` sadece server tarafında kullanılır.
+> NOT: `POSTGRES_SERVICE_ROLE_KEY` sadece server tarafında kullanılır.
 
 
 ## Şifremi Unuttum
 - `/login` ekranındaki "Şifremi unuttum" linki `/forgot-password` sayfasını açar.
-- Supabase Dashboard → Authentication → URL Configuration:
+- PostgreSQL Dashboard → Authentication → URL Configuration:
   - Site URL: `http://localhost:3000`
   - Redirect URL: `http://localhost:3000/auth/callback`
 
@@ -75,7 +75,7 @@ Yeni eklenen ekranlar:
 - `/crm/quotes/[quoteId]/print` : yazdır / PDF görünümü
 
 ### Zorunlu DB setup
-Supabase SQL Editor içinde şu dosyayı çalıştır:
+PostgreSQL SQL Editor içinde şu dosyayı çalıştır:
 ```sql
 -- sql/quote_module_setup.sql
 ```

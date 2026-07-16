@@ -1,9 +1,13 @@
 import { NextResponse } from 'next/server';
-import { createSupabaseServerClient } from '@/lib/supabase/server';
-import { createSupabaseAdminClient } from '@/lib/supabase/admin';
+import { createPgServerClient } from '@/lib/pg/server';
+import { createPgAdminClient } from '@/lib/pg/admin';
 import { requireCrmAccessOrThrow } from '@/lib/authz';
-import { isAdminLike } from '@/lib/roles';
 import { getKunyeStatus, mapKunyeDbToUi, normalizeKunyeStatusFilter } from '@/lib/kunye';
+import { fetchAllByCustomerIds, fetchAllRows } from '@/lib/reporting';
+import { isReportOnlyCustomer } from '@/lib/report-only-customers';
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 function normalizeSearchText(value: string | null | undefined) {
   return String(value ?? '')
@@ -21,9 +25,13 @@ function normalizeSearchText(value: string | null | undefined) {
     .trim();
 }
 
+function escapeIlike(value: string) {
+  return String(value ?? '').replace(/[\%_]/g, ' ').trim();
+}
+
 function phaseSearchText(phaseNo: number | null | undefined) {
-  if (phaseNo != null && phaseNo >= 1 && phaseNo <= 4) return `Fırsat Faz ${phaseNo}`;
-  if (phaseNo != null && phaseNo >= 5 && phaseNo <= 9) return `İlk Temas Faz ${phaseNo}`;
+  if (phaseNo != null && phaseNo >= 1 && phaseNo <= 4) return `Fırsat İlk Temas Faz ${phaseNo}`;
+  if (phaseNo != null && phaseNo >= 5 && phaseNo <= 9) return `Analiz + Sunumlar Faz ${phaseNo}`;
   if (phaseNo != null && phaseNo >= 10 && phaseNo <= 14) return `Business Faz ${phaseNo}`;
   if (phaseNo != null && phaseNo >= 15 && phaseNo <= 23) return `Operasyon Faz ${phaseNo}`;
   if (phaseNo != null && phaseNo >= 24 && phaseNo <= 25) return `Yayılım Faz ${phaseNo}`;
@@ -42,7 +50,7 @@ function toSummary(values: string[]) {
 
 export async function GET(request: Request) {
   try {
-    const me = await requireCrmAccessOrThrow();
+    await requireCrmAccessOrThrow();
     const url = new URL(request.url);
     const q = String(url.searchParams.get('q') ?? '').trim();
     const owner = String(url.searchParams.get('owner') ?? '').trim();
@@ -53,36 +61,49 @@ export async function GET(request: Request) {
     const fazNoRaw = String(url.searchParams.get('faz_no') ?? '').trim();
     const fazNo = fazNoRaw ? Number(fazNoRaw) : NaN;
 
-    const supabase = await createSupabaseServerClient();
-    let qy = supabase.from('vw_crm_musteriler').select('musteri_id,sektor,sorumlu,entegrasyon_tipi,aktif_faz_no,musteri');
-    if (owner) qy = qy.eq('sorumlu', owner);
-    if (sector) qy = qy.eq('sektor', sector);
-    if (integration) qy = qy.eq('entegrasyon_tipi', integration);
-    if (Number.isFinite(fazNo)) qy = qy.eq('aktif_faz_no', fazNo);
-    if (q) {
-      const escaped = q.replace(/[,%]/g, ' ').trim();
-      qy = qy.or([`musteri.ilike.%${escaped}%`,`sektor.ilike.%${escaped}%`,`sorumlu.ilike.%${escaped}%`].join(','));
-    }
+    const pgClient = await createPgServerClient();
+    const rawBaseRows = await fetchAllRows<any>((from, to) => {
+      let qy = pgClient
+        .from('vw_crm_musteriler')
+        .select('musteri_id,sektor,sorumlu,entegrasyon_tipi,aktif_faz_no,musteri')
+        .order('musteri', { ascending: true })
+        .range(from, to);
+      if (owner) qy = qy.ilike('sorumlu', escapeIlike(owner));
+      if (sector) qy = qy.ilike('sektor', escapeIlike(sector));
+      // entegrasyon_tipi enum oldugu icin DB tarafinda ilike kullanilmaz; asagida JS filtresi uygulanir.
+      if (Number.isFinite(fazNo)) qy = qy.eq('aktif_faz_no', fazNo);
+      // q filtresi asagida normalize edilerek uygulaniyor.
+      // Boylece musteri aramalarinda buyuk-kucuk harf ve Turkce karakter
+      // farklari nedeniyle kayit kacirma problemi yasamiyoruz.
+      return qy;
+    });
 
-    const { data, error } = await qy.limit(5000);
-    if (error) return NextResponse.json({ message: error.message }, { status: 500 });
+    const baseRows = rawBaseRows.filter((row: any) => !isReportOnlyCustomer(row));
 
-    const baseRows = data ?? [];
-    const admin = createSupabaseAdminClient();
-    const { data: kunyeler } = await admin
-      .from('musteri_kunye')
-      .select('musteri_id,sabit_kasa_yazilimi,magaza_sayisi,franchise_sayisi,toplam_pos_adedi,pos_modeli,erp,bankalar,pos_mulkiyet,pos_mulkiyet_bankalari');
+    const admin = createPgAdminClient();
+    const ids = baseRows.map((row: any) => String(row.musteri_id ?? '').trim()).filter(Boolean);
+    const kunyeler = ids.length
+      ? await fetchAllByCustomerIds<any>(
+          admin,
+          'v_musteri_kunye_status',
+          '*',
+          ids,
+        )
+      : [];
 
     const kuyeMap = new Map((kunyeler ?? []).map((row: any) => [row.musteri_id, row]));
     let enriched = baseRows.map((row: any) => {
-      const kunye = mapKunyeDbToUi(kuyeMap.get(row.musteri_id) ?? null);
-      const status = getKunyeStatus({ ...kunye, firma_adi: row.musteri, has_kunye_record: Boolean(kunye) });
+      const rawKunye = kuyeMap.get(row.musteri_id) ?? null;
+      const kunye = mapKunyeDbToUi(rawKunye);
+      const status = getKunyeStatus({ ...kunye, ...(rawKunye ?? {}), firma_adi: row.musteri, has_kunye_record: Boolean(kunye) });
       return {
         ...row,
         ...(kunye ?? null),
+        kasa_firmasi: kunye?.kasapos_firmasi ?? null,
         kunye_durumu: status.status,
         kunye_eksik_sayisi: status.missing,
         kunye_missing_fields: status.missingFields,
+        kunye_completion_pct: status.completionPct ?? null,
       };
     });
 
@@ -97,11 +118,20 @@ export async function GET(request: Request) {
       ].some((value) => normalizeSearchText(value).includes(needle)));
     }
 
-    if (kasaFirmasi) {
-      enriched = enriched.filter((row: any) => String(row.sabit_kasa_yazilimi ?? '').trim() === kasaFirmasi);
+    if (integration) {
+      const integrationNeedle = normalizeSearchText(integration);
+      enriched = enriched.filter((row: any) => normalizeSearchText(row.entegrasyon_tipi).includes(integrationNeedle));
     }
 
-    enriched = enriched.filter((row: any) => (kunyeStatus ? row.kunye_durumu === kunyeStatus : true));
+    if (kasaFirmasi) {
+      const kasaNeedle = normalizeSearchText(kasaFirmasi);
+      enriched = enriched.filter((row: any) => normalizeSearchText(row.kasa_firmasi).includes(kasaNeedle));
+    }
+
+    if (kunyeStatus) {
+      const kunyeNeedle = normalizeSearchText(kunyeStatus);
+      enriched = enriched.filter((row: any) => normalizeSearchText(row.kunye_durumu).includes(kunyeNeedle));
+    }
 
     const missingBreakdown = {
       firma_adi: enriched.filter((row: any) => row.kunye_durumu === 'Eksik' && row.kunye_missing_fields?.includes('firma_adi')).length,
@@ -113,7 +143,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       total: enriched.length,
       sectors: unique(enriched.map((row: any) => row.sektor)),
-      kasaFirmasi: unique(enriched.map((row: any) => row.sabit_kasa_yazilimi)),
+      kasaFirmasi: unique(enriched.map((row: any) => row.kasa_firmasi)),
       accounts: unique(enriched.map((row: any) => row.sorumlu)),
       entegrasyonYapisi: unique(enriched.map((row: any) => row.entegrasyon_tipi)),
       kunyeVar: enriched.filter((row: any) => row.kunye_durumu === 'Var').length,

@@ -27,14 +27,46 @@ export default function KunyeDashboard({ kunye, musteriAdi, sektorVeSorumlu, akt
   const stats = useMemo(() => {
     if (!kunye) return { total: 30, filled: 0, percentage: 0, groups: [] as any[] };
 
+    const normalizeYesNo = (value: any) =>
+      String(value ?? '').trim().toLocaleLowerCase('tr-TR');
+
+    const reyonKullaniyor = normalizeYesNo(kunye.reyon_kullaniliyor) === 'evet';
+    const elTerminaliKullaniyor = normalizeYesNo(kunye.el_terminali_kullaniliyor) === 'evet';
+    const posMulkiyetBanka = normalizeYesNo(kunye.pos_mulkiyet) === 'banka';
+
     const groups = [
-      { name: 'Genel Bilgiler', icon: '📋', total: 3, fields: [kunye.firma_adi, kunye.magaza_sayisi, kunye.franchise_sayisi] },
-      { name: 'Sabit Kasa', icon: '🖥️', total: 7, fields: [kunye.sabit_kasa_adedi, kunye.kasapos_firmasi, kunye.pos_modeli, kunye.pos_markasi, kunye.toplam_pos_adedi, kunye.pos_alim_yili, kunye.sabit_bilgisayar_markasi] },
-      { name: 'Reyon/Saha', icon: '📱', total: 5, fields: [kunye.reyon_kullaniliyor, kunye.reyon_odeme_yazilimi, kunye.reyon_cihaz_modeli, kunye.reyon_cihaz_sayisi, kunye.reyon_alim_yili] },
-      { name: 'El Terminali', icon: '📲', total: 5, fields: [kunye.el_terminali_kullaniliyor, kunye.el_terminali_modeli, kunye.el_terminali_yazilimi, kunye.el_terminali_adedi, kunye.el_terminali_alim_yili] },
-      { name: 'Yazılım & ERP', icon: '💻', total: 1, fields: [kunye.erp] },
-      { name: 'Bankacılık', icon: '🏦', total: 4, fields: [kunye.bankalar, kunye.pos_mulkiyet, kunye.pos_mulkiyet_bankalari, kunye.saha_hizmeti_firmasi] },
-      { name: 'Memnuniyet', icon: '⭐', total: 5, fields: [kunye.genel_memnuniyet, kunye.problem_1, kunye.problem_2, kunye.problem_3, kunye.degisim_nedeni] },
+      { name: 'Genel Bilgiler', icon: '📋', fields: [kunye.firma_adi, kunye.magaza_sayisi, kunye.franchise_sayisi] },
+      { name: 'Sabit Kasa', icon: '🖥️', fields: [kunye.sabit_kasa_adedi, kunye.kasapos_firmasi, kunye.pos_modeli, kunye.pos_markasi, kunye.toplam_pos_adedi, kunye.pos_alim_yili, kunye.sabit_bilgisayar_markasi] },
+      {
+        name: 'Reyon/Saha',
+        icon: '📱',
+        fields: reyonKullaniyor
+          ? [kunye.reyon_kullaniliyor, kunye.reyon_odeme_yazilimi, kunye.reyon_cihaz_modeli, kunye.reyon_cihaz_sayisi, kunye.reyon_alim_yili]
+          : [kunye.reyon_kullaniliyor],
+      },
+      {
+        name: 'El Terminali',
+        icon: '📲',
+        fields: elTerminaliKullaniyor
+          ? [kunye.el_terminali_kullaniliyor, kunye.el_terminali_modeli, kunye.el_terminali_yazilimi, kunye.el_terminali_adedi, kunye.el_terminali_alim_yili]
+          : [kunye.el_terminali_kullaniliyor],
+      },
+      { name: 'Yazılım & ERP', icon: '💻', fields: [kunye.erp] },
+      {
+        name: 'Bankacılık',
+        icon: '🏦',
+        fields: posMulkiyetBanka
+          ? [kunye.bankalar, kunye.pos_mulkiyet, kunye.pos_mulkiyet_bankalari, kunye.saha_hizmeti_firmasi]
+          : [kunye.bankalar, kunye.pos_mulkiyet, kunye.saha_hizmeti_firmasi],
+      },
+      {
+        name: 'Memnuniyet',
+        icon: '⭐',
+        fields:
+          normalizeYesNo(kunye.genel_memnuniyet) === 'memnun'
+            ? [kunye.genel_memnuniyet, kunye.degisim_nedeni]
+            : [kunye.genel_memnuniyet, kunye.problem_1, kunye.degisim_nedeni],
+      },
     ];
 
     const countFilled = (fields: any[]) => fields.filter(f => {
@@ -44,9 +76,15 @@ export default function KunyeDashboard({ kunye, musteriAdi, sektorVeSorumlu, akt
       return false;
     }).length;
 
-    const mappedGroups = groups.map(g => ({ name: g.name, icon: g.icon, total: g.total, filled: countFilled(g.fields) }));
+    const mappedGroups = groups.map(g => ({
+      name: g.name,
+      icon: g.icon,
+      total: g.fields.length,
+      filled: countFilled(g.fields),
+    }));
+    const total = mappedGroups.reduce((acc, g) => acc + g.total, 0);
     const filled = mappedGroups.reduce((acc, g) => acc + g.filled, 0);
-    return { total: 30, filled, percentage: Math.round((filled / 30) * 100), groups: mappedGroups };
+    return { total, filled, percentage: total > 0 ? Math.round((filled / total) * 100) : 0, groups: mappedGroups };
   }, [kunye]);
 
   const getColor = (pct: number) => {

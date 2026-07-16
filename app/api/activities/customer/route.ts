@@ -2,7 +2,10 @@ import { activityLabelFromRow, presentDurum } from '@/app/api/activities/_helper
 import { NextResponse } from 'next/server';
 import { requireAllowedUserOrThrow } from '@/lib/authz';
 import { isAdminLike } from '@/lib/roles';
-import { createSupabaseAdminClient } from '@/lib/supabase/admin';
+import { createPgAdminClient } from '@/lib/pg/admin';
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export async function GET(req: Request) {
   try {
@@ -12,7 +15,7 @@ export async function GET(req: Request) {
     const musteri_id = (url.searchParams.get('musteri_id') ?? '').trim();
     if (!musteri_id) return NextResponse.json({ message: 'musteri_id gerekli' }, { status: 400 });
 
-    const admin = createSupabaseAdminClient();
+    const admin = createPgAdminClient();
     let q = admin
       .from('pipeline_eventleri')
       .select('id,musteri_id,faz_no,iteration_no,event_type,durum,aksiyon,owner,partner_owner,notlar,created_at,hedef_tarihi,created_by')

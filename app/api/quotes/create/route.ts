@@ -1,9 +1,12 @@
 import { NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
 import { requireCrmAccessOrThrow } from '@/lib/authz';
-import { createSupabaseAdminClient } from '@/lib/supabase/admin';
+import { createPgAdminClient } from '@/lib/pg/admin';
 import { QUOTE_PROBABILITIES } from '@/lib/quotes/catalog';
 import { addDaysToIsoDate, buildQuoteSummaryText, createQuoteActivity, ensureCustomerAccessOrThrow, getNextQuoteNumber, getQuoteCatalog, getTurkeyTodayIso, isMissingRelationError, resolveQuoteLines, type QuoteLineInput } from '@/lib/quotes/service';
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 type Body = {
   customer_id?: string;
@@ -29,7 +32,7 @@ export async function POST(request: Request) {
     if (!QUOTE_PROBABILITIES.includes(probability as any)) return NextResponse.json({ message: 'Probability sadece %10 / %30 / %60 / %90 olabilir.' }, { status: 400 });
     if (!items.length) return NextResponse.json({ message: 'En az bir teklif satırı girilmeli.' }, { status: 400 });
 
-    const admin = createSupabaseAdminClient();
+    const admin = createPgAdminClient();
     await ensureCustomerAccessOrThrow({ admin, customerId, role: me.role, fullName: me.full_name });
 
     const catalog = await getQuoteCatalog(admin);

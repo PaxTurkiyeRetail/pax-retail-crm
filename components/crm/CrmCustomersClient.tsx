@@ -14,9 +14,11 @@ function Target({ size = 16 }: { size?: number }) { return <svg width={size} hei
 function Users({ size = 16 }: { size?: number }) { return <svg width={size} height={size} viewBox="0 0 24 24" {..._svg}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>; }
 import { uniqueOptions, parsePhaseNo, sumPhaseRange } from '@/lib/utils';
 import CustomersHero from '@/components/crm/CustomersHero';
-import { HAVUZ_ACCOUNT_NAME } from '@/lib/crm';
+import { ENTEGRASYON_OPTIONS, HAVUZ_ACCOUNT_NAME } from '@/lib/crm';
+import { BUSINESS_PARTNER_RESPONSIBLE, BUSINESS_PARTNER_SECTOR } from '@/lib/report-only-customers';
 import { presentKunyeStatus } from '@/lib/kunye';
 import { FIRMA_DURUMU_OPTIONS, YONETIM_TIPI_OPTIONS, customerStatusTone, deriveCustomerSegmentation, managementTypeTone } from '@/lib/customer-segmentation';
+import { appToast } from '@/lib/app-toast';
 
 type CrmRow = {
   musteri_id: string;
@@ -32,6 +34,7 @@ type CrmRow = {
   son_kalinan_faz_tarihi?: string | null;
   kasa_firmasi?: string | null;
   kunye_durumu?: string | null;
+  report_only?: boolean;
 };
 
 type Me = { email: string; full_name: string | null; role: string };
@@ -85,6 +88,9 @@ const SECTOR_PRESET_OPTIONS = [
   'Hazır Giyim',
   'Lojistik & Kargo',
   'Yeme-İçme',
+  'BANKA',
+  'VERTİCAL',
+  BUSINESS_PARTNER_SECTOR,
 ];
 
 const EMPTY_STATS: StatsPayload = {
@@ -164,12 +170,33 @@ function statusTone(status?: string | null) {
   return { background: '#f8fafc', color: '#475569', border: '1px solid #e2e8f0' };
 }
 
+function ownerOptionKey(value: string | null | undefined) {
+  return String(value ?? '').trim().toLocaleLowerCase('tr-TR');
+}
+
+function normalizeOwnerOption(value: string | null | undefined) {
+  const raw = String(value ?? '').trim();
+  const key = ownerOptionKey(raw);
+  return raw;
+}
+
+function uniqueOwnerOptions(values: Array<string | null | undefined>): string[] {
+  const map = new Map<string, string>();
+  for (const value of values) {
+    const normalized = normalizeOwnerOption(value);
+    if (!normalized) continue;
+    const key = ownerOptionKey(normalized);
+    if (!map.has(key)) map.set(key, normalized);
+  }
+  return Array.from(map.values()).sort((a, b) => a.localeCompare(b, 'tr'));
+}
+
 
 function buildPhaseBuckets(items: SummaryItem[]): PhaseBucket[] {
   return [
     {
       key: 'lead',
-      label: 'Fırsat',
+      label: 'Fırsat İlk Temas',
       range: 'Faz 1-4',
       value: sumPhaseRange(items, 1, 4),
       filterValue: '1-4',
@@ -177,7 +204,7 @@ function buildPhaseBuckets(items: SummaryItem[]): PhaseBucket[] {
     },
     {
       key: 'contact',
-      label: 'İlk Temas',
+      label: 'Analiz + Sunumlar',
       range: 'Faz 5-9',
       value: sumPhaseRange(items, 5, 9),
       filterValue: '5-9',
@@ -212,10 +239,10 @@ function buildPhaseBuckets(items: SummaryItem[]): PhaseBucket[] {
 
 function getPhaseMeta(phaseNo: number | null | undefined) {
   if (phaseNo != null && phaseNo >= 1 && phaseNo <= 4) {
-    return { label: 'Fırsat', style: { background: '#f3e8ff', color: '#7c3aed', border: '1px solid #ddd6fe' } };
+    return { label: 'Fırsat İlk Temas', style: { background: '#f3e8ff', color: '#7c3aed', border: '1px solid #ddd6fe' } };
   }
   if (phaseNo != null && phaseNo >= 5 && phaseNo <= 9) {
-    return { label: 'İlk Temas', style: { background: '#e0f2fe', color: '#2563eb', border: '1px solid #bfdbfe' } };
+    return { label: 'Analiz + Sunumlar', style: { background: '#e0f2fe', color: '#2563eb', border: '1px solid #bfdbfe' } };
   }
   if (phaseNo != null && phaseNo >= 10 && phaseNo <= 14) {
     return { label: 'Business', style: { background: '#fef3c7', color: '#b45309', border: '1px solid #fde68a' } };
@@ -278,6 +305,7 @@ export default function CrmCustomersClient() {
   const [musteri, setMusteri] = useState('');
   const [sektor, setSektor] = useState('');
   const [sorumlu, setSorumlu] = useState('');
+  const [entegrasyonTipi, setEntegrasyonTipi] = useState('');
 
   const [ownerFilter, setOwnerFilter] = useState('');
   const [sectorFilter, setSectorFilter] = useState('');
@@ -335,9 +363,9 @@ export default function CrmCustomersClient() {
 
   async function loadBaseData() {
     const [meRes, usersRes, optionsRes] = await Promise.all([
-      fetch('/api/me', { next: { revalidate: 30 } }),
-      fetch('/api/allowed-users-lite', { next: { revalidate: 30 } }),
-      fetch('/api/crm/options', { next: { revalidate: 300 } }),
+      fetch('/api/me', { cache: 'no-store' }),
+      fetch('/api/allowed-users-lite', { cache: 'no-store' }),
+      fetch('/api/crm/options', { cache: 'no-store' }),
     ]);
 
     if (!meRes.ok) {
@@ -369,7 +397,7 @@ export default function CrmCustomersClient() {
     if (kunyeFilter) params.set('kunye_status', kunyeFilter);
     if (fazFilter) params.set('faz_no', fazFilter);
 
-    const statsRes = await fetch(`/api/crm/stats?${params.toString()}`, { next: { revalidate: 30 } });
+    const statsRes = await fetch(`/api/crm/stats?${params.toString()}`, { cache: 'no-store' });
     if (statsRes.ok) {
       const statsJson = await statsRes.json().catch(() => ({}));
       setStats({ ...EMPTY_STATS, ...(statsJson ?? {}) });
@@ -389,7 +417,9 @@ export default function CrmCustomersClient() {
       if (kunyeFilter) params.set('kunye_status', kunyeFilter);
       if (fazFilter) params.set('faz_no', fazFilter);
 
-      const listRes = await fetch(`/api/crm/list?${params.toString()}`, { next: { revalidate: 30 } });
+      params.set('include_report_only', '1');
+
+      const listRes = await fetch(`/api/crm/list?${params.toString()}`, { cache: 'no-store' });
       const listJson = await listRes.json().catch(() => ({}));
       if (!listRes.ok) {
         setMsg(listJson?.message || 'Bu ekrana erişim yetkin yok.');
@@ -413,8 +443,8 @@ export default function CrmCustomersClient() {
   }, [page, debouncedQ, ownerFilter, sectorFilter, integrationFilter, kasaFilter, kunyeFilter, fazFilter, pageSize]);
 
   const ownerOptions = useMemo(
-    () => uniqueOptions([...filterOptions.ownerOptions, ...allowed.map((u) => u.full_name), HAVUZ_ACCOUNT_NAME]),
-    [allowed, filterOptions.ownerOptions]
+    () => uniqueOwnerOptions([...filterOptions.ownerOptions, BUSINESS_PARTNER_RESPONSIBLE, HAVUZ_ACCOUNT_NAME]),
+    [filterOptions.ownerOptions]
   );
 
   const sectorOptions = useMemo(
@@ -555,6 +585,7 @@ export default function CrmCustomersClient() {
     setMusteri('');
     setSektor('');
     setSorumlu(displayMeName || HAVUZ_ACCOUNT_NAME);
+    setEntegrasyonTipi('');
   };
 
   const openCreate = () => {
@@ -569,6 +600,7 @@ export default function CrmCustomersClient() {
     setMusteri(row.musteri ?? '');
     setSektor(row.sektor ?? '');
     setSorumlu(row.sorumlu ?? displayMeName ?? HAVUZ_ACCOUNT_NAME);
+    setEntegrasyonTipi(row.entegrasyon_tipi ?? '');
     setMsg(null);
     setOpen(true);
   };
@@ -585,6 +617,7 @@ export default function CrmCustomersClient() {
         musteri: musteri.trim(),
         sektor: sektor.trim() || null,
         sorumlu: sorumlu.trim(),
+        entegrasyon_tipi: entegrasyonTipi.trim() || null,
       };
       if (mode === 'edit') body.musteriId = editingId;
 
@@ -595,7 +628,9 @@ export default function CrmCustomersClient() {
       });
       const j = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setMsg(j?.message || 'Kayıt sırasında hata oluştu.');
+        const errorMessage = j?.message || 'Kayıt sırasında hata oluştu.';
+        setMsg(errorMessage);
+        appToast.error('Kayıt başarısız', errorMessage);
         return;
       }
 
@@ -603,7 +638,12 @@ export default function CrmCustomersClient() {
       resetForm();
       await Promise.all([loadRows(1), loadStats()]);
       setPage(1);
-      setMsg(mode === 'create' ? 'Müşteri eklendi.' : (j?.message ?? 'Müşteri güncelleme talebi işlendi.'));
+      const successMessage = mode === 'create' ? 'Müşteri eklendi.' : (j?.message ?? 'Müşteri güncelleme talebi işlendi.');
+      setMsg(successMessage);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Kayıt sırasında hata oluştu.';
+      setMsg(errorMessage);
+      appToast.error('Kayıt başarısız', errorMessage);
     } finally {
       setBusySave(false);
     }
@@ -843,16 +883,46 @@ export default function CrmCustomersClient() {
 
         .phase-strip { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
         .phase-segment {
-          flex-direction: column; align-items: flex-start; justify-content: flex-start;
-          min-height: 120px; padding: 16px; border: 1px solid var(--border); background: #fff;
+          flex-direction: column;
+          align-items: flex-start;
+          justify-content: flex-start;
+          min-height: 120px;
+          padding: 16px;
+          border: 1px solid var(--border);
+          background: #fff;
+          text-align: left;
         }
         .phase-segment.active { outline: 2px solid rgba(37,99,235,0.18); border-color: #93c5fd; }
         .phase-segment-head {
-          width: 100%; display: flex; align-items: center; justify-content: space-between;
-          gap: 8px; margin-bottom: 14px;
+          width: 100%;
+          display: block;
+          margin-bottom: 14px;
+          text-align: left;
         }
-        .phase-segment-name { font-size: 15px; font-weight: 900; color: var(--text); }
-        .phase-segment-range { font-size: 12px; color: var(--text-3); }
+        .phase-segment-head > div { width: 100%; min-width: 0; text-align: left; }
+        .phase-segment-name {
+          display: block;
+          min-height: 20px;
+          margin: 0;
+          padding: 0;
+          font-size: 15px;
+          font-weight: 900;
+          line-height: 20px;
+          color: var(--text);
+          text-align: left;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .phase-segment-range {
+          display: block;
+          margin: 2px 0 0;
+          padding: 0;
+          font-size: 12px;
+          line-height: 16px;
+          color: var(--text-3);
+          text-align: left;
+        }
         .phase-segment-value { font-size: 28px; font-weight: 900; letter-spacing: -0.03em; color: var(--text); line-height: 1; }
         .phase-progress { margin-top: auto; width: 100%; height: 8px; border-radius: 999px; background: rgba(255,255,255,0.65); overflow: hidden; }
         .phase-progress span {
@@ -1213,6 +1283,7 @@ export default function CrmCustomersClient() {
                 <th>Kasa Firması</th>
                 <th className="kunye-column">Künye</th>
                 <th>Entegrasyon</th>
+                <th style={{ width: 120 }}>İşlem</th>
               </tr>
             </thead>
             <tbody>
@@ -1241,6 +1312,7 @@ export default function CrmCustomersClient() {
                   <td className="phase-column">
                     {(() => {
                       const displayedPhase = getDisplayedPhase(r);
+                      if (r.report_only) return <span className="pill" style={{ background: '#f8fafc', color: '#475569', border: '1px solid #e2e8f0' }}>Rapor Müşterisi</span>;
                       if (displayedPhase.phaseNo == null) return null;
                       const phaseMeta = getPhaseMeta(displayedPhase.phaseNo);
                       return (
@@ -1256,18 +1328,27 @@ export default function CrmCustomersClient() {
                   <td>{r.sorumlu ?? '-'}</td>
                   <td>{r.kasa_firmasi ?? '-'}</td>
                   <td className="kunye-column">
-                    <span className="pill kunye-pill" style={statusTone(r.kunye_durumu)}>
-                      {presentKunyeStatus(r.kunye_durumu)}
-                    </span>
+                    {r.report_only ? (
+                      <span className="pill kunye-pill" style={{ background: '#f8fafc', color: '#475569', border: '1px solid #e2e8f0' }}>
+                        Kapsam Dışı
+                      </span>
+                    ) : (
+                      <span className="pill kunye-pill" style={statusTone(r.kunye_durumu)}>
+                        {presentKunyeStatus(r.kunye_durumu)}
+                      </span>
+                    )}
                   </td>
                   <td>{r.entegrasyon_tipi ?? '-'}</td>
+                  <td>
+                    <button type="button" className="ghost" onClick={() => openEdit(r)}>Düzenle</button>
+                  </td>
                 </tr>
               ))}
               {!loading && !visibleRows.length ? (
-                <tr><td colSpan={7} className="muted" style={{ padding: 18 }}>Kayıt bulunamadı.</td></tr>
+                <tr><td colSpan={8} className="muted" style={{ padding: 18 }}>Kayıt bulunamadı.</td></tr>
               ) : null}
               {loading ? (
-                <tr><td colSpan={7} className="muted" style={{ padding: 18 }}>Yükleniyor...</td></tr>
+                <tr><td colSpan={8} className="muted" style={{ padding: 18 }}>Yükleniyor...</td></tr>
               ) : null}
             </tbody>
           </table>
@@ -1288,8 +1369,8 @@ export default function CrmCustomersClient() {
             <div>
               <div className="title">{mode === 'create' ? 'Müşteri ekle' : 'Müşteriyi düzenle'}</div>
               <div className="sub">
-                Müşteri oluştururken sorumlu doğrudan seçilir. Düzenleme ekranında sorumlu değişirse,
-                superadmin/admin onayına düşer; diğer alanlar anında kaydolur.
+                Müşteri adı, sektör, sorumlu ve entegrasyon bilgileri bu ekrandan düzenlenir.
+                Kaydettiğinde değişiklikler doğrudan müşteri kaydına işlenir.
               </div>
             </div>
 
@@ -1315,6 +1396,15 @@ export default function CrmCustomersClient() {
                   <option value="">Seçiniz</option>
                   {ownerOptions.map((name) => (
                     <option key={name} value={name}>{name}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="field">
+                <span className="label">Entegrasyon</span>
+                <select className="select" value={entegrasyonTipi} onChange={(e) => setEntegrasyonTipi(e.target.value)}>
+                  {ENTEGRASYON_OPTIONS.map((name) => (
+                    <option key={name || 'empty'} value={name}>{name || 'Seçiniz'}</option>
                   ))}
                 </select>
               </label>

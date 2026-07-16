@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { requireCrmAccessOrThrow } from "@/lib/authz";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { createPgAdminClient } from "@/lib/pg/admin";
 import { ENTEGRASYON_OPTIONS, HAVUZ_ACCOUNT_NAME } from "@/lib/crm";
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 type Body = {
     musteri?: string;
@@ -67,30 +70,9 @@ export async function POST(req: Request) {
     }
 
     const sorumlu = (body.sorumlu ?? "").trim() || myName;
-    const admin = createSupabaseAdminClient();
+    const admin = createPgAdminClient();
 
-    if (sorumlu !== HAVUZ_ACCOUNT_NAME) {
-        const { data: allowedUser, error: allowedUserError } = await admin
-            .from("allowed_users")
-            .select("full_name")
-            .eq("is_active", true)
-            .eq("full_name", sorumlu)
-            .maybeSingle();
-
-        if (allowedUserError) {
-            return NextResponse.json(
-                { message: allowedUserError.message },
-                { status: 500 }
-            );
-        }
-
-        if (!allowedUser) {
-            return NextResponse.json(
-                { message: "Seçilen sorumlu aktif kullanıcı listesinde bulunamadı." },
-                { status: 400 }
-            );
-        }
-    }
+    // Sorumlu alanı aktif kullanıcı listesiyle sınırlandırılmıyor; seçilen/geçerli isim direkt kaydedilir.
 
     const { data, error } = await admin
         .from("musteriler")

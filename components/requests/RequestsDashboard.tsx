@@ -41,7 +41,7 @@ export default function RequestsDashboard() {
 
   useEffect(() => {
     setLoading(true);
-    fetch('/api/requests/stats')
+    fetch('/api/requests/stats', { cache: 'no-store' })
       .then(r => r.json())
       .then(data => {
         setStats({

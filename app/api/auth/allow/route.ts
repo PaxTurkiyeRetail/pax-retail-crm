@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
-import { createSupabaseAdminClient } from '@/lib/supabase/admin';
+import { createPgAdminClient } from '@/lib/pg/admin';
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export async function POST(req: Request) {
   const { email } = await req.json().catch(() => ({}));
@@ -8,7 +11,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ message: 'Email gerekli' }, { status: 400 });
   }
 
-  const admin = createSupabaseAdminClient();
+  const admin = createPgAdminClient();
 
   const { data, error } = await admin
     .from('allowed_users')

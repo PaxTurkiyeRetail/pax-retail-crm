@@ -25,7 +25,7 @@ export default function NewRequestForm({ userRole, onCreated }: { userRole: stri
   const [dueAt, setDueAt] = useState('');
 
   useEffect(() => {
-    fetch('/api/requests/options').then(r => r.json()).then(setOptions).catch(() => {});
+    fetch('/api/requests/options', { cache: 'no-store' }).then(r => r.json()).then(setOptions).catch(() => {});
   }, []);
 
   const selectedCat = options.categories.find(c => c.id === categoryId);

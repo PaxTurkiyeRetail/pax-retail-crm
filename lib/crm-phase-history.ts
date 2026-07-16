@@ -1,5 +1,5 @@
 import { normalizeDurum } from '@/app/api/activities/_helpers';
-import { createSupabaseAdminClient } from '@/lib/supabase/admin';
+import { createPgAdminClient } from '@/lib/pg/admin';
 
 type BaseCustomerRow = {
   musteri_id: string;
@@ -40,7 +40,7 @@ export async function appendLastStayedPhase<T extends BaseCustomerRow>(rows: T[]
   const musteriIds = Array.from(new Set(rows.map((row) => String(row.musteri_id ?? '').trim()).filter(Boolean)));
   if (!musteriIds.length) return rows.map((row) => ({ ...row, ...EMPTY_LAST_PHASE }));
 
-  const admin = createSupabaseAdminClient();
+  const admin = createPgAdminClient();
   const { data: events, error: eventsError } = await admin
     .from('pipeline_eventleri')
     .select('musteri_id,faz_no,durum,created_at')

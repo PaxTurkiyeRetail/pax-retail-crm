@@ -3,11 +3,47 @@ import { NextResponse } from 'next/server';
 import { requireAdminOrThrow } from '@/lib/authz';
 import { db } from '@/lib/db';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 const VALID_ROLES = ['super_admin', 'admin', 'account_manager', 'itsm', 'user'] as const;
+
+const WEEKLY_TARGET_COLUMNS = [
+  'weekly_target_sales_physical',
+  'weekly_target_sales_online',
+  'weekly_target_sales_phone',
+  'weekly_target_sales_email',
+  'weekly_target_technical_physical',
+  'weekly_target_technical_online',
+  'weekly_target_total_activities',
+  'weekly_target_unique_customers',
+] as const;
+
+function toWeeklyTarget(value: unknown) {
+  const parsed = Number(value ?? 0);
+  if (!Number.isFinite(parsed) || parsed < 0) return 0;
+  return Math.floor(parsed);
+}
+
+async function ensureWeeklyTargetColumns() {
+  await db.query(`
+    alter table public.allowed_users
+      add column if not exists weekly_target_sales_physical integer not null default 0,
+      add column if not exists weekly_target_sales_online integer not null default 0,
+      add column if not exists weekly_target_sales_phone integer not null default 0,
+      add column if not exists weekly_target_sales_email integer not null default 0,
+      add column if not exists weekly_target_technical_physical integer not null default 0,
+      add column if not exists weekly_target_technical_online integer not null default 0,
+      add column if not exists weekly_target_total_activities integer not null default 0,
+      add column if not exists weekly_target_unique_customers integer not null default 0
+  `);
+}
+
 
 export async function PATCH(req: Request, ctx: { params: Promise<{ email: string }> }) {
   try {
     await requireAdminOrThrow();
+    await ensureWeeklyTargetColumns();
     const { email } = await ctx.params;
     const body = await req.json().catch(() => ({}));
 
@@ -34,6 +70,12 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ email: string
       values.push(passwordHash);
       fields.push(`password_hash = $${values.length}`);
     }
+    for (const column of WEEKLY_TARGET_COLUMNS) {
+      if (Object.prototype.hasOwnProperty.call(body ?? {}, column)) {
+        values.push(toWeeklyTarget(body?.[column]));
+        fields.push(`${column} = $${values.length}`);
+      }
+    }
 
     if (!fields.length) {
       return NextResponse.json({ message: 'Güncellenecek alan yok' }, { status: 400 });
@@ -50,6 +92,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ email: string
 export async function DELETE(_req: Request, ctx: { params: Promise<{ email: string }> }) {
   try {
     await requireAdminOrThrow();
+    await ensureWeeklyTargetColumns();
     const { email } = await ctx.params;
     const userResult = await db.query(`select id from public.allowed_users where lower(email) = lower($1) limit 1`, [email]);
     const userId = userResult.rows[0]?.id;
