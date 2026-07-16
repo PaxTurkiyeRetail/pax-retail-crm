@@ -44,7 +44,7 @@ export async function GET(request: Request) {
           : Promise.resolve({ data: [], error: null }),
       ] as any);
 
-      const customerMap = new Map((customers ?? []).map((row: any) => [row.id, row]));
+      const customerMap = new Map<string, any>((customers ?? []).map((row: any) => [String(row.id), row]));
       const itemTextByQuote = new Map<string, string>();
       (items ?? []).forEach((item: any) => {
         const prev = itemTextByQuote.get(item.quote_id) ?? '';

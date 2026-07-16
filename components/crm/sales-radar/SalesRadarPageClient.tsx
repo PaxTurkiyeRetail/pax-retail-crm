@@ -273,8 +273,8 @@ function buildRadarRows(crmRows: CrmRow[], activities: ActivityRow[]): RadarRow[
     });
     const latest = customerActivities[0];
     const phase = phaseKeyFromNo(row.aktif_faz_no);
-    const risk = deriveRisk(latest?.created_at, phase, row.kunye_durumu);
-    const score = deriveScore(latest?.created_at, phase, row.kunye_durumu, latest?.channel);
+    const risk = deriveRisk(latest?.created_at ?? undefined, phase, row.kunye_durumu ?? undefined);
+    const score = deriveScore(latest?.created_at ?? undefined, phase, row.kunye_durumu ?? undefined, latest?.channel ?? undefined);
     return {
       id: row.musteri_id,
       customerName: row.musteri,
@@ -286,7 +286,7 @@ function buildRadarRows(crmRows: CrmRow[], activities: ActivityRow[]): RadarRow[
       lastActivityDate: latest?.created_at ?? '',
       lastActivityType: latest?.channel ?? '-',
       nextAction: String(latest?.notes ?? '').trim() || defaultNextAction(phase),
-      targetDate: suggestTargetDate(latest?.created_at),
+      targetDate: suggestTargetDate(latest?.created_at ?? undefined),
       risk,
       score,
       kunyeStatus: String(row.kunye_durumu ?? '').trim(),

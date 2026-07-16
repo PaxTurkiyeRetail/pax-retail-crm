@@ -57,7 +57,7 @@ export default function NovaCurrentStructureTab({ userRole, userTeam, userNode, 
                   {getRoleLabel(userRole)} Ekibi
                 </div>
                 <div style={{ display: 'grid', gap: 8, fontSize: 13, color: 'var(--text-2)' }}>
-                  {userTeam.map(member => (
+                  {userTeam.map((member: { name: string; title: string }) => (
                     <div key={member.name} style={{ display: 'flex', justifyContent: 'space-between' }}>
                       <span style={{ fontWeight: 600 }}>{member.name}</span>
                       <span style={{ color: 'var(--text-3)' }}>{member.title}</span>

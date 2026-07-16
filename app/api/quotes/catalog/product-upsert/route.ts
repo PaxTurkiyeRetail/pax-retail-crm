@@ -50,7 +50,7 @@ export async function POST(request: Request) {
     };
 
     const admin = createPgAdminClient();
-    let query = admin.from('quote_products');
+    const query = admin.from('quote_products');
     if (body.id) {
       const { data, error } = await query.update(payload).eq('id', body.id).select('*').single();
       if (error) return NextResponse.json({ message: error.message }, { status: 400 });

@@ -48,7 +48,7 @@ export async function GET(req: Request) {
     const daySpan = inclusiveDayCount(from, to);
 
     const admin = createPgAdminClient();
-    let data = await fetchAllRows<any>((rangeFrom, rangeTo) => {
+    const data = await fetchAllRows<any>((rangeFrom, rangeTo) => {
       let query = admin
         .from('pipeline_eventleri')
         .select('id,musteri_id,faz_no,durum,aksiyon,owner,partner_owner,notlar,created_at,created_by,musteriler(musteri,sorumlu,sektor,entegrasyon_tipi)')

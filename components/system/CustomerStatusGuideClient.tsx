@@ -115,7 +115,7 @@ export default function CustomerStatusGuideClient() {
           <ul>
             <li>Sistem önce kendi önerisini üretir.</li>
             <li>Kullanıcı isterse Firma Durumu ve Yönetim Tipi alanlarını manuel değiştirir.</li>
-            <li>"Sistem önerisine dön" ile override temizlenir ve otomatik kurgu yeniden aktif olur.</li>
+            <li>“Sistem önerisine dön” ile override temizlenir ve otomatik kurgu yeniden aktif olur.</li>
           </ul>
           <p className="foot">Demo aşamasında bu seçim local storage üzerinde tutulur. Backend bağlandığında kalıcı alanlara yazılacaktır.</p>
         </article>

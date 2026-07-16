@@ -1132,7 +1132,7 @@ async function rewriteSlideText(zip: JSZip, slideNo: number, replacements: Recor
   const fileName = `ppt/slides/slide${slideNo}.xml`;
   const file = zip.file(fileName);
   if (!file) return;
-  let xml = await file.async('string');
+  const xml = await file.async('string');
   const matches = Array.from(xml.matchAll(/<a:t>([\s\S]*?)<\/a:t>/g));
   if (!matches.length) return;
   const rebuilt: string[] = [];

@@ -33,7 +33,7 @@ export async function GET() {
   try {
     const me = await requireCrmAccessOrThrow();
     const pgClient = await createPgServerClient();
-    let query = pgClient
+    const query = pgClient
       .from('vw_crm_musteriler')
       .select('musteri_id,sektor,sorumlu,entegrasyon_tipi,aktif_faz_no')
       .order('musteri_id', { ascending: true })

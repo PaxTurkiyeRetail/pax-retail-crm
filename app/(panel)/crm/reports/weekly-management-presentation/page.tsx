@@ -39,6 +39,11 @@ type JiraTicketSummary = {
     issueCount: number;
     companyFieldId: string;
     queryMode: string;
+    searchEndpoint?: string;
+    recentProjectCount?: number;
+    availableStatuses?: string[];
+    candidateCompanyFields?: Array<{ id: string; name: string; sampleValue: string }>;
+    diagnostics?: string[];
     sampleIssues: Array<{ key: string; company: string; status: string; created: string; resolved: string; summary: string }>;
   };
 };

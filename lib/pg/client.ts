@@ -187,18 +187,23 @@ class QueryBuilder {
         continue;
       }
       if (filter.kind === 'or') {
-        const parts = String(filter.value)
-          .split(',')
+        const parts = splitTopLevel(String(filter.value))
           .map((s) => s.trim())
           .filter(Boolean)
           .map((piece) => {
-            const m = piece.match(/^([a-zA-Z0-9_]+)\.(ilike|eq)\.(.+)$/i);
+            const m = piece.match(/^([a-zA-Z0-9_]+)\.(ilike|eq|in)\.(.+)$/i);
             if (!m) return null;
-            const [, col, op, rawVal] = m;
-            const value = rawVal.replace(/^%/, '').replace(/%$/, '');
-            params.push(op.toLowerCase() === 'ilike' ? `%${value}%` : value);
+            const [, col, rawOp, rawVal] = m;
+            const op = rawOp.toLowerCase();
             const p = `$${index++}`;
-            return `${quoteIdent(col)} ${op.toLowerCase() === 'ilike' ? 'ILIKE' : '='} ${p}`;
+            if (op === 'in') {
+              const values = rawVal.replace(/^\(/, '').replace(/\)$/, '').split(',').map((value) => value.trim()).filter(Boolean);
+              params.push(values);
+              return `${quoteIdent(col)} = ANY(${p})`;
+            }
+            const value = rawVal.replace(/^%/, '').replace(/%$/, '');
+            params.push(op === 'ilike' ? `%${value}%` : value);
+            return `${quoteIdent(col)} ${op === 'ilike' ? 'ILIKE' : '='} ${p}`;
           })
           .filter(Boolean);
         if (parts.length) clauses.push(`(${parts.join(' OR ')})`);
@@ -316,8 +321,8 @@ class QueryBuilder {
     }
   }
 
-  then<TResult1 = any, TResult2 = never>(onfulfilled?: ((value: any) => TResult1 | PromiseLike<TResult1>) | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null) {
-    return this.execute().then(onfulfilled as any, onrejected as any);
+  then(onfulfilled?: ((value: any) => any) | null, onrejected?: ((reason: any) => any) | null): Promise<any> {
+    return this.execute().then(onfulfilled ?? undefined, onrejected ?? undefined);
   }
 }
 

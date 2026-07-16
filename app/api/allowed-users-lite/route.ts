@@ -24,6 +24,6 @@ export async function GET() {
     return NextResponse.json({ message: error.message }, { status: 500 });
   }
 
-  const users = (data ?? []).filter((row) => String(row.full_name ?? '').trim().length > 0);
+  const users = (data ?? []).filter((row: any) => String(row.full_name ?? '').trim().length > 0);
   return NextResponse.json({ users });
 }

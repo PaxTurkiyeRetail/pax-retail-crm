@@ -15,6 +15,9 @@ export const db =
   global.__pgPool ??
   new Pool({
     connectionString,
+    connectionTimeoutMillis: 5_000,
+    idleTimeoutMillis: 30_000,
+    allowExitOnIdle: true,
   });
 
 if (process.env.NODE_ENV !== 'production') {

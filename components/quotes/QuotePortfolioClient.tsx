@@ -29,6 +29,8 @@ type Kpis = {
   total_quotes: number;
   sent_quotes: number;
   closed_quotes: number;
+  won_quotes: number;
+  draft_quotes: number;
   overdue_followups: number;
   expiring_soon: number;
   total_devices: number;

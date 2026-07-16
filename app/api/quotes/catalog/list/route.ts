@@ -19,7 +19,7 @@ export async function GET() {
       if (isMissingRelationError(productErr ?? ruleErr)) return NextResponse.json({ message: 'quote_module_not_setup' }, { status: 400 });
       return NextResponse.json({ message: (productErr ?? ruleErr)?.message || 'Katalog alınamadı.' }, { status: 400 });
     }
-    return NextResponse.json({ products: (products ?? []).map((product) => normalizeQuoteProduct(product)), rules: rules ?? [] }, { headers: { 'Cache-Control': 'no-store, max-age=0' } });
+    return NextResponse.json({ products: (products ?? []).map((product: any) => normalizeQuoteProduct(product)), rules: rules ?? [] }, { headers: { 'Cache-Control': 'no-store, max-age=0' } });
   } catch (e: any) {
     return NextResponse.json({ message: e?.message || 'Yetkisiz' }, { status: e?.status || 401 });
   }

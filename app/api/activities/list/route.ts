@@ -169,7 +169,7 @@ export async function GET(req: Request) {
         const activityStatus = presentDurum(row.durum);
         const customer = row?.musteriler ?? null;
         const isBusinessPartner = reportOnlyCustomerKind(customer) === 'business-partner' || isBusinessPartnerSector(customer?.sektor);
-        const phase = row.faz_no != null
+        const phase: any = row.faz_no != null
           ? (isBusinessPartner ? partnerPhaseMap.get(Number(row.faz_no)) : customerPhaseMap.get(Number(row.faz_no)))
           : null;
         const phaseOwner = String(phase?.owner ?? row.owner ?? '').trim() || null;

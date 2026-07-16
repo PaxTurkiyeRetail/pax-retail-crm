@@ -24,7 +24,7 @@ export default function NovaSalesProcessTab({ onComplete }: any) {
           Müşteri Kazanım Yolculuğu
         </h2>
         <p style={{ fontSize: 14, lineHeight: 1.7, color: 'var(--text-2)' }}>
-          Her müşteri bu 6 aşamadan geçer. Sen hangi aşamada olduğunu CRM'den takip edeceksin.
+          Her müşteri bu 6 aşamadan geçer. Sen hangi aşamada olduğunu CRM’den takip edeceksin.
         </p>
       </div>
 
@@ -77,10 +77,10 @@ export default function NovaSalesProcessTab({ onComplete }: any) {
         padding: 24
       }}>
         <div style={{ fontSize: 18, fontWeight: 700, color: '#059669', marginBottom: 8 }}>
-          🎉 Tebrikler! Nova Core Onboarding'i Tamamladın
+          🎉 Tebrikler! Nova Core Onboarding’i Tamamladın
         </div>
         <div style={{ fontSize: 14, color: 'var(--text-2)' }}>
-          Artık PAX Retail'in AI destekli çalışma sistemini biliyorsun. CRM'de işine başlayabilirsin!
+          Artık PAX Retail’in AI destekli çalışma sistemini biliyorsun. CRM’de işine başlayabilirsin!
         </div>
       </div>
 

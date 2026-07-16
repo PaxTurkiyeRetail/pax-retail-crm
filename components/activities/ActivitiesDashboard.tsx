@@ -17,6 +17,8 @@ type DashboardMetrics = {
   trend: Array<{ key: string; label: string; count: number }>;
   trendTotal: number;
   trendMax: number;
+  blockedCount?: number;
+  blockedFirmCount?: number;
 };
 
 type DueDateAnalysis = {

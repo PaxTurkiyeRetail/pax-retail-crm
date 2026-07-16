@@ -1,87 +1,74 @@
-# PostgreSQL CRM Panel (Allowlist + Admin)
+# PAX Retail CRM — Canli PostgreSQL Paketi
 
-## Kurulum
-1) `.env` oluştur:
+Bu paket doğrudan yerel PostgreSQL ile çalışır. Supabase URL/key değişkenleri ve Supabase SDK bağımlılıkları yoktur.
+
+## Gereksinimler
+
+- Node.js 22 LTS
+- PostgreSQL 16+
+- PM2
+- Dolu bir `.env.local` dosyası
+
+## Ortam dosyası
+
 ```bash
-cp .env.example .env
+cp .env.local.example .env.local
+nano .env.local
 ```
 
-2) Paketleri kur:
+Zorunlu değer:
+
+```env
+DATABASE_URL=postgresql://postgres:URL_ENCODE_EDILMIS_SIFRE@localhost:5432/crm_local
+AUTH_COOKIE_NAME=crm_session
+AUTH_SESSION_TTL_HOURS=24
+AUTH_COOKIE_SECURE=true
+```
+
+HTTPS kurulmadan geçici test yapılacaksa `AUTH_COOKIE_SECURE=false` kullanılabilir. Canlı HTTPS ortamında `true` olmalıdır.
+
+## Kurulum ve build
+
 ```bash
-npm i
+npm ci
+npm run check:build
+npm run build
 ```
 
-3) Çalıştır:
+## PM2 ile çalıştırma
+
 ```bash
-npm run dev
+pm2 start ecosystem.config.cjs
+pm2 save
+pm2 startup
 ```
 
-## Özet
-- `/login` -> email+şifre giriş (önce allowlist kontrolü)
-- `/crm` -> korumalı
-- `/admin/users` -> admin korumalı
-- Admin panel kullanıcı ekler/siler/pasife çeker (service role ile Auth + allowed_users)
+`pm2 startup` çıktısında verilen `sudo ...` komutunu bir kez çalıştırıp ardından tekrar `pm2 save` çalıştırın.
 
-> NOT: `POSTGRES_SERVICE_ROLE_KEY` sadece server tarafında kullanılır.
+## Güncelleme
 
-
-## Şifremi Unuttum
-- `/login` ekranındaki "Şifremi unuttum" linki `/forgot-password` sayfasını açar.
-- PostgreSQL Dashboard → Authentication → URL Configuration:
-  - Site URL: `http://localhost:3000`
-  - Redirect URL: `http://localhost:3000/auth/callback`
-
-
-## CRM Yetkilendirme
-- CRM liste verisi `vw_crm_musteriler` view'ünden gelir.
-- Admin: tüm kayıtları görür.
-- User: `sorumlu` alanı kendi **Ad Soyad** (allowed_users.full_name) ile eşleşen kayıtları görür.
-
-## CRM Raporlar
-- `/crm/reports` ekranı faz ve risk bazlı toplamlara bakar.
-
-## Aktiviteler + Sonraki Aktivite Planı
-- `/crm/activities/new`: satışçı günlük aktivite girer.
-  - Müşteri seçince mevcut faz otomatik dolar (isterse faz değiştirir).
-  - Opsiyonel olarak "Sonraki aktivite" planı girer (tarih + hedef aksiyon + bekleyen taraf).
-- `/crm/activities`: bekleyen planların listesi (plan_status='open').
-  - Admin tüm planları görür.
-  - User sadece kendi planlarını görür.
-
-### DB (zorunlu)
-Aktivite planları için `pipeline_eventleri` tablosuna plan alanlarını ekle:
-
-```sql
--- sql/plan_columns.sql
+```bash
+cd ~/apps/pax-retail-crm
+git pull origin main
+./scripts/deploy-live.sh
 ```
 
+## Kontrol
 
-## CRM: Filtre + Yeni Müşteri
-- `/crm` ekranında arama + risk/faz/durum filtreleri vardır.
-- Sağ üstteki `+` ile yeni müşteri eklenir.
-  - Admin: sorumlu seçebilir.
-  - User: sorumlu otomatik kendi email’idir.
-- Kayıt `musteriler` tablosuna insert atar (bkz. DB açıklaması: musteriler alanları). 
-
-
-## Künye migration notu
-Künye ekranindaki `Franchise Sayisi` alani DBde `public.musteri_kunye.franchise_sayisi` kolonuna yazilir. Canli DBde bu kolon yoksa `sql/kunye_enterprise_refresh.sql` dosyasini once calistirin.
-
-## Quote Module (Teklif Yönetimi)
-Yeni eklenen ekranlar:
-- `/crm/quotes` : teklif portföyü
-- `/crm/quotes/new` : quote builder
-- `/crm/quotes/[quoteId]` : teklif detay
-- `/crm/quotes/[quoteId]/print` : yazdır / PDF görünümü
-
-### Zorunlu DB setup
-PostgreSQL SQL Editor içinde şu dosyayı çalıştır:
-```sql
--- sql/quote_module_setup.sql
+```bash
+curl -I http://localhost:3000/login
+curl http://localhost:3000/api/health
+pm2 logs pax-retail-crm --lines 100
 ```
 
-### Akış
-- Draft veya Sent teklif oluşturulur.
-- Sent olduğunda `pipeline_eventleri` tablosuna `AKTIVITE:Teklif Paylaşıldı` aktivitesi otomatik eklenir.
-- Follow-up tarihi teklif tarihinden +30 gün, geçerlilik +15 gündür.
-- Pricing engine önce `quote_products` ve `quote_pricing_rules` tablolarını okur; tablolar yoksa kod içi static fallback katalog kullanır.
+Sağlık endpoint'i başarılıysa `ok: true` ve `database: connected` döner.
+
+## Veritabanı
+
+Mevcut dump zaten restore edilmişse tekrar SQL çalıştırmak gerekmez. Yeni kurulumda `db/` ve `sql/` klasörlerindeki dosyalar migration/başlangıç amaçlıdır.
+
+## Güvenlik
+
+- `.env.local` Git'e veya ZIP'e eklenmemelidir.
+- Veritabanı portu internete açılmamalıdır; uygulama `localhost` üzerinden bağlanmalıdır.
+- Canlı ortamda HTTPS ve `AUTH_COOKIE_SECURE=true` kullanılmalıdır.

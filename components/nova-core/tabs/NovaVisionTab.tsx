@@ -55,7 +55,7 @@ export default function NovaVisionTab({ onComplete }: { onComplete: () => void }
               Ana Karar Cümlesi
             </div>
             <div style={{ fontSize: 18, fontWeight: 700, lineHeight: 1.5 }}>
-              PAX Retail'in bir sonraki büyüme eşiği, insan ekibin yanına kontrollü 
+              PAX Retail’in bir sonraki büyüme eşiği, insan ekibin yanına kontrollü 
               çalışan bir AI organizasyon katmanı eklemektir.
             </div>
           </div>

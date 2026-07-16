@@ -494,6 +494,7 @@ export function getKunyeStatus(kunye: KunyeStatusInput | null | undefined) {
       complete: false,
       missing: 4,
       missingFields: ['firma_adi', 'magaza_veya_franchise', 'pos_modeli', 'toplam_pos_adedi'],
+      completionPct: 0,
     };
   }
 
@@ -515,5 +516,6 @@ export function getKunyeStatus(kunye: KunyeStatusInput | null | undefined) {
     complete: missingFields.length === 0,
     missing: missingFields.length,
     missingFields,
+    completionPct: Math.round(((4 - missingFields.length) / 4) * 100),
   };
 }

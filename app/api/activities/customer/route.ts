@@ -16,7 +16,7 @@ export async function GET(req: Request) {
     if (!musteri_id) return NextResponse.json({ message: 'musteri_id gerekli' }, { status: 400 });
 
     const admin = createPgAdminClient();
-    let q = admin
+    const q = admin
       .from('pipeline_eventleri')
       .select('id,musteri_id,faz_no,iteration_no,event_type,durum,aksiyon,owner,partner_owner,notlar,created_at,hedef_tarihi,created_by')
       .eq('musteri_id', musteri_id)

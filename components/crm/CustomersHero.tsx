@@ -1,4 +1,6 @@
 'use client';
+
+import type { CSSProperties } from 'react';
 import '@/styles/customers-hero.css';
 
 type SummaryItem = { label: string; value: number };
@@ -12,9 +14,9 @@ type BarItem = { label: string; value: number };
 type Props = {
   stats: StatsPayload;
   completionRate: number;
-  kunyeDonutStyle: Record<string, string | number>;
-  kasaDonutStyle: Record<string, string | number>;
-  accountDonutStyle: Record<string, string | number>;
+  kunyeDonutStyle: CSSProperties;
+  kasaDonutStyle: CSSProperties;
+  accountDonutStyle: CSSProperties;
   kasaBreakdown: BarItem[];
   topSectors: BarItem[];
   sectorMax: number;

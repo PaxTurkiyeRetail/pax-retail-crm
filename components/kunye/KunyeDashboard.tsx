@@ -219,7 +219,7 @@ export default function KunyeDashboard({ kunye, musteriAdi, sektorVeSorumlu, akt
         <div className="kd-card">
           <div className="kd-card-kicker">Dolu Alan</div>
           <div className="kd-card-val" style={{ color: '#22c55e' }}>{stats.filled}</div>
-          <div className="kd-card-note">{stats.total} alanın {stats.percentage}%'si tamamlandı</div>
+          <div className="kd-card-note">{stats.total} alanın {stats.percentage}%’si tamamlandı</div>
           <div className="kd-track"><div className="kd-fill" style={{ width: `${stats.percentage}%`, background: mainColor.bar }} /></div>
         </div>
         <div className="kd-card">

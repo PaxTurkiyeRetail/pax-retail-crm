@@ -7,20 +7,22 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint . --ext .js,.jsx,.ts,.tsx,.mjs",
     "check:build": "node scripts/prebuild-check.mjs",
-    "qa:crm": "node scripts/crm-qa-agent.mjs"
+    "qa:crm": "node scripts/crm-qa-agent.mjs",
+    "typecheck": "tsc --noEmit",
+    "verify": "npm run check:build && npm run typecheck && npm run lint && npm run build"
   },
   "dependencies": {
+    "@pdf-lib/fontkit": "^1.1.1",
     "bcryptjs": "^3.0.3",
     "jszip": "^3.10.1",
     "lucide-react": "^0.469.0",
-    "next": "^15.2.0",
+    "next": "15.5.20",
+    "pdf-lib": "^1.17.1",
     "pg": "^8.20.0",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "pdf-lib": "^1.17.1",
-    "@pdf-lib/fontkit": "^1.1.1"
+    "react-dom": "^19.0.0"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
@@ -28,8 +30,8 @@
     "@types/pg": "^8.20.0",
     "@types/react": "^18.2.66",
     "@types/react-dom": "^18.2.22",
-    "eslint": "^9.0.0",
-    "eslint-config-next": "^15.2.0",
+    "eslint": "8.57.1",
+    "eslint-config-next": "15.5.20",
     "typescript": "^5.4.5"
   }
 }

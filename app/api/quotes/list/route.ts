@@ -41,7 +41,7 @@ export async function GET(request: Request) {
       .from('quotes')
       .select('id,quote_no,opportunity_title,proposal_date,valid_until,follow_up_date,probability,status,closed_reason,owner_name,total_device_count,total_amount,customer_id,created_at', { count: q ? undefined : 'exact' })
       .order('created_at', { ascending: false });
-    let ownersQuery = admin.from('quotes').select('owner_name').limit(5000);
+    const ownersQuery = admin.from('quotes').select('owner_name').limit(5000);
 
     if (status) quoteQuery = quoteQuery.ilike('status', status);
     if (owner) quoteQuery = quoteQuery.ilike('owner_name', escapeIlike(owner));
@@ -64,7 +64,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ message: (error ?? ownerError)?.message || 'Teklif listesi alınamadı.' }, { status: 500 });
     }
 
-    const ownerOptions = Array.from(new Set((ownerRows ?? []).map((row: any) => String(row.owner_name ?? '').trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'tr'));
+    const ownerOptions = Array.from(new Set<string>((ownerRows ?? []).map((row: any) => String(row.owner_name ?? '').trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'tr'));
 
     const quoteRows = quotes ?? [];
     if (!quoteRows.length) return NextResponse.json({ rows: [], ownerOptions, onboardingNeeded: false, total: 0, page, pageSize });

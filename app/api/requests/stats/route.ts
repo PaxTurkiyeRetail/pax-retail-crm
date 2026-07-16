@@ -5,6 +5,21 @@ import { createPgAdminClient } from '@/lib/pg/admin';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
+type RequestStatsRow = {
+  id: string;
+  status: string;
+  priority: string;
+  sla_status: string | null;
+  assignee_id: string | null;
+  assignee_name: string | null;
+  requester_id: string | null;
+  requester_name: string | null;
+  created_at: string;
+  first_response_at: string | null;
+  resolved_at: string | null;
+  sla_hours: number | null;
+};
+
 export async function GET(req: Request) {
   try {
     const user = await requireAllowedUserOrThrow();
@@ -18,7 +33,7 @@ export async function GET(req: Request) {
       'id, status, priority, sla_status, assignee_id, assignee_name, requester_id, requester_name, created_at, first_response_at, resolved_at, sla_hours'
     );
     if (error) throw error;
-    const all = rows ?? [];
+    const all = (rows ?? []) as RequestStatsRow[];
 
     // ── GENEL DASHBOARD ───────────────────────────────────
     if (!targetUserId) {

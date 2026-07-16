@@ -79,7 +79,7 @@ export async function GET(request: Request) {
     const sellerOptions = ['Tüm Satıcılar', ...uniqueSorted(allRows.map((r) => r.sorumlu))];
     const effectiveSeller = selectedSeller && selectedSeller !== 'Tüm Satıcılar' ? selectedSeller : '';
 
-    let filtered = effectiveSeller ? allRows.filter((r) => r.sorumlu === effectiveSeller) : allRows;
+    const filtered = effectiveSeller ? allRows.filter((r) => r.sorumlu === effectiveSeller) : allRows;
 
     const ids = filtered.map((r) => r.musteri_id).filter(Boolean);
     const kunyeMap = new Map<string, any>();

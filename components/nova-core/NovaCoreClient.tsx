@@ -70,7 +70,7 @@ export default function NovaCoreClient({ userRole, userName, userEmail }: NovaCo
           Merhaba {userName.split(' ')[0]} 👋 Sen {roleLabel} ekibindesin
         </h1>
         <p className="pax-hero-description">
-          İşte senin için hazırladığımız yol haritası. Her tab'i tamamladıkça ilerleme kaydedilir.
+          İşte senin için hazırladığımız yol haritası. Her tab’i tamamladıkça ilerleme kaydedilir.
           {userTeam.length > 0 && ` ${roleLabel} ekibinde ${userTeam.length} kişisiniz.`}
           {agentStats.active > 0 && ` Sana ${agentStats.active} AI agent yardımcı oluyor.`}
         </p>
