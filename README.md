@@ -22,10 +22,10 @@ Zorunlu değer:
 DATABASE_URL=postgresql://postgres:URL_ENCODE_EDILMIS_SIFRE@localhost:5432/crm_local
 AUTH_COOKIE_NAME=crm_session
 AUTH_SESSION_TTL_HOURS=24
-AUTH_COOKIE_SECURE=true
+AUTH_COOKIE_SECURE=false
 ```
 
-HTTPS kurulmadan geçici test yapılacaksa `AUTH_COOKIE_SECURE=false` kullanılabilir. Canlı HTTPS ortamında `true` olmalıdır.
+Doğrudan `http://...:5042` kullanılıyorsa `AUTH_COOKIE_SECURE=false` olmalıdır. HTTPS reverse proxy kurulduğunda `true` yapılmalıdır.
 
 ## Kurulum ve build
 
@@ -71,4 +71,4 @@ Mevcut dump zaten restore edilmişse tekrar SQL çalıştırmak gerekmez. Yeni k
 
 - `.env.local` Git'e veya ZIP'e eklenmemelidir.
 - Veritabanı portu internete açılmamalıdır; uygulama `localhost` üzerinden bağlanmalıdır.
-- Canlı ortamda HTTPS ve `AUTH_COOKIE_SECURE=true` kullanılmalıdır.
+- Canlı ortamda HTTPS ve `AUTH_COOKIE_SECURE=false` kullanılmalıdır.

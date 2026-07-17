@@ -6,6 +6,7 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 const RESET_TTL_MINUTES = Number(process.env.AUTH_RESET_TTL_MINUTES ?? '30');
+const GENERIC_MESSAGE = 'Eğer kullanıcı mevcutsa şifre sıfırlama bağlantısı oluşturuldu.';
 
 export async function POST(req: Request) {
   try {
@@ -14,31 +15,49 @@ export async function POST(req: Request) {
     if (!email) return NextResponse.json({ error: 'Email zorunludur.' }, { status: 400 });
 
     const userRes = await db.query(
-      `select id, email, is_active from public.allowed_users where lower(email) = $1 limit 1`,
+      'select id, email, is_active from public.allowed_users where lower(email) = $1 limit 1',
       [email]
     );
     const user = userRes.rows[0];
 
-    // Always return success-like response to avoid email enumeration.
+    // Kullanıcının varlığını yanıttan ayırt ettirmiyoruz.
     if (!user || !user.is_active) {
-      return NextResponse.json({ ok: true, message: 'Eğer kullanıcı mevcutsa şifre sıfırlama bağlantısı oluşturuldu.' });
+      return NextResponse.json({ ok: true, message: GENERIC_MESSAGE });
     }
 
     const token = crypto.randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + RESET_TTL_MINUTES * 60 * 1000);
 
-    await db.query(
-      `insert into public.password_reset_tokens (user_id, token, expires_at) values ($1, $2, $3)`,
-      [user.id, token, expiresAt]
-    );
+    const client = await db.connect();
+    try {
+      await client.query('begin');
+      await client.query(
+        'update public.password_reset_tokens set used_at = now() where user_id = $1 and used_at is null',
+        [user.id]
+      );
+      await client.query(
+        'insert into public.password_reset_tokens (user_id, token, expires_at) values ($1, $2, $3)',
+        [user.id, token, expiresAt]
+      );
+      await client.query('commit');
+    } catch (error) {
+      await client.query('rollback').catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
 
     const origin = new URL(req.url).origin;
     const resetUrl = `${origin}/reset-password?token=${token}`;
-    console.log(`[AUTH] Password reset link for ${user.email}: ${resetUrl}`);
+
+    // Üretimde token loglanmaz. Canlıda gerçek e-posta gönderimi ayrıca yapılandırılmalıdır.
+    if (process.env.NODE_ENV !== 'production') {
+      console.info(`[AUTH] Password reset link for ${user.email}: ${resetUrl}`);
+    }
 
     return NextResponse.json({
       ok: true,
-      message: 'Şifre sıfırlama bağlantısı oluşturuldu.',
+      message: GENERIC_MESSAGE,
       resetUrl: process.env.NODE_ENV !== 'production' ? resetUrl : undefined,
     });
   } catch (error) {

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
 import { createSession, verifyUserCredentials } from '@/lib/auth';
+import { shouldUseSecureAuthCookie } from '@/lib/auth-cookie';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -23,16 +23,18 @@ export async function POST(req: Request) {
     }
 
     const { sessionToken, expiresAt } = await createSession(user.id);
-    const cookieStore = await cookies();
-    cookieStore.set(AUTH_COOKIE_NAME, sessionToken, {
+    const response = NextResponse.json({ ok: true });
+
+    response.cookies.set(AUTH_COOKIE_NAME, sessionToken, {
       httpOnly: true,
       sameSite: 'lax',
-      secure: process.env.NODE_ENV === 'production',
+      secure: shouldUseSecureAuthCookie(req),
       expires: expiresAt,
       path: '/',
+      priority: 'high',
     });
 
-    return NextResponse.json({ ok: true });
+    return response;
   } catch (error) {
     console.error('Login error:', error);
     return NextResponse.json({ error: 'Giriş sırasında hata oluştu.' }, { status: 500 });

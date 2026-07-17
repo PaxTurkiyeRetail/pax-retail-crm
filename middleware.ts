@@ -11,21 +11,20 @@ export function middleware(request: NextRequest) {
     pathname.startsWith('/api/pipeline') ||
     pathname.startsWith('/api/kunye');
 
-  const hasSession = Boolean(request.cookies.get(AUTH_COOKIE_NAME)?.value);
+  const hasSessionCookie = Boolean(request.cookies.get(AUTH_COOKIE_NAME)?.value);
 
-  if (isProtected && !hasSession) {
+  if (isProtected && !hasSessionCookie) {
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('next', pathname + search);
     return NextResponse.redirect(loginUrl);
   }
 
-  if (hasSession && pathname === '/login') {
-    return NextResponse.redirect(new URL('/crm', request.url));
-  }
-
+  // Burada yalnızca cookie varlığı doğrulanabilir; geçerliliği DB gerektirir.
+  // Geçersiz/bitmiş cookie ile /login <-> /crm yönlendirme döngüsü oluşmaması
+  // için login sayfasını middleware seviyesinde CRM'e yönlendirmiyoruz.
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ['/crm/:path*', '/login', '/api/crm/:path*', '/api/pipeline/:path*', '/api/kunye'],
+  matcher: ['/crm/:path*', '/api/crm/:path*', '/api/pipeline/:path*', '/api/kunye'],
 };
