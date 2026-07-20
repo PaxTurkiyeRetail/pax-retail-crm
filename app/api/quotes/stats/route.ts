@@ -1,14 +1,14 @@
 import { NextResponse } from 'next/server';
 import { requireCrmAccessOrThrow } from '@/lib/authz';
 import { createPgAdminClient } from '@/lib/pg/admin';
-import { isMissingRelationError } from '@/lib/quotes/service';
+import { addDaysToIsoDate, getTurkeyTodayIso, isMissingRelationError } from '@/lib/quotes/service';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export async function GET(request: Request) {
   try {
-    const me = await requireCrmAccessOrThrow();
+    await requireCrmAccessOrThrow();
     const admin = createPgAdminClient();
     const url = new URL(request.url);
     const q = String(url.searchParams.get('q') ?? '').trim().toLocaleLowerCase('tr');
@@ -68,8 +68,8 @@ export async function GET(request: Request) {
       });
     }
 
-    const today = new Date().toISOString().slice(0, 10);
-    const inThreeDays = new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10);
+    const today = getTurkeyTodayIso();
+    const inThreeDays = addDaysToIsoDate(today, 3);
 
     const kpis = {
       total_quotes: rows.length,

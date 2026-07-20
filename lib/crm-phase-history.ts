@@ -1,4 +1,4 @@
-import { normalizeDurum } from '@/app/api/activities/_helpers';
+import { normalizeDurum } from '@/lib/activities/presentation';
 import { createPgAdminClient } from '@/lib/pg/admin';
 
 type BaseCustomerRow = {

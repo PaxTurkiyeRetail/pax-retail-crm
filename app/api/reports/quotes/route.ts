@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireReportsAccessOrThrow } from '@/lib/authz';
 import { createPgAdminClient } from '@/lib/pg/admin';
 import { fetchAllRows } from '@/lib/reporting';
+import { addDaysToIsoDate, getTurkeyTodayIso } from '@/lib/quotes/service';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -124,8 +125,9 @@ export async function GET(request: Request) {
       });
     }
 
-    const today = new Date().toISOString().slice(0, 10);
-    const soon = new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10);
+    const today = getTurkeyTodayIso();
+    const soon = addDaysToIsoDate(today, 3);
+    const inSevenDays = addDaysToIsoDate(today, 7);
 
     const totalQuotes = filtered.length;
     const activeQuotes = filtered.filter((row) => row.status === 'sent');
@@ -228,8 +230,8 @@ export async function GET(request: Request) {
     const agingBuckets = [
       { label: 'Takip Gecikmiş', value: filtered.filter((row) => row.status !== 'closed' && row.follow_up_date && row.follow_up_date < today).length },
       { label: '0-3 Gün', value: filtered.filter((row) => row.status !== 'closed' && row.follow_up_date && row.follow_up_date >= today && row.follow_up_date <= soon).length },
-      { label: '4-7 Gün', value: filtered.filter((row) => row.status !== 'closed' && row.follow_up_date && row.follow_up_date > soon && row.follow_up_date <= new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)).length },
-      { label: 'İleri Tarih', value: filtered.filter((row) => row.status !== 'closed' && row.follow_up_date && row.follow_up_date > new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)).length },
+      { label: '4-7 Gün', value: filtered.filter((row) => row.status !== 'closed' && row.follow_up_date && row.follow_up_date > soon && row.follow_up_date <= inSevenDays).length },
+      { label: 'İleri Tarih', value: filtered.filter((row) => row.status !== 'closed' && row.follow_up_date && row.follow_up_date > inSevenDays).length },
       { label: 'Takipsiz', value: filtered.filter((row) => row.status !== 'closed' && !row.follow_up_date).length },
     ];
 

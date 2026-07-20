@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import LogoutButton from "@/components/LogoutButton";
 import {
   canViewActivities,
@@ -17,6 +17,7 @@ import "@/styles/globals.css";
 import "@/styles/sidebar.css";
 import "@/styles/premium-ui.css";
 import "@/styles/premium-enterprise.css";
+import "@/styles/mobile-hardening.css";
 
 function roleLabel(role: AllowedRole) {
   if (role === "super_admin") return "Super Admin";
@@ -32,6 +33,7 @@ type IconKey =
   | "customers"
   | "quotes"
   | "forecast"
+  | "blocker"
   | "weekly"
   | "users"
   | "settings"
@@ -113,6 +115,14 @@ function NavIcon({ k }: { k: IconKey }) {
         <path d="M8 21v-4" />
         <path d="M13 21v-5" />
         <path d="M18 21v-9" />
+      </svg>
+    );
+  if (k === "blocker")
+    return (
+      <svg {...p}>
+        <path d="M10.3 2.9 1.8 17a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 2.9a2 2 0 0 0-3.4 0Z" />
+        <path d="M12 9v4" />
+        <path d="M12 17h.01" />
       </svg>
     );
   if (k === "weekly")
@@ -241,6 +251,7 @@ function routeMeta(pathname: string) {
     ["/crm/activities/new", "Operasyon", "Yeni Aktivite"],
     ["/crm/activities", "Operasyon", "Aktiviteler"],
     ["/crm/forecast", "Operasyon", "Forecast"],
+    ["/crm/blocker-impact", "Operasyon", "Engel & Etki"],
     ["/crm/customers", "Operasyon", "Müşteriler"],
     ["/crm/sales-radar", "Operasyon", "Satış Radarı"],
     ["/crm/system-tracker", "Operasyon", "Sistem Takibi"],
@@ -280,6 +291,8 @@ export default function PanelShell({
   const [dark, setDark] = useState(false);
   const [reportsOpen, setReportsOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const mobileMenuButtonRef = useRef<HTMLButtonElement>(null);
+  const sidebarRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     try {
@@ -307,6 +320,45 @@ export default function PanelShell({
     setUserMenuOpen(false);
     if (pathname.startsWith("/crm/reports")) setReportsOpen(true);
   }, [pathname]);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+
+    const previousOverflow = document.body.style.overflow;
+    const menuButton = mobileMenuButtonRef.current;
+    document.body.style.overflow = "hidden";
+    const sidebar = sidebarRef.current;
+    const focusableSelector = 'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
+    const focusable = () => Array.from(sidebar?.querySelectorAll<HTMLElement>(focusableSelector) ?? []);
+    requestAnimationFrame(() => focusable()[0]?.focus());
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setMenuOpen(false);
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const elements = focusable();
+      if (!elements.length) return;
+      const first = elements[0];
+      const last = elements[elements.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", onKeyDown);
+      menuButton?.focus();
+    };
+  }, [menuOpen]);
 
   const toggleCollapse = useCallback(() => {
     setCollapsed((value) => {
@@ -365,6 +417,12 @@ export default function PanelShell({
         href: "/crm/forecast",
         label: "Forecast",
         iconKey: "forecast",
+      });
+    if (canViewCRM(role))
+      operations.push({
+        href: "/crm/blocker-impact",
+        label: "Engel & Etki",
+        iconKey: "blocker",
       });
     if (canViewCRM(role))
       operations.push({
@@ -481,9 +539,12 @@ export default function PanelShell({
             {dark ? <IconSun /> : <IconMoon />}
           </button>
           <button
+            ref={mobileMenuButtonRef}
             className="pax-mobile-menu-btn"
             onClick={() => setMenuOpen((v) => !v)}
             aria-label="Menü"
+            aria-expanded={menuOpen}
+            aria-controls="pax-primary-sidebar"
           >
             <IconMenu />
           </button>
@@ -496,7 +557,14 @@ export default function PanelShell({
         aria-hidden="true"
       />
 
-      <aside className={sidebarClass}>
+      <aside
+        ref={sidebarRef}
+        id="pax-primary-sidebar"
+        className={sidebarClass}
+        aria-label="Ana menü"
+        role={menuOpen ? "dialog" : undefined}
+        aria-modal={menuOpen || undefined}
+      >
         <div className="pax-sidebar-header">
           <div className="pax-brand">
             <div className="pax-brand-mark" aria-hidden={!collapsed}>

@@ -14,7 +14,7 @@ export default function NovaAIAgentsTab({ userRole, agents, agentsByCategory, st
   return (
     <div style={{ display: 'grid', gap: 20 }}>
       <div className="pax-card">
-        <div style={{ 
+        <div className="nova-responsive-grid" style={{ 
           display: 'grid', 
           gridTemplateColumns: '1.1fr 0.9fr', 
           gap: 24,
@@ -38,7 +38,7 @@ export default function NovaAIAgentsTab({ userRole, agents, agentsByCategory, st
             </p>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div className="nova-responsive-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div style={{ 
               background: 'var(--surface-2)', 
               borderRadius: 'var(--radius-md)', 
@@ -76,7 +76,7 @@ export default function NovaAIAgentsTab({ userRole, agents, agentsByCategory, st
       </div>
 
       {/* Agents Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
+      <div className="nova-responsive-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
         {displayAgents.map((agent: any) => {
           const statusColor = 
             agent.status === 'active' ? '#10b981' :

@@ -3,7 +3,7 @@ import { revalidatePath } from 'next/cache';
 import { requireAllowedUserOrThrow } from '@/lib/authz';
 import { canCreateTechnicalActivities } from '@/lib/roles';
 import { createPgAdminClient } from '@/lib/pg/admin';
-import { normalizeDurum } from '@/app/api/activities/_helpers';
+import { normalizeDurum } from '@/lib/activities/presentation';
 import { completeActivitiesForSamePhase } from '@/lib/activity-phase-completion';
 import { activityScopeForChannel, affectsPhaseForChannel, isTechnicalChannel } from '@/lib/activity-channels';
 

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireAllowedUserOrThrow } from '@/lib/authz';
 import { createPgAdminClient } from '@/lib/pg/admin';
-import { presentDurum } from '@/app/api/activities/_helpers';
+import { presentDurum } from '@/lib/activities/presentation';
 import { BUSINESS_PARTNER_RESPONSIBLE } from '@/lib/report-only-customers';
 
 export const dynamic = 'force-dynamic';

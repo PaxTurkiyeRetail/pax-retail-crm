@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireAllowedUserOrThrow } from '@/lib/authz';
 import { createPgAdminClient } from '@/lib/pg/admin';
-import { activityLabelFromRow, presentDurum } from '@/app/api/activities/_helpers';
+import { activityLabelFromRow, presentDurum } from '@/lib/activities/presentation';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;

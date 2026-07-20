@@ -580,7 +580,7 @@ export default function CrmCustomersClient() {
       });
     }
     return tokens;
-  }, [actionMode, currentAction.title, debouncedQ, ownerFilter, kunyeFilter, fazFilter, sectorFilter, integrationFilter]);
+  }, [actionMode, currentAction.title, debouncedQ, ownerFilter, kunyeFilter, fazFilter, sectorFilter, kasaFilter, firmaDurumuFilter, yonetimTipiFilter, integrationFilter]);
 
   const resetForm = () => {
     setEditingId(null);

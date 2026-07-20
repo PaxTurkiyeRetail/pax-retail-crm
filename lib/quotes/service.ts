@@ -1,7 +1,6 @@
 import 'server-only';
 import type { PgClient } from '@/lib/pg/client';
 import { STATIC_QUOTE_PRICING_RULES, STATIC_QUOTE_PRODUCTS, normalizeQuoteProduct, type QuotePricingRule, type QuoteProduct } from '@/lib/quotes/catalog';
-import { type AllowedRole } from '@/lib/roles';
 
 export type QuoteLineInput = {
   product_id: string;
@@ -152,13 +151,11 @@ export function buildQuoteActivityNote(args: {
   return `Quote ${quoteNo} paylaşıldı. İçerik: ${summaryText} | Geçerlilik: ${validUntil ?? '-'}`;
 }
 
-export async function ensureCustomerAccessOrThrow(args: {
+export async function ensureCustomerExistsOrThrow(args: {
   admin: PgClient;
   customerId: string;
-  role: AllowedRole;
-  fullName: string | null | undefined;
 }) {
-  const { admin, customerId, role, fullName } = args;
+  const { admin, customerId } = args;
   const { data: customer, error } = await admin
     .from('musteriler')
     .select('id,musteri,sorumlu,sektor,entegrasyon_tipi')
@@ -167,8 +164,6 @@ export async function ensureCustomerAccessOrThrow(args: {
 
   if (error) throw error;
   if (!customer) throw Object.assign(new Error('Müşteri bulunamadı'), { status: 404 });
-
-
   return customer;
 }
 

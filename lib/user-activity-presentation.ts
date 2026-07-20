@@ -1,6 +1,6 @@
 import 'server-only';
 import { Buffer } from 'node:buffer';
-import { activityLabelFromRow, normalizeDurum } from '@/app/api/activities/_helpers';
+import { activityLabelFromRow, normalizeDurum } from '@/lib/activities/presentation';
 import { normalizeChannel } from '@/lib/activity-channels';
 import { db } from '@/lib/db';
 

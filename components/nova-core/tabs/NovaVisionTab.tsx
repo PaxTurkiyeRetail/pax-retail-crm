@@ -12,7 +12,7 @@ export default function NovaVisionTab({ onComplete }: { onComplete: () => void }
   return (
     <div style={{ display: 'grid', gap: 20 }}>
       <div className="pax-card">
-        <div style={{ 
+        <div className="nova-responsive-grid" style={{ 
           display: 'grid', 
           gridTemplateColumns: '1.15fr 0.85fr', 
           gap: 24,
@@ -62,7 +62,7 @@ export default function NovaVisionTab({ onComplete }: { onComplete: () => void }
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+      <div className="nova-responsive-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
         <div className="pax-card" style={{ borderLeft: '4px solid #10b981' }}>
           <div className="pax-label" style={{ marginBottom: 8 }}>Neyi Çözüyoruz</div>
           <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 12, color: 'var(--text)' }}>

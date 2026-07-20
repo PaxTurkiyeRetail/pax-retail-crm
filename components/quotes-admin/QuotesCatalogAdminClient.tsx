@@ -232,7 +232,7 @@ export default function QuotesCatalogAdminClient() {
 
       {msg ? <div style={{ ...surface, padding: 14, color: '#4338ca', background: 'var(--chip-indigo-bg)', borderColor: 'var(--chip-indigo-bd)' }}>{msg}</div> : null}
 
-      <section style={{ display: 'grid', gap: 16, gridTemplateColumns: '0.95fr 1.05fr' }}>
+      <section className="quote-catalog-layout" style={{ display: 'grid', gap: 16, gridTemplateColumns: '0.95fr 1.05fr' }}>
         <div style={{ ...surface, display: 'grid', gap: 12, alignContent: 'start' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
             <div style={{ fontSize: 18, fontWeight: 900 }}>Ürün Listesi</div>
@@ -256,7 +256,7 @@ export default function QuotesCatalogAdminClient() {
 
         <div style={{ ...surface, display: 'grid', gap: 12 }}>
           <div style={{ fontSize: 18, fontWeight: 900 }}>{productForm.id ? 'Ürün Güncelle' : 'Yeni Ürün Ekle'}</div>
-          <div style={grid2}>
+          <div className="mobile-grid-stack" style={grid2}>
             <label style={field}><span style={label}>Kod</span><input value={productForm.code} onChange={(e) => setProductForm((prev) => ({ ...prev, code: e.target.value.toUpperCase() }))} style={input} placeholder="A6650" /></label>
             <label style={field}><span style={label}>Ürün Adı</span><input value={productForm.name} onChange={(e) => setProductForm((prev) => ({ ...prev, name: e.target.value }))} style={input} placeholder="PAX A6650" /></label>
             <label style={field}><span style={label}>Kategori</span><input value={productForm.category} onChange={(e) => setProductForm((prev) => ({ ...prev, category: e.target.value }))} style={input} placeholder="EFT POS / ELYS / Service" /></label>
@@ -314,7 +314,7 @@ export default function QuotesCatalogAdminClient() {
               </table>
             </div>
 
-            <div style={{ ...surfaceInset, display: 'grid', gap: 12, gridTemplateColumns: 'repeat(4,minmax(0,1fr))' }}>
+            <div className="quote-catalog-rule-grid" style={{ ...surfaceInset, display: 'grid', gap: 12, gridTemplateColumns: 'repeat(4,minmax(0,1fr))' }}>
               <label style={field}><span style={label}>Min Adet</span><input type="number" min={1} value={ruleForm.min_qty} onChange={(e) => setRuleForm((prev) => ({ ...prev, min_qty: Number(e.target.value || 1) }))} style={input} /></label>
               <label style={field}><span style={label}>Max Adet</span><input type="number" min={1} value={ruleForm.max_qty} onChange={(e) => setRuleForm((prev) => ({ ...prev, max_qty: e.target.value }))} style={input} placeholder="Boş = sınırsız" /></label>
               <label style={field}><span style={label}>Birim Fiyat</span><input type="number" min={0} step="0.01" value={ruleForm.unit_price} onChange={(e) => setRuleForm((prev) => ({ ...prev, unit_price: e.target.value }))} style={input} placeholder="704" /></label>

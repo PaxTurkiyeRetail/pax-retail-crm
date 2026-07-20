@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
-import { requireAllowedUserOrThrow } from '@/lib/authz';
+import { requireAdminOrThrow } from '@/lib/authz';
 import { createPgAdminClient } from '@/lib/pg/admin';
 
 export const dynamic = 'force-dynamic';
@@ -10,7 +10,7 @@ type Body = { rule_id?: string };
 
 export async function POST(request: Request) {
   try {
-    await requireAllowedUserOrThrow();
+    await requireAdminOrThrow();
     const body = (await request.json().catch(() => ({}))) as Body;
     const ruleId = String(body.rule_id ?? '').trim();
     if (!ruleId) return NextResponse.json({ message: 'rule_id gerekli.' }, { status: 400 });

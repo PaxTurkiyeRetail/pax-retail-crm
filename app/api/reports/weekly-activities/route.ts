@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireReportsAccessOrThrow } from '@/lib/authz';
 import { createPgAdminClient } from '@/lib/pg/admin';
-import { activityLabelFromRow, normalizeDurum, presentDurum } from '@/app/api/activities/_helpers';
+import { activityLabelFromRow, normalizeDurum, presentDurum } from '@/lib/activities/presentation';
 import { normalizeChannel, isSalesChannel, isTechnicalChannel } from '@/lib/activity-channels';
 import { fetchAllRows, formatIstanbulDayKey, inclusiveDayCount } from '@/lib/reporting';
 

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireAllowedUserOrThrow } from '@/lib/authz';
 import { createPgAdminClient } from '@/lib/pg/admin';
-import { DURUM_CANONICAL, activityLabelFromRow, isDisplayableActivityRow, normalizeDurum, presentDurum } from '@/app/api/activities/_helpers';
+import { DURUM_CANONICAL, activityLabelFromRow, isDisplayableActivityRow, normalizeDurum, presentDurum } from '@/lib/activities/presentation';
 import { getSlaPresentation, matchesSlaFilter } from '@/lib/sla';
 import { reportOnlyCustomerKind, isBusinessPartnerSector } from '@/lib/report-only-customers';
 import { ensureBusinessPartnerPhaseTable } from '@/lib/system-parameters';

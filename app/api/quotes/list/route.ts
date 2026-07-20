@@ -1,16 +1,16 @@
 import { NextResponse } from 'next/server';
 import { requireCrmAccessOrThrow } from '@/lib/authz';
 import { createPgAdminClient } from '@/lib/pg/admin';
-import { isMissingRelationError } from '@/lib/quotes/service';
+import { addDaysToIsoDate, getTurkeyTodayIso, isMissingRelationError } from '@/lib/quotes/service';
 import { isReportOnlyCustomer } from '@/lib/report-only-customers';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 function formatState(validUntil: string | null, followUpDate: string | null) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = getTurkeyTodayIso();
   if (followUpDate && followUpDate < today) return 'overdue';
-  if (followUpDate && followUpDate <= new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10)) return 'approaching';
+  if (followUpDate && followUpDate <= addDaysToIsoDate(today, 3)) return 'approaching';
   if (validUntil && validUntil < today) return 'expired';
   return 'on_track';
 }

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
-import { requireAllowedUserOrThrow } from '@/lib/authz';
+import { requireAdminOrThrow } from '@/lib/authz';
 import { createPgAdminClient } from '@/lib/pg/admin';
 import { normalizeQuoteSpecs } from '@/lib/quotes/catalog';
 
@@ -26,7 +26,7 @@ type Body = {
 
 export async function POST(request: Request) {
   try {
-    await requireAllowedUserOrThrow();
+    await requireAdminOrThrow();
     const body = (await request.json().catch(() => ({}))) as Body;
     const code = String(body.code ?? '').trim().toUpperCase();
     const name = String(body.name ?? '').trim();

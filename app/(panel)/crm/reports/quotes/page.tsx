@@ -166,7 +166,7 @@ export default function QuoteReportsPage() {
       </div>
 
       <section style={surface}>
-        <div style={{ display: 'grid', gap: 12, gridTemplateColumns: '2fr 1fr 1fr auto' }}>
+        <div className="quote-report-filter-grid" style={{ display: 'grid', gap: 12, gridTemplateColumns: '2fr 1fr 1fr auto' }}>
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Müşteri, teklif no, satışçı veya durum ara" style={inputStyle} />
           <select value={status} onChange={(e) => setStatus(e.target.value)} style={inputStyle}>
             <option value="">Tüm Durumlar</option>
@@ -230,7 +230,7 @@ export default function QuoteReportsPage() {
         </div>
       </section>
 
-      <section style={{ display: 'grid', gap: 12, gridTemplateColumns: '1.2fr 1fr' }}>
+      <section className="quote-report-chart-grid" style={{ display: 'grid', gap: 12, gridTemplateColumns: '1.2fr 1fr' }}>
         <div style={surface}>
           <SectionTitle title="Aylık Trend" subtitle="Son 12 ayda teklif akışı ve kazanılan ciro" />
           <div style={{ overflowX: 'auto' }}>

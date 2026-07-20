@@ -277,7 +277,7 @@ export default function QuoteDetailClient({ quoteId }: { quoteId: string }) {
           </div>
 
           <div style={{ display: 'grid', gap: 14 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12 }}>
+            <div className="quote-detail-head-grid" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12 }}>
               <div>
                 <label style={labelStyle}>Senaryo Başlığı</label>
                 <input value={editTitle} onChange={(event) => setEditTitle(event.target.value)} style={{ ...inputStyle, width: '100%' }} />
@@ -302,7 +302,7 @@ export default function QuoteDetailClient({ quoteId }: { quoteId: string }) {
               </div>
 
               {resolvedEditItems.map((item, index) => (
-                <div key={item.uid} style={{ display: 'grid', gridTemplateColumns: '2fr 130px 110px 130px auto', gap: 10, alignItems: 'end', border: '1px solid var(--border)', borderRadius: 16, padding: 12 }}>
+                <div key={item.uid} className="quote-detail-line-grid" style={{ display: 'grid', gridTemplateColumns: '2fr 130px 110px 130px auto', gap: 10, alignItems: 'end', border: '1px solid var(--border)', borderRadius: 16, padding: 12 }}>
                   <div>
                     <label style={labelStyle}>Ürün</label>
                     <select value={item.product_id} onChange={(event) => setEditItems((current) => current.map((row) => row.uid === item.uid ? { ...row, product_id: event.target.value } : row))} style={{ ...inputStyle, width: '100%' }}>
@@ -346,7 +346,7 @@ export default function QuoteDetailClient({ quoteId }: { quoteId: string }) {
         <div style={surfaceCard}><div style={miniTitle}>Takip</div><div style={bigValue}>{formatDate(quote.follow_up_date)}</div><div style={{ marginTop: 8, color: health === 'overdue' ? 'var(--chip-red-color)' : 'var(--text-3)' }}>{health === 'overdue' ? 'Follow-up gecikti' : 'SLA aktif'}</div></div>
       </section>
 
-      <section style={{ display: 'grid', gap: 12, gridTemplateColumns: '1fr 1fr' }}>
+      <section className="quote-detail-meta-grid" style={{ display: 'grid', gap: 12, gridTemplateColumns: '1fr 1fr' }}>
         <div style={surface}>
           <div style={{ fontWeight: 900, fontSize: 18 }}>Müşteri ve teklif meta</div>
           <div style={{ display: 'grid', gap: 10, marginTop: 14 }}>

@@ -8,7 +8,7 @@ export default function NovaCurrentStructureTab({ userRole, userTeam, userNode, 
   return (
     <div style={{ display: 'grid', gap: 20 }}>
       <div className="pax-card">
-        <div style={{ 
+        <div className="nova-responsive-grid" style={{ 
           display: 'grid', 
           gridTemplateColumns: '1.1fr 0.9fr', 
           gap: 24,
@@ -68,7 +68,7 @@ export default function NovaCurrentStructureTab({ userRole, userTeam, userNode, 
             )}
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div className="nova-responsive-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div style={{ 
               background: 'var(--surface-2)', 
               borderRadius: 'var(--radius-md)', 
@@ -115,7 +115,7 @@ export default function NovaCurrentStructureTab({ userRole, userTeam, userNode, 
 
       {/* Interactive Hub */}
       <div className="pax-card">
-        <div style={{ 
+        <div className="nova-responsive-grid" style={{ 
           display: 'grid', 
           gridTemplateColumns: '1.05fr 0.95fr', 
           gap: 24,

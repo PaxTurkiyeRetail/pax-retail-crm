@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireReportsAccessOrThrow } from '@/lib/authz';
 import { createPgAdminClient } from '@/lib/pg/admin';
 import { getKunyeStatus, mapKunyeDbToUi } from '@/lib/kunye';
-import { activityLabelFromRow, isDisplayableActivityRow, presentDurum } from '@/app/api/activities/_helpers';
+import { activityLabelFromRow, isDisplayableActivityRow, presentDurum } from '@/lib/activities/presentation';
 import { getSlaState } from '@/lib/sla';
 import { fetchAllByCustomerIds, fetchAllRows } from '@/lib/reporting';
 import { isReportOnlyCustomer } from '@/lib/report-only-customers';

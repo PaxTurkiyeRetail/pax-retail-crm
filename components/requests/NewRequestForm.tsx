@@ -77,7 +77,7 @@ export default function NewRequestForm({ userRole, onCreated }: { userRole: stri
           <textarea value={description} onChange={e => setDesc(e.target.value)} placeholder="Detayları buraya ekle..." rows={4} style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit' }} />
         </Field>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+        <div className="mobile-grid-stack" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
           <Field label="Kategori">
             <select value={categoryId} onChange={e => setCategoryId(e.target.value)} style={inputStyle}>
               <option value="">Kategori seç</option>
@@ -94,7 +94,7 @@ export default function NewRequestForm({ userRole, onCreated }: { userRole: stri
           </Field>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+        <div className="mobile-grid-stack" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
           {canAssign && (
             <Field label="Ata (opsiyonel)">
               <select value={assigneeId} onChange={e => setAssigneeId(e.target.value)} style={inputStyle}>

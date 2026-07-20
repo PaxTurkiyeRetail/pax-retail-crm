@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { getApplicationOrigin, sendPasswordResetEmail } from '@/lib/auth/password-reset-mail';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -47,12 +48,13 @@ export async function POST(req: Request) {
       client.release();
     }
 
-    const origin = new URL(req.url).origin;
+    const origin = getApplicationOrigin(req.url);
     const resetUrl = `${origin}/reset-password?token=${token}`;
-
-    // Üretimde token loglanmaz. Canlıda gerçek e-posta gönderimi ayrıca yapılandırılmalıdır.
-    if (process.env.NODE_ENV !== 'production') {
-      console.info(`[AUTH] Password reset link for ${user.email}: ${resetUrl}`);
+    try {
+      await sendPasswordResetEmail({ email: user.email, resetUrl, expiresInMinutes: RESET_TTL_MINUTES });
+    } catch (error) {
+      await db.query('update public.password_reset_tokens set used_at = now() where token = $1', [token]).catch(() => undefined);
+      throw error;
     }
 
     return NextResponse.json({

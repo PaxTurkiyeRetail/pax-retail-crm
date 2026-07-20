@@ -1,0 +1,49 @@
+/* Shared mobile layout contracts for feature screens that still use inline desktop grids. */
+@media (max-width: 720px) {
+  .mobile-grid-stack,
+  .quote-detail-head-grid,
+  .quote-detail-meta-grid,
+  .quote-catalog-layout,
+  .quote-report-filter-grid,
+  .quote-report-chart-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .nova-responsive-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .quote-detail-line-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+  }
+
+  .quote-detail-line-grid > :first-child {
+    grid-column: 1 / -1;
+  }
+
+  .quote-detail-line-grid > button:last-child {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
+  .quote-catalog-rule-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .quote-report-filter-grid > button,
+  .quote-report-filter-grid > a {
+    width: 100%;
+  }
+}
+
+@media (max-width: 430px) {
+  .quote-detail-line-grid,
+  .quote-catalog-rule-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .quote-detail-line-grid > :first-child,
+  .quote-detail-line-grid > button:last-child {
+    grid-column: auto;
+  }
+}

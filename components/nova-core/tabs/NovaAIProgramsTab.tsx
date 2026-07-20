@@ -6,7 +6,7 @@ export default function NovaAIProgramsTab({ onComplete }: any) {
   return (
     <div style={{ display: 'grid', gap: 20 }}>
       <div className="pax-card">
-        <div style={{ 
+        <div className="nova-responsive-grid" style={{ 
           display: 'grid', 
           gridTemplateColumns: '1.1fr 0.9fr', 
           gap: 24,
@@ -55,7 +55,7 @@ export default function NovaAIProgramsTab({ onComplete }: any) {
       </div>
 
       {/* AI Programs Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 16 }}>
+      <div className="nova-responsive-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 16 }}>
         {AI_PROGRAMS.map(program => (
           <div key={program.id} className="pax-card">
             <div className="pax-label" style={{ marginBottom: 8 }}>{program.name}</div>

@@ -478,6 +478,13 @@
   justify-content: center;
 }
 @media (max-width: 1024px) {
+  .pax-nav-link,
+  .pax-subnav-link,
+  .pax-theme-btn {
+    min-height: 44px;
+    height: auto;
+  }
+
   .pax-subnav-list {
     margin-left: 22px;
   }
