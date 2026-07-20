@@ -73,6 +73,7 @@ export function matchesBlockerSearch(row: any, q: string) {
     row.sorumlu,
     row.product_code_snapshot,
     row.product_name_snapshot,
+    JSON.stringify(row.forecast_options ?? []),
     row.blocker_description,
     row.resolution_owner_name,
   ].some((value) => normalizeText(value).includes(needle));

@@ -436,3 +436,14 @@
   .drawer-footer { display: grid; grid-template-columns: .7fr 1.3fr; padding: 12px 14px calc(12px + env(safe-area-inset-bottom)); }
   .drawer-footer button { padding: 0 10px; font-size: 12px; }
 }
+
+/* Müşteri bazlı kapsam: Forecast olmayan müşterilerde bütçe kayması seçeneği kapalıdır. */
+.choice:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+  filter: grayscale(0.25);
+}
+.choice:disabled:hover {
+  transform: none;
+  box-shadow: none;
+}
