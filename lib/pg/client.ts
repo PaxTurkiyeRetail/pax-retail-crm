@@ -14,33 +14,6 @@ type Order = { column: string; ascending: boolean };
 
 type QueryMode = 'select' | 'insert' | 'update' | 'delete' | 'upsert';
 
-// CRM customer reads must always start from the base customer table. The legacy
-// database view can exclude customers without a pipeline row and make every CRM
-// screen look empty. Keep the existing response contract, but use only columns
-// that are guaranteed by the current schema.
-const CRM_CUSTOMER_SOURCE_SQL = `(
-  select
-    m.id as musteri_id,
-    m.id,
-    m.musteri,
-    m.sektor,
-    m.entegrasyon_tipi,
-    m.satis_olasiligi,
-    m.sorumlu,
-    mp.aktif_faz_no,
-    ft.asama_adi as aktif_faz_adi,
-    null::text as son_not,
-    mp.partner_owner as bekleyen_taraf
-  from public.musteriler m
-  left join public.musteri_pipeline mp on mp.musteri_id = m.id
-  left join public.faz_tanimlari ft on ft.faz_no = mp.aktif_faz_no
-) as "vw_crm_musteriler"`;
-
-function readTableSourceSql(table: string) {
-  if (table === 'vw_crm_musteriler') return CRM_CUSTOMER_SOURCE_SQL;
-  return `public.${quoteIdent(table)}`;
-}
-
 function quoteIdent(identifier: string) {
   return identifier
     .split('.')
@@ -330,13 +303,12 @@ class QueryBuilder {
       const { columnsSql, nested } = parseSelectColumns(this._select);
       const where = this.buildWhere(1);
       const orderAndPaging = this.buildOrderAndPaging();
-      const sourceSql = readTableSourceSql(this.table);
-      const sql = `SELECT ${columnsSql} FROM ${sourceSql}${where.sql}${orderAndPaging}`;
+      const sql = `SELECT ${columnsSql} FROM public.${quoteIdent(this.table)}${where.sql}${orderAndPaging}`;
       const res = await db.query(sql, where.params);
       let data: any = res.rows;
       if (nested.length && Array.isArray(data)) data = await attachNestedRelations(this.table, data, nested);
       const count = this._countExact
-        ? Number((await db.query(`SELECT COUNT(*)::int AS count FROM ${sourceSql}${where.sql}`, where.params)).rows[0]?.count ?? 0)
+        ? Number((await db.query(`SELECT COUNT(*)::int AS count FROM public.${quoteIdent(this.table)}${where.sql}`, where.params)).rows[0]?.count ?? 0)
         : null;
       if (this._single) {
         if (!data.length) return { data: null, error: { message: 'No rows found' }, count };

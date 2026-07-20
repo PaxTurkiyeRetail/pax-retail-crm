@@ -272,8 +272,7 @@ export default function AppToaster() {
       const url = requestUrl(input);
       const mutating = MUTATING_METHODS.has(method);
       const downloadLike = isDownloadLike(url, init);
-      const toastSuppressed = headerValue(init?.headers, 'x-pax-toast').toLowerCase() === 'off';
-      const shouldNotify = !toastSuppressed && isInternalApi(url) && !isAuthApi(url) && (mutating || downloadLike);
+      const shouldNotify = isInternalApi(url) && !isAuthApi(url) && (mutating || downloadLike);
       const toastId = shouldNotify ? makeToastId(downloadLike ? 'download' : 'save') : '';
       const cacheKey = downloadLike ? '' : cacheKeyFor(input, init);
       if (cacheKey) {
@@ -297,25 +296,7 @@ export default function AppToaster() {
           const item = await inflightCachePromise;
           const responseForCaller = cloneFromCached(item);
           if (!responseForCaller.ok) {
-            if (!toastSuppressed) {
-              const message = await readErrorMessage(responseForCaller);
-              emit({
-                id: shouldNotify ? toastId : undefined,
-                type: 'error',
-                title: shouldNotify ? labels.errorTitle : 'Hata oluştu',
-                description: message,
-                duration: 9000,
-              });
-            }
-            return cloneFromCached(item);
-          }
-          return responseForCaller;
-        }
-
-        const response = await originalFetch(input, init);
-        if (!response.ok) {
-          if (!toastSuppressed) {
-            const message = await readErrorMessage(response);
+            const message = await readErrorMessage(responseForCaller);
             emit({
               id: shouldNotify ? toastId : undefined,
               type: 'error',
@@ -323,7 +304,21 @@ export default function AppToaster() {
               description: message,
               duration: 9000,
             });
+            return cloneFromCached(item);
           }
+          return responseForCaller;
+        }
+
+        const response = await originalFetch(input, init);
+        if (!response.ok) {
+          const message = await readErrorMessage(response);
+          emit({
+            id: shouldNotify ? toastId : undefined,
+            type: 'error',
+            title: shouldNotify ? labels.errorTitle : 'Hata oluştu',
+            description: message,
+            duration: 9000,
+          });
           return response;
         }
 
@@ -344,7 +339,7 @@ export default function AppToaster() {
         }
         return response;
       } catch (error) {
-        if (!toastSuppressed && !isAbortError(error)) {
+        if (!isAbortError(error)) {
           const message = error instanceof Error ? error.message : 'Beklenmeyen bir bağlantı hatası oluştu.';
           emit({
             id: shouldNotify ? toastId : undefined,

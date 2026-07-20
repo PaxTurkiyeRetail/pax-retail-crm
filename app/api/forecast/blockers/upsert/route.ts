@@ -5,7 +5,6 @@ import { getCustomerForBlockerOrThrow, getCustomerForecastOrThrow } from '@/lib/
 import {
   BLOCKER_CATEGORIES,
   RESOLUTION_OWNER_TYPES,
-  isForecastBlockerMigrationMismatch,
   isLaterPeriod,
   isMissingForecastBlockerRelation,
   isoDateOnly,
@@ -159,21 +158,12 @@ export async function POST(request: Request) {
       if (isMissingForecastBlockerRelation(error)) {
         return NextResponse.json({ message: 'forecast_blocker_impact_not_setup' }, { status: 400 });
       }
-      if (isForecastBlockerMigrationMismatch(error)) {
-        console.error('forecast blocker history migration is incomplete', error);
-        return NextResponse.json(
-          { message: 'Engel ve Etki veritabanı güncellemesi eksik. Lütfen sistem yöneticisine bildirin.' },
-          { status: 409 },
-        );
-      }
       throw error;
     }
   } catch (error: any) {
-    const status = Number(error?.status || 500);
-    if (status >= 500) console.error('forecast blocker upsert failed', error);
     return NextResponse.json(
-      { message: status >= 500 ? 'Engel ve Etki kaydı sırasında teknik bir hata oluştu.' : (error?.message || 'Engel ve Etki kaydedilemedi.') },
-      { status },
+      { message: error?.message || 'Engel ve Etki kaydedilemedi.' },
+      { status: error?.status || 500 },
     );
   }
 }

@@ -49,14 +49,6 @@ export function isMissingForecastBlockerRelation(error: unknown) {
     || /Could not find the table/i.test(message);
 }
 
-export function isForecastBlockerMigrationMismatch(error: unknown) {
-  const code = String((error as any)?.code ?? '');
-  const message = String((error as any)?.message ?? error ?? '');
-  return code === '23502'
-    && /crm_forecast_blocker_history/i.test(message)
-    && /forecast_id/i.test(message);
-}
-
 export function isLaterPeriod(baseYear: number, baseMonth: number, shiftYear: number, shiftMonth: number) {
   return shiftYear * 100 + shiftMonth > baseYear * 100 + baseMonth;
 }
