@@ -60,31 +60,62 @@ export default function CrmDashboardClient() {
   const [selectedSeller, setSelectedSeller] = useState<string>("all");
   const [statsLoading, setStatsLoading] = useState(true);
   const [sellerLoading, setSellerLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // Genel CRM istatistikleri
   useEffect(() => {
+    let cancelled = false;
     setStatsLoading(true);
-    fetch("/api/crm/stats", { cache: "no-store" })
-      .then((res) => res.ok ? res.json() : EMPTY_STATS)
-      .then(setStats)
-      .catch(() => {})
-      .finally(() => setStatsLoading(false));
+    setLoadError(null);
+    void (async () => {
+      try {
+        const response = await fetch("/api/crm/stats", { cache: "no-store" });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload?.message || "CRM özeti yüklenemedi.");
+        if (!cancelled) setStats({ ...EMPTY_STATS, ...payload });
+      } catch (error) {
+        if (!cancelled) {
+          setStats(EMPTY_STATS);
+          setLoadError(error instanceof Error ? error.message : "CRM özeti yüklenemedi.");
+        }
+      } finally {
+        if (!cancelled) setStatsLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
   }, []);
 
   // Satıcı bazlı veriler — seçim değişince yeniden çek
   useEffect(() => {
+    let cancelled = false;
     setSellerLoading(true);
     const params = new URLSearchParams();
     if (selectedSeller && selectedSeller !== "all") params.set("seller", selectedSeller);
-    fetch(`/api/reports/seller-summary${params.toString() ? `?${params.toString()}` : ""}`, { cache: "no-store" })
-      .then((res) => res.ok ? res.json() : EMPTY_SELLER)
-      .then((data) => setSellerData({ ...EMPTY_SELLER, ...data }))
-      .catch(() => {})
-      .finally(() => setSellerLoading(false));
+    void (async () => {
+      try {
+        const response = await fetch(`/api/reports/seller-summary${params.toString() ? `?${params.toString()}` : ""}`, { cache: "no-store" });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload?.message || "Satıcı özeti yüklenemedi.");
+        if (!cancelled) setSellerData({ ...EMPTY_SELLER, ...payload });
+      } catch (error) {
+        if (!cancelled) {
+          setSellerData(EMPTY_SELLER);
+          setLoadError(error instanceof Error ? error.message : "Satıcı özeti yüklenemedi.");
+        }
+      } finally {
+        if (!cancelled) setSellerLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
   }, [selectedSeller]);
 
   return (
     <div style={{ display: "grid", gap: 24 }}>
+      {loadError ? (
+        <div className="pax-card" style={{ borderColor: "#fecaca", background: "#fff7f7", color: "#991b1b" }}>
+          <strong>CRM verileri yüklenemedi.</strong> {loadError}
+        </div>
+      ) : null}
       {/* Hero Header */}
       <div className="pax-hero">
         <span className="pax-hero-eyebrow">CRM Ana Ekran · Yönetim Komuta Merkezi</span>

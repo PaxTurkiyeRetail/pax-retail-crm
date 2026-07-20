@@ -40,7 +40,10 @@ export async function GET() {
       .limit(3000);
 
     const { data, error } = await query;
-    if (error) return NextResponse.json({ message: error.message }, { status: 500 });
+    if (error) {
+      console.error('[CRM_OPTIONS_QUERY_ERROR]', error);
+      return NextResponse.json({ message: 'Müşteri filtreleri veritabanından alınamadı.' }, { status: 500 });
+    }
 
     const rows = (data ?? []).filter((row: any) => !isReportOnlyCustomer(row));
 
@@ -71,6 +74,11 @@ export async function GET() {
       phaseOptions: uniqueSorted(rows.map((row: any) => row.aktif_faz_no != null ? `FAZ ${row.aktif_faz_no}` : '')),
     });
   } catch (e: any) {
-    return NextResponse.json({ message: 'Yetkisiz' }, { status: e?.status || 401 });
+    const status = Number(e?.status ?? 0);
+    if (status === 401 || status === 403) {
+      return NextResponse.json({ message: 'Bu ekrana erişim yetkiniz bulunmuyor.' }, { status });
+    }
+    console.error('[CRM_OPTIONS_ERROR]', e);
+    return NextResponse.json({ message: 'Müşteri filtreleri yüklenemedi. Lütfen tekrar deneyin.' }, { status: 500 });
   }
 }

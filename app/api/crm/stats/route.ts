@@ -155,6 +155,11 @@ export async function GET(request: Request) {
       missingBreakdown,
     });
   } catch (e: any) {
-    return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: e?.status || 401 });
+    const status = Number(e?.status ?? 0);
+    if (status === 401 || status === 403) {
+      return NextResponse.json({ message: 'Bu ekrana erişim yetkiniz bulunmuyor.' }, { status });
+    }
+    console.error('[CRM_STATS_ERROR]', e);
+    return NextResponse.json({ message: 'Müşteri özetleri yüklenemedi. Lütfen tekrar deneyin.' }, { status: 500 });
   }
 }
