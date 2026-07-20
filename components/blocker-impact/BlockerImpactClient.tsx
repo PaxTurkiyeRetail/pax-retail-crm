@@ -347,7 +347,11 @@ export default function BlockerImpactClient() {
         }),
       }));
 
-      if (isAdmin) {
+      const reviewChanged = isAdmin && (
+        form.managerNote !== (selected.manager_note ?? '')
+        || form.reviewed !== Boolean(selected.reviewed_at)
+      );
+      if (reviewChanged) {
         await readJson(await fetch('/api/forecast/blockers/review', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
@@ -359,12 +363,11 @@ export default function BlockerImpactClient() {
         }));
       }
 
-      appToast.success('Kayıt güncellendi', `${selected.musteri} müşterisinin Engel ve Etki bilgisi kaydedildi.`);
       setSelected(null);
       setForm(emptyForm());
       await loadData();
-    } catch (error: any) {
-      appToast.error('Kayıt tamamlanamadı', error?.message || 'Bilgiler kaydedilemedi.');
+    } catch (error) {
+      console.error('Engel ve Etki kaydı tamamlanamadı', error);
     } finally {
       setSaving(false);
     }
@@ -381,10 +384,9 @@ export default function BlockerImpactClient() {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ customer_id: row.customer_id }),
       }));
-      appToast.success(action === 'resolve' ? 'Engel çözüldü' : 'Engel yeniden açıldı');
       await loadData();
-    } catch (error: any) {
-      appToast.error('İşlem tamamlanamadı', error?.message || 'Durum güncellenemedi.');
+    } catch (error) {
+      console.error('Engel ve Etki durumu güncellenemedi', error);
     }
   }
 

@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import { requireCrmAccessOrThrow } from '@/lib/authz';
 import { db } from '@/lib/db';
 import { canSeeAllForecasts, normalizeText, samePersonName } from '@/lib/forecast-shared';
-import { isReportOnlyCustomer } from '@/lib/report-only-customers';
 import { isMissingForecastBlockerRelation, matchesBlockerSearch, periodLabel } from '@/lib/forecast-blockers';
 
 export const dynamic = 'force-dynamic';
@@ -119,9 +118,7 @@ export async function GET(request: Request) {
       throw error;
     }
 
-    rows = rows
-      .filter((row) => !isReportOnlyCustomer(row))
-      .filter((row) => canSeeAll || samePersonName(row.sorumlu, ownerName));
+    rows = rows.filter((row) => canSeeAll || samePersonName(row.sorumlu, ownerName));
 
     const allVisibleRows = [...rows];
     const ownerOptions = Array.from(
