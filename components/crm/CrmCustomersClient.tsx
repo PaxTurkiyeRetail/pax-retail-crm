@@ -386,9 +386,6 @@ export default function CrmCustomersClient() {
     if (optionsRes.ok) {
       const optionsJson = await optionsRes.json().catch(() => ({}));
       setFilterOptions({ ...EMPTY_OPTIONS, ...(optionsJson ?? {}) });
-    } else {
-      const optionsJson = await optionsRes.json().catch(() => ({}));
-      setMsg(optionsJson?.message || 'Müşteri filtreleri yüklenemedi.');
     }
   }
 
@@ -402,18 +399,10 @@ export default function CrmCustomersClient() {
     if (kunyeFilter) params.set('kunye_status', kunyeFilter);
     if (fazFilter) params.set('faz_no', fazFilter);
 
-    try {
-      const statsRes = await fetch(`/api/crm/stats?${params.toString()}`, { cache: 'no-store' });
+    const statsRes = await fetch(`/api/crm/stats?${params.toString()}`, { cache: 'no-store' });
+    if (statsRes.ok) {
       const statsJson = await statsRes.json().catch(() => ({}));
-      if (statsRes.ok) {
-        setStats({ ...EMPTY_STATS, ...(statsJson ?? {}) });
-      } else {
-        setStats(EMPTY_STATS);
-        setMsg(statsJson?.message || 'Müşteri özetleri yüklenemedi.');
-      }
-    } catch {
-      setStats(EMPTY_STATS);
-      setMsg('Müşteri özetleri için sunucuya ulaşılamadı.');
+      setStats({ ...EMPTY_STATS, ...(statsJson ?? {}) });
     }
   }
 
@@ -435,17 +424,13 @@ export default function CrmCustomersClient() {
       const listRes = await fetch(`/api/crm/list?${params.toString()}`, { cache: 'no-store' });
       const listJson = await listRes.json().catch(() => ({}));
       if (!listRes.ok) {
-        setMsg(listJson?.message || 'Müşteri listesi yüklenemedi.');
+        setMsg(listJson?.message || 'Bu ekrana erişim yetkin yok.');
         setRows([]);
         setTotal(0);
       } else {
         setRows(listJson.rows ?? []);
         setTotal(Number(listJson.total ?? 0));
       }
-    } catch {
-      setMsg('Müşteri listesi için sunucuya ulaşılamadı.');
-      setRows([]);
-      setTotal(0);
     } finally {
       setLoading(false);
     }

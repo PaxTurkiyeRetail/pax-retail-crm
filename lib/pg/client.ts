@@ -14,16 +14,10 @@ type Order = { column: string; ascending: boolean };
 
 type QueryMode = 'select' | 'insert' | 'update' | 'delete' | 'upsert';
 
-
-// `vw_crm_musteriler` was historically the single source for almost every CRM
-// screen. In some environments that database view only contains customers that
-// already have a pipeline row, which makes the whole CRM appear empty even
-// though `musteriler` still contains data. Build a complete, read-only source
-// from the base customer table and left-join the latest phase/activity data.
-//
-// Keeping this compatibility source in the PG adapter fixes every existing
-// `.from('vw_crm_musteriler')` reader (customer list, dashboard, activities and
-// reports) without changing their response contracts.
+// CRM customer reads must always start from the base customer table. The legacy
+// database view can exclude customers without a pipeline row and make every CRM
+// screen look empty. Keep the existing response contract, but use only columns
+// that are guaranteed by the current schema.
 const CRM_CUSTOMER_SOURCE_SQL = `(
   select
     m.id as musteri_id,
@@ -33,32 +27,13 @@ const CRM_CUSTOMER_SOURCE_SQL = `(
     m.entegrasyon_tipi,
     m.satis_olasiligi,
     m.sorumlu,
-    coalesce(mp.aktif_faz_no, latest_event.faz_no) as aktif_faz_no,
+    mp.aktif_faz_no,
     ft.asama_adi as aktif_faz_adi,
-    latest_event.notlar as son_not,
-    coalesce(mp.partner_owner, latest_event.partner_owner) as bekleyen_taraf,
-    mp.durum as pipeline_durum,
-    mp.owner as pipeline_owner,
-    mp.partner_owner as pipeline_partner_owner,
-    mp.hedef_tarihi as pipeline_hedef_tarihi,
-    mp.updated_at as pipeline_updated_at,
-    latest_event.created_at as son_aktivite_tarihi
+    null::text as son_not,
+    mp.partner_owner as bekleyen_taraf
   from public.musteriler m
-  left join public.musteri_pipeline mp
-    on mp.musteri_id = m.id
-  left join lateral (
-    select
-      pe.faz_no,
-      pe.notlar,
-      pe.partner_owner,
-      pe.created_at
-    from public.pipeline_eventleri pe
-    where pe.musteri_id = m.id
-    order by pe.created_at desc nulls last, pe.id desc
-    limit 1
-  ) latest_event on true
-  left join public.faz_tanimlari ft
-    on ft.faz_no = coalesce(mp.aktif_faz_no, latest_event.faz_no)
+  left join public.musteri_pipeline mp on mp.musteri_id = m.id
+  left join public.faz_tanimlari ft on ft.faz_no = mp.aktif_faz_no
 ) as "vw_crm_musteriler"`;
 
 function readTableSourceSql(table: string) {

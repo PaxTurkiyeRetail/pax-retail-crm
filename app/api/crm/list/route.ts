@@ -218,10 +218,7 @@ export async function GET(request: Request) {
       query = applyDbFilters(query, { owner, sector, integration, fazNo, q, lite });
 
       const result = await query;
-      if (result.error) {
-        console.error('[CRM_LIST_QUERY_ERROR]', result.error);
-        return NextResponse.json({ message: 'Müşteri listesi veritabanından alınamadı.' }, { status: 500 });
-      }
+      if (result.error) return NextResponse.json({ message: result.error.message }, { status: 500 });
       rows = (result.data ?? []).filter((row: any) => includeReportOnly || !isReportOnlyCustomer(row));
       if (includeReportOnly) {
         const reportOnlyRows = await fetchReportOnlyCustomerRows(admin, { owner, sector, integration, fazNo, kasaFirmasi, kunyeStatus });
@@ -310,11 +307,6 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ rows: rowsWithLastStayedPhase, total: filteredTotal || (count ?? 0), page, pageSize });
   } catch (e: any) {
-    const status = Number(e?.status ?? 0);
-    if (status === 401 || status === 403) {
-      return NextResponse.json({ message: 'Bu ekrana erişim yetkiniz bulunmuyor.' }, { status });
-    }
-    console.error('[CRM_LIST_ERROR]', e);
-    return NextResponse.json({ message: 'Müşteri listesi yüklenemedi. Lütfen tekrar deneyin.' }, { status: 500 });
+    return NextResponse.json({ message: 'Yetkisiz' }, { status: e?.status || 401 });
   }
 }
