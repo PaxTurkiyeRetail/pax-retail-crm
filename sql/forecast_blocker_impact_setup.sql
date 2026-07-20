@@ -194,6 +194,9 @@ create table if not exists public.crm_forecast_blocker_history (
 
 alter table public.crm_forecast_blocker_history add column if not exists customer_id uuid null;
 alter table public.crm_forecast_blocker_history add column if not exists forecast_id uuid null;
+-- Müşteri bazlı kayıtlarda aktif Forecast bulunması zorunlu değildir.
+-- Eski kurulumlarda bu kolon NOT NULL kaldığı için history trigger'ı engel yok kaydında hata veriyordu.
+alter table public.crm_forecast_blocker_history alter column forecast_id drop not null;
 
 update public.crm_forecast_blocker_history h
 set customer_id = coalesce(

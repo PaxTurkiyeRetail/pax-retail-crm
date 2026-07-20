@@ -329,7 +329,7 @@ export default function BlockerImpactClient() {
     try {
       await readJson(await fetch('/api/forecast/blockers/upsert', {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', 'x-pax-toast': 'off' },
         body: JSON.stringify({
           customer_id: selected.customer_id,
           forecast_id: form.forecastId || null,
@@ -350,7 +350,7 @@ export default function BlockerImpactClient() {
       if (isAdmin) {
         await readJson(await fetch('/api/forecast/blockers/review', {
           method: 'POST',
-          headers: { 'content-type': 'application/json' },
+          headers: { 'content-type': 'application/json', 'x-pax-toast': 'off' },
           body: JSON.stringify({
             customer_id: selected.customer_id,
             manager_note: form.managerNote,
@@ -378,7 +378,7 @@ export default function BlockerImpactClient() {
     try {
       await readJson(await fetch(`/api/forecast/blockers/${action}`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', 'x-pax-toast': 'off' },
         body: JSON.stringify({ customer_id: row.customer_id }),
       }));
       appToast.success(action === 'resolve' ? 'Engel çözüldü' : 'Engel yeniden açıldı');
