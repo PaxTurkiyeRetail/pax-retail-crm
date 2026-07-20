@@ -265,7 +265,14 @@ create trigger crm_forecast_blockers_history
 after insert or update or delete on public.crm_forecast_blockers
 for each row execute function public.log_crm_forecast_blocker_history();
 
-create or replace view public.v_crm_forecast_blocker_impact as
+-- The previous forecast-based view used a different column order.
+-- PostgreSQL cannot rename/reorder existing view columns with CREATE OR REPLACE VIEW,
+-- so recreate only the view. This does not delete blocker/history table data.
+begin;
+
+drop view if exists public.v_crm_forecast_blocker_impact;
+
+create view public.v_crm_forecast_blocker_impact as
 select
   m.id as customer_id,
   m.musteri,
@@ -366,3 +373,5 @@ left join lateral (
     f.product_name_snapshot
   limit 1
 ) selected_forecast on true;
+
+commit;
