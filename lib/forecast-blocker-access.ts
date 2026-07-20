@@ -1,6 +1,6 @@
 import 'server-only';
 import { db } from '@/lib/db';
-import { canSeeAllForecasts, samePersonName } from '@/lib/forecast';
+import { canSeeAllForecasts, samePersonName } from '@/lib/forecast-shared';
 import type { AllowedUser } from '@/lib/authz';
 
 export type ForecastAccessRow = {

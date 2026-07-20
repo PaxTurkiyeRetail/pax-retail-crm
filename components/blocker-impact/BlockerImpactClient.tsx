@@ -27,7 +27,7 @@ import {
   periodLabel,
   statusLabel,
 } from '@/lib/forecast-blockers';
-import { buildForecastYears, FORECAST_MONTHS } from '@/lib/forecast';
+import { buildForecastYears, FORECAST_MONTHS } from '@/lib/forecast-shared';
 import { buildBlockerImpactWorkbook } from '@/components/blocker-impact/BlockerImpactExport';
 import '@/styles/blocker-impact.css';
 

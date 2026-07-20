@@ -1,4 +1,4 @@
-import { FORECAST_MONTHS, monthLabel, normalizeText } from '@/lib/forecast';
+import { FORECAST_MONTHS, monthLabel, normalizeText } from '@/lib/forecast-shared';
 
 export const BLOCKER_CATEGORIES = [
   { value: 'customer_decision', label: 'Müşteri kararı bekleniyor' },
