@@ -727,7 +727,7 @@ export default function PanelShell({
                     <strong>{displayName}</strong>
                     <span>{email?.trim() || roleLabel(role)}</span>
                   </div>
-                  {(showParameterManagement || allowed('admin.users.manage') || allowed('admin.backup.execute')) && (
+                  {(showParameterManagement || allowed('admin.users.manage') || allowed('admin.backup.execute') || allowed('admin.rbac.manage')) && (
                     <div className="pax-user-dropdown-section">
                       {showParameterManagement && (
                         <Link
@@ -751,6 +751,14 @@ export default function PanelShell({
                           className="pax-user-dropdown-link"
                         >
                           Kullanıcı Yönetimi
+                        </Link>
+                      )}
+                      {allowed('admin.rbac.manage') && (
+                        <Link
+                          href="/admin/rbac"
+                          className="pax-user-dropdown-link"
+                        >
+                          Rol ve Yetki Yönetimi
                         </Link>
                       )}
                     </div>
