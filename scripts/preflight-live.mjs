@@ -8,7 +8,6 @@ if (!databaseUrl) throw new Error('DATABASE_URL is required.');
 const requiredColumns = {
   allowed_users: ['id', 'email', 'full_name', 'role', 'is_active'],
   user_sessions: ['user_id', 'session_token', 'expires_at'],
-  password_reset_tokens: ['token', 'expires_at'],
   musteriler: ['id', 'musteri', 'sorumlu', 'sektor', 'entegrasyon_tipi', 'satis_olasiligi'],
   quotes: ['id', 'owner_name', 'owner_email', 'probability'],
   system_parameters: ['id', 'group_key', 'param_key', 'label', 'value', 'sort_order', 'is_active', 'meta'],
@@ -29,6 +28,28 @@ try {
     columns.filter((column) => !available.has(`${table}.${column}`)).map((column) => `${table}.${column}`),
   );
   if (missing.length) throw new Error(`Migration preflight failed; missing base columns: ${missing.join(', ')}`);
+
+  const passwordResetTableResult = await client.query(
+    `select to_regclass('public.password_reset_tokens') is not null as exists`,
+  );
+  const passwordResetTableExists = Boolean(passwordResetTableResult.rows[0]?.exists);
+  if (passwordResetTableExists) {
+    const passwordResetColumnsResult = await client.query(
+      `select column_name
+       from information_schema.columns
+       where table_schema = 'public' and table_name = 'password_reset_tokens'`,
+    );
+    const passwordResetColumns = new Set(passwordResetColumnsResult.rows.map((row) => String(row.column_name)));
+    const requiredPasswordResetColumns = ['id', 'user_id', 'token', 'expires_at', 'used_at', 'created_at'];
+    const missingPasswordResetColumns = requiredPasswordResetColumns.filter(
+      (column) => !passwordResetColumns.has(column),
+    );
+    if (missingPasswordResetColumns.length) {
+      throw new Error(
+        `Migration preflight failed; password_reset_tokens exists but is incompatible: ${missingPasswordResetColumns.join(', ')}`,
+      );
+    }
+  }
 
   const roleResult = await client.query(
     `select coalesce(role, '<null>') as role, count(*)::integer as count
@@ -83,6 +104,7 @@ try {
     customerOwnership: customerOwnership.rows[0],
     quoteOwnership: quoteOwnership.rows[0],
     pgcryptoInstalled: Boolean(extension.pgcrypto_installed),
+    passwordResetTable: passwordResetTableExists ? 'compatible' : 'will_be_created',
   }, null, 2)}\n`);
 } finally {
   await client.end();

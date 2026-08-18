@@ -221,6 +221,19 @@ create index if not exists user_sessions_expires_at_idx on public.user_sessions 
 -- Düz metin kolonunun temizliği, bütün instance'lar hash sürümüne geçtikten sonra
 -- ayrı ve geri alınabilir bir contract migration ile yapılacaktır.
 
+-- Bazı canlı kurulumlarda parola sıfırlama tablosu hiç oluşturulmamış olabilir.
+-- Tabloyu burada oluşturmak, migration öncesinde çalışmayan parola sıfırlama
+-- özelliğini güvenli şekilde devreye alır ve mevcut kurulumları değiştirmez.
+create table if not exists public.password_reset_tokens (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.allowed_users(id) on delete cascade,
+  token text,
+  token_hash text,
+  expires_at timestamptz not null,
+  used_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
 alter table if exists public.password_reset_tokens
   add column if not exists token_hash text;
 
@@ -237,6 +250,9 @@ alter table if exists public.password_reset_tokens
 create unique index if not exists password_reset_tokens_token_hash_uidx
   on public.password_reset_tokens (token_hash)
   where token_hash is not null;
+create unique index if not exists password_reset_tokens_token_uidx
+  on public.password_reset_tokens (token)
+  where token is not null;
 create index if not exists password_reset_tokens_expires_at_idx on public.password_reset_tokens (expires_at);
 
 -- Eski instance uyumluluğu için token bu genişletme migration'ında korunur.
