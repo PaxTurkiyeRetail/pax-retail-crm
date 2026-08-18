@@ -1240,6 +1240,8 @@ alter table public.crm_target_definitions add column if not exists is_active boo
 alter table public.crm_target_definitions add column if not exists display_order integer default 0;
 alter table public.crm_target_definitions add column if not exists created_at timestamptz default now();
 alter table public.crm_target_definitions add column if not exists updated_at timestamptz default now();
+alter table public.crm_target_definitions alter column source_type set default 'quotes_won';
+update public.crm_target_definitions set source_type = 'quotes_won' where source_type is null;
 
 -- crm_target_values
 alter table public.crm_target_values add column if not exists definition_id uuid;

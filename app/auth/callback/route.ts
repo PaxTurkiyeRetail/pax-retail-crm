@@ -3,6 +3,7 @@ import { createSession } from '@/lib/auth';
 import { shouldUseSecureAuthCookie } from '@/lib/auth-cookie';
 import { assertOidcRuntimeEnabled, redeemAuthorizationCode, resolveEnterpriseUser } from '@/lib/auth/oidc';
 import { apiErrorResponse, ApiError } from '@/lib/http/api-error';
+import { getForwardedOrigin } from '@/lib/http/forwarded-origin';
 import { recordAuditEvent } from '@/lib/audit';
 
 const AUTH_COOKIE_NAME = process.env.AUTH_COOKIE_NAME ?? 'crm_session';
@@ -17,7 +18,7 @@ export async function GET(request: NextRequest) {
     const transactionCookie = request.cookies.get('crm_oidc_tx')?.value;
     if (!code || !state || !transactionCookie) throw new ApiError('OIDC_CALLBACK_INVALID', 'Kurumsal giriş yanıtı eksik.', 400);
 
-    const origin = new URL(request.url).origin;
+    const origin = getForwardedOrigin(request);
     const { claims, next } = await redeemAuthorizationCode({ code, state, transactionCookie, origin });
     const user = await resolveEnterpriseUser(claims);
     const { sessionToken, expiresAt } = await createSession(user.id);

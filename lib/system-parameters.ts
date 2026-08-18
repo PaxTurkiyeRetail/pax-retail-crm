@@ -444,9 +444,24 @@ export const SYSTEM_BEHAVIOR_PARAMETER_GROUPS = [
     key: "system_oidc_group_role_sync_enabled",
     module: "Kimlik ve Erişim",
     category: "Active Directory / OIDC",
-    title: "AD Grup-Rol Senkronizasyonu",
-    description: "AD grup üyeliklerinin CRM rollerine uygulanmasını açar. Eşlemeler doğrulanmadan etkinleştirilmemelidir.",
+    title: "AD Grup-Rol Senkronizasyonu (Kullanım Dışı)",
+    description: "Eski grup-claim tabanlı eşleme. Artık Entra App Role akışı kullanılıyor; bu parametre pasif bırakılmalıdır.",
     type: "boolean",
+  },
+  {
+    key: "system_oidc_app_role_sync_enabled",
+    module: "Kimlik ve Erişim",
+    category: "Active Directory / OIDC",
+    title: "Entra App Role-Rol Senkronizasyonu",
+    description: "Entra ID App Role bilgilerinin CRM rollerine uygulanmasını açar. Eşlemeler doğrulanmadan etkinleştirilmemelidir.",
+    type: "boolean",
+  },
+  {
+    key: "system_oidc_app_role_mapping",
+    module: "Kimlik ve Erişim",
+    category: "Active Directory / OIDC",
+    title: "Entra App Role - CRM Rol Eşlemesi",
+    description: "Ad alanına Entra App Role değerini (örn. crm.super_admin), değer alanına karşılık gelen CRM rolünü (super_admin/admin/account_manager/itsm/user) yazın.",
   },
   {
     key: "system_jira_enabled",
@@ -562,6 +577,14 @@ export const DEFAULT_SYSTEM_BEHAVIOR_OPTIONS: Record<
 > = {
   system_oidc_enabled: [{ label: "Kapalı", value: "false", sortOrder: 10 }],
   system_oidc_group_role_sync_enabled: [{ label: "Kapalı", value: "false", sortOrder: 10 }],
+  system_oidc_app_role_sync_enabled: [{ label: "Kapalı", value: "false", sortOrder: 10 }],
+  system_oidc_app_role_mapping: [
+    { label: "crm.super_admin", value: "super_admin", sortOrder: 10 },
+    { label: "crm.admin", value: "admin", sortOrder: 20 },
+    { label: "crm.itsm", value: "itsm", sortOrder: 30 },
+    { label: "crm.account_manager", value: "account_manager", sortOrder: 40 },
+    { label: "crm.user", value: "user", sortOrder: 50 },
+  ],
   system_jira_enabled: [{ label: "Aktif", value: "true", sortOrder: 10 }],
   system_jira_weekly_pptx_enabled: [
     { label: "Aktif", value: "true", sortOrder: 10 },

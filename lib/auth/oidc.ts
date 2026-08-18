@@ -115,7 +115,7 @@ export async function createAuthorizationRequest(origin: string, next: string | 
   url.searchParams.set('client_id', config.clientId);
   url.searchParams.set('response_type', 'code');
   url.searchParams.set('redirect_uri', redirectUri);
-  url.searchParams.set('scope', 'openid profile email groups');
+  url.searchParams.set('scope', 'openid profile email');
   url.searchParams.set('state', state);
   url.searchParams.set('nonce', nonce);
   url.searchParams.set('code_challenge', challenge);
@@ -168,25 +168,65 @@ export async function resolveEnterpriseUser(claims: JWTPayload) {
   const subject = claims.sub;
   const tenantId = claimString(claims, 'tid', 'tenant_id');
   const email = claimString(claims, 'preferred_username', 'email', 'upn')?.toLowerCase();
+  const fullName = claimString(claims, 'name') ?? (email ? email.split('@')[0] : null);
   if (!subject || !tenantId || !email) throw new ApiError('OIDC_CLAIMS_INVALID', 'Kimlik sağlayıcı gerekli hesap bilgilerini göndermedi.', 403);
 
   const client = await db.connect();
   try {
     await client.query('begin');
+
+    // App Role önce çözülür: hesap yoksa dahi hangi rolle oluşturulacağı gerekir,
+    // hesap varsa da geçerli rol şartı (JIT dahil) her durumda zorunludur.
+    const mappingRows = await client.query(
+      `select label, value from public.system_parameters
+       where group_key = 'system_oidc_app_role_mapping' and is_active = true`,
+    );
+    const appRoleToCrmRole = new Map<string, AllowedRole>();
+    for (const row of mappingRows.rows as Array<{ label: string; value: string }>) {
+      const mapped = normalizeRole(row.value);
+      if (mapped) appRoleToCrmRole.set(row.label, mapped);
+    }
+    const appRoles = Array.isArray(claims.roles)
+      ? claims.roles.filter((value): value is string => typeof value === 'string')
+      : [];
+    const matchedRoles = appRoles
+      .map((appRole) => appRoleToCrmRole.get(appRole))
+      .filter((role): role is AllowedRole => Boolean(role));
+    if (!matchedRoles.length) {
+      throw new ApiError('OIDC_NO_APP_ROLE', 'Hesabınıza CRM erişim yetkisi atanmamış.', 403);
+    }
+    const bestRole = matchedRoles.sort((a, b) => ROLE_PRIORITY[b] - ROLE_PRIORITY[a])[0];
+
     let result = await client.query(
       `select au.id, au.email, au.full_name, au.role, au.is_active
        from public.auth_identities ai join public.allowed_users au on au.id = ai.user_id
        where ai.provider = 'active_directory' and ai.tenant_id = $1 and ai.subject = $2 limit 1 for update of ai`,
       [tenantId, subject],
     );
+    let isNewAccount = false;
     if (!result.rowCount) {
       result = await client.query(
         `select id, email, full_name, role, is_active from public.allowed_users
          where lower(email) = lower($1) limit 1 for update`,
         [email],
       );
-      const candidate = result.rows[0];
-      if (!candidate?.is_active) throw new ApiError('OIDC_USER_NOT_PROVISIONED', 'Hesabınız CRM için yetkilendirilmemiş.', 403);
+      let candidate = result.rows[0];
+      if (candidate && !candidate.is_active) {
+        throw new ApiError('OIDC_USER_DISABLED', 'CRM hesabınız devre dışı.', 403);
+      }
+      if (!candidate) {
+        // Kayıt yok: Entra tarafında geçerli App Role kanıtlanmış, JIT ile hesap açılır.
+        // allowed_users burada elle yönetilmiyor; tek otorite Entra Enterprise App atamasıdır.
+        const inserted = await client.query(
+          `insert into public.allowed_users (email, full_name, role, is_active)
+           values (lower($1), $2, $3, true)
+           returning id, email, full_name, role, is_active`,
+          [email, fullName, bestRole],
+        );
+        candidate = inserted.rows[0];
+        isNewAccount = true;
+        result = inserted;
+      }
       await client.query(
         `insert into public.auth_identities(provider, tenant_id, subject, user_id, email_at_link_time, last_login_at)
          values ('active_directory',$1,$2,$3,$4,now())`,
@@ -202,26 +242,12 @@ export async function resolveEnterpriseUser(claims: JWTPayload) {
 
     const user = result.rows[0];
     if (!user?.is_active) throw new ApiError('OIDC_USER_DISABLED', 'CRM hesabınız devre dışı.', 403);
-    const groups = Array.isArray(claims.groups) ? claims.groups.filter((value): value is string => typeof value === 'string') : [];
-    const groupRoleSyncEnabled = process.env.OIDC_SYNC_GROUP_ROLES === 'true'
-      && await getSystemParameterBoolean('system_oidc_group_role_sync_enabled', false);
-    if (groupRoleSyncEnabled) {
-      if (claims._claim_names && typeof claims._claim_names === 'object' && 'groups' in claims._claim_names) {
-        throw new ApiError('OIDC_GROUP_OVERAGE', 'Kullanıcının AD grup listesi token sınırını aşıyor; grup senkronizasyonu yapılandırılmalıdır.', 403);
-      }
-      const mappings = await client.query(
-        `select role from public.auth_group_role_mappings
-         where tenant_id = $1 and is_active = true and group_id = any($2::text[])`,
-        [tenantId, groups],
-      );
-      const mappedRole = mappings.rows
-        .map((row) => normalizeRole(row.role))
-        .filter((role): role is AllowedRole => Boolean(role))
-        .sort((a, b) => ROLE_PRIORITY[b] - ROLE_PRIORITY[a])[0] ?? 'user';
-      if (mappedRole !== normalizeRole(user.role)) {
-        await client.query('update public.allowed_users set role = $1 where id = $2', [mappedRole, user.id]);
-        user.role = mappedRole;
-      }
+
+    const appRoleSyncEnabled = isNewAccount
+      || await getSystemParameterBoolean('system_oidc_app_role_sync_enabled', false);
+    if (appRoleSyncEnabled && bestRole !== normalizeRole(user.role)) {
+      await client.query('update public.allowed_users set role = $1 where id = $2', [bestRole, user.id]);
+      user.role = bestRole;
     }
     await client.query('commit');
     return { id: String(user.id), email: String(user.email), fullName: user.full_name ? String(user.full_name) : null, role: normalizeRole(user.role) };
