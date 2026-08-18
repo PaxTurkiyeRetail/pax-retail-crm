@@ -2,8 +2,13 @@
 
 export default function LogoutButton() {
   async function handleLogout() {
-    await fetch('/api/auth/logout', { method: 'POST' });
-    window.location.href = '/login';
+    try {
+      await fetch('/api/auth/logout', { method: 'POST', cache: 'no-store' });
+    } catch {
+      // Ağ hatası olsa bile yönlendirme mutlaka gerçekleşmeli.
+    } finally {
+      window.location.replace('/login');
+    }
   }
 
   return (
