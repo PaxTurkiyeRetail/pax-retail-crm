@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createPgServerClient } from "@/lib/pg/server";
-import { requireCrmAccessOrThrow } from "@/lib/authz";
+import { assertOwnedResourceAccess, requireCrmAccessOrThrow } from "@/lib/authz";
+import { createPgAdminClient } from '@/lib/pg/admin';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -13,6 +14,10 @@ export async function GET(request: Request) {
 
     const me = await requireCrmAccessOrThrow();
     const pgClient = await createPgServerClient();
+    const admin = createPgAdminClient();
+    const { data: customer } = await admin.from('musteriler').select('owner_user_id,sorumlu').eq('id', musteriId).maybeSingle();
+    if (!customer) return NextResponse.json({ error: 'Müşteri bulunamadı.' }, { status: 404 });
+    assertOwnedResourceAccess({ user: me, resource: customer, ownPermission: 'customer.read', anyPermission: 'customer.read.any' });
 
     const { data, error } = await pgClient
       .from("vw_crm_timeline")

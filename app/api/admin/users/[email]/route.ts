@@ -25,25 +25,9 @@ function toWeeklyTarget(value: unknown) {
   return Math.floor(parsed);
 }
 
-async function ensureWeeklyTargetColumns() {
-  await db.query(`
-    alter table public.allowed_users
-      add column if not exists weekly_target_sales_physical integer not null default 0,
-      add column if not exists weekly_target_sales_online integer not null default 0,
-      add column if not exists weekly_target_sales_phone integer not null default 0,
-      add column if not exists weekly_target_sales_email integer not null default 0,
-      add column if not exists weekly_target_technical_physical integer not null default 0,
-      add column if not exists weekly_target_technical_online integer not null default 0,
-      add column if not exists weekly_target_total_activities integer not null default 0,
-      add column if not exists weekly_target_unique_customers integer not null default 0
-  `);
-}
-
-
 export async function PATCH(req: Request, ctx: { params: Promise<{ email: string }> }) {
   try {
     await requireAdminOrThrow();
-    await ensureWeeklyTargetColumns();
     const { email } = await ctx.params;
     const body = await req.json().catch(() => ({}));
 
@@ -92,7 +76,6 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ email: string
 export async function DELETE(_req: Request, ctx: { params: Promise<{ email: string }> }) {
   try {
     await requireAdminOrThrow();
-    await ensureWeeklyTargetColumns();
     const { email } = await ctx.params;
     const userResult = await db.query(`select id from public.allowed_users where lower(email) = lower($1) limit 1`, [email]);
     const userId = userResult.rows[0]?.id;

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireCrmAccessOrThrow } from '@/lib/authz';
+import { assertOwnedResourceAccess, requireCrmAccessOrThrow } from '@/lib/authz';
 import { createPgAdminClient } from '@/lib/pg/admin';
 import { formatMoney, getQuoteDetailById, isMissingRelationError } from '@/lib/quotes/service';
 
@@ -20,6 +20,12 @@ export async function GET(request: Request) {
     });
 
     if (!detail) return NextResponse.json({ message: 'Teklif bulunamadı veya quote module setup eksik.' }, { status: 404 });
+    assertOwnedResourceAccess({
+      user: me,
+      resource: detail,
+      ownPermission: 'quote.read',
+      anyPermission: 'quote.read.any',
+    });
 
     const enriched = {
       ...detail,

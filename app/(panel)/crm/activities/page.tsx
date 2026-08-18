@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { getSlaPresentation, getSlaState } from '@/lib/sla';
 import { formatDate, toLocalDateInputValue } from '@/lib/utils';
 import ActivitiesDashboard from '@/components/activities/ActivitiesDashboard';
+import { useConfiguredPageSize } from '@/components/hooks/useConfiguredPageSize';
 
 type ActivityRow = {
   id: string;
@@ -20,6 +21,7 @@ type ActivityRow = {
   phase_owner?: string | null;
   created_by_display?: string | null;
   is_business_partner?: boolean | null;
+  activity_scope?: 'account' | 'technical' | null;
   created_at: string;
   due_date: string | null;
   is_blocked?: boolean | null;
@@ -117,9 +119,7 @@ function percentage(value: number, total: number) {
 }
 
 function resolveRole(row: ActivityRow): RoleKey {
-  const source = `${row.owner ?? ''} ${row.partner_owner ?? ''}`.toLocaleLowerCase('tr-TR');
-  const rsHints = ['retail support', 'support', 'destek', 'teknik', 'rs', 'ishak', 'işhak', 'taha'];
-  return rsHints.some((hint) => source.includes(hint)) ? 'rs' : 'sales';
+  return row.activity_scope === 'technical' ? 'rs' : 'sales';
 }
 
 
@@ -132,7 +132,7 @@ export default function ActivitiesPage() {
   const [q, setQ] = useState('');
   const [debouncedQ, setDebouncedQ] = useState('');
   const [page, setPage] = useState(1);
-  const [pageSize] = useState(20);
+  const [pageSize] = useConfiguredPageSize();
   const [total, setTotal] = useState(0);
   const [msg, setMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -494,6 +494,7 @@ export default function ActivitiesPage() {
     setSla('');
     setOwner('');
     setResponsible('');
+    setBlockedFilter('');
     setFromDate('');
     setToDate('');
     setTimeRange('week');

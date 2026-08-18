@@ -4,7 +4,7 @@ import fontkit from '@pdf-lib/fontkit';
 import fs from 'fs/promises';
 import path from 'path';
 
-import { requireCrmAccessOrThrow } from '@/lib/authz';
+import { assertOwnedResourceAccess, requireCrmAccessOrThrow } from '@/lib/authz';
 import { createPgAdminClient } from '@/lib/pg/admin';
 import { getQuoteDetailById } from '@/lib/quotes/service';
 import { STATIC_QUOTE_PRODUCTS, STATIC_QUOTE_PRICING_RULES, normalizeQuoteSpecs, type QuoteProduct } from '@/lib/quotes/catalog';
@@ -726,6 +726,7 @@ export async function GET(
     if (!quote) {
       return NextResponse.json({ message: 'Teklif bulunamadı.' }, { status: 404 });
     }
+    assertOwnedResourceAccess({ user: me, resource: quote, ownPermission: 'quote.read', anyPermission: 'quote.read.any' });
 
 
     let templateBytes: Uint8Array | null = null;

@@ -1,5 +1,4 @@
 import { requireCrmAccessOrThrow } from '@/lib/authz';
-import SystemRequirementStamp from '@/components/system/SystemRequirementStamp';
 import EmbeddedHtmlPage from '@/components/shared/EmbeddedHtmlPage';
 
 export default async function CrmSalesProcessPage() {
@@ -7,7 +6,6 @@ export default async function CrmSalesProcessPage() {
 
   return (
     <div className="pax-page-container">
-      <SystemRequirementStamp pageKey="salesProcess" />
       <EmbeddedHtmlPage
         eyebrow="Satış Süreci · PAX Retail Yol Haritası"
         title="Satış Süreci"

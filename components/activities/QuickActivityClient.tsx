@@ -28,6 +28,7 @@ type Me = {
   email: string;
   role: string;
   full_name: string | null;
+  permissions?: string[];
 };
 
 const AKTIVITE_TIPLERI = [
@@ -61,38 +62,20 @@ const TECHNICAL_PHASE_REQUIRED_MESSAGE = 'Bu müşteri için faz bilgisi bulunam
 
 type ActivityType = typeof AKTIVITE_TIPLERI[number];
 type PhaseStatus = typeof FAZ_DURUMLARI[number];
-type WaitingSide = typeof BEKLEYEN_TARAFLAR[number];
+type WaitingSide = string;
 
 function isTechnicalActivityType(value: string | null | undefined) {
   return TECHNICAL_ACTIVITY_TYPES.includes(value as typeof TECHNICAL_ACTIVITY_TYPES[number]);
 }
 
-function canCreateTechnicalActivity(role: string | null | undefined) {
-  return role === 'itsm' || role === 'admin' || role === 'super_admin';
-}
-
-function normalizeTr(value: string | null | undefined) {
-  return String(value ?? '').trim().toLocaleLowerCase('tr-TR');
-}
-
-function normalizeTrAscii(value: string | null | undefined) {
-  return normalizeTr(value)
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/ı/g, 'i')
-    .replace(/ş/g, 's')
-    .replace(/ğ/g, 'g')
-    .replace(/ü/g, 'u')
-    .replace(/ö/g, 'o')
-    .replace(/ç/g, 'c');
+function canCreateTechnicalActivity(me: Me | null) {
+  return Boolean(me?.permissions?.includes('activity.technical.create'));
 }
 
 function isPhaseOptionalCustomer(customer: Customer | null) {
-  if (!customer) return false;
-  // Faz muafiyeti backend'de Parametreler / CRM / Faz İstemeyecek Sorumlular
-  // listesine göre hesaplanır. İş ortağı/yemek kartı gibi müşteri tipi tek başına
-  // muafiyet yaratmaz.
-  return Boolean(customer.report_only);
+  // İstisna kişi adı veya sektör adına göre türetilmez. Yalnız backend'in açık
+  // müşteri politikası işareti UI davranışını değiştirebilir.
+  return Boolean(customer?.report_only);
 }
 
 function coercePhaseStatus(value: string | null | undefined): PhaseStatus {
@@ -122,6 +105,7 @@ export default function QuickActivityClient() {
   const [fazNo, setFazNo] = useState<number | null>(null);
   const [fazDurum, setFazDurum] = useState<PhaseStatus>('Devam Ediyor');
   const [bekleyenTaraf, setBekleyenTaraf] = useState<WaitingSide | ''>('');
+  const [waitingSideOptions, setWaitingSideOptions] = useState<string[]>([...BEKLEYEN_TARAFLAR]);
   const [notlar, setNotlar] = useState('');
   
   const [sonrakiAksiyonVar, setSonrakiAksiyonVar] = useState(true);
@@ -135,7 +119,7 @@ export default function QuickActivityClient() {
   const [editReady, setEditReady] = useState(false);
   const [phaseMetaLoading, setPhaseMetaLoading] = useState(false);
 
-  const canCreateTechnical = canCreateTechnicalActivity(me?.role);
+  const canCreateTechnical = canCreateTechnicalActivity(me);
   const visibleActivityTypes = useMemo(() => {
     return AKTIVITE_TIPLERI.filter((tip) => !isTechnicalActivityType(tip) || canCreateTechnical);
   }, [canCreateTechnical]);
@@ -150,11 +134,12 @@ export default function QuickActivityClient() {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [meRes, customersRes, fazRes, partnerFazRes] = await Promise.all([
+        const [meRes, customersRes, fazRes, partnerFazRes, activityOptionsRes] = await Promise.all([
           fetch('/api/me', { cache: 'no-store' }),
           fetch('/api/activities/customers?all=1&limit=5000', { cache: 'no-store' }),
           fetch('/api/faz/list', { cache: 'no-store' }),
-          fetch('/api/faz/list?type=business-partner', { cache: 'no-store' })
+          fetch('/api/faz/list?type=business-partner', { cache: 'no-store' }),
+          fetch('/api/activities/options', { cache: 'no-store' })
         ]);
 
         if (meRes.ok) {
@@ -175,6 +160,12 @@ export default function QuickActivityClient() {
         if (partnerFazRes.ok) {
           const data = await partnerFazRes.json();
           setPartnerFazlar((data.fazlar || []).sort((a: Faz, b: Faz) => a.faz_no - b.faz_no));
+        }
+
+        if (activityOptionsRes.ok) {
+          const data = await activityOptionsRes.json();
+          const values = (data.waitingSideOptions ?? []).map((item: { value?: string }) => String(item.value ?? '').trim()).filter(Boolean);
+          if (values.length) setWaitingSideOptions(values);
         }
       } catch (err) {
         console.error('Data yükleme hatası:', err);
@@ -492,7 +483,7 @@ export default function QuickActivityClient() {
             <label className="pax-label" style={{ display: 'block', marginBottom: 8 }}>Bekleyen Taraf {phaseOptionalCustomer ? '' : '*'} {isTechnicalActivity && !phaseOptionalCustomer ? '(otomatik / değiştirilemez)' : ''}</label>
             <select value={bekleyenTaraf} onChange={(e) => setBekleyenTaraf(e.target.value as WaitingSide)} className="pax-input" required={!phaseOptionalCustomer} disabled={isTechnicalActivity || phaseOptionalCustomer} style={{ width: '100%', minHeight: 48, fontSize: 16, opacity: (isTechnicalActivity || phaseOptionalCustomer) ? 0.75 : 1 }}>
               <option value="">Seçin...</option>
-              {BEKLEYEN_TARAFLAR.map(taraf => <option key={taraf} value={taraf}>{taraf}</option>)}
+              {waitingSideOptions.map(taraf => <option key={taraf} value={taraf}>{taraf}</option>)}
             </select>
             {phaseMetaLoading && <div style={{ marginTop: 6, fontSize: 12, color: 'var(--text-3)' }}>Faz bilgileri alınıyor...</div>}
           </div>

@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { requireAllowedUserOrThrow } from '@/lib/authz';
 import { createPgAdminClient } from '@/lib/pg/admin';
+import { userHasPermission } from '@/lib/authz';
+import { apiErrorResponse } from '@/lib/http/api-error';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -29,7 +31,7 @@ export async function GET(req: Request) {
         request_categories(name, color)
       `, { count: 'exact' });
 
-    if (mine) {
+    if (mine || !userHasPermission(user, 'request.read.all')) {
       query = query.or(`requester_id.eq.${user.id},assignee_id.eq.${user.id}`);
     }
     if (status)   query = query.ilike('status', status.replace(/[\%_]/g, ' ').trim());
@@ -45,7 +47,7 @@ export async function GET(req: Request) {
     if (error) throw error;
 
     return NextResponse.json({ rows: data ?? [], total: count ?? 0, page, pageSize });
-  } catch (err: any) {
-    return NextResponse.json({ message: err.message }, { status: err.status ?? 500 });
+  } catch (err: unknown) {
+    return apiErrorResponse(err, 'Talepler yüklenemedi.');
   }
 }

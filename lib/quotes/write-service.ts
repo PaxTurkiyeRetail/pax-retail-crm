@@ -2,6 +2,7 @@ import 'server-only';
 import type { PoolClient } from 'pg';
 import { db } from '@/lib/db';
 import type { ResolvedQuoteLine } from '@/lib/quotes/service';
+import { recordAuditEvent } from '@/lib/audit';
 
 type QuoteTotals = {
   totalDeviceCount: number;
@@ -91,9 +92,9 @@ export async function createQuoteTransaction(args: {
       `
         insert into quotes (
           customer_id, opportunity_title, proposal_date, valid_until, follow_up_date,
-          owner_name, owner_email, probability, status, closed_reason, total_device_count,
+          owner_name, owner_email, owner_user_id, probability, status, closed_reason, total_device_count,
           total_amount, monthly_amount, hardware_amount, note, quote_year, quote_serial, quote_no
-        ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,null,$10,$11,$12,$13,$14,$15,$16,$17)
+        ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,null,$11,$12,$13,$14,$15,$16,$17,$18)
         returning id, quote_no, status
       `,
       [
@@ -104,6 +105,7 @@ export async function createQuoteTransaction(args: {
         args.dates.followUpDate,
         args.ownerName,
         args.ownerEmail,
+        args.ownerUserId ?? null,
         args.probability,
         args.status,
         args.totals.totalDeviceCount,
@@ -154,6 +156,15 @@ export async function createQuoteTransaction(args: {
       activityId = activityResult.rows[0]?.id ?? null;
       await client.query('update quotes set activity_event_id = $1 where id = $2', [activityId, quote.id]);
     }
+
+    await recordAuditEvent({
+      actorId: args.ownerUserId,
+      actorEmail: args.ownerEmail,
+      action: 'quote.created',
+      resourceType: 'quote',
+      resourceId: quote.id,
+      after: { ...quote, activity_id: activityId, customer_id: args.customerId },
+    }, client);
 
     return { ...quote, activity_id: activityId };
   });

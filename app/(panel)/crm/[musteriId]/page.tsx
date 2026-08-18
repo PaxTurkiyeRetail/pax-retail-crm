@@ -14,28 +14,6 @@ type Customer = {
   aktif_faz_adi?: string | null;
 };
 
-function normalizeTr(value: unknown) {
-  return String(value ?? '').trim().toLocaleLowerCase('tr-TR');
-}
-
-function normalizeTrAscii(value: unknown) {
-  return normalizeTr(value)
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/ı/g, 'i')
-    .replace(/ş/g, 's')
-    .replace(/ğ/g, 'g')
-    .replace(/ü/g, 'u')
-    .replace(/ö/g, 'o')
-    .replace(/ç/g, 'c');
-}
-
-function isReportOnlyCustomer(customer: Customer | null) {
-  if (!customer) return false;
-  const sector = normalizeTrAscii(customer.sektor);
-  return sector === 'is ortagi';
-}
-
 export default function CustomerDetailPage() {
   const params = useParams();
   const musteriId = params.musteriId as string;
@@ -92,22 +70,8 @@ export default function CustomerDetailPage() {
     );
   }
 
-  const kunyeDisabled = isReportOnlyCustomer(customer);
-
   return (
     <div className="pax-page-container">
-      {kunyeDisabled ? (
-        <section className="pax-card" style={{ padding: 24, display: 'grid', gap: 10 }}>
-          <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--text-3)' }}>
-            Rapor Müşterisi
-          </div>
-          <h2 style={{ margin: 0 }}>{customer.musteri}</h2>
-          <p style={{ margin: 0, color: 'var(--text-3)' }}>
-            {[customer.sektor, customer.sorumlu ? `Sorumlu: ${customer.sorumlu}` : null].filter(Boolean).join(' • ')}
-          </p>
-        </section>
-      ) : (
-        <>
       {/* TEK HERO — KunyeDashboard içinde, tekrar yok */}
       <KunyeDashboard
         kunye={kunye}
@@ -123,8 +87,6 @@ export default function CustomerDetailPage() {
         musteriAdi={customer.musteri}
         existingData={kunye}
       />
-        </>
-      )}
     </div>
   );
 }

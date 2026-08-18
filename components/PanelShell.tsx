@@ -5,14 +5,10 @@ import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import LogoutButton from "@/components/LogoutButton";
 import {
-  canViewActivities,
-  canViewCRM,
-  canViewReports,
-  canViewUsers,
-  isAdminLike,
+  hasPermission,
   type AllowedRole,
+  type Permission,
 } from "@/lib/roles";
-import { canManageSystemParameters } from "@/lib/technical-owners";
 import "@/styles/globals.css";
 import "@/styles/sidebar.css";
 import "@/styles/premium-ui.css";
@@ -254,11 +250,11 @@ function routeMeta(pathname: string) {
     ["/crm/blocker-impact", "Operasyon", "Engel & Etki"],
     ["/crm/customers", "Operasyon", "Müşteriler"],
     ["/crm/sales-radar", "Operasyon", "Satış Radarı"],
-    ["/crm/system-tracker", "Operasyon", "Sistem Takibi"],
     ["/crm/customer-status-guide", "Operasyon", "Müşteri Durum Rehberi"],
     ["/crm/nova-core", "Strateji", "Nova Core"],
     ["/crm/sales-process", "Strateji", "Satış Süreci"],
     ["/crm/me", "Profil", "Hesabım"],
+    ["/requests", "Operasyon", "Talepler"],
         ["/admin/parameters", "Yönetim", "Parametre Yönetimi"],
     ["/admin/users", "Yönetim", "Kullanıcı Yönetimi"],
     ["/admin/db-backup", "Yönetim", "DB Yedeği"],
@@ -275,11 +271,13 @@ function routeMeta(pathname: string) {
 
 export default function PanelShell({
   role,
+  permissions,
   fullName,
   email,
   children,
 }: {
   role: AllowedRole;
+  permissions?: Permission[];
   fullName?: string | null;
   email?: string | null;
   children: React.ReactNode;
@@ -293,6 +291,10 @@ export default function PanelShell({
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const mobileMenuButtonRef = useRef<HTMLButtonElement>(null);
   const sidebarRef = useRef<HTMLElement>(null);
+  const allowed = useCallback(
+    (permission: Permission) => permissions ? permissions.includes(permission) : hasPermission(role, permission),
+    [permissions, role],
+  );
 
   useEffect(() => {
     try {
@@ -387,57 +389,57 @@ export default function PanelShell({
     const operations: NavItem[] = [];
     const reports: NavItem[] = [];
 
-    if (canViewCRM(role))
+    if (allowed('request.read.own') || allowed('request.read.all') || allowed('request.create'))
+      overview.push({
+        href: "/requests",
+        label: "Talepler",
+        iconKey: "requests",
+      });
+
+    if (allowed('customer.read'))
       overview.push({
         href: "/crm",
         label: "Genel Bakış",
         iconKey: "dashboard",
         exact: true,
       });
-    if (canViewCRM(role))
+    if (allowed('customer.read'))
       operations.push({
         href: "/crm/customers",
         label: "Müşteriler",
         iconKey: "customers",
       });
-    if (canViewActivities(role))
+    if (allowed('activity.read'))
       operations.push({
         href: "/crm/activities",
         label: "Aktiviteler",
         iconKey: "activity",
       });
-    if (canViewCRM(role))
+    if (allowed('quote.read'))
       operations.push({
         href: "/crm/quotes",
         label: "Teklifler",
         iconKey: "quotes",
       });
-    if (canViewCRM(role))
+    if (allowed('forecast.read'))
       operations.push({
         href: "/crm/forecast",
         label: "Forecast",
         iconKey: "forecast",
       });
-    if (canViewCRM(role))
+    if (allowed('forecast.read'))
       operations.push({
         href: "/crm/blocker-impact",
         label: "Engel & Etki",
         iconKey: "blocker",
       });
-    if (canViewCRM(role))
+    if (allowed('report.read.all'))
       operations.push({
         href: "/crm/sales-radar",
         label: "Satış Radarı",
         iconKey: "weekly",
       });
-    if (canViewCRM(role))
-      operations.push({
-        href: "/crm/system-tracker",
-        label: "Sistem Takibi",
-        iconKey: "settings",
-      });
-
-    if (canViewReports(role)) {
+    if (allowed('report.read.all')) {
       reports.push({
         href: "/crm/reports/quotes",
         label: "Teklif Raporları",
@@ -473,7 +475,7 @@ export default function PanelShell({
         label: "Yönetim Sunumu",
         iconKey: "weekly",
       });
-      if (isAdminLike(role)) reports.push({
+      if (allowed('admin.users.manage')) reports.push({
         href: "/crm/reports/user-activity-presentation",
         label: "Kullanıcı Aktivite Sunumu",
         iconKey: "weekly",
@@ -494,7 +496,7 @@ export default function PanelShell({
         ? { title: "Raporlar", iconKey: "weekly", items: reports }
         : null,
     };
-  }, [role, fullName, email]);
+  }, [allowed]);
 
   const displayName = (fullName ?? "").trim() || "Demo Kullanıcı";
   const displaySub = email?.trim() || roleLabel(role);
@@ -511,8 +513,7 @@ export default function PanelShell({
     .join(" ");
   const reportsActive = pathname.startsWith("/crm/reports");
   const pageMeta = useMemo(() => routeMeta(pathname), [pathname]);
-  const showParameterManagement =
-    isAdminLike(role) || canManageSystemParameters({ fullName, email });
+  const showParameterManagement = allowed('admin.parameters.manage');
   const showReports = Boolean(
     reportsGroup && (reportsOpen || reportsActive || collapsed),
   );
@@ -726,7 +727,7 @@ export default function PanelShell({
                     <strong>{displayName}</strong>
                     <span>{email?.trim() || roleLabel(role)}</span>
                   </div>
-                  {(showParameterManagement || canViewUsers(role)) && (
+                  {(showParameterManagement || allowed('admin.users.manage') || allowed('admin.backup.execute')) && (
                     <div className="pax-user-dropdown-section">
                       {showParameterManagement && (
                         <Link
@@ -736,7 +737,7 @@ export default function PanelShell({
                           Parametre Yönetimi
                         </Link>
                       )}
-                      {canViewUsers(role) && (
+                      {allowed('admin.backup.execute') && (
                         <Link
                           href="/admin/db-backup"
                           className="pax-user-dropdown-link"
@@ -744,7 +745,7 @@ export default function PanelShell({
                           DB Yedeği
                         </Link>
                       )}
-                      {canViewUsers(role) && (
+                      {allowed('admin.users.manage') && (
                         <Link
                           href="/admin/users"
                           className="pax-user-dropdown-link"

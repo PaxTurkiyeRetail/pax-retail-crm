@@ -63,23 +63,8 @@ function targetsFromDbRow(row: any): WeeklyContactTargets {
   return targets;
 }
 
-async function ensureAllowedUserWeeklyTargetColumns() {
-  await db.query(`
-    alter table public.allowed_users
-      add column if not exists weekly_target_sales_physical integer not null default 0,
-      add column if not exists weekly_target_sales_online integer not null default 0,
-      add column if not exists weekly_target_sales_phone integer not null default 0,
-      add column if not exists weekly_target_sales_email integer not null default 0,
-      add column if not exists weekly_target_technical_physical integer not null default 0,
-      add column if not exists weekly_target_technical_online integer not null default 0,
-      add column if not exists weekly_target_total_activities integer not null default 0,
-      add column if not exists weekly_target_unique_customers integer not null default 0
-  `);
-}
-
 async function loadWeeklyContactTargetMap() {
   try {
-    await ensureAllowedUserWeeklyTargetColumns();
     const result = await db.query(`
       select full_name,
         weekly_target_sales_physical,
@@ -327,19 +312,20 @@ type RetailDashboardAccountRow = {
   customer?: string | null;
   owner?: string | null;
   sector?: string | null;
+  customer_type?: string | null;
 };
 
 function retailDashboardSpecialOwnerLabel(owner: unknown): string | null {
   const normalized = normalizeDashboardKey(owner);
   if (!normalized) return null;
-  if (normalized === 'cem koc' || normalized === 'havuz account') return 'Havuz Account';
-  if (normalized === 'seda kesikoglu' || normalized === 'yemek kartlari') return 'Yemek Kartları';
+  if (normalized === 'havuz account') return 'Havuz Account';
+  if (normalized === 'yemek kartlari') return 'Yemek Kartları';
   if (normalized === 'is ortaklari' || normalized === 'is ortagi') return 'İş Ortakları';
   return null;
 }
 
 function retailDashboardSpecialAccountLabel(row: RetailDashboardAccountRow): string | null {
-  if (reportOnlyCustomerKind({ musteri: row.customer, sorumlu: row.owner, sektor: row.sector }) === 'business-partner') {
+  if (reportOnlyCustomerKind({ customer_type: row.customer_type }) === 'business-partner') {
     return 'İş Ortakları';
   }
   return retailDashboardSpecialOwnerLabel(row.owner);
@@ -349,13 +335,8 @@ function isRetailDashboardSpecialAccount(row: RetailDashboardAccountRow) {
   return Boolean(retailDashboardSpecialAccountLabel(row));
 }
 
-function isRetailDashboardExcludedSector(sector: unknown) {
-  const normalized = normalizeDashboardKey(sector);
-  return normalized === 'banka' || normalized === 'vertical' || normalized === 'vertikal';
-}
-
 function sellerPresentationOwnerLabel(row: RetailDashboardAccountRow): string {
-  if (reportOnlyCustomerKind({ musteri: row.customer, sorumlu: row.owner, sektor: row.sector }) === 'business-partner') return 'İş Ortakları';
+  if (reportOnlyCustomerKind({ customer_type: row.customer_type }) === 'business-partner') return 'İş Ortakları';
   return cleanText(row.owner, '');
 }
 
@@ -643,6 +624,7 @@ export type PresentationCustomer = {
   customer: string;
   owner: string;
   sector: string;
+  customer_type?: string;
   entegrasyon_tipi: string;
   phase_no: number | null;
   phase_name: string | null;
@@ -823,6 +805,12 @@ export async function buildWeeklyManagementPresentation(admin: any, options?: { 
       .order('musteri', { ascending: true })
       .range(rangeFrom, rangeTo);
   });
+  const customerPolicies = await fetchAllRows<any>((rangeFrom, rangeTo) => admin
+    .from('musteriler')
+    .select('id,customer_type,integration_type_key')
+    .order('id', { ascending: true })
+    .range(rangeFrom, rangeTo));
+  const customerPolicyMap = new Map((customerPolicies ?? []).map((row: any) => [String(row.id), row]));
 
   const phaseDefinitions = (await fetchAllRows<any>((rangeFrom, rangeTo) => {
     return admin
@@ -840,24 +828,26 @@ export async function buildWeeklyManagementPresentation(admin: any, options?: { 
   const phaseNameMap = new Map<number, string>(phaseDefinitions.map((row) => [row.phase_no, row.phase_name]));
 
   const normalizedCustomers = (customers ?? []).map((row) => {
+    const policy = customerPolicyMap.get(String(row.musteri_id ?? '')) as any;
     const customer = cleanText(row.musteri);
     const rawOwner = cleanText(row.sorumlu);
     const sector = cleanText(row.sektor);
     return {
       musteri_id: cleanText(row.musteri_id, ''),
       customer,
-      owner: sellerMode ? (sellerPresentationOwnerLabel({ customer, owner: rawOwner, sector }) || rawOwner) : rawOwner,
+      owner: sellerMode ? (sellerPresentationOwnerLabel({ customer, owner: rawOwner, sector, customer_type: policy?.customer_type }) || rawOwner) : rawOwner,
       raw_owner: rawOwner,
       phase_no: row.aktif_faz_no == null ? null : Number(row.aktif_faz_no),
       phase_name: (row.aktif_faz_no == null ? null : phaseNameMap.get(Number(row.aktif_faz_no))) || String(row.aktif_faz_adi ?? '').trim() || null,
       sector,
-      entegrasyon_tipi: cleanText(row.entegrasyon_tipi),
+      customer_type: cleanText(policy?.customer_type, 'standard'),
+      entegrasyon_tipi: cleanText(policy?.integration_type_key ?? row.entegrasyon_tipi),
     };
   }).filter((row) => row.musteri_id);
 
   const reportOnlyCustomerIds = new Set(normalizedCustomers.filter((row) => isReportOnlyCustomer({ musteri: row.customer, sorumlu: row.owner, sektor: row.sector })).map((row) => row.musteri_id));
-  // Yönetim sunumunda rapor-harici kayıt kuralı korunur; Satışçı Sunumu tarafında ise
-  // İş Ortakları / özel portföy kayıtları da filtre seçeneklerine ve rapora dahil edilir.
+  // Yalnızca açıkça işaretlenmiş sentetik rapor satırları ayrıştırılır;
+  // kişi adı veya sektör adı hiçbir müşteriyi rapor dışında bırakmaz.
   const normalPresentationCustomerRows = sellerMode ? normalizedCustomers : normalizedCustomers.filter((row) => !reportOnlyCustomerIds.has(row.musteri_id));
   const customerIds = normalizedCustomers.map((row) => row.musteri_id);
   const [kunyeRows, quotes, activities, allActivitiesRaw] = await Promise.all([
@@ -868,7 +858,7 @@ export async function buildWeeklyManagementPresentation(admin: any, options?: { 
     fetchAllRows<any>((rangeFrom, rangeTo) => {
       return admin
         .from('pipeline_eventleri')
-        .select('id,musteri_id,faz_no,durum,event_type,aksiyon,owner,partner_owner,notlar,created_at,created_by,activity_scope,affects_phase,is_blocked,blocked_note,musteriler(musteri,sorumlu,sektor,entegrasyon_tipi)')
+        .select('id,musteri_id,faz_no,durum,event_type,aksiyon,owner,partner_owner,notlar,created_at,created_by,activity_scope,affects_phase,is_blocked,blocked_note,musteriler(musteri,sorumlu,sektor,entegrasyon_tipi,customer_type)')
         .gte('created_at', `${from}T00:00:00`)
         .lte('created_at', `${to}T23:59:59`)
         .order('created_at', { ascending: false })
@@ -963,6 +953,7 @@ export async function buildWeeklyManagementPresentation(admin: any, options?: { 
       customer: row.customer,
       owner: row.owner,
       sector: row.sector,
+      customer_type: row.customer_type,
       entegrasyon_tipi: row.entegrasyon_tipi,
       phase_no: row.phase_no,
       phase_name: row.phase_name,
@@ -992,10 +983,8 @@ export async function buildWeeklyManagementPresentation(admin: any, options?: { 
   if (selectedOwner) presentationCustomers = presentationCustomers.filter((row) => row.owner === selectedOwner);
   if (selectedSegment) presentationCustomers = presentationCustomers.filter((row) => detectSegment(row) === selectedSegment);
 
-  // Retail Genel Durum Raporu üst dashboardu, normal pipeline müşteri akışını bozmadan
-  // tüm müşteri kaynağından hesaplanır. Böylece Cem Koç / Seda Kesikoğlu / İş Ortakları
-  // portföy toplamı ve account sayısına dahil edilmez; ancak Account Yapısı panelinde
-  // Havuz Account / Yemek Kartları / İş Ortakları kırılımları ayrıca görünür.
+  // Retail Genel Durum Raporu üst dashboardu tüm yetkili müşteri kaynağından hesaplanır.
+  // Özel portföy etiketleri yalnızca sunum gruplamasıdır; görünürlük kısıtı değildir.
   let customerDashboardSource: PresentationCustomer[] = normalizedCustomers.map((row) => {
     const rawKunye = kunyeMap.get(row.musteri_id) ?? null;
     const mapped = rawKunye ? mapKunyeDbToUi(rawKunye) : null;
@@ -1043,6 +1032,7 @@ export async function buildWeeklyManagementPresentation(admin: any, options?: { 
     customer: row.customer,
     owner: row.owner,
     sector: row.sector,
+    customer_type: row.customer_type,
     entegrasyon_tipi: row.entegrasyon_tipi,
   }]));
   const mapActivityRow = (row: any): ActivityRow => {
@@ -1077,8 +1067,8 @@ export async function buildWeeklyManagementPresentation(admin: any, options?: { 
 
     // Satışçı sunumunda aktivitenin sahibi müşteri sorumlusu değil,
     // aktiviteyi gerçekten ekleyen kullanıcıdır.
-    // Örnek: aktivite Seda'nın müşterisine girilmiş olsa bile created_by başka satışçıysa
-    // kayıt Seda sunumunda değil, aktiviteyi giren satışçının sunumunda görünmelidir.
+    // Aktivite müşteri sorumlusundan farklı bir kullanıcı tarafından girildiyse,
+    // kayıt aktiviteyi gerçekten oluşturan kullanıcının sunumunda görünmelidir.
     const createdByNorm = normalizeForSearch(row?.created_by);
     return createdByNorm === selectedOwnerNorm;
   };
@@ -1086,7 +1076,7 @@ export async function buildWeeklyManagementPresentation(admin: any, options?: { 
   const activityAllowedForPresentation = (row: any) => {
     const id = String(row.musteri_id ?? '').trim();
     const fallbackCustomer = activityCustomerFallbackMap.get(id);
-    const kind = reportOnlyCustomerKind({ musteri: fallbackCustomer?.customer ?? row?.musteriler?.musteri, sorumlu: fallbackCustomer?.owner ?? row?.musteriler?.sorumlu, sektor: fallbackCustomer?.sector ?? row?.musteriler?.sektor });
+    const kind = reportOnlyCustomerKind({ customer_type: fallbackCustomer?.customer_type ?? row?.musteriler?.customer_type });
     const isBusinessPartnerActivity = kind === 'business-partner';
     const isReportOnlyTechnical = reportOnlyCustomerIds.has(id) && isTechnicalChannelLike(parseActivityType(row.aksiyon, row.event_type));
 
@@ -1310,7 +1300,7 @@ export async function buildWeeklyManagementPresentation(admin: any, options?: { 
   // Böylece Havuz Account / Yemek Kartları / İş Ortakları panelde yer aldığı gibi
   // portföy müşteri toplamına da yansır; Account KPI'sı ise sadece normal sorumlu adedini sayar.
   const dashboardPortfolioRows = dashboardAccountStructureRows;
-  const dashboardSectorRows = dashboardPortfolioRows.filter((row) => !isRetailDashboardExcludedSector(row.sector));
+  const dashboardSectorRows = dashboardPortfolioRows;
   const dashboardTotalCustomers = dashboardAccountStructureCustomerTotal;
   const dashboardKunyeComplete = dashboardPortfolioRows.filter((row) => ['Var', 'Tamam'].includes(String(row.kunye_status))).length;
   const dashboardKunyeMissing = dashboardPortfolioRows.filter((row) => row.kunye_status === 'Eksik').length;

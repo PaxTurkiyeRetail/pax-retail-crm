@@ -3,7 +3,9 @@ import { execFile } from 'child_process';
 import { access, mkdir } from 'fs/promises';
 import path from 'path';
 import { promisify } from 'util';
-import { requireAdminOrThrow } from '@/lib/authz';
+import { requireBackupAccessOrThrow } from '@/lib/authz';
+import { apiErrorResponse, ApiError } from '@/lib/http/api-error';
+import { tryRecordAuditEvent } from '@/lib/audit';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -71,11 +73,11 @@ function normalizeBackupError(error: unknown) {
 
 export async function POST() {
   try {
-    await requireAdminOrThrow();
+    const user = await requireBackupAccessOrThrow();
 
     const databaseUrl = process.env.DATABASE_URL;
     if (!databaseUrl) {
-      return NextResponse.json({ ok: false, message: 'DATABASE_URL tanımlı değil.' }, { status: 500 });
+      throw new ApiError('BACKUP_NOT_CONFIGURED', 'Veritabanı yedekleme yapılandırılmamış.', 503);
     }
 
     const dir = backupDirectory();
@@ -85,14 +87,40 @@ export async function POST() {
     const filePath = path.join(dir, fileName);
     const pgDump = await resolvePgDumpCommand();
 
-    await execFileAsync(pgDump, ['--format=custom', '--no-owner', '--no-privileges', '--file', filePath, databaseUrl], {
+    const parsedDatabaseUrl = new URL(databaseUrl);
+    const databaseName = decodeURIComponent(parsedDatabaseUrl.pathname.replace(/^\//, ''));
+    const databaseUser = decodeURIComponent(parsedDatabaseUrl.username);
+    const databasePassword = decodeURIComponent(parsedDatabaseUrl.password);
+
+    await execFileAsync(pgDump, [
+      '--format=custom',
+      '--no-owner',
+      '--no-privileges',
+      '--host', parsedDatabaseUrl.hostname,
+      '--port', parsedDatabaseUrl.port || '5432',
+      '--username', databaseUser,
+      '--dbname', databaseName,
+      '--file', filePath,
+    ], {
       windowsHide: true,
       timeout: 1000 * 60 * 10,
       maxBuffer: 1024 * 1024,
+      env: { ...process.env, PGPASSWORD: databasePassword },
     });
 
-    return NextResponse.json({ ok: true, fileName, filePath, pgDumpPath: pgDump });
+    await tryRecordAuditEvent({
+      actorId: user.id,
+      actorEmail: user.email,
+      action: 'database.backup.created',
+      resourceType: 'database_backup',
+      resourceId: fileName,
+    });
+
+    return NextResponse.json({ ok: true, fileName });
   } catch (error) {
-    return NextResponse.json({ ok: false, message: normalizeBackupError(error) }, { status: 500 });
+    if (error instanceof ApiError || (error as { status?: number })?.status) {
+      return apiErrorResponse(error, 'DB yedeği alınamadı.');
+    }
+    return apiErrorResponse(new ApiError('BACKUP_FAILED', normalizeBackupError(error), 500), 'DB yedeği alınamadı.');
   }
 }

@@ -1,9 +1,8 @@
 import { NextResponse } from 'next/server';
-import { requireCrmAccessOrThrow, isAdminLike } from '@/lib/authz';
+import { assertOwnedResourceAccess, requireCrmAccessOrThrow } from '@/lib/authz';
 import { createPgAdminClient } from '@/lib/pg/admin';
 import { getKunyeStatus, mapKunyeDbToUi } from '@/lib/kunye';
 import { appendLastStayedPhase } from '@/lib/crm-phase-history';
-import { isReportOnlyCustomer } from '@/lib/report-only-customers';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -18,12 +17,13 @@ export async function GET(request: Request) {
     const admin = createPgAdminClient();
     const { data: musteri, error } = await admin
       .from('musteriler')
-      .select('id,musteri,sektor,entegrasyon_tipi,satis_olasiligi,sorumlu')
+      .select('id,musteri,sektor,entegrasyon_tipi,satis_olasiligi,sorumlu,owner_user_id')
       .eq('id', musteriId)
       .maybeSingle();
 
     if (error) return NextResponse.json({ message: error.message }, { status: 500 });
     if (!musteri) return NextResponse.json({ message: 'Müşteri bulunamadı.' }, { status: 404 });
+    assertOwnedResourceAccess({ user: me, resource: musteri, ownPermission: 'customer.read', anyPermission: 'customer.read.any' });
     const { data: phaseView } = await admin
       .from('vw_crm_musteriler')
       .select('musteri_id,aktif_faz_no,aktif_faz_adi')

@@ -1,7 +1,6 @@
 import { activityLabelFromRow, presentDurum } from '@/lib/activities/presentation';
 import { NextResponse } from 'next/server';
-import { requireAllowedUserOrThrow } from '@/lib/authz';
-import { isAdminLike } from '@/lib/roles';
+import { assertOwnedResourceAccess, requireCrmAccessOrThrow } from '@/lib/authz';
 import { createPgAdminClient } from '@/lib/pg/admin';
 
 export const dynamic = 'force-dynamic';
@@ -9,13 +8,15 @@ export const revalidate = 0;
 
 export async function GET(req: Request) {
   try {
-    const me = await requireAllowedUserOrThrow();
-    const myName = (me.full_name ?? '').trim();
+    const me = await requireCrmAccessOrThrow();
     const url = new URL(req.url);
     const musteri_id = (url.searchParams.get('musteri_id') ?? '').trim();
     if (!musteri_id) return NextResponse.json({ message: 'musteri_id gerekli' }, { status: 400 });
 
     const admin = createPgAdminClient();
+    const { data: customer } = await admin.from('musteriler').select('owner_user_id,sorumlu').eq('id', musteri_id).maybeSingle();
+    if (!customer) return NextResponse.json({ message: 'Müşteri bulunamadı.' }, { status: 404 });
+    assertOwnedResourceAccess({ user: me, resource: customer, ownPermission: 'customer.read', anyPermission: 'customer.read.any' });
     const q = admin
       .from('pipeline_eventleri')
       .select('id,musteri_id,faz_no,iteration_no,event_type,durum,aksiyon,owner,partner_owner,notlar,created_at,hedef_tarihi,created_by')

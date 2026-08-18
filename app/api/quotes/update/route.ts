@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
-import { requireCrmAccessOrThrow } from '@/lib/authz';
+import { assertOwnedResourceAccess, requireCrmAccessOrThrow } from '@/lib/authz';
 import { createPgAdminClient } from '@/lib/pg/admin';
-import { QUOTE_PROBABILITIES } from '@/lib/quotes/catalog';
-import { buildQuoteActivityNote, buildQuoteSummaryText, getQuoteCatalog, isMissingRelationError, normalizeDateOnly, resolveQuoteLines, type QuoteLineInput } from '@/lib/quotes/service';
+import { buildQuoteActivityNote, buildQuoteSummaryText, getQuoteCatalog, getQuoteDetailById, isMissingRelationError, normalizeDateOnly, resolveQuoteLines, type QuoteLineInput } from '@/lib/quotes/service';
+import { tryRecordAuditEvent } from '@/lib/audit';
 import { updateQuoteTransaction } from '@/lib/quotes/write-service';
+import { assertActiveParameterValue } from '@/lib/system-parameters';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -19,7 +20,7 @@ type Body = {
 
 export async function POST(request: Request) {
   try {
-    await requireCrmAccessOrThrow();
+    const me = await requireCrmAccessOrThrow();
     const body = (await request.json().catch(() => ({}))) as Body;
     const quoteId = String(body.quote_id ?? '').trim();
     const probability = Number(body.probability ?? 0);
@@ -28,10 +29,13 @@ export async function POST(request: Request) {
     const note = String(body.note ?? '').trim() || null;
 
     if (!quoteId) return NextResponse.json({ message: 'quote_id gerekli' }, { status: 400 });
-    if (!QUOTE_PROBABILITIES.includes(probability as any)) return NextResponse.json({ message: 'Probability sadece %10 / %30 / %60 / %90 olabilir.' }, { status: 400 });
+    await assertActiveParameterValue('quote_probability', String(probability));
     if (!items.length) return NextResponse.json({ message: 'En az bir teklif satırı girilmeli.' }, { status: 400 });
 
     const admin = createPgAdminClient();
+    const existing = await getQuoteDetailById(admin, quoteId);
+    if (!existing) return NextResponse.json({ message: 'Teklif bulunamadı.' }, { status: 404 });
+    assertOwnedResourceAccess({ user: me, resource: existing, ownPermission: 'quote.update.own', anyPermission: 'quote.update.any' });
     const catalog = await getQuoteCatalog(admin);
     const resolved = resolveQuoteLines(items, catalog);
     const summaryText = buildQuoteSummaryText(resolved.items.map((item) => ({ product_name: item.product_name, quantity: item.quantity })));
@@ -48,6 +52,7 @@ export async function POST(request: Request) {
         validUntil: normalizeDateOnly(quote.valid_until, null),
       }),
     });
+    await tryRecordAuditEvent({ actorId: me.id, actorEmail: me.email, action: 'quote.updated', resourceType: 'quote', resourceId: quoteId, before: existing });
 
     revalidatePath('/crm/quotes');
     revalidatePath(`/crm/quotes/${quoteId}`);

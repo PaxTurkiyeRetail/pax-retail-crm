@@ -172,21 +172,6 @@ function isDistributionChannelSector(value: unknown) {
     || text.includes('lojistik kargo');
 }
 
-function isOtherKasaposFirm(value: unknown) {
-  const text = normalizeText(value);
-  return text === 'diğer' || text === 'diger' || text === 'other';
-}
-
-function isExcludedFromOtherKasaposReportSector(value: unknown) {
-  const text = normalizeText(value);
-  if (!text) return false;
-  return text.includes('fmsc dağıtım kanalları')
-    || text.includes('fmsc dagitim kanallari')
-    || text.includes('lojistik & kargo')
-    || text.includes('lojistik ve kargo')
-    || text.includes('lojistik kargo');
-}
-
 function isExcludedKasaPos(value: unknown) {
   const text = normalizeText(value);
   return text.includes('nebim') || text.includes('toshiba');
@@ -355,11 +340,9 @@ function kasaposFirmReportValue(item: PresentationCustomer) {
 
 function getKasaposFirmReportCustomers(payload: WeeklyManagementPresentationPayload, firmName: string) {
   const target = normalizeText(firmName);
-  const isOtherReport = isOtherKasaposFirm(firmName);
   return payload.customers
     .filter(hasGeneralReportActivity)
     .filter((item) => normalizeText(kasaposFirmReportValue(item)) === target)
-    .filter((item) => !isOtherReport || !isExcludedFromOtherKasaposReportSector(item.sector))
     .sort(compareByLatestActivityDesc);
 }
 

@@ -16,11 +16,11 @@ function Target({ size = 16, strokeWidth = 1.75, style }: IconProps) { return <s
 function Users({ size = 16, strokeWidth = 1.75, style }: IconProps) { return <svg width={size} height={size} viewBox="0 0 24 24" {..._svg} strokeWidth={strokeWidth} style={style}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>; }
 import { uniqueOptions, parsePhaseNo, sumPhaseRange } from '@/lib/utils';
 import CustomersHero from '@/components/crm/CustomersHero';
-import { ENTEGRASYON_OPTIONS, HAVUZ_ACCOUNT_NAME } from '@/lib/crm';
-import { BUSINESS_PARTNER_RESPONSIBLE, BUSINESS_PARTNER_SECTOR } from '@/lib/report-only-customers';
+import { HAVUZ_ACCOUNT_NAME } from '@/lib/crm';
 import { presentKunyeStatus } from '@/lib/kunye';
-import { FIRMA_DURUMU_OPTIONS, YONETIM_TIPI_OPTIONS, customerStatusTone, deriveCustomerSegmentation, managementTypeTone } from '@/lib/customer-segmentation';
+import { customerStatusTone, deriveCustomerSegmentation, managementTypeTone } from '@/lib/customer-segmentation';
 import { appToast } from '@/lib/app-toast';
+import { normalizePageSize, PAGE_SIZE_OPTIONS } from '@/lib/ui-pagination';
 
 type CrmRow = {
   musteri_id: string;
@@ -37,10 +37,15 @@ type CrmRow = {
   kasa_firmasi?: string | null;
   kunye_durumu?: string | null;
   report_only?: boolean;
+  owner_user_id?: string | null;
+  satis_olasiligi?: string | null;
+  customer_type?: string | null;
+  pipeline_policy?: string | null;
 };
 
-type Me = { email: string; full_name: string | null; role: string };
-type AllowedUser = { email: string; full_name: string | null; role: string; is_active: boolean };
+type Me = { id: string; email: string; full_name: string | null; role: string; permissions?: string[] };
+type AllowedUser = { id: string; email: string; full_name: string | null; role: string; is_active: boolean };
+type CatalogOption = { label: string; value: string };
 type ModalMode = 'create' | 'edit';
 type SummaryItem = { label: string; value: number };
 type StatsPayload = {
@@ -62,6 +67,12 @@ type FilterOptions = {
   integrationOptions: string[];
   kasaOptions: string[];
   phaseOptions: string[];
+  sectorCatalogOptions: CatalogOption[];
+  integrationCatalogOptions: CatalogOption[];
+  salesProbabilityOptions: CatalogOption[];
+  customerTypeOptions: CatalogOption[];
+  pipelinePolicyOptions: CatalogOption[];
+  defaultPageSize: number;
 };
 type PhaseBucket = { key: string; label: string; range: string; value: number; tone: string; filterValue: string };
 type FilterToken = { key: string; label: string; onClear: () => void };
@@ -75,25 +86,11 @@ type ActionMode = {
   metric: (stats: StatsPayload) => number;
 };
 
-const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
 const KUNYE_OPTIONS = [
   { value: 'Tamam', label: 'Tamam' },
   { value: 'Eksik', label: 'Eksik' },
   { value: 'Yok', label: 'Yok' },
 ] as const;
-
-const SECTOR_PRESET_OPTIONS = [
-  'Elektronik & Beyaz Eşya',
-  'Ev & Yaşam / Yapı Market',
-  'FMCG Dağıtım Kanalları',
-  'Gıda Perakendesi',
-  'Hazır Giyim',
-  'Lojistik & Kargo',
-  'Yeme-İçme',
-  'BANKA',
-  'VERTİCAL',
-  BUSINESS_PARTNER_SECTOR,
-];
 
 const EMPTY_STATS: StatsPayload = {
   total: 0,
@@ -115,6 +112,12 @@ const EMPTY_OPTIONS: FilterOptions = {
   integrationOptions: [],
   kasaOptions: [],
   phaseOptions: [],
+  sectorCatalogOptions: [],
+  integrationCatalogOptions: [],
+  salesProbabilityOptions: [],
+  customerTypeOptions: [],
+  pipelinePolicyOptions: [],
+  defaultPageSize: 25,
 };
 
 const ACTION_MODES: ActionMode[] = [
@@ -290,7 +293,7 @@ export default function CrmCustomersClient() {
   const [q, setQ] = useState('');
   const [debouncedQ, setDebouncedQ] = useState('');
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  const [pageSize, setPageSize] = useState(25);
   const [total, setTotal] = useState(0);
   const [stats, setStats] = useState<StatsPayload>(EMPTY_STATS);
   const [showSectorSummary, setShowSectorSummary] = useState(true);
@@ -307,7 +310,11 @@ export default function CrmCustomersClient() {
   const [musteri, setMusteri] = useState('');
   const [sektor, setSektor] = useState('');
   const [sorumlu, setSorumlu] = useState('');
+  const [ownerUserId, setOwnerUserId] = useState('');
   const [entegrasyonTipi, setEntegrasyonTipi] = useState('');
+  const [satisOlasiligi, setSatisOlasiligi] = useState('');
+  const [customerType, setCustomerType] = useState('standard');
+  const [pipelinePolicy, setPipelinePolicy] = useState('phase_required');
 
   const [ownerFilter, setOwnerFilter] = useState('');
   const [sectorFilter, setSectorFilter] = useState('');
@@ -315,10 +322,17 @@ export default function CrmCustomersClient() {
   const [kasaFilter, setKasaFilter] = useState('');
   const [kunyeFilter, setKunyeFilter] = useState('');
   const [fazFilter, setFazFilter] = useState('');
-  const [firmaDurumuFilter, setFirmaDurumuFilter] = useState('');
-  const [yonetimTipiFilter, setYonetimTipiFilter] = useState('');
 
   const displayMeName = useMemo(() => (me?.full_name ?? '').trim(), [me?.full_name]);
+  const canAssignCustomers = Boolean(me?.permissions?.includes('customer.assign'));
+  const canManageClassification = Boolean(me?.permissions?.includes('customer.classification.manage'));
+  const canCreateCustomers = Boolean(me?.permissions?.includes('customer.create'));
+  const canUpdateAnyCustomer = Boolean(me?.permissions?.includes('customer.update.any'));
+  const canUpdateOwnCustomer = Boolean(me?.permissions?.includes('customer.update.own'));
+  const ownerDirectoryOptions = canAssignCustomers ? allowed : allowed.filter((user) => user.id === me?.id);
+
+  const canEditCustomer = (row: CrmRow) => canUpdateAnyCustomer
+    || (canUpdateOwnCustomer && Boolean(me?.id) && row.owner_user_id === me?.id);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedQ(q.trim()), 220);
@@ -327,7 +341,7 @@ export default function CrmCustomersClient() {
 
   useEffect(() => {
     setPage(1);
-  }, [debouncedQ, ownerFilter, sectorFilter, integrationFilter, kasaFilter, kunyeFilter, fazFilter, firmaDurumuFilter, yonetimTipiFilter, pageSize]);
+  }, [debouncedQ, ownerFilter, sectorFilter, integrationFilter, kasaFilter, kunyeFilter, fazFilter, pageSize]);
 
   useEffect(() => {
     if (actionMode === 'all') return;
@@ -386,6 +400,7 @@ export default function CrmCustomersClient() {
     if (optionsRes.ok) {
       const optionsJson = await optionsRes.json().catch(() => ({}));
       setFilterOptions({ ...EMPTY_OPTIONS, ...(optionsJson ?? {}) });
+      setPageSize(normalizePageSize(optionsJson.defaultPageSize));
     }
   }
 
@@ -445,24 +460,32 @@ export default function CrmCustomersClient() {
   }, [page, debouncedQ, ownerFilter, sectorFilter, integrationFilter, kasaFilter, kunyeFilter, fazFilter, pageSize]);
 
   const ownerOptions = useMemo(
-    () => uniqueOwnerOptions([...filterOptions.ownerOptions, BUSINESS_PARTNER_RESPONSIBLE, HAVUZ_ACCOUNT_NAME]),
+    () => uniqueOwnerOptions([...filterOptions.ownerOptions, HAVUZ_ACCOUNT_NAME]),
     [filterOptions.ownerOptions]
   );
 
   const sectorOptions = useMemo(
     () =>
       uniqueOptions([
-        ...SECTOR_PRESET_OPTIONS,
+        ...filterOptions.sectorCatalogOptions.map((item) => item.value),
         ...filterOptions.sectorOptions,
         ...rows.map((r) => r.sektor),
         ...stats.bySector.map((r) => r.label),
       ]),
-    [filterOptions.sectorOptions, rows, stats.bySector]
+    [filterOptions.sectorCatalogOptions, filterOptions.sectorOptions, rows, stats.bySector]
   );
 
   const integrationOptions = useMemo(
-    () => uniqueOptions([...filterOptions.integrationOptions, ...rows.map((r) => r.entegrasyon_tipi)]),
-    [filterOptions.integrationOptions, rows]
+    () => uniqueOptions([...filterOptions.integrationCatalogOptions.map((item) => item.value), ...filterOptions.integrationOptions, ...rows.map((r) => r.entegrasyon_tipi)]),
+    [filterOptions.integrationCatalogOptions, filterOptions.integrationOptions, rows]
+  );
+  const sectorFormOptions = useMemo(
+    () => uniqueOptions([...filterOptions.sectorCatalogOptions.map((item) => item.value), sektor]),
+    [filterOptions.sectorCatalogOptions, sektor],
+  );
+  const integrationFormOptions = useMemo(
+    () => uniqueOptions([...filterOptions.integrationCatalogOptions.map((item) => item.value), entegrasyonTipi]),
+    [filterOptions.integrationCatalogOptions, entegrasyonTipi],
   );
 
   const kasaOptions = useMemo(
@@ -470,12 +493,7 @@ export default function CrmCustomersClient() {
     [filterOptions.kasaOptions, rows]
   );
 
-  const visibleRows = useMemo(() => rows.filter((r) => {
-    const segmentation = deriveCustomerSegmentation(r.aktif_faz_no);
-    if (firmaDurumuFilter && segmentation.firmaDurumu !== firmaDurumuFilter) return false;
-    if (yonetimTipiFilter && segmentation.yonetimTipi !== yonetimTipiFilter) return false;
-    return true;
-  }), [rows, firmaDurumuFilter, yonetimTipiFilter]);
+  const visibleRows = rows;
 
   const visibleTotal = visibleRows.length;
 
@@ -570,8 +588,6 @@ export default function CrmCustomersClient() {
     if (fazFilter) tokens.push({ key: 'phase', label: `Faz: ${fazFilter}`, onClear: () => setFazFilter('') });
     if (sectorFilter) tokens.push({ key: 'sector', label: `Sektör: ${sectorFilter}`, onClear: () => setSectorFilter('') });
     if (kasaFilter) tokens.push({ key: 'kasa', label: `Kasa Firması: ${kasaFilter}`, onClear: () => setKasaFilter('') });
-    if (firmaDurumuFilter) tokens.push({ key: 'firma', label: `Firma Durumu: ${firmaDurumuFilter}`, onClear: () => setFirmaDurumuFilter('') });
-    if (yonetimTipiFilter) tokens.push({ key: 'yonetim', label: `Yönetim Tipi: ${yonetimTipiFilter}`, onClear: () => setYonetimTipiFilter('') });
     if (integrationFilter) {
       tokens.push({
         key: 'integration',
@@ -580,29 +596,39 @@ export default function CrmCustomersClient() {
       });
     }
     return tokens;
-  }, [actionMode, currentAction.title, debouncedQ, ownerFilter, kunyeFilter, fazFilter, sectorFilter, kasaFilter, firmaDurumuFilter, yonetimTipiFilter, integrationFilter]);
+  }, [actionMode, currentAction.title, debouncedQ, ownerFilter, kunyeFilter, fazFilter, sectorFilter, kasaFilter, integrationFilter]);
 
   const resetForm = () => {
     setEditingId(null);
     setMusteri('');
     setSektor('');
     setSorumlu(displayMeName || HAVUZ_ACCOUNT_NAME);
+    setOwnerUserId(me?.id ?? '');
     setEntegrasyonTipi('');
+    setSatisOlasiligi('');
+    setCustomerType('standard');
+    setPipelinePolicy('phase_required');
   };
 
   const openCreate = () => {
+    if (!canCreateCustomers) return;
     setMode('create');
     resetForm();
     setOpen(true);
   };
 
   const openEdit = (row: CrmRow) => {
+    if (!canEditCustomer(row)) return;
     setMode('edit');
     setEditingId(row.musteri_id);
     setMusteri(row.musteri ?? '');
     setSektor(row.sektor ?? '');
     setSorumlu(row.sorumlu ?? displayMeName ?? HAVUZ_ACCOUNT_NAME);
+    setOwnerUserId(row.owner_user_id ?? '');
     setEntegrasyonTipi(row.entegrasyon_tipi ?? '');
+    setSatisOlasiligi(row.satis_olasiligi ?? '');
+    setCustomerType(row.customer_type ?? 'standard');
+    setPipelinePolicy(row.pipeline_policy ?? 'phase_required');
     setMsg(null);
     setOpen(true);
   };
@@ -619,7 +645,11 @@ export default function CrmCustomersClient() {
         musteri: musteri.trim(),
         sektor: sektor.trim() || null,
         sorumlu: sorumlu.trim(),
+        owner_user_id: ownerUserId || null,
         entegrasyon_tipi: entegrasyonTipi.trim() || null,
+        satis_olasiligi: satisOlasiligi.trim() || null,
+        customer_type: customerType,
+        pipeline_policy: pipelinePolicy,
       };
       if (mode === 'edit') body.musteriId = editingId;
 
@@ -660,8 +690,6 @@ export default function CrmCustomersClient() {
     setKasaFilter('');
     setKunyeFilter('');
     setFazFilter('');
-    setFirmaDurumuFilter('');
-    setYonetimTipiFilter('');
   }
 
   function applyPhaseBucket(filterValue: string, actionKey: ActionModeKey) {
@@ -1203,26 +1231,6 @@ export default function CrmCustomersClient() {
             </label>
 
             <label className="field">
-              <span className="field-label">Firma Durumu</span>
-              <select className="select" value={firmaDurumuFilter} onChange={(e) => setFirmaDurumuFilter(e.target.value)}>
-                <option value="">Tüm durumlar</option>
-                {FIRMA_DURUMU_OPTIONS.map((name) => (
-                  <option key={name} value={name}>{name}</option>
-                ))}
-              </select>
-            </label>
-
-            <label className="field">
-              <span className="field-label">Yönetim Tipi</span>
-              <select className="select" value={yonetimTipiFilter} onChange={(e) => setYonetimTipiFilter(e.target.value)}>
-                <option value="">Tüm tipler</option>
-                {YONETIM_TIPI_OPTIONS.map((name) => (
-                  <option key={name} value={name}>{name}</option>
-                ))}
-              </select>
-            </label>
-
-            <label className="field">
               <span className="field-label">Sayfa boyutu</span>
               <select className="select" value={String(pageSize)} onChange={(e) => setPageSize(Number(e.target.value))}>
                 {PAGE_SIZE_OPTIONS.map((size) => (
@@ -1257,6 +1265,9 @@ export default function CrmCustomersClient() {
                 <button type="button" onClick={item.onClear}>×</button>
               </span>
             ))}
+            <button type="button" onClick={clearFilters} style={{ minHeight: 36, padding: '0 12px', border: '1px solid var(--border)', borderRadius: 10, background: 'var(--surface)', color: 'var(--text-2)', fontWeight: 800, cursor: 'pointer' }}>
+              Tüm filtreleri temizle
+            </button>
           </div>
         </section>
       ) : null}
@@ -1269,9 +1280,9 @@ export default function CrmCustomersClient() {
             <div className="section-kicker">Execution Layer</div>
             <div className="section-title">Müşteri listesi</div>
           </div>
-          <button className="primary" onClick={openCreate}>
+          {canCreateCustomers ? <button className="primary" onClick={openCreate}>
             <Plus size={16} strokeWidth={1.7} /> Müşteri ekle
-          </button>
+          </button> : null}
         </div>
 
         <div className="table-wrap">
@@ -1342,7 +1353,7 @@ export default function CrmCustomersClient() {
                   </td>
                   <td>{r.entegrasyon_tipi ?? '-'}</td>
                   <td>
-                    <button type="button" className="ghost" onClick={() => openEdit(r)}>Düzenle</button>
+                    {canEditCustomer(r) ? <button type="button" className="ghost" onClick={() => openEdit(r)}>Düzenle</button> : null}
                   </td>
                 </tr>
               ))}
@@ -1386,7 +1397,7 @@ export default function CrmCustomersClient() {
                 <span className="label">Sektör</span>
                 <select className="select" value={sektor} onChange={(e) => setSektor(e.target.value)}>
                   <option value="">Seçiniz</option>
-                  {SECTOR_PRESET_OPTIONS.map((name) => (
+                  {sectorFormOptions.map((name) => (
                     <option key={name} value={name}>{name}</option>
                   ))}
                 </select>
@@ -1394,10 +1405,20 @@ export default function CrmCustomersClient() {
 
               <label className="field">
                 <span className="label">Sorumlusu</span>
-                <select className="select" value={sorumlu} onChange={(e) => setSorumlu(e.target.value)}>
-                  <option value="">Seçiniz</option>
-                  {ownerOptions.map((name) => (
-                    <option key={name} value={name}>{name}</option>
+                <select
+                  className="select"
+                  value={ownerUserId}
+                  onChange={(e) => {
+                    const nextId = e.target.value;
+                    const nextOwner = ownerDirectoryOptions.find((user) => user.id === nextId);
+                    setOwnerUserId(nextId);
+                    setSorumlu(nextOwner ? String(nextOwner.full_name ?? nextOwner.email) : HAVUZ_ACCOUNT_NAME);
+                  }}
+                  disabled={!canAssignCustomers}
+                >
+                  {canAssignCustomers ? <option value="">Havuz / Atanmamış</option> : null}
+                  {ownerDirectoryOptions.map((user) => (
+                    <option key={user.id} value={user.id}>{user.full_name} · {user.email}</option>
                   ))}
                 </select>
               </label>
@@ -1405,11 +1426,43 @@ export default function CrmCustomersClient() {
               <label className="field">
                 <span className="label">Entegrasyon</span>
                 <select className="select" value={entegrasyonTipi} onChange={(e) => setEntegrasyonTipi(e.target.value)}>
-                  {ENTEGRASYON_OPTIONS.map((name) => (
+                  <option value="">Seçiniz</option>
+                  {integrationFormOptions.map((name) => (
                     <option key={name || 'empty'} value={name}>{name || 'Seçiniz'}</option>
                   ))}
                 </select>
               </label>
+
+              <label className="field">
+                <span className="label">Satış Olasılığı</span>
+                <select className="select" value={satisOlasiligi} onChange={(e) => setSatisOlasiligi(e.target.value)}>
+                  <option value="">Seçiniz</option>
+                  {filterOptions.salesProbabilityOptions.map((item) => (
+                    <option key={item.value} value={item.value}>{item.label}</option>
+                  ))}
+                </select>
+              </label>
+
+              {canManageClassification ? (
+                <>
+                  <label className="field">
+                    <span className="label">Müşteri Tipi</span>
+                    <select className="select" value={customerType} onChange={(e) => setCustomerType(e.target.value)}>
+                      {filterOptions.customerTypeOptions.map((item) => (
+                        <option key={item.value} value={item.value}>{item.label}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span className="label">Pipeline Politikası</span>
+                    <select className="select" value={pipelinePolicy} onChange={(e) => setPipelinePolicy(e.target.value)}>
+                      {filterOptions.pipelinePolicyOptions.map((item) => (
+                        <option key={item.value} value={item.value}>{item.label}</option>
+                      ))}
+                    </select>
+                  </label>
+                </>
+              ) : null}
             </div>
 
             {msg ? <div className="message">{msg}</div> : null}

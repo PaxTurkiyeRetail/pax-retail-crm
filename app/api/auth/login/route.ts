@@ -1,30 +1,54 @@
+import crypto from 'crypto';
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { createSession, verifyUserCredentials } from '@/lib/auth';
 import { shouldUseSecureAuthCookie } from '@/lib/auth-cookie';
+import { ApiError, apiErrorResponse, parseJsonBody } from '@/lib/http/api-error';
+import { clearRateLimit, enforceRateLimit } from '@/lib/security/rate-limit';
+import { tryRecordAuditEvent } from '@/lib/audit';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 const AUTH_COOKIE_NAME = process.env.AUTH_COOKIE_NAME ?? 'crm_session';
+const loginSchema = z.object({
+  email: z.string().trim().toLowerCase().email().max(254),
+  password: z.string().min(1).max(256),
+}).strict();
+
+function identityHash(email: string) {
+  return crypto.createHash('sha256').update(email).digest('hex');
+}
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
-    const email = String(body?.email ?? '').trim();
-    const password = String(body?.password ?? '');
-
-    if (!email || !password) {
-      return NextResponse.json({ error: 'Email ve şifre zorunludur.' }, { status: 400 });
+    if (process.env.AUTH_LOCAL_LOGIN_ENABLED === 'false') {
+      throw new ApiError('LOCAL_LOGIN_DISABLED', 'Parola ile giriş devre dışı; kurumsal hesabınızı kullanın.', 403);
     }
+    const { email, password } = await parseJsonBody(req, loginSchema);
+    await enforceRateLimit({ request: req, action: 'auth.login', identity: email, limit: 5, windowSeconds: 15 * 60 });
 
     const user = await verifyUserCredentials(email, password);
     if (!user) {
-      return NextResponse.json({ error: 'Geçersiz email veya şifre.' }, { status: 401 });
+      await tryRecordAuditEvent({
+        action: 'auth.login.failed',
+        resourceType: 'auth_identity',
+        resourceId: identityHash(email),
+      });
+      throw new ApiError('INVALID_CREDENTIALS', 'Geçersiz e-posta veya şifre.', 401);
     }
 
     const { sessionToken, expiresAt } = await createSession(user.id);
-    const response = NextResponse.json({ ok: true });
+    await clearRateLimit({ request: req, action: 'auth.login', identity: email });
+    await tryRecordAuditEvent({
+      actorId: user.id,
+      actorEmail: user.email,
+      action: 'auth.login.succeeded',
+      resourceType: 'user_session',
+      resourceId: user.id,
+    });
 
+    const response = NextResponse.json({ ok: true });
     response.cookies.set(AUTH_COOKIE_NAME, sessionToken, {
       httpOnly: true,
       sameSite: 'lax',
@@ -33,10 +57,8 @@ export async function POST(req: Request) {
       path: '/',
       priority: 'high',
     });
-
     return response;
   } catch (error) {
-    console.error('Login error:', error);
-    return NextResponse.json({ error: 'Giriş sırasında hata oluştu.' }, { status: 500 });
+    return apiErrorResponse(error, 'Giriş sırasında hata oluştu.');
   }
 }

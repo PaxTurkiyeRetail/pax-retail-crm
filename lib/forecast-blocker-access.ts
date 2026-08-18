@@ -1,13 +1,13 @@
 import 'server-only';
 import { db } from '@/lib/db';
-import { canSeeAllForecasts, samePersonName } from '@/lib/forecast-shared';
-import type { AllowedUser } from '@/lib/authz';
+import { userHasPermission, type AllowedUser } from '@/lib/authz';
 
 export type CustomerBlockerAccessRow = {
   customer_id: string;
   musteri: string;
   sektor: string | null;
   sorumlu: string | null;
+  owner_user_id: string | null;
 };
 
 export type CustomerForecastAccessRow = {
@@ -31,7 +31,8 @@ export async function getCustomerForBlockerOrThrow(
         m.id::text as customer_id,
         m.musteri,
         m.sektor,
-        m.sorumlu
+        m.sorumlu,
+        m.owner_user_id::text
       from public.musteriler m
       where m.id = $1::uuid
       limit 1
@@ -42,7 +43,8 @@ export async function getCustomerForBlockerOrThrow(
   const row = result.rows[0] as CustomerBlockerAccessRow | undefined;
   if (!row) throw Object.assign(new Error('Müşteri kaydı bulunamadı.'), { status: 404 });
 
-  if (!canSeeAllForecasts(me.role) && !samePersonName(row.sorumlu, me.full_name)) {
+  if (!userHasPermission(me, 'forecast.write.any')
+      && (!userHasPermission(me, 'forecast.write.own') || row.owner_user_id !== me.id)) {
     throw Object.assign(new Error('Bu müşteri sizin portföyünüzde değil.'), { status: 403 });
   }
 

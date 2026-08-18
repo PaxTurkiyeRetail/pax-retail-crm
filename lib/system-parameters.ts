@@ -8,6 +8,7 @@ export type SystemParameter = {
   value: string;
   sort_order: number;
   is_active: boolean;
+  version?: number;
   meta?: Record<string, unknown>;
 };
 
@@ -352,14 +353,61 @@ export const PHASE_PARAMETER_GROUPS = [
   },
 ] as const;
 
-export const CRM_ACTIVITY_PARAMETER_GROUPS = [
+export const CRM_MASTER_DATA_PARAMETER_GROUPS = [
   {
-    key: "crm_phase_optional_responsibles",
+    key: "crm_sector",
     module: "CRM",
-    category: "Aktivite Akışı",
-    title: "Faz İstemeyecek Sorumlular",
-    description:
-      "Bu listede yer alan sorumlulara bağlı müşterilerde aktivite eklerken faz istenmez ve kayıt pipeline/faz değiştirmez.",
+    category: "Ana Veri",
+    title: "Sektörler",
+    description: "Müşteri oluşturma, düzenleme ve filtrelemede kullanılan sektör kataloğu.",
+    type: "text",
+  },
+  {
+    key: "crm_integration_type",
+    module: "CRM",
+    category: "Ana Veri",
+    title: "Entegrasyon Tipleri",
+    description: "Müşterilerde seçilebilen entegrasyon yapıları.",
+    type: "text",
+  },
+  {
+    key: "crm_sales_probability",
+    module: "CRM",
+    category: "Ana Veri",
+    title: "Satış Olasılıkları",
+    description: "Müşteri ve fırsat kayıtlarında kullanılabilen satış olasılığı değerleri.",
+    type: "text",
+  },
+  {
+    key: "crm_customer_type",
+    module: "CRM",
+    category: "Müşteri Politikası",
+    title: "Müşteri Tipleri",
+    description: "Sektörden bağımsız müşteri iş akışı sınıflandırması.",
+    type: "text",
+  },
+  {
+    key: "crm_pipeline_policy",
+    module: "CRM",
+    category: "Müşteri Politikası",
+    title: "Pipeline Politikaları",
+    description: "Müşterinin aktivite sırasında faz kullanıp kullanmayacağını açıkça belirler.",
+    type: "text",
+  },
+  {
+    key: "quote_probability",
+    module: "Teklif",
+    category: "Ticari Politika",
+    title: "Teklif Olasılıkları",
+    description: "Teklif oluşturma ve düzenlemede kullanılabilen yüzde değerleri.",
+    type: "text",
+  },
+  {
+    key: "activity_waiting_party",
+    module: "CRM",
+    category: "Aktivite Politikası",
+    title: "Bekleyen Taraflar",
+    description: "Aktivite kaydında sorumluluğun kimde beklediğini belirleyen kanonik liste.",
     type: "text",
   },
 ] as const;
@@ -384,6 +432,22 @@ export const FORECAST_PARAMETER_GROUPS = [
 ] as const;
 
 export const SYSTEM_BEHAVIOR_PARAMETER_GROUPS = [
+  {
+    key: "system_oidc_enabled",
+    module: "Kimlik ve Erişim",
+    category: "Active Directory / OIDC",
+    title: "Kurumsal Giriş",
+    description: "IT bilgileri tamamlandıktan sonra Active Directory / OIDC girişini açar. Şimdilik kapalı tutulmalıdır.",
+    type: "boolean",
+  },
+  {
+    key: "system_oidc_group_role_sync_enabled",
+    module: "Kimlik ve Erişim",
+    category: "Active Directory / OIDC",
+    title: "AD Grup-Rol Senkronizasyonu",
+    description: "AD grup üyeliklerinin CRM rollerine uygulanmasını açar. Eşlemeler doğrulanmadan etkinleştirilmemelidir.",
+    type: "boolean",
+  },
   {
     key: "system_jira_enabled",
     module: "Entegrasyonlar",
@@ -430,14 +494,10 @@ export const SYSTEM_BEHAVIOR_PARAMETER_GROUPS = [
 export const ALL_PARAMETER_GROUPS = [
   ...KUNYE_PARAMETER_GROUPS,
   ...PHASE_PARAMETER_GROUPS,
-  ...CRM_ACTIVITY_PARAMETER_GROUPS,
+  ...CRM_MASTER_DATA_PARAMETER_GROUPS,
   ...FORECAST_PARAMETER_GROUPS,
   ...SYSTEM_BEHAVIOR_PARAMETER_GROUPS,
 ] as const;
-
-export const DEFAULT_CRM_ACTIVITY_OPTIONS: Record<string, ParameterOption[]> = {
-  crm_phase_optional_responsibles: [],
-};
 
 export const DEFAULT_FORECAST_OPTIONS: Record<string, ParameterOption[]> = {
   forecast_sales_channel: [
@@ -452,10 +512,56 @@ export const DEFAULT_FORECAST_OPTIONS: Record<string, ParameterOption[]> = {
   ],
 };
 
+export const DEFAULT_CRM_MASTER_DATA_OPTIONS: Record<string, ParameterOption[]> = {
+  crm_sector: [
+    "Elektronik & Beyaz Eşya",
+    "Ev & Yaşam / Yapı Market",
+    "FMCG Dağıtım Kanalları",
+    "Gıda Perakendesi",
+    "Hazır Giyim",
+    "Lojistik & Kargo",
+    "Yeme-İçme",
+    "BANKA",
+    "VERTICAL",
+    "İŞ ORTAĞI",
+  ].map((value, index) => ({ label: value, value, sortOrder: (index + 1) * 10 })),
+  crm_integration_type: ["A2A", "D2D", "D2D+A2A"].map((value, index) => ({
+    label: value,
+    value,
+    sortOrder: (index + 1) * 10,
+  })),
+  crm_sales_probability: ["Düşük", "Orta", "Yüksek"].map((value, index) => ({
+    label: value,
+    value,
+    sortOrder: (index + 1) * 10,
+  })),
+  crm_customer_type: [
+    { label: "Standart Müşteri", value: "standard", sortOrder: 10 },
+    { label: "İş Ortağı", value: "business_partner", sortOrder: 20 },
+  ],
+  crm_pipeline_policy: [
+    { label: "Faz Zorunlu", value: "phase_required", sortOrder: 10 },
+    { label: "Yalnız Aktivite / Fazsız", value: "phase_optional", sortOrder: 20 },
+  ],
+  quote_probability: [10, 30, 60, 90].map((value, index) => ({
+    label: `%${value}`,
+    value: String(value),
+    sortOrder: (index + 1) * 10,
+  })),
+  activity_waiting_party: [
+    "Müşteri",
+    "Müşteri IT",
+    "Müşteri (Finance Owner)",
+    "PAX RS(Support)",
+  ].map((value, index) => ({ label: value, value, sortOrder: (index + 1) * 10 })),
+};
+
 export const DEFAULT_SYSTEM_BEHAVIOR_OPTIONS: Record<
   string,
   ParameterOption[]
 > = {
+  system_oidc_enabled: [{ label: "Kapalı", value: "false", sortOrder: 10 }],
+  system_oidc_group_role_sync_enabled: [{ label: "Kapalı", value: "false", sortOrder: 10 }],
   system_jira_enabled: [{ label: "Aktif", value: "true", sortOrder: 10 }],
   system_jira_weekly_pptx_enabled: [
     { label: "Aktif", value: "true", sortOrder: 10 },
@@ -469,7 +575,7 @@ export const DEFAULT_SYSTEM_BEHAVIOR_OPTIONS: Record<
 
 export const DEFAULT_PARAMETER_OPTIONS: Record<string, ParameterOption[]> = {
   ...DEFAULT_KUNYE_OPTIONS,
-  ...DEFAULT_CRM_ACTIVITY_OPTIONS,
+  ...DEFAULT_CRM_MASTER_DATA_OPTIONS,
   ...DEFAULT_FORECAST_OPTIONS,
   ...DEFAULT_SYSTEM_BEHAVIOR_OPTIONS,
 };
@@ -498,52 +604,6 @@ export function fallbackKunyeOptions() {
   ) as Record<string, Array<{ label: string; value: string }>>;
 }
 
-export async function ensureSystemParametersTable() {
-  await db.query(`
-    create table if not exists public.system_parameters (
-      id uuid primary key default gen_random_uuid(),
-      group_key text not null,
-      param_key text not null,
-      label text not null,
-      value text not null,
-      sort_order integer not null default 0,
-      is_active boolean not null default true,
-      meta jsonb not null default '{}'::jsonb,
-      created_at timestamptz not null default now(),
-      updated_at timestamptz not null default now(),
-      unique (group_key, param_key)
-    )
-  `);
-  await db.query(
-    `create index if not exists idx_system_parameters_group_active_sort on public.system_parameters (group_key, is_active, sort_order, label)`,
-  );
-}
-
-export async function seedDefaultKunyeParameters() {
-  await ensureSystemParametersTable();
-  for (const [groupKey, values] of Object.entries(DEFAULT_PARAMETER_OPTIONS)) {
-    // CRM aktivite faz muafiyeti sadece DB/Parametreler ekranından yönetilir.
-    // Burada default Seda/Cem seed edilirse kullanıcı silince tekrar aktif oluşur.
-    if (groupKey === "crm_phase_optional_responsibles") continue;
-    for (const item of values) {
-      await db.query(
-        `
-          insert into public.system_parameters (group_key, param_key, label, value, sort_order, is_active, meta)
-          values ($1, $2, $3, $4, $5, true, jsonb_build_object('source', 'default_seed'))
-          on conflict (group_key, param_key) do nothing
-        `,
-        [
-          groupKey,
-          slugifyParamKey(item.value),
-          item.label,
-          item.value,
-          item.sortOrder ?? 0,
-        ],
-      );
-    }
-  }
-}
-
 export async function getActiveParametersByGroups(groupKeys: string[]) {
   if (!groupKeys.length) return [] as SystemParameter[];
   const result = await db.query(
@@ -559,9 +619,82 @@ export async function getActiveParametersByGroups(groupKeys: string[]) {
   return result.rows as SystemParameter[];
 }
 
+export type ParameterOptionsByGroup = Record<string, Array<{ label: string; value: string }>>;
+
+export const PARAMETER_GROUPS_REQUIRING_ACTIVE_VALUE = new Set([
+  "crm_sector",
+  "crm_integration_type",
+  "crm_customer_type",
+  "crm_pipeline_policy",
+  "quote_probability",
+  "activity_waiting_party",
+  "forecast_sales_channel",
+  "forecast_probability",
+  "system_page_size",
+]);
+
+function fallbackOptionsForGroups(groupKeys: readonly string[]): ParameterOptionsByGroup {
+  return Object.fromEntries(
+    groupKeys.map((groupKey) => [
+      groupKey,
+      (DEFAULT_PARAMETER_OPTIONS[groupKey] ?? []).map((item) => ({ label: item.label, value: item.value })),
+    ]),
+  );
+}
+
+export async function getParameterOptionsByGroups(groupKeys: readonly string[]) {
+  const keys = Array.from(new Set(groupKeys.map((key) => String(key).trim()).filter(Boolean)));
+  if (!keys.length) return {} as ParameterOptionsByGroup;
+
+  try {
+    const rows = await getActiveParametersByGroups(keys);
+    const grouped: ParameterOptionsByGroup = Object.fromEntries(keys.map((key) => [key, []]));
+    for (const row of rows) grouped[row.group_key]?.push({ label: row.label, value: row.value });
+    const fallback = fallbackOptionsForGroups(keys);
+    for (const key of keys) {
+      if (!grouped[key]?.length) grouped[key] = fallback[key] ?? [];
+    }
+    return grouped;
+  } catch {
+    // Migration öncesi geriye uyum: uygulama eski sürümle aynı kanonik
+    // değerlerle çalışır. Migration sonrası DB tek gerçek kaynak olur.
+    return fallbackOptionsForGroups(keys);
+  }
+}
+
+export async function getCrmMasterDataOptions() {
+  return getParameterOptionsByGroups(Object.keys(DEFAULT_CRM_MASTER_DATA_OPTIONS));
+}
+
+export async function assertActiveParameterValue(
+  groupKey: string,
+  value: string | null | undefined,
+  options: { optional: true },
+): Promise<string | null>;
+export async function assertActiveParameterValue(
+  groupKey: string,
+  value: string | null | undefined,
+  options?: { optional?: false },
+): Promise<string>;
+export async function assertActiveParameterValue(
+  groupKey: string,
+  value: string | null | undefined,
+  options?: { optional?: boolean },
+) {
+  const normalized = String(value ?? "").trim();
+  if (!normalized && options?.optional) return null;
+  if (!normalized) throw Object.assign(new Error("Parametre değeri zorunlu."), { status: 400 });
+
+  const grouped = await getParameterOptionsByGroups([groupKey]);
+  const allowed = new Set((grouped[groupKey] ?? []).map((item) => item.value));
+  if (!allowed.has(normalized)) {
+    throw Object.assign(new Error(`Geçersiz veya pasif parametre değeri: ${groupKey}`), { status: 400 });
+  }
+  return normalized;
+}
+
 export async function getKunyeOptions() {
   try {
-    await ensureSystemParametersTable();
     const groupKeys = Object.keys(DEFAULT_KUNYE_OPTIONS);
     const rows = await getActiveParametersByGroups(groupKeys);
     const grouped: Record<string, Array<{ label: string; value: string }>> = {};
@@ -570,6 +703,10 @@ export async function getKunyeOptions() {
     for (const row of rows) {
       if (!grouped[row.group_key]) grouped[row.group_key] = [];
       grouped[row.group_key].push({ label: row.label, value: row.value });
+    }
+    const fallback = fallbackKunyeOptions();
+    for (const key of groupKeys) {
+      if (!grouped[key]?.length) grouped[key] = fallback[key] ?? [];
     }
     return grouped;
   } catch {
@@ -587,24 +724,6 @@ export type PhaseParameterRow = {
   is_active: boolean;
   sort_order: number;
 };
-
-export async function ensureBusinessPartnerPhaseTable() {
-  await db.query(`
-    create table if not exists public.is_ortagi_faz_tanimlari (
-      id uuid primary key default gen_random_uuid(),
-      faz_no integer not null unique,
-      asama_adi text not null,
-      owner text null,
-      is_active boolean not null default true,
-      sort_order integer not null default 0,
-      created_at timestamptz not null default now(),
-      updated_at timestamptz not null default now()
-    )
-  `);
-  await db.query(
-    `create index if not exists idx_is_ortagi_faz_tanimlari_active_sort on public.is_ortagi_faz_tanimlari (is_active, sort_order, faz_no)`,
-  );
-}
 
 function mapPhaseRow(
   row: any,
@@ -625,7 +744,6 @@ function mapPhaseRow(
 }
 
 export async function listPhaseParameters() {
-  await ensureBusinessPartnerPhaseTable();
   const [customerPhases, partnerPhases] = await Promise.all([
     db
       .query(
@@ -669,7 +787,6 @@ export async function createPhaseParameter(input: {
     throw Object.assign(new Error("Faz adı zorunlu."), { status: 400 });
   const owner = String(input.owner ?? "").trim() || null;
   if (input.groupKey === "is_ortagi_faz_tanimlari") {
-    await ensureBusinessPartnerPhaseTable();
     const result = await db.query(
       `
       insert into public.is_ortagi_faz_tanimlari (faz_no, asama_adi, owner, is_active, sort_order)
@@ -720,7 +837,6 @@ export async function updatePhaseParameter(input: {
   const owner =
     typeof input.owner === "string" ? input.owner.trim() || null : undefined;
   if (input.groupKey === "is_ortagi_faz_tanimlari") {
-    await ensureBusinessPartnerPhaseTable();
     const result = await db.query(
       `
       update public.is_ortagi_faz_tanimlari
@@ -763,22 +879,19 @@ export async function deletePhaseParameter(input: {
 }) {
   const fazNo = Number(input.fazNo);
   if (input.groupKey === "is_ortagi_faz_tanimlari") {
-    await ensureBusinessPartnerPhaseTable();
     const result = await db.query(
-      "delete from public.is_ortagi_faz_tanimlari where faz_no = $1 returning faz_no",
+      "update public.is_ortagi_faz_tanimlari set is_active = false, updated_at = now() where faz_no = $1 returning faz_no",
       [fazNo],
     );
     return (result.rowCount ?? 0) > 0;
   }
-  const result = await db.query(
-    "delete from public.faz_tanimlari where faz_no = $1 returning faz_no",
-    [fazNo],
+  throw Object.assign(
+    new Error('Müşteri faz tanımları geçmiş kayıtları korumak için silinemez; adını güncelleyin.'),
+    { status: 409 },
   );
-  return (result.rowCount ?? 0) > 0;
 }
 
 export async function listPartnerPhaseOptions() {
-  await ensureBusinessPartnerPhaseTable();
   const result = await db.query(`
     select faz_no, asama_adi, owner
     from public.is_ortagi_faz_tanimlari
@@ -788,29 +901,10 @@ export async function listPartnerPhaseOptions() {
   return result.rows;
 }
 
-export async function listCrmResponsibleOptions() {
-  const result = await db
-    .query(
-      `
-    select distinct trim(sorumlu) as value
-    from public.musteriler
-    where sorumlu is not null
-      and trim(sorumlu) <> ''
-    order by trim(sorumlu) asc
-  `,
-    )
-    .catch(() => ({ rows: [] }));
-  return ((result as any).rows ?? [])
-    .map((row: any) => String(row.value ?? "").trim())
-    .filter(Boolean)
-    .map((value: string) => ({ label: value, value }));
-}
-
 export async function listSystemParameters() {
-  await seedDefaultKunyeParameters();
   const result = await db.query(
     `
-      select id, group_key, param_key, label, value, sort_order, is_active, meta
+      select id, group_key, param_key, label, value, sort_order, is_active, version, meta
       from public.system_parameters
       where group_key = any($1::text[])
       order by group_key asc, sort_order asc, label asc
@@ -820,13 +914,20 @@ export async function listSystemParameters() {
   return result.rows as SystemParameter[];
 }
 
+export async function getSystemParameterGroupKey(id: string) {
+  const result = await db.query(
+    "select group_key from public.system_parameters where id = $1 limit 1",
+    [id],
+  );
+  return result.rows[0]?.group_key ? String(result.rows[0].group_key) : null;
+}
+
 export async function createSystemParameter(input: {
   groupKey: string;
   label: string;
   value?: string;
   sortOrder?: number;
 }) {
-  await ensureSystemParametersTable();
   const label = input.label.trim();
   const value = (input.value ?? input.label).trim();
   const paramKey = slugifyParamKey(value);
@@ -835,7 +936,7 @@ export async function createSystemParameter(input: {
       insert into public.system_parameters (group_key, param_key, label, value, sort_order, is_active, meta)
       values ($1, $2, $3, $4, $5, true, jsonb_build_object('source', 'admin'))
       on conflict (group_key, param_key) do nothing
-      returning id, group_key, param_key, label, value, sort_order, is_active, meta
+      returning id, group_key, param_key, label, value, sort_order, is_active, version, meta
     `,
     [input.groupKey, paramKey, label, value, Number(input.sortOrder ?? 999)],
   );
@@ -855,7 +956,6 @@ export async function getSystemParameterValue(
   fallback: string,
 ) {
   try {
-    await ensureSystemParametersTable();
     const result = await db.query(
       `
         select value
@@ -874,7 +974,7 @@ export async function getSystemParameterValue(
 
 export async function getSystemParameterBoolean(
   groupKey: string,
-  fallback = true,
+  fallback = false,
 ) {
   const raw = (
     await getSystemParameterValue(groupKey, fallback ? "true" : "false")
@@ -890,33 +990,81 @@ export async function updateSystemParameter(input: {
   value?: string;
   sortOrder?: number;
   isActive?: boolean;
+  updatedByUserId?: string | null;
+  expectedVersion?: number;
 }) {
+  if (input.isActive === false) {
+    await assertParameterCanBeDeactivated(input.id);
+  }
+  const currentResult = await db.query(
+    "select value, version from public.system_parameters where id = $1",
+    [input.id],
+  );
+  const currentRow = currentResult.rows[0] as { value?: string; version?: number } | undefined;
+  if (!currentRow) return undefined;
+  if (input.expectedVersion !== undefined && Number(currentRow.version) !== input.expectedVersion) {
+    throw Object.assign(new Error("Parametre başka bir kullanıcı tarafından güncellendi. Listeyi yenileyip tekrar deneyin."), { status: 409 });
+  }
+  if (input.value !== undefined) {
+    const currentValue = String(currentRow.value ?? "");
+    if (input.value.trim() !== currentValue) {
+      throw Object.assign(
+        new Error("Kanonik parametre kodu değiştirilemez. Yeni bir değer oluşturup eski değeri pasife alın."),
+        { status: 409 },
+      );
+    }
+  }
   const result = await db.query(
     `
       update public.system_parameters
       set label = coalesce($2, label),
-          value = coalesce($3, value),
-          sort_order = coalesce($4, sort_order),
-          is_active = coalesce($5, is_active),
+          value = value,
+          sort_order = coalesce($3, sort_order),
+          is_active = coalesce($4, is_active),
+          version = version + 1,
+          updated_by_user_id = coalesce($5::uuid, updated_by_user_id),
           updated_at = now()
       where id = $1
-      returning id, group_key, param_key, label, value, sort_order, is_active, meta
+        and ($6::integer is null or version = $6)
+      returning id, group_key, param_key, label, value, sort_order, is_active, version, meta
     `,
     [
       input.id,
       input.label?.trim() || null,
-      input.value?.trim() || null,
       input.sortOrder ?? null,
       typeof input.isActive === "boolean" ? input.isActive : null,
+      input.updatedByUserId ?? null,
+      input.expectedVersion ?? null,
     ],
   );
+  if (!result.rows[0] && input.expectedVersion !== undefined) {
+    throw Object.assign(new Error("Parametre başka bir kullanıcı tarafından güncellendi. Listeyi yenileyip tekrar deneyin."), { status: 409 });
+  }
   return result.rows[0] as SystemParameter | undefined;
 }
 
-export async function deleteSystemParameter(id: string) {
-  const result = await db.query(
-    "delete from public.system_parameters where id = $1 returning id",
+export async function assertParameterCanBeDeactivated(id: string) {
+  const rowResult = await db.query(
+    "select group_key, is_active from public.system_parameters where id = $1",
     [id],
+  );
+  const row = rowResult.rows[0] as { group_key?: string; is_active?: boolean } | undefined;
+  if (!row?.is_active || !row.group_key || !PARAMETER_GROUPS_REQUIRING_ACTIVE_VALUE.has(row.group_key)) return;
+
+  const countResult = await db.query(
+    "select count(*)::integer as count from public.system_parameters where group_key = $1 and is_active = true and id <> $2",
+    [row.group_key, id],
+  );
+  if (Number(countResult.rows[0]?.count ?? 0) < 1) {
+    throw Object.assign(new Error("Bu parametre grubunda en az bir aktif değer kalmalıdır."), { status: 409 });
+  }
+}
+
+export async function deleteSystemParameter(id: string, updatedByUserId?: string | null) {
+  await assertParameterCanBeDeactivated(id);
+  const result = await db.query(
+    "update public.system_parameters set is_active = false, version = version + 1, updated_by_user_id = coalesce($2::uuid, updated_by_user_id), updated_at = now() where id = $1 returning id",
+    [id, updatedByUserId ?? null],
   );
   return (result.rowCount ?? 0) > 0;
 }

@@ -1,4 +1,4 @@
-import { getActiveParametersByGroups, seedDefaultKunyeParameters } from '@/lib/system-parameters';
+import { getActiveParametersByGroups } from '@/lib/system-parameters';
 
 export const FORECAST_SALES_CHANNEL_GROUP = 'forecast_sales_channel';
 export const FORECAST_PROBABILITY_GROUP = 'forecast_probability';
@@ -74,7 +74,6 @@ export function samePersonName(a: unknown, b: unknown) {
 
 export async function getForecastParameterOptions() {
   try {
-    await seedDefaultKunyeParameters();
     const rows = await getActiveParametersByGroups([FORECAST_SALES_CHANNEL_GROUP, FORECAST_PROBABILITY_GROUP]);
     const channels = rows
       .filter((row) => row.group_key === FORECAST_SALES_CHANNEL_GROUP)

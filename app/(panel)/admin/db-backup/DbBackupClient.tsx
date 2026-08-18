@@ -5,7 +5,6 @@ import { useState } from 'react';
 type BackupResult = {
   ok: boolean;
   fileName?: string;
-  filePath?: string;
   message?: string;
 };
 
@@ -46,7 +45,7 @@ export default function DbBackupClient() {
           <div style={{ border: '1px solid var(--chip-green-bd)', background: 'var(--chip-green-bg)', color: 'var(--chip-green-color)', borderRadius: 14, padding: 14 }}>
             <strong>Yedek alındı.</strong>
             <div>Dosya: {result.fileName}</div>
-            <div>Konum: {result.filePath}</div>
+            <div>Dosya güvenli sunucu yedek dizinine kaydedildi.</div>
           </div>
         )}
 

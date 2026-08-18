@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireCrmAccessOrThrow } from '@/lib/authz';
+import { requireAnyPermissionOrThrow } from '@/lib/authz';
 import { db } from '@/lib/db';
 import { getCustomerForBlockerOrThrow } from '@/lib/forecast-blocker-access';
 
@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
   try {
-    const me = await requireCrmAccessOrThrow();
+    const me = await requireAnyPermissionOrThrow(['forecast.write.own', 'forecast.write.any']);
     const body = await request.json().catch(() => ({}));
     const customerId = String(body.customer_id ?? '').trim();
     await getCustomerForBlockerOrThrow(me, customerId);

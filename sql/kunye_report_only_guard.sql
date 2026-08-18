@@ -1,3 +1,5 @@
+-- DEVRE DIŞI / TARİHSEL DOSYA: kişi veya sektör adına göre erişim/işlem engeli yasaktır.
+/*
 -- BANKA / VERTICAL rapor müşterilerinde künye oluşturmayı DB seviyesinde engelle
 -- Sorumlu Seda Kesikoğlu veya Cem Koç ise musteri_kunye ve musteri_kunye_v2 insert/update bloklanır.
 
@@ -43,8 +45,7 @@ delete from public.musteri_kunye k
 using public.musteriler m
 where k.musteri_id = m.id
   and lower(trim(coalesce(m.sorumlu, ''))) in ('seda kesikoğlu', 'cem koç');
+*/
 
-delete from public.musteri_kunye_v2 k
-using public.musteriler m
-where k.musteri_id = m.id
-  and lower(trim(coalesce(m.sorumlu, ''))) in ('seda kesikoğlu', 'cem koç');
+-- Bilinçli no-op: tarihsel kişi/sektör kısıtı tekrar çalıştırılmamalıdır.
+select 'deprecated_person_sector_guard_disabled' as status;

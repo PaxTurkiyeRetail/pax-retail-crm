@@ -1,14 +1,12 @@
-import { requireCrmAccessOrThrow } from '@/lib/authz';
-import SystemRequirementStamp from '@/components/system/SystemRequirementStamp';
+import { requirePermissionOrThrow } from '@/lib/authz';
 import QuoteHeroDashboard from '@/components/quotes/QuoteHeroDashboard';
 import QuotePortfolioClient from '@/components/quotes/QuotePortfolioClient';
 
 export default async function QuotesPage() {
-  await requireCrmAccessOrThrow();
+  await requirePermissionOrThrow('quote.read');
 
   return (
     <div className="pax-page-container">
-      <SystemRequirementStamp pageKey="quotes" />
       <QuoteHeroDashboard />
       <QuotePortfolioClient />
     </div>

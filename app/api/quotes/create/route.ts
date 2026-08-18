@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
-import { requireCrmAccessOrThrow } from '@/lib/authz';
+import { requirePermissionOrThrow, userHasPermission } from '@/lib/authz';
 import { createPgAdminClient } from '@/lib/pg/admin';
-import { QUOTE_PROBABILITIES } from '@/lib/quotes/catalog';
 import { addDaysToIsoDate, buildQuoteSummaryText, ensureCustomerExistsOrThrow, getQuoteCatalog, getTurkeyTodayIso, isMissingRelationError, resolveQuoteLines, type QuoteLineInput } from '@/lib/quotes/service';
 import { createQuoteTransaction } from '@/lib/quotes/write-service';
+import { assertActiveParameterValue } from '@/lib/system-parameters';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -19,7 +19,7 @@ type Body = {
 
 export async function POST(request: Request) {
   try {
-    const me = await requireCrmAccessOrThrow();
+    const me = await requirePermissionOrThrow('quote.create');
     const body = (await request.json().catch(() => ({}))) as Body;
     const customerId = String(body.customer_id ?? '').trim();
     const probability = Number(body.probability ?? 0);
@@ -29,11 +29,15 @@ export async function POST(request: Request) {
     const note = String(body.note ?? '').trim() || null;
 
     if (!customerId) return NextResponse.json({ message: 'Müşteri seçimi zorunlu.' }, { status: 400 });
-    if (!QUOTE_PROBABILITIES.includes(probability as any)) return NextResponse.json({ message: 'Probability sadece %10 / %30 / %60 / %90 olabilir.' }, { status: 400 });
+    await assertActiveParameterValue('quote_probability', String(probability));
     if (!items.length) return NextResponse.json({ message: 'En az bir teklif satırı girilmeli.' }, { status: 400 });
 
     const admin = createPgAdminClient();
     await ensureCustomerExistsOrThrow({ admin, customerId });
+    if (!userHasPermission(me, 'customer.read.any')) {
+      const { data: customer } = await admin.from('musteriler').select('owner_user_id').eq('id', customerId).maybeSingle();
+      if (String(customer?.owner_user_id ?? '') !== me.id) return NextResponse.json({ message: 'Bu müşteri için teklif oluşturma yetkiniz yok.' }, { status: 403 });
+    }
 
     const catalog = await getQuoteCatalog(admin);
     const resolved = resolveQuoteLines(items, catalog);

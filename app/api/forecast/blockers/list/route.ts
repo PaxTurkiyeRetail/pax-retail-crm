@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import { requireCrmAccessOrThrow } from '@/lib/authz';
+import { requirePermissionOrThrow, userHasPermission } from '@/lib/authz';
 import { db } from '@/lib/db';
-import { canSeeAllForecasts, normalizeText, samePersonName } from '@/lib/forecast-shared';
+import { normalizeText } from '@/lib/forecast-shared';
 import { isMissingForecastBlockerRelation, matchesBlockerSearch, periodLabel } from '@/lib/forecast-blockers';
 
 export const dynamic = 'force-dynamic';
@@ -18,7 +18,7 @@ function activeRisk(status: string) {
 
 export async function GET(request: Request) {
   try {
-    const me = await requireCrmAccessOrThrow();
+    const me = await requirePermissionOrThrow('forecast.read');
     const url = new URL(request.url);
     const q = String(url.searchParams.get('q') ?? '').trim();
     const status = String(url.searchParams.get('status') ?? '').trim();
@@ -26,19 +26,8 @@ export async function GET(request: Request) {
     const category = String(url.searchParams.get('category') ?? '').trim();
     const page = positiveInt(url.searchParams.get('page'), 1);
     const pageSize = Math.min(positiveInt(url.searchParams.get('pageSize'), 20), 5000);
-    const canSeeAll = canSeeAllForecasts(me.role);
-    const ownerName = String(me.full_name ?? '').trim();
-
-    if (!canSeeAll && !ownerName) {
-      return NextResponse.json({
-        rows: [],
-        total: 0,
-        page,
-        pageSize,
-        scope: 'own',
-        message: 'Kullanıcı ad soyad bilgisi bulunamadı.',
-      });
-    }
+    const canSeeAll = userHasPermission(me, 'forecast.read.any');
+    const displayOwnerName = String(me.full_name ?? me.email).trim();
 
     let rows: any[];
     try {
@@ -118,7 +107,14 @@ export async function GET(request: Request) {
       throw error;
     }
 
-    rows = rows.filter((row) => canSeeAll || samePersonName(row.sorumlu, ownerName));
+    if (!canSeeAll) {
+      const ownedCustomers = await db.query(
+        'select id::text from public.musteriler where owner_user_id = $1::uuid',
+        [me.id],
+      );
+      const ownedCustomerIds = new Set(ownedCustomers.rows.map((row) => String(row.id)));
+      rows = rows.filter((row) => ownedCustomerIds.has(String(row.customer_id)));
+    }
 
     const allVisibleRows = [...rows];
     const ownerOptions = Array.from(
@@ -248,7 +244,7 @@ export async function GET(request: Request) {
       page,
       pageSize,
       scope: canSeeAll ? 'all' : 'own',
-      ownerName: canSeeAll ? 'Tüm Accountlar' : ownerName,
+      ownerName: canSeeAll ? 'Tüm Accountlar' : displayOwnerName,
       summary,
       completionByOwner,
       budgetImpact,

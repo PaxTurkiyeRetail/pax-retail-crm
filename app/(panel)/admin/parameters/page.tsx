@@ -10,7 +10,7 @@ export default async function ParametersPage() {
         <span className="pax-hero-eyebrow">Kurumsal CRM · Ayarlar</span>
         <h1 className="pax-hero-title">Parametre Yönetimi</h1>
         <p className="pax-hero-description">
-          Bu ekran yalnızca Taha Bitim ve Ömer Canatar için sağ üst kullanıcı menüsünde görünür. Sistem Ayarları, Entegrasyonlar, Liste Yönetimleri ve Güvenlik/Tanı ayrı kartlarla yönetilir; künye dropdownları Liste Yönetimleri → Müşteri Künye alt kırılımında düzenlenir.
+          Bu ekran yalnızca parametre yönetimi yetkisi bulunan kullanıcılara görünür. Sistem Ayarları, Entegrasyonlar, Liste Yönetimleri ve Güvenlik/Tanı ayrı kartlarla yönetilir; künye seçenekleri Liste Yönetimleri → Müşteri Künye alt kırılımında düzenlenir.
         </p>
       </div>
       <ParametersClient />

@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
-import { requireCrmAccessOrThrow } from '@/lib/authz';
+import { requirePermissionOrThrow, userHasPermission } from '@/lib/authz';
 import { db } from '@/lib/db';
 import { isReportOnlyCustomer } from '@/lib/report-only-customers';
-import { canSeeAllForecasts, isMissingForecastRelation, monthLabel, normalizeText, sanitizeLike, toPositiveInt } from '@/lib/forecast';
+import { isMissingForecastRelation, monthLabel, normalizeText, toPositiveInt } from '@/lib/forecast';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -32,7 +32,7 @@ function parsePage(value: string | null, fallback: number) {
 
 export async function GET(request: Request) {
   try {
-    const me = await requireCrmAccessOrThrow();
+    const me = await requirePermissionOrThrow('forecast.read');
     const url = new URL(request.url);
     const q = String(url.searchParams.get('q') ?? '').trim();
     const status = String(url.searchParams.get('status') ?? '').trim();
@@ -42,23 +42,20 @@ export async function GET(request: Request) {
     const pageSize = Math.min(parsePage(url.searchParams.get('pageSize'), 20), 100);
     const offset = (page - 1) * pageSize;
 
-    const ownerName = String(me.full_name ?? '').trim();
-    const canSeeAll = canSeeAllForecasts(me.role);
-    if (!ownerName && !canSeeAll) {
-      return NextResponse.json({ rows: [], total: 0, page, pageSize, onboardingNeeded: false, message: 'Kullanici ad soyad bilgisi bulunamadi.' });
-    }
+    const canSeeAll = userHasPermission(me, 'forecast.read.any');
+    const displayOwnerName = String(me.full_name ?? me.email).trim();
 
     const customerSql = canSeeAll ? `
-      select id::text as musteri_id, musteri, sektor, sorumlu, entegrasyon_tipi, satis_olasiligi
+      select id::text as musteri_id, musteri, sektor, sorumlu, owner_user_id, entegrasyon_tipi, satis_olasiligi
       from public.musteriler
       order by musteri asc
     ` : `
-      select id::text as musteri_id, musteri, sektor, sorumlu, entegrasyon_tipi, satis_olasiligi
+      select id::text as musteri_id, musteri, sektor, sorumlu, owner_user_id, entegrasyon_tipi, satis_olasiligi
       from public.musteriler
-      where lower(trim(coalesce(sorumlu, ''))) = lower(trim($1))
+      where owner_user_id = $1::uuid
       order by musteri asc
     `;
-    const customerResult = await db.query(customerSql, canSeeAll ? [] : [ownerName]);
+    const customerResult = await db.query(customerSql, canSeeAll ? [] : [me.id]);
     let customers = customerResult.rows.filter((row: any) => !isReportOnlyCustomer(row));
 
     if (q) {
@@ -137,7 +134,7 @@ export async function GET(request: Request) {
       total,
       page,
       pageSize,
-      ownerName: canSeeAll ? 'Tüm Accountlar' : ownerName,
+      ownerName: canSeeAll ? 'Tüm Accountlar' : displayOwnerName,
       scope: canSeeAll ? 'all' : 'own',
       filters: { q, status, year, month },
       summary: {

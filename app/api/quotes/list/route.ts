@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireCrmAccessOrThrow } from '@/lib/authz';
+import { requirePermissionOrThrow, userHasPermission } from '@/lib/authz';
 import { createPgAdminClient } from '@/lib/pg/admin';
 import { addDaysToIsoDate, getTurkeyTodayIso, isMissingRelationError } from '@/lib/quotes/service';
 import { isReportOnlyCustomer } from '@/lib/report-only-customers';
@@ -26,7 +26,7 @@ function escapeIlike(value: string) {
 
 export async function GET(request: Request) {
   try {
-    await requireCrmAccessOrThrow();
+    const me = await requirePermissionOrThrow('quote.read');
     const admin = createPgAdminClient();
     const url = new URL(request.url);
     const q = String(url.searchParams.get('q') ?? '').trim().toLocaleLowerCase('tr');
@@ -41,7 +41,12 @@ export async function GET(request: Request) {
       .from('quotes')
       .select('id,quote_no,opportunity_title,proposal_date,valid_until,follow_up_date,probability,status,closed_reason,owner_name,total_device_count,total_amount,customer_id,created_at', { count: q ? undefined : 'exact' })
       .order('created_at', { ascending: false });
-    const ownersQuery = admin.from('quotes').select('owner_name').limit(5000);
+    let ownersQuery = admin.from('quotes').select('owner_name').limit(5000);
+
+    if (!userHasPermission(me, 'quote.read.any')) {
+      quoteQuery = quoteQuery.eq('owner_user_id', me.id);
+      ownersQuery = ownersQuery.eq('owner_user_id', me.id);
+    }
 
     if (status) quoteQuery = quoteQuery.ilike('status', status);
     if (owner) quoteQuery = quoteQuery.ilike('owner_name', escapeIlike(owner));

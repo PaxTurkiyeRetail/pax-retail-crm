@@ -1,5 +1,4 @@
 import { requireCrmAccessOrThrow } from '@/lib/authz';
-import SystemRequirementStamp from '@/components/system/SystemRequirementStamp';
 import NovaCoreClient from '@/components/nova-core/NovaCoreClient';
 import type { AllowedRole } from '@/lib/roles';
 import type { UserRole } from '@/lib/nova-core-data';
@@ -16,7 +15,6 @@ export default async function NovaCorePage() {
 
   return (
     <div className="pax-page-container">
-      <SystemRequirementStamp pageKey="novaCore" />
       <NovaCoreClient 
         userRole={toNovaRole(user.role)}
         userName={user.full_name || 'Kullanıcı'}

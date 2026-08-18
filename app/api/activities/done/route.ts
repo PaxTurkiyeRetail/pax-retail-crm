@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
-import { requireAllowedUserOrThrow } from '@/lib/authz';
+import { assertOwnedResourceAccess, requireAnyPermissionOrThrow } from '@/lib/authz';
 import { createPgAdminClient } from '@/lib/pg/admin';
 import { completeActivitiesForSamePhase } from '@/lib/activity-phase-completion';
 
@@ -10,8 +10,8 @@ export const revalidate = 0;
 type Body = { activity_id?: string };
 
 export async function POST(req: Request) {
-  let me: Awaited<ReturnType<typeof requireAllowedUserOrThrow>>;
-  try { me = await requireAllowedUserOrThrow(); } catch (e: any) { return NextResponse.json({ message: 'Yetkisiz' }, { status: e?.status || 401 }); }
+  let me: Awaited<ReturnType<typeof requireAnyPermissionOrThrow>>;
+  try { me = await requireAnyPermissionOrThrow(['activity.update.own', 'activity.update.any']); } catch (e: any) { return NextResponse.json({ message: 'Yetkisiz' }, { status: e?.status || 401 }); }
 
   const actor = String(me.full_name ?? me.email ?? '').trim();
   if (!actor) return NextResponse.json({ message: 'Kullanıcı kimliği bulunamadı' }, { status: 400 });
@@ -21,8 +21,9 @@ export async function POST(req: Request) {
   if (!activity_id) return NextResponse.json({ message: 'activity_id gerekli' }, { status: 400 });
 
   const admin = createPgAdminClient();
-  const { data: found, error: foundErr } = await admin.from('pipeline_eventleri').select('id,musteri_id,faz_no,iteration_no,owner,durum,created_by,activity_scope,affects_phase').eq('id', activity_id).single();
+  const { data: found, error: foundErr } = await admin.from('pipeline_eventleri').select('id,musteri_id,faz_no,iteration_no,owner,durum,created_by,created_by_user_id,created_by_email,activity_scope,affects_phase').eq('id', activity_id).single();
   if (foundErr || !found) return NextResponse.json({ message: foundErr?.message || 'Aktivite bulunamadı' }, { status: 404 });
+  assertOwnedResourceAccess({ user: me, resource: { owner_user_id: found.created_by_user_id, owner_email: found.created_by_email, owner_name: found.created_by }, ownPermission: 'activity.update.own', anyPermission: 'activity.update.any' });
 
   const { error: upErr } = await admin.from('pipeline_eventleri').update({ durum: 'Tamamlandı', updated_by_user_id: me.id, updated_by_email: me.email, updated_at: new Date().toISOString() }).eq('id', activity_id);
   if (upErr) return NextResponse.json({ message: upErr.message }, { status: 400 });

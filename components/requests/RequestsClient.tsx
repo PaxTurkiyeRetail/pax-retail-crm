@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
-import { isAdminLike } from '@/lib/roles';
+import { useConfiguredPageSize } from '@/components/hooks/useConfiguredPageSize';
 
 type Request = {
   id: string; title: string; status: string; priority: string; sla_status: string;
@@ -36,14 +36,14 @@ function timeAgo(iso: string) {
   return `${Math.floor(d/86400)}g`;
 }
 
-export default function RequestsClient({ userRole, userId, onNewRequest }: { userRole: string; userId: string; onNewRequest?: () => void }) {
-  const isAdmin = isAdminLike(userRole);
+export default function RequestsClient({ userRole, userId, canManage, onNewRequest }: { userRole: string; userId: string; canManage: boolean; onNewRequest?: () => void }) {
+  const isAdmin = canManage;
   const [rows, setRows]     = useState<Request[]>([]);
   const [total, setTotal]   = useState(0);
   const [loading, setLoading] = useState(false);
   const [options, setOptions] = useState<Options>({ categories: [], users: [] });
   const [page, setPage] = useState(1);
-  const pageSize = 25;
+  const [pageSize] = useConfiguredPageSize();
 
   const [q, setQ]               = useState('');
   const [debouncedQ, setDQ]     = useState('');
@@ -104,8 +104,10 @@ export default function RequestsClient({ userRole, userId, onNewRequest }: { use
         .pager-btn:disabled { opacity:.4; cursor:default; }
 
         @media (max-width:640px) {
-          .filter-row { grid-template-columns:1fr auto; }
-          .filter-extras { display:none; }
+          .filter-row { grid-template-columns:1fr; }
+          .filter-extras { display:block; width:100%; }
+          .sel, .new-btn { width:100%; min-height:44px; }
+          .new-btn { justify-content:center; }
         }
       `}</style>
 

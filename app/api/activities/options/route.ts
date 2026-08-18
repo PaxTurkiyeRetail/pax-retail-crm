@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
-import { requireAllowedUserOrThrow } from '@/lib/authz';
+import { requireActivityReadOrThrow, userHasPermission } from '@/lib/authz';
 import { createPgAdminClient } from '@/lib/pg/admin';
 import { presentDurum } from '@/lib/activities/presentation';
 import { BUSINESS_PARTNER_RESPONSIBLE } from '@/lib/report-only-customers';
+import { getParameterOptionsByGroups } from '@/lib/system-parameters';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -13,24 +14,33 @@ function uniqueSorted(values: Array<string | null | undefined>) {
 
 export async function GET() {
   try {
-    await requireAllowedUserOrThrow();
+    const me = await requireActivityReadOrThrow();
     const admin = createPgAdminClient();
 
-    const [{ data: events }, { data: customers }, { data: users }] = await Promise.all([
-      admin
-        .from('pipeline_eventleri')
-        .select('faz_no,durum,partner_owner,owner,created_by')
-        .order('created_at', { ascending: false })
-        .limit(1500),
-      admin
-        .from('musteriler')
-        .select('sorumlu,sektor')
-        .limit(1500),
-      admin
+    const canReadAny = userHasPermission(me, 'activity.read.any');
+    let eventQuery = admin
+      .from('pipeline_eventleri')
+      .select('faz_no,durum,partner_owner,owner,created_by')
+      .order('created_at', { ascending: false })
+      .limit(1500);
+    let customerQuery = admin
+      .from('musteriler')
+      .select('sorumlu,sektor')
+      .limit(1500);
+    if (!canReadAny) {
+      eventQuery = eventQuery.eq('created_by_user_id', me.id);
+      customerQuery = customerQuery.eq('owner_user_id', me.id);
+    }
+
+    const [{ data: events }, { data: customers }, { data: users }, parameterOptions] = await Promise.all([
+      eventQuery,
+      customerQuery,
+      canReadAny ? admin
         .from('allowed_users')
         .select('full_name,is_active')
         .eq('is_active', true)
-        .limit(200),
+        .limit(200) : Promise.resolve({ data: [] as any[] }),
+      getParameterOptionsByGroups(['activity_waiting_party']),
     ]);
 
     return NextResponse.json({
@@ -42,6 +52,7 @@ export async function GET() {
         ...(users ?? []).map((row: any) => row.full_name),
       ]),
       responsibleOptions: uniqueSorted([...(customers ?? []).map((row: any) => row.sorumlu), BUSINESS_PARTNER_RESPONSIBLE]),
+      waitingSideOptions: parameterOptions.activity_waiting_party ?? [],
     });
   } catch (e: any) {
     return NextResponse.json({ message: 'Yetkisiz' }, { status: e?.status || 401 });

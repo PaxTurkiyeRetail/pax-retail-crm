@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { canManageRequests } from '@/lib/roles';
 
 type RequestDetail = {
   id: string; title: string; body: string; status: string; priority: string;
@@ -44,9 +43,9 @@ function evIcon(type: string) {
   return { bg: 'var(--surface-2)', color: 'var(--text-3)', icon: '·' };
 }
 
-export default function RequestDetail({ id, userRole }: { id: string; userRole: string }) {
+export default function RequestDetail({ id, userRole, canManage }: { id: string; userRole: string; canManage: boolean }) {
   const router = useRouter();
-  const canAssign = canManageRequests(userRole);
+  const canAssign = canManage;
   const [request, setRequest] = useState<RequestDetail | null>(null);
   const [events, setEvents] = useState<Event[]>([]);
   const [options, setOptions] = useState<Options>({ users: [] });

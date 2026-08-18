@@ -13,7 +13,7 @@ function uniqueSorted(values: Array<string | null | undefined>) {
 }
 
 
-function sellerReportOwner(row: { musteri?: unknown; sorumlu?: unknown; sektor?: unknown }) {
+function sellerReportOwner(row: { sorumlu?: unknown; customer_type?: unknown }) {
   if (reportOnlyCustomerKind(row) === 'business-partner') return 'İş Ortakları';
   return String(row.sorumlu ?? '').trim() || '-';
 }
@@ -41,19 +41,27 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const selectedSeller = String(url.searchParams.get('seller') ?? '').trim();
 
-    const customers = await fetchAllRows<any>((from, to) => {
-      return admin
-        .from('vw_crm_musteriler')
-        .select('musteri_id,musteri,sorumlu,aktif_faz_no,aktif_faz_adi,sektor,entegrasyon_tipi')
-        .order('musteri', { ascending: true })
-        .range(from, to);
-    });
+    const [customers, customerTypes] = await Promise.all([
+      fetchAllRows<any>((from, to) => admin
+          .from('vw_crm_musteriler')
+          .select('musteri_id,musteri,sorumlu,aktif_faz_no,aktif_faz_adi,sektor,entegrasyon_tipi')
+          .order('musteri', { ascending: true })
+          .range(from, to)),
+      fetchAllRows<any>((from, to) => admin
+          .from('musteriler')
+          .select('id,customer_type,integration_type_key')
+          .order('id', { ascending: true })
+          .range(from, to)),
+    ]);
+    const customerTypeMap = new Map((customerTypes ?? []).map((row: any) => [String(row.id), row]));
 
     const allRows = (customers ?? []).map((row: any) => {
       const musteri = String(row.musteri ?? '').trim() || '-';
       const sektor = String(row.sektor ?? '').trim() || '-';
       const rawSorumlu = String(row.sorumlu ?? '').trim();
-      const sorumlu = sellerReportOwner({ musteri, sorumlu: rawSorumlu, sektor });
+      const policy = customerTypeMap.get(String(row.musteri_id ?? '')) as any;
+      const customer_type = String(policy?.customer_type ?? 'standard');
+      const sorumlu = sellerReportOwner({ sorumlu: rawSorumlu, customer_type });
       return {
         musteri_id: String(row.musteri_id ?? '').trim(),
         musteri,
@@ -61,8 +69,8 @@ export async function GET(request: Request) {
         aktif_faz_no: row.aktif_faz_no == null ? null : Number(row.aktif_faz_no),
         aktif_faz_adi: String(row.aktif_faz_adi ?? '').trim() || null,
         sektor,
-        entegrasyon_tipi: String(row.entegrasyon_tipi ?? '').trim() || '-',
-        kayit_tipi: reportOnlyCustomerKind({ musteri, sorumlu: rawSorumlu, sektor }) === 'business-partner' ? 'İş Ortağı' : 'Müşteri',
+        entegrasyon_tipi: String(policy?.integration_type_key ?? row.entegrasyon_tipi ?? '').trim() || '-',
+        kayit_tipi: reportOnlyCustomerKind({ customer_type }) === 'business-partner' ? 'İş Ortağı' : 'Müşteri',
       };
     });
 

@@ -15,7 +15,7 @@ export async function GET() {
   const admin = createPgAdminClient();
   const { data, error } = await admin
     .from('allowed_users')
-    .select('email, full_name')
+    .select('id, email, full_name')
     .eq('is_active', true)
     .not('full_name', 'is', null)
     .order('full_name', { ascending: true });

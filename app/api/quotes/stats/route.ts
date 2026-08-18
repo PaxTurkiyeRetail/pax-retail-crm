@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireCrmAccessOrThrow } from '@/lib/authz';
+import { requirePermissionOrThrow, userHasPermission } from '@/lib/authz';
 import { createPgAdminClient } from '@/lib/pg/admin';
 import { addDaysToIsoDate, getTurkeyTodayIso, isMissingRelationError } from '@/lib/quotes/service';
 
@@ -8,7 +8,7 @@ export const revalidate = 0;
 
 export async function GET(request: Request) {
   try {
-    await requireCrmAccessOrThrow();
+    const me = await requirePermissionOrThrow('quote.read');
     const admin = createPgAdminClient();
     const url = new URL(request.url);
     const q = String(url.searchParams.get('q') ?? '').trim().toLocaleLowerCase('tr');
@@ -22,6 +22,7 @@ export async function GET(request: Request) {
 
     if (status) query = query.ilike('status', status);
     if (owner) query = query.ilike('owner_name', owner.replace(/[\%_]/g, ' ').trim());
+    if (!userHasPermission(me, 'quote.read.any')) query = query.eq('owner_user_id', me.id);
 
     const { data, error } = await query;
     if (error) {

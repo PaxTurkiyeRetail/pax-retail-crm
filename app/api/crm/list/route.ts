@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createPgServerClient } from '@/lib/pg/server';
 import { createPgAdminClient } from '@/lib/pg/admin';
-import { requireCrmAccessOrThrow } from '@/lib/authz';
+import { requireCrmAccessOrThrow, userHasPermission } from '@/lib/authz';
 import { getKunyeStatus, mapKunyeDbToUi, normalizeKunyeStatusFilter } from '@/lib/kunye';
 import { appendLastStayedPhase } from '@/lib/crm-phase-history';
 import { isReportOnlyCustomer } from '@/lib/report-only-customers';
@@ -50,9 +50,11 @@ function applyDbFilters(query: any, params: {
   fazNo: number;
   q: string;
   lite: boolean;
+  visibleCustomerIds?: string[] | null;
 }) {
-  const { owner, sector, integration, fazNo, q } = params;
+  const { owner, sector, integration, fazNo, q, visibleCustomerIds } = params;
 
+  if (visibleCustomerIds) query = query.in('musteri_id', visibleCustomerIds.length ? visibleCustomerIds : ['__none__']);
   if (owner) query = query.ilike('sorumlu', escapeIlike(owner));
   if (sector) query = query.ilike('sektor', escapeIlike(sector));
   // entegrasyon_tipi enum oldugu icin DB tarafinda ilike kullanilmaz; JS tarafinda filtrelenir.
@@ -84,6 +86,7 @@ async function fetchAllRows(pgClient: any, params: {
   fazNo: number;
   q: string;
   lite: boolean;
+  visibleCustomerIds?: string[] | null;
 }) {
   const batchSize = 1000;
   let from = 0;
@@ -189,8 +192,15 @@ export async function GET(request: Request) {
     const to = from + pageSize;
 
     const pgClient = await createPgServerClient();
-    await requireCrmAccessOrThrow();
+    const me = await requireCrmAccessOrThrow();
     const admin = createPgAdminClient();
+    const canReadAny = userHasPermission(me, 'customer.read.any');
+    const visibleCustomerResult = canReadAny
+      ? { data: null as any[] | null, error: null as any }
+      : await admin.from('musteriler').select('id').eq('owner_user_id', me.id).limit(10000);
+    if (visibleCustomerResult.error) return NextResponse.json({ message: visibleCustomerResult.error.message }, { status: 500 });
+    const visibleCustomerIds = canReadAny ? null : (visibleCustomerResult.data ?? []).map((row: any) => String(row.id ?? '')).filter(Boolean);
+    const effectiveOwner = canReadAny ? owner : '';
 
     const needsClientFiltering = Boolean(kasaFirmasi || kunyeStatus || integration);
     const shouldReturnAllLiteRows = (lite && includeAll) || needsClientFiltering;
@@ -202,9 +212,9 @@ export async function GET(request: Request) {
     let count: number | null = null;
 
     if (shouldReturnAllLiteRows) {
-      rows = (await fetchAllRows(pgClient, { owner, sector, integration, fazNo, q, lite })).filter((row: any) => includeReportOnly || !isReportOnlyCustomer(row));
+      rows = (await fetchAllRows(pgClient, { owner: effectiveOwner, sector, integration, fazNo, q, lite, visibleCustomerIds })).filter((row: any) => includeReportOnly || !isReportOnlyCustomer(row));
       if (includeReportOnly) {
-        const reportOnlyRows = await fetchReportOnlyCustomerRows(admin, { owner, sector, integration, fazNo, kasaFirmasi, kunyeStatus });
+        const reportOnlyRows = await fetchReportOnlyCustomerRows(admin, { owner: effectiveOwner, sector, integration, fazNo, kasaFirmasi, kunyeStatus });
         rows = mergeRowsByCustomerId([...rows, ...reportOnlyRows]);
       }
       count = rows.length;
@@ -215,13 +225,13 @@ export async function GET(request: Request) {
         .order('musteri', { ascending: true })
         .range(from, to - 1);
 
-      query = applyDbFilters(query, { owner, sector, integration, fazNo, q, lite });
+      query = applyDbFilters(query, { owner: effectiveOwner, sector, integration, fazNo, q, lite, visibleCustomerIds });
 
       const result = await query;
       if (result.error) return NextResponse.json({ message: result.error.message }, { status: 500 });
       rows = (result.data ?? []).filter((row: any) => includeReportOnly || !isReportOnlyCustomer(row));
       if (includeReportOnly) {
-        const reportOnlyRows = await fetchReportOnlyCustomerRows(admin, { owner, sector, integration, fazNo, kasaFirmasi, kunyeStatus });
+        const reportOnlyRows = await fetchReportOnlyCustomerRows(admin, { owner: effectiveOwner, sector, integration, fazNo, kasaFirmasi, kunyeStatus });
         rows = mergeRowsByCustomerId([...rows, ...reportOnlyRows]);
       }
       count = Number(result.count ?? rows.length);
@@ -229,22 +239,33 @@ export async function GET(request: Request) {
 
     const ids = rows.map((row: any) => row.musteri_id).filter(Boolean);
     const kunyeMap = new Map<string, any>();
+    const customerMetaMap = new Map<string, any>();
 
     if (ids.length > 0) {
-      const { data: kunyeler, error: kunyeErr } = await admin
-        .from('v_musteri_kunye_status')
-        .select('*')
-        .in('musteri_id', ids);
+      const [{ data: kunyeler, error: kunyeErr }, { data: customerMeta, error: customerMetaError }] = await Promise.all([
+        admin.from('v_musteri_kunye_status').select('*').in('musteri_id', ids),
+        admin.from('musteriler').select('id,owner_user_id,customer_type,pipeline_policy,integration_type_key').in('id', ids),
+      ]);
 
       if (!kunyeErr || !/relation .* does not exist/i.test(kunyeErr.message)) {
         (kunyeler ?? []).forEach((item: any) => kunyeMap.set(item.musteri_id, item));
       }
+      if (customerMetaError) return NextResponse.json({ message: customerMetaError.message }, { status: 500 });
+      (customerMeta ?? []).forEach((item: any) => customerMetaMap.set(item.id, item));
     }
 
     let enriched = rows.map((row: any) => {
+      const customerMeta = customerMetaMap.get(row.musteri_id) ?? {};
+      const rowWithPolicy = {
+        ...row,
+        owner_user_id: customerMeta.owner_user_id ?? null,
+        customer_type: customerMeta.customer_type ?? 'standard',
+        pipeline_policy: customerMeta.pipeline_policy ?? 'phase_required',
+        entegrasyon_tipi: customerMeta.integration_type_key ?? row.entegrasyon_tipi ?? null,
+      };
       if (isReportOnlyCustomer(row)) {
         return {
-          ...row,
+          ...rowWithPolicy,
           report_only: true,
           kasa_firmasi: null,
           kunye_missing_fields: [],
@@ -258,7 +279,7 @@ export async function GET(request: Request) {
       const kunye = mapKunyeDbToUi(rawKunye);
       const status = getKunyeStatus({ ...kunye, ...(rawKunye ?? {}), firma_adi: row.musteri, has_kunye_record: Boolean(kunye) });
       return {
-        ...row,
+        ...rowWithPolicy,
         kasa_firmasi: kunye?.kasapos_firmasi ?? null,
         kunye_missing_fields: status.missingFields,
         kunye_durumu: status.status,
@@ -305,7 +326,7 @@ export async function GET(request: Request) {
       : (shouldReturnAllLiteRows ? enriched.slice(from, to) : enriched);
     const rowsWithLastStayedPhase = await appendLastStayedPhase(pagedRows);
 
-    return NextResponse.json({ rows: rowsWithLastStayedPhase, total: filteredTotal || (count ?? 0), page, pageSize });
+    return NextResponse.json({ rows: rowsWithLastStayedPhase, total: filteredTotal, page, pageSize });
   } catch (e: any) {
     return NextResponse.json({ message: 'Yetkisiz' }, { status: e?.status || 401 });
   }

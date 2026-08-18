@@ -10,3 +10,6 @@ node_modules/
 .DS_Store
 coverage/
 backups/
+.claude/
+__pycache__/
+*.pyc

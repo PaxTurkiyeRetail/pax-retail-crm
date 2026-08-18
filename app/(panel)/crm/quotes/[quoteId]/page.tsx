@@ -1,14 +1,12 @@
-import { requireCrmAccessOrThrow } from '@/lib/authz';
-import SystemRequirementStamp from '@/components/system/SystemRequirementStamp';
+import { requirePermissionOrThrow } from '@/lib/authz';
 import QuoteDetailClient from '@/components/quotes/QuoteDetailClient';
 
 export default async function QuoteDetailPage({ params }: { params: Promise<{ quoteId: string }> }) {
-  await requireCrmAccessOrThrow();
+  await requirePermissionOrThrow('quote.read');
   const { quoteId } = await params;
 
   return (
     <div className="pax-page-container">
-      <SystemRequirementStamp pageKey="quotes-detail" />
       <QuoteDetailClient quoteId={quoteId} />
     </div>
   );

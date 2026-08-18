@@ -1,9 +1,7 @@
 import { NextResponse } from 'next/server';
-import { requireAllowedUserOrThrow } from '@/lib/authz';
+import { requireActivityReadOrThrow, userHasPermission } from '@/lib/authz';
 import { createPgAdminClient } from '@/lib/pg/admin';
 import { appendLastStayedPhase } from '@/lib/crm-phase-history';
-import { isBusinessPartnerSector, isPhaseOptionalCustomerByResponsible } from '@/lib/report-only-customers';
-import { getPhaseOptionalResponsibles } from '@/lib/phase-optional-responsibles';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -44,14 +42,21 @@ function sortCustomers(a: ActivityCustomerRow, b: ActivityCustomerRow) {
 
 export async function GET(req: Request) {
   try {
-    await requireAllowedUserOrThrow();
+    const me = await requireActivityReadOrThrow();
     const admin = createPgAdminClient();
     const url = new URL(req.url);
     const qRaw = String(url.searchParams.get('q') ?? '').trim();
     const q = normalizeSearchText(qRaw);
     const selectedId = String(url.searchParams.get('id') ?? '').trim();
     const includeAll = url.searchParams.get('all') === '1';
-    const phaseOptionalResponsibles = await getPhaseOptionalResponsibles();
+    const canReadAny = userHasPermission(me, 'activity.read.any');
+    const ownCustomerResult = canReadAny
+      ? { data: null as any[] | null, error: null as any }
+      : await admin.from('musteriler').select('id').eq('owner_user_id', me.id).limit(5000);
+    if (ownCustomerResult.error) return NextResponse.json({ message: ownCustomerResult.error.message }, { status: 500 });
+    const ownCustomerIds = canReadAny
+      ? null
+      : (ownCustomerResult.data ?? []).map((row: any) => String(row.id ?? '')).filter(Boolean);
     const requestedLimit = Number(url.searchParams.get('limit') ?? (includeAll ? 5000 : (qRaw ? 120 : 60)));
     const maxLimit = includeAll ? 5000 : 300;
     const limit = Math.min(Math.max(requestedLimit, 20), maxLimit);
@@ -73,41 +78,37 @@ export async function GET(req: Request) {
       .select('musteri_id,musteri,sorumlu,sektor,aktif_faz_no,aktif_faz_adi')
       .order('musteri', { ascending: true })
       .limit(limit);
+    if (ownCustomerIds) crmQuery = crmQuery.in('musteri_id', ownCustomerIds.length ? ownCustomerIds : ['__none__']);
     crmQuery = applySearch(crmQuery);
 
-    const phaseOptionalOrParts = phaseOptionalResponsibles
-      .map((name) => String(name ?? '').trim())
-      .filter(Boolean)
-      .map((name) => `sorumlu.ilike.${name}`);
-
-    let reportOnlyQuery = admin
-      .from('musteriler')
-      .select('id,musteri,sorumlu,sektor')
-      .order('musteri', { ascending: true })
-      .limit(Math.min(limit, 300));
-    if (phaseOptionalOrParts.length) {
-      reportOnlyQuery = reportOnlyQuery.or(phaseOptionalOrParts.join(','));
-    } else if (!selectedId) {
-      reportOnlyQuery = reportOnlyQuery.limit(0);
-    }
-    reportOnlyQuery = applySearch(reportOnlyQuery);
-
-    const [{ data: crmRows, error: crmErr }, { data: reportOnlyRows, error: reportOnlyErr }, selectedResult] = await Promise.all([
+    const [{ data: crmRows, error: crmErr }, selectedResult] = await Promise.all([
       crmQuery,
-      reportOnlyQuery,
       selectedId
-        ? admin.from('musteriler').select('id,musteri,sorumlu,sektor').eq('id', selectedId).maybeSingle()
+        ? (canReadAny
+          ? admin.from('musteriler').select('id,musteri,sorumlu,sektor,customer_type,pipeline_policy').eq('id', selectedId).maybeSingle()
+          : admin.from('musteriler').select('id,musteri,sorumlu,sektor,customer_type,pipeline_policy').eq('id', selectedId).eq('owner_user_id', me.id).maybeSingle())
         : Promise.resolve({ data: null, error: null } as any),
     ]);
 
     if (crmErr) return NextResponse.json({ message: crmErr.message }, { status: 500 });
-    if (reportOnlyErr) return NextResponse.json({ message: reportOnlyErr.message }, { status: 500 });
+
+    const selectedRow = (selectedResult as any)?.data ?? null;
+    const customerIds = Array.from(new Set([
+      ...(crmRows ?? []).map((row: any) => String(row.musteri_id ?? '')).filter(Boolean),
+      ...(selectedRow?.id ? [String(selectedRow.id)] : []),
+    ]));
+    const policyResult = customerIds.length
+      ? await admin.from('musteriler').select('id,customer_type,pipeline_policy').in('id', customerIds)
+      : { data: [] as any[], error: null as any };
+    if (policyResult.error) return NextResponse.json({ message: policyResult.error.message }, { status: 500 });
+    const policyById = new Map((policyResult.data ?? []).map((row: any) => [String(row.id), row]));
 
     const byId = new Map<string, ActivityCustomerRow>();
 
     (crmRows ?? []).forEach((row: any) => {
       const id = String(row.musteri_id ?? '').trim();
       if (!id) return;
+      const policy = policyById.get(id) as any;
       byId.set(id, {
         musteri_id: id,
         musteri: String(row.musteri ?? '').trim(),
@@ -115,33 +116,27 @@ export async function GET(req: Request) {
         sektor: row.sektor ?? null,
         aktif_faz_no: row.aktif_faz_no != null ? Number(row.aktif_faz_no) : null,
         aktif_faz_adi: row.aktif_faz_adi ?? null,
-        report_only: isPhaseOptionalCustomerByResponsible(row, phaseOptionalResponsibles),
-        is_business_partner: isBusinessPartnerSector(row.sektor),
+        report_only: String(policy?.pipeline_policy ?? 'phase_required') === 'phase_optional',
+        is_business_partner: String(policy?.customer_type ?? 'standard') === 'business_partner',
       });
     });
 
-    const selectedRow = (selectedResult as any)?.data ?? null;
-    const reportOnlySourceRows = selectedRow ? [...(reportOnlyRows ?? []), selectedRow] : (reportOnlyRows ?? []);
-
-    reportOnlySourceRows
-      .filter((row: any) => isPhaseOptionalCustomerByResponsible(row, phaseOptionalResponsibles) || String(row?.id ?? '') === selectedId)
-      .forEach((row: any) => {
+    if (selectedRow) {
+      [selectedRow].forEach((row: any) => {
         const id = String(row.id ?? '').trim();
         if (!id) return;
         const existing = byId.get(id);
-        const rowReportOnly = isPhaseOptionalCustomerByResponsible(row, phaseOptionalResponsibles);
-        const rowBusinessPartner = isBusinessPartnerSector(row.sektor);
+        const rowPolicy = policyById.get(id) as any;
+        const rowPhaseOptional = String(rowPolicy?.pipeline_policy ?? row.pipeline_policy ?? 'phase_required') === 'phase_optional';
+        const rowBusinessPartner = String(rowPolicy?.customer_type ?? row.customer_type ?? 'standard') === 'business_partner';
 
-        // Secili normal musteri zaten CRM view'den geldiyse uzerine synthetic
-        // report_only=true yazma. Bu eski bug Trendyol gibi normal musterileri
-        // secince fazsiz/rapor kapsami gibi gosterebiliyordu.
-        if (existing && !rowReportOnly && String(row?.id ?? '') === selectedId) {
+        if (existing) {
           byId.set(id, {
             ...existing,
             musteri: String(existing.musteri || row.musteri || '').trim(),
             sorumlu: existing.sorumlu ?? row.sorumlu ?? null,
             sektor: existing.sektor ?? row.sektor ?? null,
-            report_only: Boolean(existing.report_only) || rowReportOnly,
+            report_only: rowPhaseOptional,
             is_business_partner: Boolean(existing.is_business_partner) || rowBusinessPartner,
           });
           return;
@@ -149,18 +144,19 @@ export async function GET(req: Request) {
 
         byId.set(id, {
           musteri_id: id,
-          musteri: String(row.musteri ?? existing?.musteri ?? '').trim(),
-          sorumlu: row.sorumlu ?? existing?.sorumlu ?? null,
-          sektor: row.sektor ?? existing?.sektor ?? null,
-          aktif_faz_no: existing?.aktif_faz_no ?? null,
-          aktif_faz_adi: existing?.aktif_faz_adi ?? null,
-          report_only: rowReportOnly,
+          musteri: String(row.musteri ?? '').trim(),
+          sorumlu: row.sorumlu ?? null,
+          sektor: row.sektor ?? null,
+          aktif_faz_no: null,
+          aktif_faz_adi: null,
+          report_only: rowPhaseOptional,
           is_business_partner: rowBusinessPartner,
-          son_kalinan_faz_no: existing?.son_kalinan_faz_no ?? null,
-          son_kalinan_faz_adi: existing?.son_kalinan_faz_adi ?? null,
-          son_kalinan_faz_durumu: existing?.son_kalinan_faz_durumu ?? null,
+          son_kalinan_faz_no: null,
+          son_kalinan_faz_adi: null,
+          son_kalinan_faz_durumu: null,
         });
       });
+    }
 
     let rows = Array.from(byId.values());
 

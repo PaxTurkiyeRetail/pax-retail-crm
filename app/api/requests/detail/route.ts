@@ -1,13 +1,15 @@
 import { NextResponse } from 'next/server';
 import { requireAllowedUserOrThrow } from '@/lib/authz';
 import { db } from '@/lib/db';
+import { assertCanReadRequest } from '@/lib/requests/access';
+import { apiErrorResponse } from '@/lib/http/api-error';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export async function GET(req: Request) {
   try {
-    await requireAllowedUserOrThrow();
+    const user = await requireAllowedUserOrThrow();
     const { searchParams } = new URL(req.url);
     const id = searchParams.get('id');
 
@@ -37,6 +39,7 @@ export async function GET(req: Request) {
     if (!request) {
       return NextResponse.json({ message: 'Talep bulunamadı veya erişim yok' }, { status: 404 });
     }
+    assertCanReadRequest(user, request);
 
     const eventsResult = await db.query(
       `
@@ -49,7 +52,7 @@ export async function GET(req: Request) {
     );
 
     return NextResponse.json({ request, events: eventsResult.rows ?? [] });
-  } catch (err: any) {
-    return NextResponse.json({ message: err.message }, { status: err.status ?? 500 });
+  } catch (err: unknown) {
+    return apiErrorResponse(err, 'Talep detayı yüklenemedi.');
   }
 }

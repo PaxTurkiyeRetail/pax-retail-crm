@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { requireAllowedUserOrThrow } from '@/lib/authz';
 import { createPgAdminClient } from '@/lib/pg/admin';
+import { userHasPermission } from '@/lib/authz';
+import { apiErrorResponse, ApiError } from '@/lib/http/api-error';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -28,12 +30,19 @@ export async function GET(req: Request) {
     // ?userId=xxx → kişi detay stats. Boşsa → genel dashboard stats.
     const targetUserId = searchParams.get('userId') || null;
 
+    if (targetUserId && targetUserId !== user.id && !userHasPermission(user, 'request.read.all')) {
+      throw new ApiError('FORBIDDEN', 'Başka kullanıcıların istatistiklerini görüntüleyemezsiniz.', 403);
+    }
+
     // Fetch ALL requests (herkes herkesi görür)
     const { data: rows, error } = await sb.from('requests').select(
       'id, status, priority, sla_status, assignee_id, assignee_name, requester_id, requester_name, created_at, first_response_at, resolved_at, sla_hours'
     );
     if (error) throw error;
-    const all = (rows ?? []) as RequestStatsRow[];
+    const visibleRows = userHasPermission(user, 'request.read.all')
+      ? rows ?? []
+      : (rows ?? []).filter((row: RequestStatsRow) => row.requester_id === user.id || row.assignee_id === user.id);
+    const all = visibleRows as RequestStatsRow[];
 
     // ── GENEL DASHBOARD ───────────────────────────────────
     if (!targetUserId) {
@@ -149,7 +158,7 @@ export async function GET(req: Request) {
       slaScore,
       weeklyTrend,
     });
-  } catch (err: any) {
-    return NextResponse.json({ message: err.message }, { status: err.status ?? 500 });
+  } catch (err: unknown) {
+    return apiErrorResponse(err, 'Talep istatistikleri yüklenemedi.');
   }
 }

@@ -1,3 +1,5 @@
+-- DEVRE DIŞI / TARİHSEL DOSYA: kişi veya sektör adına göre kayıt silmek yasaktır.
+/*
 -- Bu patch kod tarafındadır.
 -- Seda Kesikoğlu / Cem Koç ve BANKA / VERTİCAL müşterileri müşteri listesinde görünür.
 -- Künye tablolarında kayıtları olmamalıdır; varsa temizlenir.
@@ -18,3 +20,4 @@ begin
            or upper(trim(coalesce(m.sektor, ''))) in ('BANKA', 'VERTİCAL', 'VERTICAL'));
   end if;
 end $$;
+*/

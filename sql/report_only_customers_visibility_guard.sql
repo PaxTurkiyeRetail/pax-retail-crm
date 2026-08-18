@@ -1,3 +1,5 @@
+-- DEVRE DIŞI / TARİHSEL DOSYA: kişi veya sektör adına göre görünürlük/kayıt silme yasaktır.
+/*
 begin;
 
 delete from public.musteri_kunye_v2 k
@@ -13,3 +15,4 @@ where k.musteri_id = m.id
        or lower(trim(coalesce(m.sektor, ''))) in ('banka', 'vertical', 'verti̇cal'));
 
 commit;
+*/

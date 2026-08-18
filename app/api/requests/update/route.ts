@@ -4,6 +4,12 @@ import { requireAllowedUserOrThrow } from '@/lib/authz';
 import { createPgAdminClient } from '@/lib/pg/admin';
 import { getAllowedUserNameForRequests } from '@/lib/request-users';
 import { canManageRequests } from '@/lib/roles';
+import { apiErrorResponse } from '@/lib/http/api-error';
+import {
+  assertCanCommentRequest,
+  assertCanManageRequest,
+  assertCanReadRequest,
+} from '@/lib/requests/access';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -20,12 +26,14 @@ export async function POST(req: Request) {
     const { data: current, error: fetchError } = await sb.from('requests').select('*').eq('id', id).single();
     if (fetchError) throw fetchError;
     if (!current) return NextResponse.json({ message: 'Talep bulunamadı' }, { status: 404 });
+    assertCanReadRequest(user, current);
 
     let updateData: Record<string, unknown> = {};
     let eventType = '';
     let eventPayload: Record<string, unknown> = {};
 
     if (action === 'status') {
+      assertCanManageRequest(user);
       const newStatus = payload.status;
       updateData = { status: newStatus };
       if (newStatus === 'resolved' || newStatus === 'closed') updateData.resolved_at = new Date().toISOString();
@@ -54,6 +62,7 @@ export async function POST(req: Request) {
       eventType = 'priority_changed';
       eventPayload = { from: current.priority, to: payload.priority };
     } else if (action === 'comment') {
+      assertCanCommentRequest(user, current);
       if (!payload.comment?.trim()) return NextResponse.json({ message: 'Yorum boş olamaz' }, { status: 400 });
       await sb.from('request_events').insert({
         request_id: id,
@@ -81,7 +90,7 @@ export async function POST(req: Request) {
 
     revalidatePath('/requests');
     return NextResponse.json({ ok: true });
-  } catch (err: any) {
-    return NextResponse.json({ message: err.message }, { status: err.status ?? 500 });
+  } catch (err: unknown) {
+    return apiErrorResponse(err, 'Talep güncellenemedi.');
   }
 }

@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
-import { requireAllowedUserOrThrow } from '@/lib/authz';
-import { canCreateTechnicalActivities } from '@/lib/roles';
+import { assertOwnedResourceAccess, requireAnyPermissionOrThrow, userHasPermission } from '@/lib/authz';
 import { createPgAdminClient } from '@/lib/pg/admin';
 import { normalizeDurum } from '@/lib/activities/presentation';
 import { completeActivitiesForSamePhase } from '@/lib/activity-phase-completion';
@@ -20,9 +19,9 @@ type Body = {
 };
 
 export async function POST(req: Request) {
-  let me: Awaited<ReturnType<typeof requireAllowedUserOrThrow>>;
+  let me: Awaited<ReturnType<typeof requireAnyPermissionOrThrow>>;
   try {
-    me = await requireAllowedUserOrThrow();
+    me = await requireAnyPermissionOrThrow(['activity.update.own', 'activity.update.any']);
   } catch (e: any) {
     return NextResponse.json({ message: 'Yetkisiz' }, { status: e?.status || 401 });
   }
@@ -37,19 +36,20 @@ export async function POST(req: Request) {
   const admin = createPgAdminClient();
   const { data: found, error: foundErr } = await admin
     .from('pipeline_eventleri')
-    .select('id,musteri_id,faz_no,owner,durum,created_by,aksiyon,partner_owner,notlar,hedef_tarihi,activity_scope,affects_phase')
+    .select('id,musteri_id,faz_no,owner,durum,created_by,created_by_user_id,created_by_email,aksiyon,partner_owner,notlar,hedef_tarihi,activity_scope,affects_phase')
     .eq('id', activity_id)
     .single();
 
   if (foundErr || !found) {
     return NextResponse.json({ message: foundErr?.message || 'Aktivite bulunamadı' }, { status: 404 });
   }
+  assertOwnedResourceAccess({ user: me, resource: { owner_user_id: found.created_by_user_id, owner_email: found.created_by_email, owner_name: found.created_by }, ownPermission: 'activity.update.own', anyPermission: 'activity.update.any' });
 
   const payload: Record<string, unknown> = {};
 
   if (typeof body.activity_label === 'string') {
     const label = body.activity_label.trim();
-    if (label && isTechnicalChannel(label) && !canCreateTechnicalActivities(me.role)) {
+    if (label && isTechnicalChannel(label) && !userHasPermission(me, 'activity.technical.create')) {
       return NextResponse.json({ message: 'Teknik Ziyaret, Teknik Online ve POM aktivitelerini sadece ITSM, admin veya super admin kullanıcıları güncelleyebilir.' }, { status: 403 });
     }
     payload.aksiyon = label ? `AKTIVITE:${label}` : (found as any).aksiyon ?? 'AKTIVITE:Diğer';

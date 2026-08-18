@@ -1,31 +1,23 @@
 import { NextResponse } from 'next/server';
-import { createPgAdminClient } from '@/lib/pg/admin';
+import { z } from 'zod';
+import { apiErrorResponse, parseJsonBody } from '@/lib/http/api-error';
+import { enforceRateLimit } from '@/lib/security/rate-limit';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
+const schema = z.object({ email: z.string().trim().toLowerCase().email().max(254) }).strict();
+const GENERIC_MESSAGE = 'Giriş için email ve şifrenizi kullanabilirsiniz.';
+
 export async function POST(req: Request) {
-  const { email } = await req.json().catch(() => ({}));
-
-  if (!email || typeof email !== 'string') {
-    return NextResponse.json({ message: 'Email gerekli' }, { status: 400 });
+  try {
+    const { email } = await parseJsonBody(req, schema);
+    await enforceRateLimit({ request: req, action: 'auth.allow', identity: email, limit: 10, windowSeconds: 15 * 60 });
+    return NextResponse.json(
+      { ok: true, message: GENERIC_MESSAGE },
+      { status: 202, headers: { Deprecation: 'true', Sunset: 'Sat, 31 Oct 2026 00:00:00 GMT' } },
+    );
+  } catch (error) {
+    return apiErrorResponse(error, 'İşlem tamamlanamadı.');
   }
-
-  const admin = createPgAdminClient();
-
-  const { data, error } = await admin
-    .from('allowed_users')
-    .select('email, is_active')
-    .eq('email', email)
-    .maybeSingle();
-
-  if (error) {
-    return NextResponse.json({ message: 'Sunucu hatası' }, { status: 500 });
-  }
-
-  if (!data || !data.is_active) {
-    return NextResponse.json({ message: 'Bu email ile giriş yetkin yok.' }, { status: 403 });
-  }
-
-  return NextResponse.json({ ok: true });
 }

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireAllowedUserOrThrow } from '@/lib/authz';
+import { assertOwnedResourceAccess, requireActivityReadOrThrow } from '@/lib/authz';
 import { createPgAdminClient } from '@/lib/pg/admin';
 
 export const dynamic = 'force-dynamic';
@@ -7,7 +7,7 @@ export const revalidate = 0;
 
 export async function GET(req: Request) {
   try {
-    await requireAllowedUserOrThrow();
+    const me = await requireActivityReadOrThrow();
     const url = new URL(req.url);
     const musteriId = url.searchParams.get('musteri_id')?.trim() || '';
     const fazNoRaw = url.searchParams.get('faz_no')?.trim() || '';
@@ -18,6 +18,9 @@ export async function GET(req: Request) {
     }
 
     const admin = createPgAdminClient();
+    const { data: customer } = await admin.from('musteriler').select('owner_user_id,sorumlu').eq('id', musteriId).maybeSingle();
+    if (!customer) return NextResponse.json({ message: 'Müşteri bulunamadı' }, { status: 404 });
+    assertOwnedResourceAccess({ user: me, resource: customer, ownPermission: 'activity.read', anyPermission: 'activity.read.any' });
 
     const { data: phaseStatus } = await admin
       .from('pipeline_eventleri')

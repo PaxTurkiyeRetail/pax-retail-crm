@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import { appToast } from '@/lib/app-toast';
+import { useConfiguredPageSize } from '@/components/hooks/useConfiguredPageSize';
+import { PAGE_SIZE_OPTIONS } from '@/lib/ui-pagination';
 
 type Product = { id: string; code: string; name: string; category: string; product_type?: string };
 type Option = { label: string; value: string };
@@ -100,7 +102,7 @@ export default function ForecastClient() {
   const [year, setYear] = useState('');
   const [month, setMonth] = useState('');
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  const [pageSize, setPageSize] = useConfiguredPageSize();
   const [total, setTotal] = useState(0);
   const [ownerName, setOwnerName] = useState('');
   const [scope, setScope] = useState<'own' | 'all'>('own');
@@ -305,7 +307,7 @@ export default function ForecastClient() {
           <label className="premium-field"><span>Forecast Durumu</span><select value={status} onChange={(event) => setStatus(event.target.value)}><option value="">Tümü</option><option value="entered">Forecast girilenler</option><option value="missing">Forecast eksikler</option></select></label>
           <label className="premium-field"><span>Ay</span><select value={month} onChange={(event) => setMonth(event.target.value)}><option value="">Tüm Aylar</option>{options.months.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
           <label className="premium-field"><span>Yıl</span><select value={year} onChange={(event) => setYear(event.target.value)}><option value="">Tüm Yıllar</option>{options.years.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
-          <label className="premium-field"><span>Sayfa</span><select value={String(pageSize)} onChange={(event) => setPageSize(Number(event.target.value))}>{[10, 20, 50, 100].map((size) => <option key={size} value={size}>{size} / sayfa</option>)}</select></label>
+          <label className="premium-field"><span>Sayfa</span><select value={String(pageSize)} onChange={(event) => setPageSize(Number(event.target.value))}>{PAGE_SIZE_OPTIONS.map((size) => <option key={size} value={size}>{size} / sayfa</option>)}</select></label>
         </div>
       </section>
 

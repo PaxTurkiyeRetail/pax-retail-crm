@@ -1,20 +1,23 @@
 import { NextResponse } from 'next/server';
-import { requireCrmAccessOrThrow } from '@/lib/authz';
+import { requirePermissionOrThrow, userHasPermission } from '@/lib/authz';
 import { createPgAdminClient } from '@/lib/pg/admin';
 import { getQuoteCatalog } from '@/lib/quotes/service';
-import { QUOTE_PROBABILITIES } from '@/lib/quotes/catalog';
 import { isReportOnlyCustomer } from '@/lib/report-only-customers';
+import { getParameterOptionsByGroups } from '@/lib/system-parameters';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export async function GET() {
   try {
-    await requireCrmAccessOrThrow();
+    const me = await requirePermissionOrThrow('quote.read');
     const admin = createPgAdminClient();
-    const [{ products, rules, source }, customerRes] = await Promise.all([
+    let customerQuery = admin.from('musteriler').select('id,musteri,sektor,sorumlu,entegrasyon_tipi').order('musteri', { ascending: true }).limit(2000);
+    if (!userHasPermission(me, 'customer.read.any')) customerQuery = customerQuery.eq('owner_user_id', me.id);
+    const [{ products, rules, source }, customerRes, parameterOptions] = await Promise.all([
       getQuoteCatalog(admin),
-      admin.from('musteriler').select('id,musteri,sektor,sorumlu,entegrasyon_tipi').order('musteri', { ascending: true }).limit(2000),
+      customerQuery,
+      getParameterOptionsByGroups(['quote_probability']),
     ]);
 
     if (customerRes.error) return NextResponse.json({ message: customerRes.error.message }, { status: 500 });
@@ -22,7 +25,7 @@ export async function GET() {
     return NextResponse.json({
       products,
       rules,
-      probabilities: QUOTE_PROBABILITIES,
+      probabilities: (parameterOptions.quote_probability ?? []).map((item) => Number(item.value)).filter(Number.isFinite),
       customers: (customerRes.data ?? []).filter((row: any) => !isReportOnlyCustomer(row)),
       catalogSource: source,
     });

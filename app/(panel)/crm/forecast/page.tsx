@@ -1,8 +1,8 @@
-import { requireCrmAccessOrThrow } from '@/lib/authz';
+import { requirePermissionOrThrow } from '@/lib/authz';
 import ForecastClient from '@/components/forecast/ForecastClient';
 
 export default async function ForecastPage() {
-  await requireCrmAccessOrThrow();
+  await requirePermissionOrThrow('forecast.read');
   return (
     <div className="pax-page-container">
       <ForecastClient />

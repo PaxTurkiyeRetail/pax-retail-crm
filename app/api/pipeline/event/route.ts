@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createPgAdminClient } from "@/lib/pg/admin";
-import { requireCrmAccessOrThrow } from "@/lib/authz";
+import { requireActivityCreateOrThrow, userHasPermission } from "@/lib/authz";
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -14,7 +14,7 @@ type Body = {
 
 export async function POST(request: Request) {
   try {
-    const me = await requireCrmAccessOrThrow();
+    const me = await requireActivityCreateOrThrow();
     const body = (await request.json()) as Body;
 
     if (!body?.musteriId || !body?.fazNo || !body?.eventType) {
@@ -22,6 +22,16 @@ export async function POST(request: Request) {
     }
 
     const admin = createPgAdminClient();
+    const { data: customer, error: customerError } = await admin
+      .from('musteriler')
+      .select('id,owner_user_id')
+      .eq('id', body.musteriId)
+      .maybeSingle();
+    if (customerError) return NextResponse.json({ error: customerError.message }, { status: 500 });
+    if (!customer) return NextResponse.json({ error: 'Müşteri bulunamadı.' }, { status: 404 });
+    if (!userHasPermission(me, 'customer.read.any') && String(customer.owner_user_id ?? '') !== me.id) {
+      return NextResponse.json({ error: 'Bu müşteri için aktivite oluşturma yetkiniz yok.' }, { status: 403 });
+    }
     const actor = String(me.full_name ?? me.email ?? "").trim() || null;
 
     const { error } = await admin.from("pipeline_eventleri").insert({

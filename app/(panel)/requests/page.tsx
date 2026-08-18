@@ -1,5 +1,7 @@
-import { redirect } from 'next/navigation';
+import RequestsHub from '@/components/requests/RequestsHub';
+import { requireRequestsAccessOrThrow, userHasPermission } from '@/lib/authz';
 
-export default function RequestsDisabledPage() {
-  redirect('/crm');
+export default async function RequestsPage() {
+  const user = await requireRequestsAccessOrThrow();
+  return <RequestsHub userRole={user.role} userId={user.id} canManage={userHasPermission(user, 'request.manage')} />;
 }

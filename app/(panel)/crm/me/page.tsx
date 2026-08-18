@@ -1,83 +1,45 @@
-import SystemRequirementStamp from '@/components/system/SystemRequirementStamp';
-import '@/styles/me-page.css';
-import { requireCrmAccessOrThrow } from '@/lib/authz';
+import { requireAllowedUserOrThrow } from '@/lib/authz';
+
+const roleLabels: Record<string, string> = {
+  super_admin: 'Super Admin',
+  admin: 'Admin',
+  account_manager: 'Account Manager',
+  itsm: 'ITSM',
+  user: 'Kullanıcı',
+};
 
 export default async function MyHomePage() {
-  await requireCrmAccessOrThrow();
+  const user = await requireAllowedUserOrThrow();
+  const permissions = [...(user.permissions ?? [])].sort((a, b) => a.localeCompare(b, 'tr'));
 
   return (
-    <div className="pax-page-container">
-
-      <SystemRequirementStamp pageKey="me" />
-
-      <div className="pax-hero">
-        <span className="pax-hero-eyebrow">Benim Ekranım · Kişisel Komuta Merkezi</span>
-        <h1 className="pax-hero-title">Günlük işini, hedeflerini ve AI desteğini tek ekranda gör.</h1>
+    <main className="pax-page-container">
+      <section className="pax-hero">
+        <span className="pax-hero-eyebrow">Hesabım</span>
+        <h1 className="pax-hero-title">{user.full_name || user.email}</h1>
         <p className="pax-hero-description">
-          Müşteri havuzu, teklif ritmi, hedef ilerleme, iletişim analitiği ve AI destek katmanı burada birleşir.
+          Hesap kimliğiniz, atanmış rolünüz ve etkin yetkileriniz. Hedef ve performans verileri yalnızca gerçek veri kaynağı bağlandığında burada gösterilecektir.
         </p>
-        <div className="pax-hero-stats">
-          <div className="pax-hero-stat"><div className="pax-hero-stat-label">Müşteri</div><div className="pax-hero-stat-value">24</div></div>
-          <div className="pax-hero-stat"><div className="pax-hero-stat-label">Fırsat</div><div className="pax-hero-stat-value">12</div></div>
-          <div className="pax-hero-stat"><div className="pax-hero-stat-label">Teklif</div><div className="pax-hero-stat-value">7</div></div>
-          <div className="pax-hero-stat"><div className="pax-hero-stat-label">Risk</div><div className="pax-hero-stat-value">3</div></div>
-        </div>
-      </div>
+      </section>
 
-      <div className="two-col">
-        <div className="pax-card">
-          <div className="pax-page-header" style={{ marginBottom: 20 }}>
-            <div className="pax-page-title" style={{ fontSize: 16 }}>Hedef & Gerçekleşen</div>
-            <div className="pax-page-sub">Kullanıcı bazlı hedef tabloları bağlandığında gerçek veri ile dolacak.</div>
-          </div>
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 8 }}>
-              <span style={{ color: 'var(--text-2)' }}>Hedef ilerleme</span>
-              <strong style={{ color: 'var(--text)' }}>%64</strong>
-            </div>
-            <div style={{ height: 8, background: 'var(--surface-2)', borderRadius: 999, overflow: 'hidden' }}>
-              <div style={{ height: '100%', width: '64%', background: '#10b981', borderRadius: 999 }} />
-            </div>
-          </div>
-          <div className="two-col">
-            <div className="stat-mini"><div className="stat-mini-lbl">Haftalık aktivite</div><div className="stat-mini-val">23</div></div>
-            <div className="stat-mini"><div className="stat-mini-lbl">Ort. cevap</div><div className="stat-mini-val">7 sa</div></div>
-          </div>
+      <section className="pax-card" style={{ padding: 24, display: 'grid', gap: 18 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
+          <div><small style={{ color: 'var(--text-3)' }}>E-posta</small><div style={{ marginTop: 5, fontWeight: 800 }}>{user.email}</div></div>
+          <div><small style={{ color: 'var(--text-3)' }}>Rol</small><div style={{ marginTop: 5, fontWeight: 800 }}>{roleLabels[user.role] ?? user.role}</div></div>
+          <div><small style={{ color: 'var(--text-3)' }}>Hesap durumu</small><div style={{ marginTop: 5, fontWeight: 800, color: '#15803d' }}>Aktif</div></div>
         </div>
 
-        <div className="pax-card">
-          <div className="pax-page-header" style={{ marginBottom: 20 }}>
-            <div className="pax-page-title" style={{ fontSize: 16 }}>Mail & İletişim Analitiği</div>
-            <div className="pax-page-sub">Mail entegrasyonu sonrası gerçek veriye bağlanacak.</div>
-          </div>
-          <div className="two-col">
-            <div className="stat-mini"><div className="stat-mini-lbl">Ortalama mail</div><div className="stat-mini-val">18</div></div>
-            <div className="stat-mini"><div className="stat-mini-lbl">Ort. cevap</div><div className="stat-mini-val">7 sa</div></div>
-            <div className="stat-mini"><div className="stat-mini-lbl">Cevaplanma</div><div className="stat-mini-val">%74</div></div>
-            <div className="stat-mini"><div className="stat-mini-lbl">Takip yoğunluğu</div><div className="stat-mini-val">9</div></div>
+        <div>
+          <h2 style={{ margin: '0 0 10px', fontSize: 16 }}>Etkin yetkiler</h2>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {permissions.length ? permissions.map((permission) => (
+              <span key={permission} style={{ padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 999, background: 'var(--surface-2)', fontSize: 12, fontWeight: 700 }}>
+                {permission}
+              </span>
+            )) : <span style={{ color: 'var(--text-3)' }}>Atanmış uygulama yetkisi bulunmuyor.</span>}
           </div>
         </div>
-      </div>
-
-      <div className="two-col">
-        <div className="risk-box">
-          <div className="box-title" style={{ color: '#92400e' }}>Benim Risklerim</div>
-          <ul className="box-list" style={{ color: '#78716c' }}>
-            <li>• 7 gündür temas bekleyen 3 müşteri</li>
-            <li>• Follow-up gerektiren 4 teklif</li>
-            <li>• Geri dönüş bekleyen 2 kritik başlık</li>
-          </ul>
-        </div>
-        <div className="ai-box">
-          <div className="box-title" style={{ color: '#1e40af' }}>Bana Destek Olan Agentlar</div>
-          <ul className="box-list" style={{ color: '#64748b' }}>
-            <li>• Follow-up Agent</li>
-            <li>• Teklif Hazırlayıcı</li>
-            <li>• Müşteri Segmentasyon Agent</li>
-            <li>• Haftalık Yönetici Özeti Agent</li>
-          </ul>
-        </div>
-      </div>
-    </div>
+      </section>
+    </main>
   );
 }

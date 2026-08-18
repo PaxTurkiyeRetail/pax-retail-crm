@@ -1,3 +1,6 @@
+-- DEVRE DIŞI / TARİHSEL DOSYA: kişi veya sektör adına göre CRM davranışı üretmek yasaktır.
+-- Bu dosya bilinçli olarak yorum bloğuna alınmıştır ve yeniden çalıştırılmamalıdır.
+/*
 -- BANKA / VERTICAL rapora özel müşteri yükleme + fazsız teknik aktivite desteği
 -- Kaynak: RETAİL DESTEK RAPOR VERTİCAL BANKA.xlsx
 -- Mantık:
@@ -146,3 +149,4 @@ where mp.aktif_faz_no is not null
    or upper(trim(coalesce(m.sektor, ''))) in ('BANKA', 'VERTİCAL');
 
 commit;
+*/

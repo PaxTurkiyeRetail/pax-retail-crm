@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireAllowedUserOrThrow } from '@/lib/authz';
+import { assertOwnedResourceAccess, requireAnyPermissionOrThrow } from '@/lib/authz';
 import { createPgAdminClient } from '@/lib/pg/admin';
 
 export const dynamic = 'force-dynamic';
@@ -12,7 +12,7 @@ function normalizeText(value: unknown) {
 
 export async function POST(req: Request) {
   try {
-    const me = await requireAllowedUserOrThrow();
+    const me = await requireAnyPermissionOrThrow(['activity.update.own', 'activity.update.any']);
     const body = await req.json().catch(() => ({}));
     const activityId = String(body?.activity_id ?? '').trim();
     const blocked = Boolean(body?.blocked);
@@ -23,6 +23,9 @@ export async function POST(req: Request) {
     }
 
     const admin = createPgAdminClient();
+    const { data: found } = await admin.from('pipeline_eventleri').select('created_by,created_by_user_id,created_by_email').eq('id', activityId).maybeSingle();
+    if (!found) return NextResponse.json({ message: 'Aktivite bulunamadı' }, { status: 404 });
+    assertOwnedResourceAccess({ user: me, resource: { owner_user_id: found.created_by_user_id, owner_email: found.created_by_email, owner_name: found.created_by }, ownPermission: 'activity.update.own', anyPermission: 'activity.update.any' });
     const payload = blocked
       ? {
           is_blocked: true,

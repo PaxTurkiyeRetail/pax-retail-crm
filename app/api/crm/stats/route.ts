@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createPgServerClient } from '@/lib/pg/server';
 import { createPgAdminClient } from '@/lib/pg/admin';
-import { requireCrmAccessOrThrow } from '@/lib/authz';
+import { requireCrmAccessOrThrow, userHasPermission } from '@/lib/authz';
 import { getKunyeStatus, mapKunyeDbToUi, normalizeKunyeStatusFilter } from '@/lib/kunye';
 import { fetchAllByCustomerIds, fetchAllRows } from '@/lib/reporting';
 import { isReportOnlyCustomer } from '@/lib/report-only-customers';
@@ -50,7 +50,7 @@ function toSummary(values: string[]) {
 
 export async function GET(request: Request) {
   try {
-    await requireCrmAccessOrThrow();
+    const me = await requireCrmAccessOrThrow();
     const url = new URL(request.url);
     const q = String(url.searchParams.get('q') ?? '').trim();
     const owner = String(url.searchParams.get('owner') ?? '').trim();
@@ -62,12 +62,20 @@ export async function GET(request: Request) {
     const fazNo = fazNoRaw ? Number(fazNoRaw) : NaN;
 
     const pgClient = await createPgServerClient();
+    const admin = createPgAdminClient();
+    const canReadAny = userHasPermission(me, 'customer.read.any');
+    const visibleCustomerResult = canReadAny
+      ? { data: null as any[] | null, error: null as any }
+      : await admin.from('musteriler').select('id').eq('owner_user_id', me.id).limit(10000);
+    if (visibleCustomerResult.error) return NextResponse.json({ message: visibleCustomerResult.error.message }, { status: 500 });
+    const visibleCustomerIds = canReadAny ? null : (visibleCustomerResult.data ?? []).map((row: any) => String(row.id ?? '')).filter(Boolean);
     const rawBaseRows = await fetchAllRows<any>((from, to) => {
       let qy = pgClient
         .from('vw_crm_musteriler')
         .select('musteri_id,sektor,sorumlu,entegrasyon_tipi,aktif_faz_no,musteri')
         .order('musteri', { ascending: true })
         .range(from, to);
+      if (visibleCustomerIds) qy = qy.in('musteri_id', visibleCustomerIds.length ? visibleCustomerIds : ['__none__']);
       if (owner) qy = qy.ilike('sorumlu', escapeIlike(owner));
       if (sector) qy = qy.ilike('sektor', escapeIlike(sector));
       // entegrasyon_tipi enum oldugu icin DB tarafinda ilike kullanilmaz; asagida JS filtresi uygulanir.
@@ -80,7 +88,6 @@ export async function GET(request: Request) {
 
     const baseRows = rawBaseRows.filter((row: any) => !isReportOnlyCustomer(row));
 
-    const admin = createPgAdminClient();
     const ids = baseRows.map((row: any) => String(row.musteri_id ?? '').trim()).filter(Boolean);
     const kunyeler = ids.length
       ? await fetchAllByCustomerIds<any>(

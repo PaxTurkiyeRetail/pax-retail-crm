@@ -19,11 +19,7 @@ type ParamRow = {
   value: string;
   sort_order: number;
   is_active: boolean;
-};
-
-type ResponsibleOption = {
-  label: string;
-  value: string;
+  version: number;
 };
 
 type PhaseRow = {
@@ -45,6 +41,7 @@ type EditState = {
   value: string;
   sortOrder: string;
   isActive: boolean;
+  version?: number;
 } | null;
 
 const MODULE_STYLE: Record<
@@ -117,27 +114,7 @@ function isPhaseGroup(group?: ParamGroup) {
   );
 }
 
-function isCollectionGroup(group?: ParamGroup) {
-  return group?.key === "crm_phase_optional_responsibles";
-}
-
-function normalizeResponsibleKey(value: unknown) {
-  return String(value ?? "")
-    .trim()
-    .toLocaleLowerCase("tr-TR")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/ı/g, "i")
-    .replace(/ş/g, "s")
-    .replace(/ğ/g, "g")
-    .replace(/ü/g, "u")
-    .replace(/ö/g, "o")
-    .replace(/ç/g, "c")
-    .replace(/\s+/g, " ");
-}
-
-function displayValueLabel(group?: ParamGroup) {
-  if (group?.key === "crm_phase_optional_responsibles") return "Sorumlu Adı";
+function displayValueLabel() {
   return "Görünen Ad";
 }
 
@@ -145,9 +122,6 @@ export default function ParametersClient() {
   const [groups, setGroups] = useState<ParamGroup[]>([]);
   const [rows, setRows] = useState<ParamRow[]>([]);
   const [phaseRows, setPhaseRows] = useState<PhaseRow[]>([]);
-  const [crmResponsibleOptions, setCrmResponsibleOptions] = useState<
-    ResponsibleOption[]
-  >([]);
   const [selectedModule, setSelectedModule] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
   const [selectedGroup, setSelectedGroup] = useState("");
@@ -171,7 +145,6 @@ export default function ParametersClient() {
       setGroups(nextGroups);
       setRows(data.rows ?? []);
       setPhaseRows(data.phaseRows ?? []);
-      setCrmResponsibleOptions(data.crmResponsibleOptions ?? []);
       const first = nextGroups[0];
       setSelectedModule(
         (current) => current || first?.module || "Sistem Ayarları",
@@ -254,67 +227,6 @@ export default function ParametersClient() {
     [phaseRows, selectedGroup],
   );
 
-  const phaseOptionalResponsibleRows = useMemo(() => {
-    const parameterRows = rows.filter((row) => row.group_key === "crm_phase_optional_responsibles");
-    const byKey = new Map<string, ParamRow>();
-
-    for (const row of parameterRows) {
-      const key = normalizeResponsibleKey(row.value || row.label);
-      if (key && !byKey.has(key)) byKey.set(key, row);
-    }
-
-    const optionValues = crmResponsibleOptions
-      .map((option) => String(option.value || option.label || "").trim())
-      .filter(Boolean);
-    const manualValues = parameterRows
-      .map((row) => String(row.value || row.label || "").trim())
-      .filter(Boolean);
-
-    return Array.from(new Set([...optionValues, ...manualValues]))
-      .map((name) => {
-        const key = normalizeResponsibleKey(name);
-        const row = byKey.get(key);
-        return {
-          key: key || name,
-          label: row?.label || name,
-          value: row?.value || name,
-          row,
-          isActive: Boolean(row?.is_active),
-        };
-      })
-      .sort((a, b) => a.label.localeCompare(b.label, "tr"));
-  }, [rows, crmResponsibleOptions]);
-
-  async function createPhaseOptionalResponsible(name: string) {
-    const cleaned = String(name || "").trim();
-    if (!cleaned) return;
-    setError("");
-    setMessage("");
-    try {
-      const res = await fetch("/api/admin/parameters", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          groupKey: "crm_phase_optional_responsibles",
-          label: cleaned,
-          value: cleaned,
-          sortOrder: 999,
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.message || "Sorumlu kaydedilemedi.");
-      setRows((items) => [...items, data.row]);
-      setMessage("Sorumlu güncellendi.");
-    } catch (err: any) {
-      setError(err.message || "Sorumlu kaydedilemedi.");
-    }
-  }
-
-  const moduleRows = useMemo(() => {
-    const keys = new Set(moduleGroups.map((group) => group.key));
-    return rows.filter((row) => keys.has(row.group_key));
-  }, [rows, moduleGroups]);
-
   const activeCount =
     rows.filter((row) => row.is_active).length +
     phaseRows.filter((row) => row.is_active).length;
@@ -391,6 +303,7 @@ export default function ParametersClient() {
                 value: edit.value || edit.label,
                 sortOrder: Number(edit.sortOrder || 999),
                 isActive: edit.isActive,
+                expectedVersion: edit.version,
               },
         ),
       });
@@ -601,8 +514,7 @@ export default function ParametersClient() {
             <span className={`settings-type-badge tone-${selectedMeta.tone}`}>
               {isPhaseGroup(selectedDefinition)
                 ? "Faz Yönetimi"
-                : isListModule(selectedModule) ||
-                    isCollectionGroup(selectedDefinition)
+                : isListModule(selectedModule)
                   ? "Liste Yönetimi"
                   : isBooleanGroup(selectedDefinition)
                     ? "Aç / Kapat"
@@ -629,9 +541,7 @@ export default function ParametersClient() {
             ))}
           </div>
 
-          {!isListModule(selectedModule) &&
-          !isCollectionGroup(selectedDefinition) &&
-          primaryRow ? (
+          {!isListModule(selectedModule) && primaryRow ? (
             <div className="settings-control-panel">
               {isBooleanGroup(selectedDefinition) ? (
                 <label className="settings-switch-card">
@@ -859,34 +769,22 @@ export default function ParametersClient() {
             <>
               <form onSubmit={addParameter} className="parameters-form">
                 <label className="pax-label">
-                  {displayValueLabel(selectedDefinition)}
+                  {displayValueLabel()}
                   <input
                     className="pax-input"
                     value={label}
                     onChange={(e) => setLabel(e.target.value)}
-                    placeholder={
-                      selectedDefinition?.key ===
-                      "crm_phase_optional_responsibles"
-                        ? "Örn: Müşteri Sorumlusu"
-                        : "Örn: Yeni Kasa Firması"
-                    }
+                    placeholder="Örn: Yeni Kasa Firması"
                     required
                   />
                 </label>
                 <label className="pax-label">
-                  {selectedDefinition?.key === "crm_phase_optional_responsibles"
-                    ? "Kayıt Değeri"
-                    : "Form/DB Değeri"}
+                  Form/DB Değeri
                   <input
                     className="pax-input"
                     value={value}
                     onChange={(e) => setValue(e.target.value)}
-                    placeholder={
-                      selectedDefinition?.key ===
-                      "crm_phase_optional_responsibles"
-                        ? "Boşsa sorumlu adı kullanılır"
-                        : "Boşsa görünen ad kullanılır"
-                    }
+                    placeholder="Boşsa görünen ad kullanılır"
                   />
                 </label>
                 <label className="pax-label">
@@ -907,13 +805,8 @@ export default function ParametersClient() {
                 <table className="pax-table parameters-table">
                   <thead>
                     <tr>
-                      <th>{displayValueLabel(selectedDefinition)}</th>
-                      <th>
-                        {selectedDefinition?.key ===
-                        "crm_phase_optional_responsibles"
-                          ? "Kayıt Değeri"
-                          : "Form/DB Değeri"}
-                      </th>
+                      <th>{displayValueLabel()}</th>
+                      <th>Form/DB Değeri</th>
                       <th>Sıra</th>
                       <th>Durum</th>
                       <th style={{ textAlign: "right" }}>İşlem</th>
@@ -924,92 +817,6 @@ export default function ParametersClient() {
                       <tr>
                         <td colSpan={5}>Yükleniyor...</td>
                       </tr>
-                    ) : selectedDefinition?.key ===
-                      "crm_phase_optional_responsibles" ? (
-                      phaseOptionalResponsibleRows.length === 0 ? (
-                        <tr>
-                          <td colSpan={5}>
-                            Müşterilerden sorumlu listesi bulunamadı. İstersen
-                            yukarıdan manuel sorumlu ekleyebilirsin.
-                          </td>
-                        </tr>
-                      ) : (
-                        phaseOptionalResponsibleRows.map((item) => (
-                          <tr
-                            key={item.key}
-                            style={{ opacity: item.isActive ? 1 : 0.62 }}
-                          >
-                            <td>
-                              <strong>{item.label}</strong>
-                              <div className="parameters-row-key">
-                                {item.row
-                                  ? item.row.param_key
-                                  : "müşteri sorumlusu"}
-                              </div>
-                            </td>
-                            <td>{item.value}</td>
-                            <td>{item.row?.sort_order ?? "-"}</td>
-                            <td>
-                              <label
-                                className="parameters-check"
-                                title={
-                                  item.isActive
-                                    ? "Bu sorumlu için faz istenmez"
-                                    : "Bu sorumlu için faz zorunlu"
-                                }
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={item.isActive}
-                                  onChange={() =>
-                                    item.row
-                                      ? patchRow(item.row, {
-                                          is_active: !item.row.is_active,
-                                        })
-                                      : createPhaseOptionalResponsible(
-                                          item.value,
-                                        )
-                                  }
-                                />
-                                {item.isActive ? "Faz istemez" : "Faz zorunlu"}
-                              </label>
-                            </td>
-                            <td className="parameters-actions">
-                              {item.row ? (
-                                <>
-                                  <button
-                                    className="pax-btn secondary"
-                                    type="button"
-                                    onClick={() =>
-                                      setEdit({
-                                        id: item.row!.id,
-                                        type: "parameter",
-                                        label: item.row!.label,
-                                        value: item.row!.value,
-                                        sortOrder: String(item.row!.sort_order),
-                                        isActive: item.row!.is_active,
-                                      })
-                                    }
-                                  >
-                                    Düzenle
-                                  </button>
-                                  <button
-                                    className="pax-btn secondary"
-                                    type="button"
-                                    onClick={() => remove(item.row!)}
-                                  >
-                                    Sil
-                                  </button>
-                                </>
-                              ) : (
-                                <span className="parameters-row-key">
-                                  Parametreye eklenmemiş
-                                </span>
-                              )}
-                            </td>
-                          </tr>
-                        ))
-                      )
                     ) : visibleRows.length === 0 ? (
                       <tr>
                         <td colSpan={5}>Bu grupta parametre yok.</td>
@@ -1029,32 +836,11 @@ export default function ParametersClient() {
                           <td>{row.value}</td>
                           <td>{row.sort_order}</td>
                           <td>
-                            {selectedDefinition?.key ===
-                            "crm_phase_optional_responsibles" ? (
-                              <label
-                                className="parameters-check"
-                                title={
-                                  row.is_active
-                                    ? "Bu sorumlu için faz istenmez"
-                                    : "Pasif; bu sorumlu için faz istenir"
-                                }
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={row.is_active}
-                                  onChange={() =>
-                                    patchRow(row, { is_active: !row.is_active })
-                                  }
-                                />
-                                {row.is_active ? "Faz istemez" : "Pasif"}
-                              </label>
-                            ) : (
-                              <span
-                                className={`parameters-status ${row.is_active ? "active" : "passive"}`}
-                              >
-                                {row.is_active ? "Aktif" : "Pasif"}
-                              </span>
-                            )}
+                            <span
+                              className={`parameters-status ${row.is_active ? "active" : "passive"}`}
+                            >
+                              {row.is_active ? "Aktif" : "Pasif"}
+                            </span>
                           </td>
                           <td className="parameters-actions">
                             <button
@@ -1068,23 +854,21 @@ export default function ParametersClient() {
                                   value: row.value,
                                   sortOrder: String(row.sort_order),
                                   isActive: row.is_active,
+                                  version: row.version,
                                 })
                               }
                             >
                               Düzenle
                             </button>
-                            {selectedDefinition?.key !==
-                              "crm_phase_optional_responsibles" && (
-                              <button
-                                className="pax-btn secondary"
-                                type="button"
-                                onClick={() =>
-                                  patchRow(row, { is_active: !row.is_active })
-                                }
-                              >
-                                {row.is_active ? "Pasife Al" : "Aktif Et"}
-                              </button>
-                            )}
+                            <button
+                              className="pax-btn secondary"
+                              type="button"
+                              onClick={() =>
+                                patchRow(row, { is_active: !row.is_active })
+                              }
+                            >
+                              {row.is_active ? "Pasife Al" : "Aktif Et"}
+                            </button>
                             <button
                               className="pax-btn secondary"
                               type="button"
@@ -1123,7 +907,7 @@ export default function ParametersClient() {
               <p>
                 {edit.type === "phase"
                   ? "Faz adı, owner, sıralama ve aktiflik tek yerden güncellenir. Faz no değiştirmek için silip yeniden ekle."
-                  : "Görünen ad, form/DB değeri, sıralama ve aktiflik tek yerden güncellenir."}
+                  : "Görünen ad, sıralama ve aktiflik güncellenir. Kanonik kod veri bütünlüğü için değiştirilemez."}
               </p>
             </div>
             <label className="pax-label">
@@ -1136,12 +920,13 @@ export default function ParametersClient() {
               />
             </label>
             <label className="pax-label">
-              {edit.type === "phase" ? "Owner" : "Form/DB Değeri"}
+              {edit.type === "phase" ? "Owner" : "Kanonik Kod"}
               <input
                 className="pax-input"
                 value={edit.value}
                 onChange={(e) => setEdit({ ...edit, value: e.target.value })}
                 required={edit.type !== "phase"}
+                disabled={edit.type !== "phase"}
               />
             </label>
             <label className="pax-label">

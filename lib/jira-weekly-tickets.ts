@@ -1,3 +1,5 @@
+import { externalJsonRequest } from '@/lib/integrations/http-client';
+
 export type JiraWeeklyTicketPivotRow = {
   company: string;
   created: number;
@@ -188,21 +190,58 @@ async function jiraFetchJson(path: string, init: RequestInit = {}) {
     return { ok: false, status: 0, json: null as any, text: 'Jira env eksik: JIRA_BASE_URL, JIRA_EMAIL, JIRA_API_TOKEN girilmedi.' };
   }
 
-  const response = await fetch(`${baseUrl}${path}`, {
-    ...init,
-    headers: {
-      Authorization: `Basic ${encodeBasicAuth(email, token)}`,
-      Accept: 'application/json',
-      ...(init.body ? { 'Content-Type': 'application/json' } : {}),
-      ...(init.headers ?? {}),
+  return externalJsonRequest<any>({
+    url: `${baseUrl}${path}`,
+    retryable: true,
+    retries: 1,
+    timeoutMs: 15_000,
+    init: {
+      ...init,
+      headers: {
+        Authorization: `Basic ${encodeBasicAuth(email, token)}`,
+        Accept: 'application/json',
+        ...(init.body ? { 'Content-Type': 'application/json' } : {}),
+        ...(init.headers ?? {}),
+      },
     },
-    cache: 'no-store',
   });
+}
 
-  const text = await response.text().catch(() => '');
-  let json: any = null;
-  try { json = text ? JSON.parse(text) : null; } catch { json = null; }
-  return { ok: response.ok, status: response.status, json, text };
+export async function checkJiraIntegrationHealth() {
+  const baseUrl = cleanText(process.env.JIRA_BASE_URL, '').replace(/\/+$/, '');
+  const projectKey = cleanText(process.env.JIRA_PROJECT_KEY, 'RS');
+  const missing = ['JIRA_BASE_URL', 'JIRA_EMAIL', 'JIRA_API_TOKEN'].filter(
+    (name) => !cleanText(process.env[name], ''),
+  );
+  if (missing.length) {
+    return { ok: false, configured: false, missing, baseHost: null, projectKey, identityStatus: 0, projectStatus: 0 };
+  }
+
+  let baseHost: string | null = null;
+  try {
+    const parsed = new URL(baseUrl);
+    baseHost = parsed.host;
+    if (process.env.NODE_ENV === 'production' && parsed.protocol !== 'https:') {
+      return { ok: false, configured: true, missing: [], baseHost, projectKey, identityStatus: 0, projectStatus: 0, reason: 'JIRA_BASE_URL_HTTPS_REQUIRED' };
+    }
+  } catch {
+    return { ok: false, configured: true, missing: [], baseHost: null, projectKey, identityStatus: 0, projectStatus: 0, reason: 'JIRA_BASE_URL_INVALID' };
+  }
+
+  const [identity, project] = await Promise.all([
+    jiraFetchJson('/rest/api/3/myself'),
+    jiraFetchJson(`/rest/api/3/project/${encodeURIComponent(projectKey)}`),
+  ]);
+  return {
+    ok: identity.ok && project.ok,
+    configured: true,
+    missing: [],
+    baseHost,
+    projectKey,
+    identityStatus: identity.status,
+    projectStatus: project.status,
+    reason: identity.ok && project.ok ? null : 'JIRA_REQUEST_FAILED',
+  };
 }
 
 function extractIssues(json: any): any[] {

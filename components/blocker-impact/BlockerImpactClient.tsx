@@ -30,6 +30,8 @@ import {
 import { buildForecastYears, FORECAST_MONTHS } from '@/lib/forecast-shared';
 import { buildBlockerImpactWorkbook } from '@/components/blocker-impact/BlockerImpactExport';
 import '@/styles/blocker-impact.css';
+import { useConfiguredPageSize } from '@/components/hooks/useConfiguredPageSize';
+import { PAGE_SIZE_OPTIONS } from '@/lib/ui-pagination';
 
 type Status = 'pending' | 'no_blocker' | 'open' | 'in_progress' | 'overdue' | 'resolved';
 type ViewTab = 'customers' | 'team' | 'budget';
@@ -229,7 +231,7 @@ export default function BlockerImpactClient() {
   const [scope, setScope] = useState<'all' | 'own'>('own');
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  const [pageSize, setPageSize] = useConfiguredPageSize();
   const [q, setQ] = useState('');
   const [status, setStatus] = useState('');
   const [owner, setOwner] = useState('');
@@ -516,7 +518,7 @@ export default function BlockerImpactClient() {
               <label className="blocker-search"><Search size={17} /><input value={q} onChange={(event) => { setQ(event.target.value); setPage(1); }} placeholder="Müşteri, sektör, engel veya sorumlu ara" /></label>
               {isAdmin ? <label><span>Account</span><select value={owner} onChange={(event) => { setOwner(event.target.value); setPage(1); }}><option value="">Tüm kullanıcılar</option>{ownerOptions.map((item) => <option key={item} value={item}>{item}</option>)}</select></label> : null}
               <label><span>Engel Türü</span><select value={category} onChange={(event) => { setCategory(event.target.value); setPage(1); }}><option value="">Tüm kategoriler</option>{BLOCKER_CATEGORIES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
-              <label><span>Gösterim</span><select value={String(pageSize)} onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1); }}><option value="10">10 / sayfa</option><option value="20">20 / sayfa</option><option value="50">50 / sayfa</option><option value="100">100 / sayfa</option></select></label>
+              <label><span>Gösterim</span><select value={String(pageSize)} onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1); }}>{PAGE_SIZE_OPTIONS.map((size) => <option key={size} value={size}>{size} / sayfa</option>)}</select></label>
             </div>
             <div className="blocker-status-tabs">{statusTabs.map((item) => <button key={item.value || 'all'} type="button" className={status === item.value ? 'active' : ''} onClick={() => { setStatus(item.value); setPage(1); }}>{item.label}<b>{item.count}</b></button>)}</div>
           </section>

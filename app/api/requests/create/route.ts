@@ -4,15 +4,28 @@ import { requireAllowedUserOrThrow } from '@/lib/authz';
 import { createPgAdminClient } from '@/lib/pg/admin';
 import { getAllowedUserNameForRequests } from '@/lib/request-users';
 import { canManageRequests } from '@/lib/roles';
+import { z } from 'zod';
+import { apiErrorResponse, parseJsonBody } from '@/lib/http/api-error';
+import { tryRecordAuditEvent } from '@/lib/audit';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
+
+const createRequestSchema = z.object({
+  title: z.string().trim().min(3).max(200),
+  description: z.string().trim().max(10_000).optional().default(''),
+  category_id: z.string().uuid().nullish(),
+  priority: z.enum(['low', 'medium', 'high', 'critical']).optional().default('medium'),
+  assignee_id: z.string().uuid().nullish(),
+  due_at: z.iso.datetime({ offset: true }).nullish(),
+  tags: z.array(z.string().trim().min(1).max(40)).max(20).optional().default([]),
+}).strict();
 
 export async function POST(req: Request) {
   try {
     const user = await requireAllowedUserOrThrow();
     const sb = createPgAdminClient();
-    const body = await req.json();
+    const body = await parseJsonBody(req, createRequestSchema);
 
     const { title, description, category_id, priority, assignee_id: rawAssigneeId, due_at, tags } = body;
     if (!title?.trim()) return NextResponse.json({ message: 'Başlık zorunlu' }, { status: 400 });
@@ -65,9 +78,18 @@ export async function POST(req: Request) {
       });
     }
 
+    await tryRecordAuditEvent({
+      actorId: user.id,
+      actorEmail: user.email,
+      action: 'request.created',
+      resourceType: 'request',
+      resourceId: String(request.id),
+      after: request,
+    });
+
     revalidatePath('/requests');
     return NextResponse.json(request, { status: 201 });
-  } catch (err: any) {
-    return NextResponse.json({ message: err.message }, { status: err.status ?? 500 });
+  } catch (err: unknown) {
+    return apiErrorResponse(err, 'Talep oluşturulamadı.');
   }
 }

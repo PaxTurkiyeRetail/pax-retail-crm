@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
-import { requireCrmAccessOrThrow } from '@/lib/authz';
+import { assertOwnedResourceAccess, requireCrmAccessOrThrow } from '@/lib/authz';
+import { tryRecordAuditEvent } from '@/lib/audit';
 import { createPgAdminClient } from '@/lib/pg/admin';
 import { addDaysToIsoDate, buildQuoteSummaryText, createQuoteActivity, getQuoteDetailById, getTurkeyTodayIso, normalizeDateOnly } from '@/lib/quotes/service';
 
@@ -31,6 +32,7 @@ export async function POST(request: Request) {
     const admin = createPgAdminClient();
     const detail = await getQuoteDetailById(admin, quoteId);
     if (!detail) return NextResponse.json({ message: 'Teklif bulunamadı.' }, { status: 404 });
+    assertOwnedResourceAccess({ user: me, resource: detail, ownPermission: 'quote.status.own', anyPermission: 'quote.status.any' });
 
     let activityId = (detail as any).activity_event_id ?? null;
     if (status === 'sent' && !activityId) {
@@ -73,6 +75,16 @@ ${closeNoteBlock}` : closeNoteBlock;
       }
       return NextResponse.json({ message: error.message }, { status: 400 });
     }
+
+    await tryRecordAuditEvent({
+      actorId: me.id,
+      actorEmail: me.email,
+      action: 'quote.status_changed',
+      resourceType: 'quote',
+      resourceId: quoteId,
+      before: { status: (detail as any).status, closed_reason: (detail as any).closed_reason },
+      after: payload,
+    });
 
     return NextResponse.json({ ok: true, activity_id: activityId });
   } catch (e: any) {

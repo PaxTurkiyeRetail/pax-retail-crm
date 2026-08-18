@@ -5,6 +5,8 @@ import type { CSSProperties } from 'react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { formatDate } from '@/lib/utils';
+import { useConfiguredPageSize } from '@/components/hooks/useConfiguredPageSize';
+import { PAGE_SIZE_OPTIONS } from '@/lib/ui-pagination';
 
 type QuoteRow = {
   id: string;
@@ -66,7 +68,7 @@ export default function QuotePortfolioClient() {
   const [loading, setLoading] = useState(true);
   const [onboarding, setOnboarding] = useState(false);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  const [pageSize, setPageSize] = useConfiguredPageSize();
   const [total, setTotal] = useState(0);
   const [msg, setMsg] = useState<string | null>(null);
 
@@ -84,7 +86,7 @@ export default function QuotePortfolioClient() {
       try {
         const [listRes, statsRes] = await Promise.all([
           fetch(`/api/quotes/list?${params.toString()}`, { cache: 'no-store' }),
-          fetch('/api/quotes/stats', { cache: 'no-store' }),
+          fetch(`/api/quotes/stats?${params.toString()}`, { cache: 'no-store' }),
         ]);
         const listJson = await listRes.json().catch(() => ({}));
         const statsJson = await statsRes.json().catch(() => ({}));
@@ -172,7 +174,7 @@ export default function QuotePortfolioClient() {
             {ownerOptions.map((item) => <option key={item} value={item}>{item}</option>)}
           </select>
           <select value={String(pageSize)} onChange={(e) => setPageSize(Number(e.target.value))} style={inputStyle}>
-            {[10, 20, 50, 100].map((size) => <option key={size} value={size}>{size} / sayfa</option>)}
+            {PAGE_SIZE_OPTIONS.map((size) => <option key={size} value={size}>{size} / sayfa</option>)}
           </select>
           <button onClick={() => { setQ(''); setStatus(''); setOwner(''); setPage(1); }} style={ghostButton}>Temizle</button>
         </div>

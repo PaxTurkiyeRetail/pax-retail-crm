@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireReportsAccessOrThrow } from '@/lib/authz';
+import { requireReportsAccessOrThrow, userHasPermission } from '@/lib/authz';
 import { createPgAdminClient } from '@/lib/pg/admin';
 import { fetchAllRows } from '@/lib/reporting';
 import { addDaysToIsoDate, getTurkeyTodayIso } from '@/lib/quotes/service';
@@ -11,6 +11,7 @@ type QuoteRow = {
   id: string;
   customer_id: string | null;
   owner_name: string | null;
+  owner_user_id: string | null;
   quote_no: string | null;
   opportunity_title: string | null;
   status: 'draft' | 'sent' | 'closed' | string;
@@ -61,7 +62,7 @@ function summarizeMap(map: Map<string, number>) {
 
 export async function GET(request: Request) {
   try {
-    await requireReportsAccessOrThrow();
+    const me = await requireReportsAccessOrThrow();
     const admin = createPgAdminClient();
     const url = new URL(request.url);
 
@@ -73,19 +74,22 @@ export async function GET(request: Request) {
       fetchAllRows<QuoteRow>(async (from, to) => {
         let query = admin
           .from('quotes')
-          .select('id,customer_id,owner_name,quote_no,opportunity_title,status,closed_reason,probability,proposal_date,valid_until,follow_up_date,total_amount,total_device_count,created_at,closed_at')
+          .select('id,customer_id,owner_name,owner_user_id,quote_no,opportunity_title,status,closed_reason,probability,proposal_date,valid_until,follow_up_date,total_amount,total_device_count,created_at,closed_at')
           .order('created_at', { ascending: false })
           .range(from, to);
         if (owner) query = query.ilike('owner_name', owner.replace(/[\%_]/g, ' ').trim());
         if (status) query = query.ilike('status', status);
+        if (!userHasPermission(me, 'quote.read.any')) query = query.eq('owner_user_id', me.id);
         return await query;
       }),
-      fetchAllRows<Pick<QuoteRow, 'owner_name'>>(async (from, to) => {
-        return await admin
+      fetchAllRows<Pick<QuoteRow, 'owner_name' | 'owner_user_id'>>(async (from, to) => {
+        let query = admin
           .from('quotes')
-          .select('owner_name')
+          .select('owner_name,owner_user_id')
           .order('owner_name', { ascending: true })
           .range(from, to);
+        if (!userHasPermission(me, 'quote.read.any')) query = query.eq('owner_user_id', me.id);
+        return await query;
       }),
     ]);
 

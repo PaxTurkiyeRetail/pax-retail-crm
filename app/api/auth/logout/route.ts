@@ -1,6 +1,8 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { deleteSession } from '@/lib/auth';
+import { deleteSession, getUserBySessionToken } from '@/lib/auth';
 import { shouldUseSecureAuthCookie } from '@/lib/auth-cookie';
+import { apiErrorResponse } from '@/lib/http/api-error';
+import { tryRecordAuditEvent } from '@/lib/audit';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -12,7 +14,11 @@ export async function POST(req: NextRequest) {
     const sessionToken = req.cookies.get(AUTH_COOKIE_NAME)?.value;
 
     if (sessionToken) {
+      const user = await getUserBySessionToken(sessionToken);
       await deleteSession(sessionToken);
+      if (user) {
+        await tryRecordAuditEvent({ actorId: user.id, actorEmail: user.email, action: 'auth.logout', resourceType: 'user_session', resourceId: user.id });
+      }
     }
 
     const response = NextResponse.json({ ok: true });
@@ -28,7 +34,6 @@ export async function POST(req: NextRequest) {
 
     return response;
   } catch (error) {
-    console.error('Logout error:', error);
-    return NextResponse.json({ error: 'Çıkış sırasında hata oluştu.' }, { status: 500 });
+    return apiErrorResponse(error, 'Çıkış sırasında hata oluştu.');
   }
 }

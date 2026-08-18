@@ -1,36 +1,43 @@
 import { NextResponse } from "next/server";
-import { requireSystemParametersAccessOrThrow } from "@/lib/authz";
+import { requireSystemParametersAccessOrThrow, userHasPermission, type AllowedUser } from "@/lib/authz";
 import {
   ALL_PARAMETER_GROUPS,
   createPhaseParameter,
   createSystemParameter,
   deletePhaseParameter,
   deleteSystemParameter,
-  listCrmResponsibleOptions,
+  getSystemParameterGroupKey,
   listPhaseParameters,
   listSystemParameters,
   updatePhaseParameter,
   updateSystemParameter,
 } from "@/lib/system-parameters";
+import { tryRecordAuditEvent } from '@/lib/audit';
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 const PHASE_GROUPS = new Set<string>(["faz_tanimlari", "is_ortagi_faz_tanimlari"]);
+const IDENTITY_GROUPS = new Set<string>(["system_oidc_enabled", "system_oidc_group_role_sync_enabled"]);
+
+function assertGroupManagementAccess(actor: AllowedUser, groupKey: string) {
+  if (IDENTITY_GROUPS.has(groupKey) && !userHasPermission(actor, 'admin.identity.manage')) {
+    throw Object.assign(new Error('Kurumsal kimlik parametreleri yalnız Super Admin tarafından yönetilebilir.'), { status: 403 });
+  }
+}
 
 export async function GET() {
   try {
-    await requireSystemParametersAccessOrThrow();
-    const [rows, phaseRows, crmResponsibleOptions] = await Promise.all([
+    const actor = await requireSystemParametersAccessOrThrow();
+    const [rows, phaseRows] = await Promise.all([
       listSystemParameters(),
       listPhaseParameters(),
-      listCrmResponsibleOptions(),
     ]);
+    const canManageIdentity = userHasPermission(actor, 'admin.identity.manage');
     return NextResponse.json({
-      groups: ALL_PARAMETER_GROUPS,
-      rows,
+      groups: ALL_PARAMETER_GROUPS.filter((group) => canManageIdentity || !IDENTITY_GROUPS.has(group.key)),
+      rows: rows.filter((row) => canManageIdentity || !IDENTITY_GROUPS.has(row.group_key)),
       phaseRows,
-      crmResponsibleOptions,
     });
   } catch (error: any) {
     return NextResponse.json(
@@ -42,7 +49,7 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
-    await requireSystemParametersAccessOrThrow();
+    const actor = await requireSystemParametersAccessOrThrow();
     const body = await req.json();
     const groupKey = String(body.groupKey ?? "").trim();
     const allowedGroups = new Set<string>(
@@ -53,6 +60,7 @@ export async function POST(req: Request) {
         { message: "Geçersiz parametre grubu." },
         { status: 400 },
       );
+    assertGroupManagementAccess(actor, groupKey);
 
     if (PHASE_GROUPS.has(groupKey)) {
       const row = await createPhaseParameter({
@@ -65,6 +73,7 @@ export async function POST(req: Request) {
         sortOrder:
           body.sortOrder === undefined ? undefined : Number(body.sortOrder),
       });
+      await tryRecordAuditEvent({ actorId: actor.id, actorEmail: actor.email, action: 'parameter.created', resourceType: groupKey, resourceId: String(row?.id ?? body.fazNo), after: row });
       return NextResponse.json({ row });
     }
 
@@ -82,6 +91,7 @@ export async function POST(req: Request) {
       value,
       sortOrder,
     });
+    await tryRecordAuditEvent({ actorId: actor.id, actorEmail: actor.email, action: 'parameter.created', resourceType: groupKey, resourceId: String(row.id), after: row });
     return NextResponse.json({ row });
   } catch (error: any) {
     return NextResponse.json(
@@ -93,9 +103,9 @@ export async function POST(req: Request) {
 
 export async function PATCH(req: Request) {
   try {
-    await requireSystemParametersAccessOrThrow();
+    const actor = await requireSystemParametersAccessOrThrow();
     const body = await req.json();
-    const groupKey = String(body.groupKey ?? "").trim();
+    let groupKey = String(body.groupKey ?? "").trim();
 
     if (PHASE_GROUPS.has(groupKey)) {
       const row = await updatePhaseParameter({
@@ -119,6 +129,7 @@ export async function PATCH(req: Request) {
           { message: "Faz tanımı bulunamadı." },
           { status: 404 },
         );
+      await tryRecordAuditEvent({ actorId: actor.id, actorEmail: actor.email, action: 'parameter.updated', resourceType: groupKey, resourceId: String(row.id), after: row });
       return NextResponse.json({ row });
     }
 
@@ -128,6 +139,8 @@ export async function PATCH(req: Request) {
         { message: "Parametre id zorunlu." },
         { status: 400 },
       );
+    if (!groupKey) groupKey = await getSystemParameterGroupKey(id) ?? "";
+    assertGroupManagementAccess(actor, groupKey);
     const row = await updateSystemParameter({
       id,
       label: typeof body.label === "string" ? body.label : undefined,
@@ -135,12 +148,15 @@ export async function PATCH(req: Request) {
       sortOrder:
         body.sortOrder === undefined ? undefined : Number(body.sortOrder),
       isActive: typeof body.isActive === "boolean" ? body.isActive : undefined,
+      updatedByUserId: actor.id,
+      expectedVersion: body.expectedVersion === undefined ? undefined : Number(body.expectedVersion),
     });
     if (!row)
       return NextResponse.json(
         { message: "Parametre bulunamadı." },
         { status: 404 },
       );
+    await tryRecordAuditEvent({ actorId: actor.id, actorEmail: actor.email, action: 'parameter.updated', resourceType: String(row.group_key), resourceId: String(row.id), after: row });
     return NextResponse.json({ row });
   } catch (error: any) {
     return NextResponse.json(
@@ -152,9 +168,9 @@ export async function PATCH(req: Request) {
 
 export async function DELETE(req: Request) {
   try {
-    await requireSystemParametersAccessOrThrow();
+    const actor = await requireSystemParametersAccessOrThrow();
     const url = new URL(req.url);
-    const groupKey = String(url.searchParams.get("groupKey") ?? "").trim();
+    let groupKey = String(url.searchParams.get("groupKey") ?? "").trim();
     if (PHASE_GROUPS.has(groupKey)) {
       const fazNo = Number(
         url.searchParams.get("fazNo") ?? url.searchParams.get("faz_no"),
@@ -165,6 +181,7 @@ export async function DELETE(req: Request) {
           { message: "Faz tanımı bulunamadı." },
           { status: 404 },
         );
+      await tryRecordAuditEvent({ actorId: actor.id, actorEmail: actor.email, action: 'parameter.archived', resourceType: groupKey, resourceId: String(fazNo) });
       return NextResponse.json({ ok: true });
     }
     const id = String(url.searchParams.get("id") ?? "").trim();
@@ -173,12 +190,15 @@ export async function DELETE(req: Request) {
         { message: "Parametre id zorunlu." },
         { status: 400 },
       );
-    const ok = await deleteSystemParameter(id);
+    if (!groupKey) groupKey = await getSystemParameterGroupKey(id) ?? "";
+    assertGroupManagementAccess(actor, groupKey);
+    const ok = await deleteSystemParameter(id, actor.id);
     if (!ok)
       return NextResponse.json(
         { message: "Parametre bulunamadı." },
         { status: 404 },
       );
+    await tryRecordAuditEvent({ actorId: actor.id, actorEmail: actor.email, action: 'parameter.archived', resourceType: groupKey || 'system_parameter', resourceId: id });
     return NextResponse.json({ ok: true });
   } catch (error: any) {
     return NextResponse.json(

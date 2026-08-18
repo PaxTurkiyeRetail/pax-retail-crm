@@ -1,10 +1,9 @@
 import { NextResponse } from 'next/server';
-import { requireAllowedUserOrThrow } from '@/lib/authz';
+import { requireActivityReadOrThrow, userHasPermission } from '@/lib/authz';
 import { createPgAdminClient } from '@/lib/pg/admin';
 import { DURUM_CANONICAL, activityLabelFromRow, isDisplayableActivityRow, normalizeDurum, presentDurum } from '@/lib/activities/presentation';
 import { getSlaPresentation, matchesSlaFilter } from '@/lib/sla';
-import { reportOnlyCustomerKind, isBusinessPartnerSector } from '@/lib/report-only-customers';
-import { ensureBusinessPartnerPhaseTable } from '@/lib/system-parameters';
+import { reportOnlyCustomerKind } from '@/lib/report-only-customers';
 
 
 export const dynamic = 'force-dynamic';
@@ -40,7 +39,7 @@ function chunkArray<T>(items: T[], size: number) {
 
 export async function GET(req: Request) {
   try {
-    const me = await requireAllowedUserOrThrow();
+    const me = await requireActivityReadOrThrow();
     const myName = (me.full_name ?? '').trim();
     if (!myName) return NextResponse.json({ message: 'Kullanıcı adı/soyadı boş.' }, { status: 400 });
 
@@ -89,13 +88,17 @@ export async function GET(req: Request) {
 
     const needsClientFiltering = Boolean(sla);
     const baseSelect = analyticsMode
-      ? 'id,musteri_id,faz_no,durum,aksiyon,owner,partner_owner,created_at,hedef_tarihi,created_by,is_blocked,musteriler(musteri,sektor,sorumlu)'
-      : 'id,musteri_id,faz_no,iteration_no,event_type,durum,aksiyon,owner,partner_owner,notlar,created_at,hedef_tarihi,created_by,is_blocked,blocked_note,blocked_at,blocked_by,musteriler(musteri,sektor,entegrasyon_tipi,satis_olasiligi,sorumlu)';
+      ? 'id,musteri_id,faz_no,durum,aksiyon,owner,partner_owner,created_at,hedef_tarihi,created_by,is_blocked,activity_scope,musteriler(musteri,sektor,sorumlu,customer_type)'
+      : 'id,musteri_id,faz_no,iteration_no,event_type,durum,aksiyon,owner,partner_owner,notlar,created_at,hedef_tarihi,created_by,is_blocked,blocked_note,blocked_at,blocked_by,activity_scope,musteriler(musteri,sektor,entegrasyon_tipi,satis_olasiligi,sorumlu,customer_type)';
 
     let query = admin
       .from('pipeline_eventleri')
       .select(baseSelect, { count: needsClientFiltering ? undefined : 'exact' })
       .order('created_at', { ascending: false });
+
+    if (!userHasPermission(me, 'activity.read.any')) {
+      query = query.or(`created_by_user_id.eq.${me.id},created_by_email.ilike.${escapeIlike(me.email)}`);
+    }
 
     if (Number.isFinite(fazNo)) query = query.eq('faz_no', fazNo);
     if (partner) query = query.eq('partner_owner', partner);
@@ -154,9 +157,7 @@ export async function GET(req: Request) {
         ? admin.from('faz_tanimlari').select('faz_no,asama_adi,owner').in('faz_no', phaseNos)
         : Promise.resolve({ data: [] as any[] }),
       phaseNos.length
-        ? ensureBusinessPartnerPhaseTable()
-            .then(() => admin.from('is_ortagi_faz_tanimlari').select('faz_no,asama_adi,owner,is_active').in('faz_no', phaseNos))
-            .catch(() => ({ data: [] as any[] }))
+        ? admin.from('is_ortagi_faz_tanimlari').select('faz_no,asama_adi,owner,is_active').in('faz_no', phaseNos)
         : Promise.resolve({ data: [] as any[] }),
     ]);
     const customerPhaseMap = new Map((customerPhaseResult.data ?? []).map((phase: any) => [Number(phase.faz_no), phase]));
@@ -168,7 +169,7 @@ export async function GET(req: Request) {
         const dueDate = row.hedef_tarihi ?? null;
         const activityStatus = presentDurum(row.durum);
         const customer = row?.musteriler ?? null;
-        const isBusinessPartner = reportOnlyCustomerKind(customer) === 'business-partner' || isBusinessPartnerSector(customer?.sektor);
+        const isBusinessPartner = reportOnlyCustomerKind(customer) === 'business-partner';
         const phase: any = row.faz_no != null
           ? (isBusinessPartner ? partnerPhaseMap.get(Number(row.faz_no)) : customerPhaseMap.get(Number(row.faz_no)))
           : null;

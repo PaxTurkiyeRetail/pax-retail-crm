@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { canManageRequests } from '@/lib/roles';
 
 type Options = {
   categories: { id: string; name: string; color: string; sla_hours: number }[];
@@ -10,9 +9,9 @@ type Options = {
   teams?: { id: string; name: string }[];
 };
 
-export default function NewRequestForm({ userRole, onCreated }: { userRole: string; onCreated?: () => void }) {
+export default function NewRequestForm({ userRole, canManage, onCreated }: { userRole: string; canManage: boolean; onCreated?: () => void }) {
   const router = useRouter();
-  const canAssign = canManageRequests(userRole);
+  const canAssign = canManage;
   const [options, setOptions] = useState<Options>({ categories: [], users: [] });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');

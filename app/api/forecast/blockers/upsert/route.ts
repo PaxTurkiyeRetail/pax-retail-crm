@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireCrmAccessOrThrow } from '@/lib/authz';
+import { requireAnyPermissionOrThrow } from '@/lib/authz';
 import { db } from '@/lib/db';
 import { getCustomerForBlockerOrThrow, getCustomerForecastOrThrow } from '@/lib/forecast-blocker-access';
 import {
@@ -16,7 +16,7 @@ export const revalidate = 0;
 
 export async function POST(request: Request) {
   try {
-    const me = await requireCrmAccessOrThrow();
+    const me = await requireAnyPermissionOrThrow(['forecast.write.own', 'forecast.write.any']);
     const body = await request.json().catch(() => ({}));
     const customerId = String(body.customer_id ?? '').trim();
     const requestedForecastId = String(body.forecast_id ?? '').trim();

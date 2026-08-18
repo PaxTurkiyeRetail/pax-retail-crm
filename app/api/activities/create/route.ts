@@ -1,21 +1,18 @@
 import { normalizeDurum } from '@/lib/activities/presentation';
 import { NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
-import { requireAllowedUserOrThrow } from '@/lib/authz';
-import { canCreateTechnicalActivities } from '@/lib/roles';
+import { requireActivityCreateOrThrow, userHasPermission } from '@/lib/authz';
 import { createPgAdminClient } from '@/lib/pg/admin';
 import { completeActivitiesForSamePhase, completePreviousOpenActivities } from '@/lib/activity-phase-completion';
 import { activityScopeForChannel, affectsPhaseForChannel, isTechnicalChannel, normalizeChannel } from '@/lib/activity-channels';
-import { isBusinessPartnerSector, isPhaseOptionalCustomerByResponsible, reportOnlyCustomerKind } from '@/lib/report-only-customers';
-import { getPhaseOptionalResponsibles } from '@/lib/phase-optional-responsibles';
-import { ensureBusinessPartnerPhaseTable } from '@/lib/system-parameters';
+import { assertActiveParameterValue } from '@/lib/system-parameters';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 type ActivityKanal = 'Online Toplantı' | 'Yerinde Ziyaret' | 'Telefon' | 'E-posta' | 'Teknik Ziyaret' | 'Teknik Online' | 'POM' | 'Diğer';
 type ActivityDurum = 'Devam Ediyor' | 'Tamamlandı' | 'İhtiyaç Duyulmadı' | 'Başlamadı' | 'Bekleniyor' | null;
-type WaitingSide = 'Müşteri' | 'Müşteri IT' | 'Müşteri (Finance Owner)' | 'PAX RS(Support)' | null;
+type WaitingSide = string | null;
 
 type Body = {
   activity_id?: string | null;
@@ -88,9 +85,9 @@ async function getTechnicalPhaseSnapshot(admin: any, musteri_id: string) {
 }
 
 export async function POST(req: Request) {
-  let me: Awaited<ReturnType<typeof requireAllowedUserOrThrow>>;
+  let me: Awaited<ReturnType<typeof requireActivityCreateOrThrow>>;
   try {
-    me = await requireAllowedUserOrThrow();
+    me = await requireActivityCreateOrThrow();
   } catch (e: any) {
     return NextResponse.json({ message: 'Yetkisiz' }, { status: e?.status || 401 });
   }
@@ -107,7 +104,7 @@ export async function POST(req: Request) {
 
   const kanal = normalizeChannel((body.kanal ?? body.event_type ?? 'Diğer') as string) as ActivityKanal;
   const isTechnicalActivity = isTechnicalChannel(kanal);
-  const canCreateTechnical = canCreateTechnicalActivities(me.role);
+  const canCreateTechnical = userHasPermission(me, 'activity.technical.create');
 
   if (isTechnicalActivity && !canCreateTechnical) {
     return NextResponse.json(
@@ -116,7 +113,7 @@ export async function POST(req: Request) {
     );
   }
 
-  let activity_scope = activityScopeForChannel(kanal);
+  const activity_scope = activityScopeForChannel(kanal);
   let affects_phase = affectsPhaseForChannel(kanal);
   const notlar = (body.notlar ?? '').toString().trim() || null;
   const requestedFazNo = body.faz_no ?? null;
@@ -128,6 +125,11 @@ export async function POST(req: Request) {
     body.aksiyon ??
     null;
   const explicitBekleyenTaraf = explicitBekleyenTarafRaw ? String(explicitBekleyenTarafRaw).trim() : null;
+  try {
+    await assertActiveParameterValue('activity_waiting_party', explicitBekleyenTaraf, { optional: true });
+  } catch (error: any) {
+    return NextResponse.json({ message: error?.message || 'Geçersiz bekleyen taraf.' }, { status: error?.status || 400 });
+  }
 
   const requestedNextActivity = body.plan ?? (
     body.plan_enabled && body.plan_tarih
@@ -145,7 +147,7 @@ export async function POST(req: Request) {
 
   const { data: customer } = await admin
     .from('musteriler')
-    .select('id,musteri,sorumlu,sektor')
+    .select('id,musteri,sorumlu,sektor,owner_user_id,customer_type,pipeline_policy')
     .eq('id', musteri_id)
     .maybeSingle();
 
@@ -153,15 +155,16 @@ export async function POST(req: Request) {
     return NextResponse.json({ message: 'Müşteri bulunamadı' }, { status: 404 });
   }
 
-  const phaseOptionalResponsibles = await getPhaseOptionalResponsibles();
-  const isBusinessPartnerCustomer = reportOnlyCustomerKind(customer) === 'business-partner' || isBusinessPartnerSector(customer.sektor);
-  const phaseOptionalCustomer = isPhaseOptionalCustomerByResponsible(customer, phaseOptionalResponsibles);
+  if (!userHasPermission(me, 'activity.read.any') && !userHasPermission(me, 'customer.read.any') && String(customer.owner_user_id ?? '') !== me.id) {
+    return NextResponse.json({ message: 'Bu müşteri için aktivite oluşturma yetkiniz yok.' }, { status: 403 });
+  }
+
+  const isBusinessPartnerCustomer = String(customer.customer_type ?? 'standard') === 'business_partner';
+  const phaseOptionalCustomer = String(customer.pipeline_policy ?? 'phase_required') === 'phase_optional';
   if (phaseOptionalCustomer) {
-    activity_scope = isTechnicalActivity ? 'technical' : 'account';
     affects_phase = false;
     nextActivity = null;
   }
-  if (isBusinessPartnerCustomer) await ensureBusinessPartnerPhaseTable();
   const technicalSnapshot = isTechnicalActivity ? await getTechnicalPhaseSnapshot(admin, musteri_id) : null;
 
   if (!isTechnicalActivity && !phaseOptionalCustomer && requestedFazNo == null) return NextResponse.json({ message: 'faz_no gerekli' }, { status: 400 });

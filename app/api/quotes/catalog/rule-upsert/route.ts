@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
-import { requireAdminOrThrow } from '@/lib/authz';
+import { requireQuoteCatalogAccessOrThrow } from '@/lib/authz';
 import { createPgAdminClient } from '@/lib/pg/admin';
 
 export const dynamic = 'force-dynamic';
@@ -15,7 +15,7 @@ type Body = {
 
 export async function POST(request: Request) {
   try {
-    await requireAdminOrThrow();
+    await requireQuoteCatalogAccessOrThrow();
     const body = (await request.json().catch(() => ({}))) as Body;
     const productId = String(body.product_id ?? '').trim();
     const minQty = Number(body.min_qty ?? 0);

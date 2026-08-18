@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
-import { requireCrmAccessOrThrow } from '@/lib/authz';
+import { requireAnyPermissionOrThrow, userHasPermission } from '@/lib/authz';
 import { db } from '@/lib/db';
 import { createPgAdminClient } from '@/lib/pg/admin';
 import { getQuoteCatalog } from '@/lib/quotes/service';
-import { canSeeAllForecasts, FORECAST_MONTHS, getForecastParameterOptions, isMissingForecastRelation, samePersonName, toPositiveInt } from '@/lib/forecast';
+import { FORECAST_MONTHS, getForecastParameterOptions, isMissingForecastRelation, toPositiveInt } from '@/lib/forecast';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -42,13 +42,12 @@ function normalizeItems(body: Body): ForecastItem[] {
 
 export async function POST(request: Request) {
   try {
-    const me = await requireCrmAccessOrThrow();
+    const me = await requireAnyPermissionOrThrow(['forecast.write.own', 'forecast.write.any']);
     const body = (await request.json().catch(() => ({}))) as Body;
     const customerId = String(body.customer_id ?? '').trim();
     const ownerName = String(me.full_name ?? '').trim();
-    const canSeeAll = canSeeAllForecasts(me.role);
+    const canSeeAll = userHasPermission(me, 'forecast.write.any');
 
-    if (!ownerName && !canSeeAll) return NextResponse.json({ message: 'Kullanici ad soyad bilgisi bulunamadi.' }, { status: 400 });
     if (!customerId) return NextResponse.json({ message: 'Musteri secimi zorunlu.' }, { status: 400 });
 
     const items = normalizeItems(body).map((item, index) => ({
@@ -79,12 +78,12 @@ export async function POST(request: Request) {
     }
 
     const customerCheck = await db.query(
-      `select id::text, musteri, sorumlu from public.musteriler where id = $1::uuid limit 1`,
+      `select id::text, musteri, sorumlu, owner_user_id::text from public.musteriler where id = $1::uuid limit 1`,
       [customerId],
     );
     const customer = customerCheck.rows[0];
     if (!customer) return NextResponse.json({ message: 'Musteri bulunamadi.' }, { status: 404 });
-    if (!canSeeAll && !samePersonName(customer.sorumlu, ownerName)) {
+    if (!canSeeAll && String(customer.owner_user_id ?? '') !== me.id) {
       return NextResponse.json({ message: 'Bu musteri sizin portfoyunuzde degil veya bulunamadi.' }, { status: 403 });
     }
     const forecastOwnerName = String(customer.sorumlu ?? '').trim() || ownerName || String(me.email ?? '').trim();
@@ -113,11 +112,11 @@ export async function POST(request: Request) {
             insert into public.crm_forecasts (
               customer_id, product_id, product_code_snapshot, product_name_snapshot, quantity,
               forecast_year, forecast_month, sales_channel, probability,
-              owner_name, owner_email, note, created_by_email, created_by_name, updated_by_email, updated_by_name
+              owner_name, owner_email, owner_user_id, note, created_by_email, created_by_name, updated_by_email, updated_by_name
             )
-            values ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $11, $13, $11, $13)
+            values ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $11, $14, $11, $14)
             returning id::text, customer_id::text, product_id, product_code_snapshot, product_name_snapshot, quantity,
-                      forecast_year, forecast_month, sales_channel, probability, owner_name, owner_email, note,
+                      forecast_year, forecast_month, sales_channel, probability, owner_name, owner_email, owner_user_id, note,
                       created_at::text, updated_at::text
           `,
           [
@@ -132,6 +131,7 @@ export async function POST(request: Request) {
             item.probability,
             forecastOwnerName,
             me.email,
+            customer.owner_user_id,
             item.note,
             actorName,
           ],

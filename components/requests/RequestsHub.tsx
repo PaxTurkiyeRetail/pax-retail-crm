@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { isAdminLike } from '@/lib/roles';
 import RequestsClient from './RequestsClient';
 import NewRequestForm from './NewRequestForm';
 import RequestsDashboard from './RequestsDashboard';
@@ -16,8 +15,8 @@ const LEFT_TABS: { id: Tab; label: string; adminOnly?: boolean }[] = [
   { id: 'people',    label: 'Kişiler' },
 ];
 
-export default function RequestsHub({ userRole, userId }: { userRole: string; userId: string }) {
-  const isAdmin = isAdminLike(userRole);
+export default function RequestsHub({ userRole, userId, canManage }: { userRole: string; userId: string; canManage: boolean }) {
+  const isAdmin = canManage;
   const [active, setActive] = useState<Tab>('list');
 
   useEffect(() => {
@@ -143,8 +142,8 @@ export default function RequestsHub({ userRole, userId }: { userRole: string; us
 
       {/* İçerik */}
       <div>
-        {active === 'list'      && <RequestsClient  userRole={userRole} userId={userId} onNewRequest={() => go('new')} />}
-        {active === 'new'       && <NewRequestForm  userRole={userRole} onCreated={() => go('list')} />}
+        {active === 'list'      && <RequestsClient  userRole={userRole} userId={userId} canManage={canManage} onNewRequest={() => go('new')} />}
+        {active === 'new'       && <NewRequestForm  userRole={userRole} canManage={canManage} onCreated={() => go('list')} />}
         {active === 'dashboard' && <RequestsDashboard />}
         {active === 'people'    && <PersonStats />}
       </div>

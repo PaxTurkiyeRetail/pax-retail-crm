@@ -1,7 +1,8 @@
 export const HAVUZ_ACCOUNT_NAME = 'Havuz Account';
 
-export const ENTEGRASYON_OPTIONS = ['', 'A2A', 'D2D', 'D2D+A2A'] as const;
-export const SATIS_OLASILIGI_OPTIONS = ['', 'Düşük', 'Orta', 'Yüksek'] as const;
+// Eski PostgreSQL enum kolonuna çift yazım için teknik uyumluluk listesi.
+// Kullanıcıya sunulan/izin verilen değerler system_parameters kaynağından gelir.
+export const LEGACY_INTEGRATION_ENUM_VALUES = ['A2A', 'D2D', 'D2D+A2A'] as const;
 
 export function normalizeName(value: unknown) {
   return String(value ?? '').trim();
