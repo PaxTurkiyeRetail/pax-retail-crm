@@ -74,7 +74,7 @@ export default function LoginClient({
 
   return (
     <main className="crm-auth-page">
-      <form onSubmit={onSubmit} className="crm-auth-card">
+      <form onSubmit={onSubmit} method="post" className="crm-auth-card">
         <div className="crm-auth-brand">
           <Image src="/pax-logo.svg" alt="PAX Türkiye" width={150} height={58} priority />
           <span>Kurumsal CRM</span>

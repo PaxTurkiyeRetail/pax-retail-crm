@@ -53,7 +53,7 @@ export default function ResetPasswordClient() {
 
   return (
     <main style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', padding: 24 }}>
-      <form onSubmit={onSubmit} style={{ width: '100%', maxWidth: 420, display: 'grid', gap: 12 }}>
+      <form onSubmit={onSubmit} method="post" style={{ width: '100%', maxWidth: 420, display: 'grid', gap: 12 }}>
         <h1>Yeni Şifre Belirle</h1>
         <input type="password" placeholder="Yeni şifre" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} style={{ padding: 12, border: '1px solid #ccc', borderRadius: 8 }} />
         <input type="password" placeholder="Yeni şifre tekrar" value={password2} onChange={(e) => setPassword2(e.target.value)} required minLength={8} style={{ padding: 12, border: '1px solid #ccc', borderRadius: 8 }} />

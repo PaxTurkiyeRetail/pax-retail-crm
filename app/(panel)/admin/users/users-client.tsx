@@ -191,7 +191,7 @@ export default function UsersClient() {
         </div>
       </div>
 
-      <form onSubmit={createUser} className="surface" style={{ display: 'grid', gap: 14 }}>
+      <form onSubmit={createUser} method="post" className="surface" style={{ display: 'grid', gap: 14 }}>
         <div className="toolbar">
           <div>
             <div style={{ fontWeight: 900, fontSize: 18 }}>Yeni kullanıcı ekle</div>

@@ -37,7 +37,7 @@ export default function ForgotPasswordPage() {
 
   return (
     <main style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', padding: 24 }}>
-      <form onSubmit={onSubmit} style={{ width: '100%', maxWidth: 420, display: 'grid', gap: 12 }}>
+      <form onSubmit={onSubmit} method="post" style={{ width: '100%', maxWidth: 420, display: 'grid', gap: 12 }}>
         <h1>Şifremi Unuttum</h1>
         <p>Email adresini gir. Geliştirme ortamında oluşturulan sıfırlama linki ekranda gösterilir.</p>
         <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required style={{ padding: 12, border: '1px solid #ccc', borderRadius: 8 }} />
