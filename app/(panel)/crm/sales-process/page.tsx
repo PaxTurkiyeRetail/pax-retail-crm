@@ -1,8 +1,9 @@
-import { requireCrmAccessOrThrow } from '@/lib/authz';
+import { requireCrmAccessOrThrow, requireScreenAccessOrThrow } from '@/lib/authz';
 import EmbeddedHtmlPage from '@/components/shared/EmbeddedHtmlPage';
 
 export default async function CrmSalesProcessPage() {
   await requireCrmAccessOrThrow();
+  await requireScreenAccessOrThrow('screen.crm.sales_process.view');
 
   return (
     <div className="pax-page-container">

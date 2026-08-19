@@ -1,9 +1,10 @@
-import { requireActivityCreateOrThrow } from '@/lib/authz';
+import { requireActivityCreateOrThrow, requireScreenAccessOrThrow } from '@/lib/authz';
 import QuickActivityClient from '@/components/activities/QuickActivityClient';
 import ActivityHeroDashboard from '@/components/activities/ActivityHeroDashboard';
 
 export default async function NewActivityPage() {
   await requireActivityCreateOrThrow();
+  await requireScreenAccessOrThrow('screen.crm.activities.view');
   
   return (
     <div className="pax-page-container">

@@ -9,7 +9,8 @@ type Mapping = { role_key: string; permission_key: string; granted: boolean };
 const EDITABLE_ROLES = ['admin', 'account_manager', 'itsm', 'user'];
 
 const MODULE_LABELS: Record<string, string> = {
-  admin: 'Yönetim Ekranları',
+  screen: 'Ekran Görünürlüğü (rol hangi menüyü görür)',
+  admin: 'Yönetim İşlemleri',
   crm: 'Müşteriler',
   activity: 'Aktiviteler',
   quote: 'Teklifler',
@@ -17,6 +18,8 @@ const MODULE_LABELS: Record<string, string> = {
   report: 'Raporlar',
   request: 'Talepler',
 };
+
+const MODULE_ORDER = ['screen', 'admin', 'crm', 'activity', 'quote', 'forecast', 'report', 'request'];
 
 export default function RbacClient() {
   const [roles, setRoles] = useState<Role[]>([]);
@@ -62,7 +65,11 @@ export default function RbacClient() {
       list.push(permission);
       map.set(permission.module_key, list);
     }
-    return Array.from(map.entries());
+    return Array.from(map.entries()).sort(([a], [b]) => {
+      const ai = MODULE_ORDER.indexOf(a);
+      const bi = MODULE_ORDER.indexOf(b);
+      return (ai === -1 ? MODULE_ORDER.length : ai) - (bi === -1 ? MODULE_ORDER.length : bi);
+    });
   }, [permissions]);
 
   const editableRoles = roles.filter((role) => EDITABLE_ROLES.includes(role.role_key));

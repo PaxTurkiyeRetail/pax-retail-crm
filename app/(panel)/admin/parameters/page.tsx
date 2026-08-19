@@ -1,8 +1,9 @@
-import { requireSystemParametersAccessOrThrow } from '@/lib/authz';
+import { requireSystemParametersAccessOrThrow, requireScreenAccessOrThrow } from '@/lib/authz';
 import ParametersClient from './ParametersClient';
 
 export default async function ParametersPage() {
   await requireSystemParametersAccessOrThrow();
+  await requireScreenAccessOrThrow('screen.admin.parameters.view');
 
   return (
     <div className="pax-page-container">

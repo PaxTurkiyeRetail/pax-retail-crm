@@ -1,8 +1,9 @@
-import { requirePermissionOrThrow } from '@/lib/authz';
+import { requirePermissionOrThrow, requireScreenAccessOrThrow } from '@/lib/authz';
 import RbacClient from './RbacClient';
 
 export default async function RbacPage() {
   await requirePermissionOrThrow('admin.rbac.manage');
+  await requireScreenAccessOrThrow('screen.admin.rbac.view');
 
   return (
     <div className="pax-page-container">

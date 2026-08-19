@@ -18,7 +18,12 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 const PHASE_GROUPS = new Set<string>(["faz_tanimlari", "is_ortagi_faz_tanimlari"]);
-const IDENTITY_GROUPS = new Set<string>(["system_oidc_enabled", "system_oidc_group_role_sync_enabled"]);
+const IDENTITY_GROUPS = new Set<string>([
+  "system_oidc_enabled",
+  "system_oidc_group_role_sync_enabled",
+  "system_oidc_app_role_sync_enabled",
+  "system_oidc_app_role_mapping",
+]);
 
 function assertGroupManagementAccess(actor: AllowedUser, groupKey: string) {
   if (IDENTITY_GROUPS.has(groupKey) && !userHasPermission(actor, 'admin.identity.manage')) {

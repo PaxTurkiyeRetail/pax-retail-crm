@@ -45,9 +45,28 @@ export type Permission =
   | 'request.read.all'
   | 'request.comment.own'
   | 'request.comment.all'
-  | 'request.manage';
+  | 'request.manage'
+  | 'screen.crm.dashboard.view'
+  | 'screen.crm.customers.view'
+  | 'screen.crm.activities.view'
+  | 'screen.crm.quotes.view'
+  | 'screen.crm.forecast.view'
+  | 'screen.crm.blocker_impact.view'
+  | 'screen.crm.sales_radar.view'
+  | 'screen.reports.view'
+  | 'screen.requests.view'
+  | 'screen.admin.users.view'
+  | 'screen.admin.parameters.view'
+  | 'screen.admin.identity.view'
+  | 'screen.admin.rbac.view'
+  | 'screen.admin.backup.view'
+  | 'screen.crm.nova_core.view'
+  | 'screen.crm.sales_process.view'
+  | 'screen.crm.customer_status_guide.view'
+  | 'screen.crm.approvals.view'
+  | 'screen.reports.user_activity.view';
 
-const ALL_PERMISSIONS: readonly Permission[] = [
+export const ALL_PERMISSIONS: readonly Permission[] = [
   'admin.users.manage',
   'admin.parameters.manage',
   'admin.backup.execute',
@@ -88,11 +107,33 @@ const ALL_PERMISSIONS: readonly Permission[] = [
   'request.comment.own',
   'request.comment.all',
   'request.manage',
+  'screen.crm.dashboard.view',
+  'screen.crm.customers.view',
+  'screen.crm.activities.view',
+  'screen.crm.quotes.view',
+  'screen.crm.forecast.view',
+  'screen.crm.blocker_impact.view',
+  'screen.crm.sales_radar.view',
+  'screen.reports.view',
+  'screen.requests.view',
+  'screen.admin.users.view',
+  'screen.admin.parameters.view',
+  'screen.admin.identity.view',
+  'screen.admin.rbac.view',
+  'screen.admin.backup.view',
+  'screen.crm.nova_core.view',
+  'screen.crm.sales_process.view',
+  'screen.crm.customer_status_guide.view',
+  'screen.crm.approvals.view',
+  'screen.reports.user_activity.view',
 ];
 
 const ROLE_PERMISSIONS: Readonly<Record<AllowedRole, ReadonlySet<Permission>>> = {
   super_admin: new Set(ALL_PERMISSIONS),
-  admin: new Set(ALL_PERMISSIONS.filter((permission) => !['admin.rbac.manage', 'admin.identity.manage'].includes(permission))),
+  admin: new Set(ALL_PERMISSIONS.filter((permission) => ![
+    'admin.rbac.manage', 'admin.identity.manage',
+    'screen.admin.rbac.view', 'screen.admin.identity.view',
+  ].includes(permission))),
   account_manager: new Set([
     'customer.read',
     'customer.read.any',
@@ -113,6 +154,18 @@ const ROLE_PERMISSIONS: Readonly<Record<AllowedRole, ReadonlySet<Permission>>> =
     'request.create',
     'request.read.own',
     'request.comment.own',
+    'screen.crm.dashboard.view',
+    'screen.crm.customers.view',
+    'screen.crm.activities.view',
+    'screen.crm.quotes.view',
+    'screen.crm.forecast.view',
+    'screen.crm.blocker_impact.view',
+    'screen.crm.sales_radar.view',
+    'screen.reports.view',
+    'screen.requests.view',
+    'screen.crm.nova_core.view',
+    'screen.crm.sales_process.view',
+    'screen.crm.customer_status_guide.view',
   ]),
   itsm: new Set([
     'admin.parameters.manage',
@@ -132,12 +185,32 @@ const ROLE_PERMISSIONS: Readonly<Record<AllowedRole, ReadonlySet<Permission>>> =
     'request.read.all',
     'request.comment.all',
     'request.manage',
+    'screen.crm.dashboard.view',
+    'screen.crm.customers.view',
+    'screen.crm.activities.view',
+    'screen.crm.quotes.view',
+    'screen.crm.forecast.view',
+    'screen.reports.view',
+    'screen.requests.view',
+    'screen.admin.parameters.view',
+    'screen.crm.nova_core.view',
+    'screen.crm.sales_process.view',
+    'screen.crm.customer_status_guide.view',
   ]),
   user: new Set([
     'request.create',
     'request.read.own',
     'request.comment.own',
+    'screen.requests.view',
   ]),
+};
+
+export const ROLE_PRIORITY: Record<AllowedRole, number> = {
+  user: 1,
+  account_manager: 2,
+  itsm: 3,
+  admin: 4,
+  super_admin: 5,
 };
 
 export function normalizeRole(role: string | null | undefined): AllowedRole | null {

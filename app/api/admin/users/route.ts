@@ -1,4 +1,3 @@
-import bcrypt from 'bcryptjs';
 import { NextResponse } from 'next/server';
 import { requireAdminOrThrow } from '@/lib/authz';
 import { db } from '@/lib/db';
@@ -6,94 +5,39 @@ import { db } from '@/lib/db';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-const VALID_ROLES = ['super_admin', 'admin', 'account_manager', 'itsm', 'user'] as const;
-
-const WEEKLY_TARGET_COLUMNS = [
-  'weekly_target_sales_physical',
-  'weekly_target_sales_online',
-  'weekly_target_sales_phone',
-  'weekly_target_sales_email',
-  'weekly_target_technical_physical',
-  'weekly_target_technical_online',
-  'weekly_target_total_activities',
-  'weekly_target_unique_customers',
-] as const;
-
-function toWeeklyTarget(value: unknown) {
-  const parsed = Number(value ?? 0);
-  if (!Number.isFinite(parsed) || parsed < 0) return 0;
-  return Math.floor(parsed);
-}
-
-function cleanEmail(value: unknown) {
-  return String(value ?? '').trim().toLowerCase();
-}
-
+// Kullanıcı create/delete/password/manuel rol atama akışları kaldırıldı.
+// Roller yalnız AD grup üyeliğinden türetilir (auth_group_role_mappings,
+// lib/auth/oidc.ts). Bu ekran sadece görüntüleme + is_active (emergency block)
+// için var; allowed_users.role ve secondary_roles buradan asla değiştirilmez.
 export async function GET() {
   try {
     await requireAdminOrThrow();
     const result = await db.query(`
-      select email, full_name, role, is_active,
-        weekly_target_sales_physical,
-        weekly_target_sales_online,
-        weekly_target_sales_phone,
-        weekly_target_sales_email,
-        weekly_target_technical_physical,
-        weekly_target_technical_online,
-        weekly_target_total_activities,
-        weekly_target_unique_customers
-      from public.allowed_users
-      order by coalesce(full_name, email) asc
+      select
+        au.email, au.full_name, au.role, au.secondary_roles, au.is_active,
+        au.weekly_target_sales_physical,
+        au.weekly_target_sales_online,
+        au.weekly_target_sales_phone,
+        au.weekly_target_sales_email,
+        au.weekly_target_technical_physical,
+        au.weekly_target_technical_online,
+        au.weekly_target_total_activities,
+        au.weekly_target_unique_customers,
+        ai.provider as auth_provider,
+        ai.tenant_id as auth_tenant_id,
+        ai.last_login_at as auth_last_login_at
+      from public.allowed_users au
+      left join lateral (
+        select provider, tenant_id, last_login_at
+        from public.auth_identities
+        where user_id = au.id
+        order by last_login_at desc nulls last
+        limit 1
+      ) ai on true
+      order by coalesce(au.full_name, au.email) asc
     `);
     return NextResponse.json({ users: result.rows }, { headers: { 'cache-control': 'no-store' } });
   } catch (e: any) {
     return NextResponse.json({ message: e?.message || 'Yetkisiz' }, { status: e?.status || 401 });
-  }
-}
-
-export async function POST(req: Request) {
-  try {
-    await requireAdminOrThrow();
-    const body = await req.json().catch(() => ({}));
-    const email = cleanEmail(body?.email);
-    const fullName = String(body?.full_name ?? '').trim();
-    const role = String(body?.role ?? 'user').trim().toLowerCase();
-    const password = String(body?.password ?? '').trim();
-    const weeklyTargets = WEEKLY_TARGET_COLUMNS.map((column) => toWeeklyTarget(body?.[column]));
-
-    if (!email) return NextResponse.json({ message: 'Email zorunlu' }, { status: 400 });
-    if (!fullName) return NextResponse.json({ message: 'Ad Soyad zorunlu' }, { status: 400 });
-    if (!VALID_ROLES.includes(role as any)) return NextResponse.json({ message: 'Geçersiz rol' }, { status: 400 });
-    if (!password) return NextResponse.json({ message: 'Şifre zorunlu' }, { status: 400 });
-
-    const passwordHash = await bcrypt.hash(password, 10);
-    await db.query(
-      `
-        insert into public.allowed_users (
-          email, full_name, role, is_active, password_hash,
-          weekly_target_sales_physical, weekly_target_sales_online, weekly_target_sales_phone, weekly_target_sales_email,
-          weekly_target_technical_physical, weekly_target_technical_online, weekly_target_total_activities, weekly_target_unique_customers
-        )
-        values ($1, $2, $3, true, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-        on conflict (email) do update set
-          full_name = excluded.full_name,
-          role = excluded.role,
-          is_active = true,
-          password_hash = excluded.password_hash,
-          weekly_target_sales_physical = excluded.weekly_target_sales_physical,
-          weekly_target_sales_online = excluded.weekly_target_sales_online,
-          weekly_target_sales_phone = excluded.weekly_target_sales_phone,
-          weekly_target_sales_email = excluded.weekly_target_sales_email,
-          weekly_target_technical_physical = excluded.weekly_target_technical_physical,
-          weekly_target_technical_online = excluded.weekly_target_technical_online,
-          weekly_target_total_activities = excluded.weekly_target_total_activities,
-          weekly_target_unique_customers = excluded.weekly_target_unique_customers
-      `,
-      [email, fullName, role, passwordHash, ...weeklyTargets]
-    );
-
-    return NextResponse.json({ ok: true }, { headers: { 'cache-control': 'no-store' } });
-  } catch (e: any) {
-    return NextResponse.json({ message: e?.message || 'Kullanıcı oluşturulamadı' }, { status: e?.status || 500 });
   }
 }

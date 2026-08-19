@@ -10,13 +10,12 @@ export const revalidate = 0;
 export default async function LoginPage() {
   const sessionEmail = await getSessionEmailOrNull();
   if (sessionEmail) redirect('/crm');
-  const localLoginEnabled = process.env.AUTH_LOCAL_LOGIN_ENABLED !== 'false';
   const oidcEnabled = process.env.NEXT_PUBLIC_OIDC_ENABLED === 'true'
     && await getSystemParameterBoolean('system_oidc_enabled', false);
 
   return (
     <Suspense fallback={null}>
-      <LoginClient localLoginEnabled={localLoginEnabled} oidcEnabled={oidcEnabled} />
+      <LoginClient oidcEnabled={oidcEnabled} />
     </Suspense>
   );
 }

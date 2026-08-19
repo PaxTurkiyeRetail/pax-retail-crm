@@ -1,8 +1,9 @@
-import { requireBackupAccessOrThrow } from '@/lib/authz';
+import { requireBackupAccessOrThrow, requireScreenAccessOrThrow } from '@/lib/authz';
 import DbBackupClient from './DbBackupClient';
 
 export default async function DbBackupPage() {
   await requireBackupAccessOrThrow();
+  await requireScreenAccessOrThrow('screen.admin.backup.view');
 
   return (
     <div className="pax-page-container">

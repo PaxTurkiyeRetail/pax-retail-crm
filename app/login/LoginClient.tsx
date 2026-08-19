@@ -1,8 +1,7 @@
 'use client';
 
-import { FormEvent, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { appToast } from '@/lib/app-toast';
 import Image from 'next/image';
 
 function sanitizeNextPath(value: string | null) {
@@ -12,69 +11,36 @@ function sanitizeNextPath(value: string | null) {
   return value;
 }
 
-export default function LoginClient({
-  localLoginEnabled,
-  oidcEnabled,
-}: {
-  localLoginEnabled: boolean;
-  oidcEnabled: boolean;
-}) {
+const OIDC_ERROR_MESSAGES: Record<string, string> = {
+  OIDC_PROVIDER_ERROR: 'Kurumsal hesabınızla giriş yapılamadı.',
+  OIDC_CALLBACK_INVALID: 'Kurumsal hesabınızla giriş yapılamadı.',
+  OIDC_STATE_INVALID: 'Kurumsal hesabınızla giriş yapılamadı. Tekrar deneyin.',
+  OIDC_STATE_MISMATCH: 'Kurumsal hesabınızla giriş yapılamadı. Tekrar deneyin.',
+  OIDC_STATE_EXPIRED: 'Giriş oturumunun süresi doldu. Tekrar deneyin.',
+  OIDC_NONCE_MISMATCH: 'Kurumsal hesabınızla giriş yapılamadı. Tekrar deneyin.',
+  OIDC_TOKEN_EXCHANGE_FAILED: 'Kurumsal hesabınızla giriş yapılamadı.',
+  OIDC_CLAIMS_INVALID: 'Kurumsal hesabınızla giriş yapılamadı.',
+  OIDC_USER_DISABLED: 'Hesabınız CRM erişimi için engellenmiş durumda.',
+  OIDC_NO_GROUP_ROLE: 'Hesabınız CRM erişimi olan bir kurumsal gruba atanmış değil.',
+  OIDC_GROUP_SYNC_DISABLED: 'Kurumsal kimlik servisine şu anda erişilemiyor.',
+  OIDC_DISABLED: 'Kurumsal kimlik servisine şu anda erişilemiyor.',
+  OIDC_NOT_CONFIGURED: 'Kurumsal kimlik servisine şu anda erişilemiyor.',
+  OIDC_INVALID_CONFIG: 'Kurumsal kimlik servisine şu anda erişilemiyor.',
+  OIDC_DISCOVERY_FAILED: 'Kurumsal kimlik servisine şu anda erişilemiyor.',
+  OIDC_DISCOVERY_INVALID: 'Kurumsal kimlik servisine şu anda erişilemiyor.',
+};
+
+const DEFAULT_ERROR_MESSAGE = 'Kurumsal hesabınızla giriş yapılamadı.';
+
+export default function LoginClient({ oidcEnabled }: { oidcEnabled: boolean }) {
   const searchParams = useSearchParams();
   const nextPath = useMemo(() => sanitizeNextPath(searchParams.get('next')), [searchParams]);
-
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function onSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (loading) return;
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-        cache: 'no-store',
-        credentials: 'same-origin',
-      });
-
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setError(data?.error?.message ?? data?.message ?? 'Giriş başarısız.');
-        return;
-      }
-
-      // Set-Cookie yanıtının tarayıcı tarafından kabul edildiğini doğrula.
-      const sessionCheck = await fetch('/api/me', {
-        method: 'GET',
-        cache: 'no-store',
-        credentials: 'same-origin',
-        headers: { Accept: 'application/json' },
-      });
-
-      if (!sessionCheck.ok) {
-        setError('Oturum çerezi oluşturulamadı. Adresin HTTP/HTTPS ve AUTH_COOKIE_SECURE ayarını kontrol edin.');
-        return;
-      }
-
-      appToast.success('Giriş sağlandı', 'Yönlendiriliyorsun.');
-      window.location.replace(nextPath);
-    } catch (caught) {
-      console.error('Login request failed:', caught);
-      setError('Beklenmeyen bir bağlantı hatası oluştu.');
-    } finally {
-      setLoading(false);
-    }
-  }
+  const errorCode = searchParams.get('error');
+  const errorMessage = errorCode ? (OIDC_ERROR_MESSAGES[errorCode] ?? DEFAULT_ERROR_MESSAGE) : null;
 
   return (
     <main className="crm-auth-page">
-      <form onSubmit={onSubmit} method="post" className="crm-auth-card">
+      <div className="crm-auth-card">
         <div className="crm-auth-brand">
           <Image src="/pax-logo.svg" alt="PAX Türkiye" width={150} height={58} priority />
           <span>Kurumsal CRM</span>
@@ -83,47 +49,18 @@ export default function LoginClient({
           <h1>Tekrar hoş geldiniz</h1>
           <p className="crm-auth-subtitle">Müşteri, teklif ve taleplerinizi güvenli çalışma alanından yönetin.</p>
         </div>
-        {localLoginEnabled ? <>
-        <label htmlFor="login-email">E-posta</label>
-        <input
-          id="login-email"
-          name="email"
-          type="email"
-          placeholder="Email"
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
-          autoComplete="username"
-          required
-          className="crm-auth-input"
-        />
-        <label htmlFor="login-password">Şifre</label>
-        <input
-          id="login-password"
-          name="password"
-          type="password"
-          placeholder="Şifre"
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-          autoComplete="current-password"
-          required
-          className="crm-auth-input"
-        />
-        {error ? <p role="alert" aria-live="polite" style={{ color: '#c00' }}>{error}</p> : null}
-        <button type="submit" disabled={loading} className="crm-auth-primary">
-          {loading ? 'Giriş yapılıyor...' : 'Giriş Yap'}
-        </button>
-        </> : null}
-        {oidcEnabled && localLoginEnabled ? (
-          <div className="crm-auth-divider"><span>veya</span></div>
-        ) : null}
+        {errorMessage ? <p role="alert" aria-live="polite" style={{ color: '#c00' }}>{errorMessage}</p> : null}
         {oidcEnabled ? (
           <a href={`/api/auth/oidc/start?next=${encodeURIComponent(nextPath)}`} className="crm-auth-secondary">
             Kurumsal Hesapla Giriş
           </a>
-        ) : null}
-        {localLoginEnabled ? <a href="/forgot-password" className="crm-auth-link">Şifremi unuttum</a> : null}
+        ) : (
+          <p role="alert" aria-live="polite" style={{ color: '#c00' }}>
+            Kurumsal kimlik servisine şu anda erişilemiyor.
+          </p>
+        )}
         <p className="crm-auth-security">Yetkisiz erişimler kayıt altına alınır. Oturum bilgilerinizi paylaşmayın.</p>
-      </form>
+      </div>
     </main>
   );
 }

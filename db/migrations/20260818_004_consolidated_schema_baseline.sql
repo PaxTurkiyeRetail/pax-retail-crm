@@ -887,9 +887,19 @@ comment on column public.pipeline_eventleri.updated_by_email is 'Kaydı en son d
 
 -- user_sessions / password_reset_tokens: hash tabanlı token sütunları (20260816_001).
 alter table public.user_sessions add column if not exists session_token_hash text;
+alter table public.user_sessions add column if not exists auth_source text not null default 'legacy';
 alter table public.password_reset_tokens add column if not exists token_hash text;
 alter table public.user_sessions alter column session_token drop not null;
 alter table public.password_reset_tokens alter column token drop not null;
+
+-- AD grup çözümlemesi: Graph sorgusu OIDC pairwise sub değil, immutable Entra Object ID
+-- (oid claim) kullanmalı. Object ID auth_identities'e ayrıca saklanır (additive, geriye uyumlu).
+alter table public.auth_identities add column if not exists object_id text;
+
+-- Yeni AD session'da eşleşen TÜM CRM rolleri (multi-group union) burada snapshot olarak
+-- tutulur; runtime authorization allowed_users.role yerine buradan hesaplanır. Legacy
+-- session'larda null kalır, o durumda compatibility fallback allowed_users.role kullanır.
+alter table public.user_sessions add column if not exists effective_roles text[];
 
 -- crm_forecast_blocker_history: müşteri bazlı takip (forecast_id nullable), forecast_blocker_impact_setup.sql.
 alter table public.crm_forecast_blocker_history add column if not exists customer_id uuid null;
@@ -916,6 +926,7 @@ alter table public.musteriler add column if not exists updated_at timestamptz;
 alter table public.allowed_users add column if not exists email text;
 alter table public.allowed_users add column if not exists full_name text;
 alter table public.allowed_users add column if not exists role text default 'user'::text;
+alter table public.allowed_users add column if not exists secondary_roles text[] not null default '{}'::text[];
 alter table public.allowed_users add column if not exists is_active boolean default true;
 alter table public.allowed_users add column if not exists created_at timestamp with time zone default now();
 alter table public.allowed_users add column if not exists password_hash text;
@@ -2612,42 +2623,103 @@ insert into public.rbac_permissions(permission_key, module_key, label) values
   ('request.read.all','request','Tüm talepleri görüntüleme'),
   ('request.comment.own','request','Kendi taleplerine yorum'),
   ('request.comment.all','request','Tüm taleplere yorum'),
-  ('request.manage','request','Talep yönetimi')
+  ('request.manage','request','Talep yönetimi'),
+  ('screen.crm.dashboard.view','screen','Ekran: Komuta Merkezi'),
+  ('screen.crm.customers.view','screen','Ekran: Müşteriler'),
+  ('screen.crm.activities.view','screen','Ekran: Aktiviteler'),
+  ('screen.crm.quotes.view','screen','Ekran: Teklifler'),
+  ('screen.crm.forecast.view','screen','Ekran: Forecast'),
+  ('screen.crm.blocker_impact.view','screen','Ekran: Engel & Etki'),
+  ('screen.crm.sales_radar.view','screen','Ekran: Satış Radarı'),
+  ('screen.reports.view','screen','Ekran: Rapor Merkezi'),
+  ('screen.requests.view','screen','Ekran: Talepler'),
+  ('screen.admin.users.view','screen','Ekran: Kullanıcı Yönetimi'),
+  ('screen.admin.parameters.view','screen','Ekran: Parametre Yönetimi'),
+  ('screen.admin.identity.view','screen','Ekran: Kurumsal Kimlik Yönetimi'),
+  ('screen.admin.rbac.view','screen','Ekran: Rol ve Yetki Yönetimi'),
+  ('screen.admin.backup.view','screen','Ekran: Veritabanı Yedeği'),
+  ('screen.crm.nova_core.view','screen','Ekran: Nova Core'),
+  ('screen.crm.sales_process.view','screen','Ekran: Satış Süreci'),
+  ('screen.crm.customer_status_guide.view','screen','Ekran: Müşteri Durum Rehberi'),
+  ('screen.crm.approvals.view','screen','Ekran: Onaylar'),
+  ('screen.reports.user_activity.view','screen','Ekran: Kullanıcı Aktivite Sunumu')
 on conflict (permission_key) do update set module_key = excluded.module_key, label = excluded.label;
 
 insert into public.rbac_role_permissions(role_key, permission_key)
 select 'super_admin', permission_key from public.rbac_permissions
 on conflict do nothing;
 
+-- admin rolü bilinçli olarak wildcard degil, sabit bootstrap listesi kullanir:
+-- yeni eklenen bir permission (ör. gelecekteki screen.*.view) admin'e OTOMATIK
+-- verilmez; yalnizca Super Admin admin/rbac ekranindan acikca atarsa admin kazanir.
+-- super_admin ise kod seviyesinde immutable ALL_PERMISSIONS (lib/authz.ts) oldugu
+-- icin DB satirina bagimli degil; asagidaki wildcard seed onun icin zararsizdir.
+-- Asagidaki admin/account_manager/itsm/user seed'leri SADECE ilk bootstrap'ta
+-- (rol icin hic satir yokken) calisir: "not exists" guard'i sayesinde, Super
+-- Admin bir rolun permission'larini bir kez configure ettikten (ekleyip/revoke
+-- ettikten) sonra bu SQL o role bir daha asla dokunmaz — eksik/silinmis
+-- permission'i geri eklemez, ON CONFLICT DO NOTHING tek basina bunu garanti
+-- etmez cunku rol icin farkli bir permission satiri eksikse yine INSERT edilir.
 insert into public.rbac_role_permissions(role_key, permission_key)
 select 'admin', permission_key from public.rbac_permissions
-where permission_key not in ('admin.rbac.manage','admin.identity.manage')
+where not exists (select 1 from public.rbac_role_permissions where role_key = 'admin')
+and permission_key = any(array[
+  'admin.users.manage','admin.parameters.manage','admin.backup.execute',
+  'customer.read','customer.read.any','customer.create','customer.update.own','customer.update.any',
+  'customer.assign','customer.classification.manage',
+  'activity.read','activity.read.any','activity.create','activity.update.own','activity.update.any','activity.technical.create',
+  'quote.read','quote.read.any','quote.create','quote.update.own','quote.update.any','quote.status.own','quote.status.any','quote.catalog.manage',
+  'forecast.read','forecast.read.any','forecast.write.own','forecast.write.any',
+  'report.read','report.read.own','report.read.team','report.read.all',
+  'request.create','request.read.own','request.read.all','request.comment.own','request.comment.all','request.manage',
+  'screen.crm.dashboard.view','screen.crm.customers.view','screen.crm.activities.view',
+  'screen.crm.quotes.view','screen.crm.forecast.view','screen.crm.blocker_impact.view',
+  'screen.crm.sales_radar.view','screen.reports.view','screen.requests.view',
+  'screen.admin.users.view','screen.admin.parameters.view','screen.admin.backup.view',
+  'screen.crm.nova_core.view','screen.crm.sales_process.view','screen.crm.customer_status_guide.view',
+  'screen.crm.approvals.view','screen.reports.user_activity.view'
+]::text[])
 on conflict do nothing;
 
 insert into public.rbac_role_permissions(role_key, permission_key)
 select 'account_manager', permission_key from public.rbac_permissions
-where permission_key = any(array[
+where not exists (select 1 from public.rbac_role_permissions where role_key = 'account_manager')
+and permission_key = any(array[
   'customer.read','customer.read.any','customer.create','customer.update.own',
   'quote.read','quote.read.any','quote.create','quote.update.own','quote.status.own',
   'activity.read','activity.read.any','activity.create','activity.update.own',
   'forecast.read','forecast.write.own',
-  'request.create','request.read.own','request.comment.own'
+  'request.create','request.read.own','request.comment.own',
+  'report.read.all',
+  'screen.crm.dashboard.view','screen.crm.customers.view','screen.crm.activities.view',
+  'screen.crm.quotes.view','screen.crm.forecast.view','screen.crm.blocker_impact.view',
+  'screen.crm.sales_radar.view','screen.reports.view','screen.requests.view',
+  'screen.crm.nova_core.view','screen.crm.sales_process.view','screen.crm.customer_status_guide.view'
 ]::text[])
 on conflict do nothing;
 
 insert into public.rbac_role_permissions(role_key, permission_key)
 select 'itsm', permission_key from public.rbac_permissions
-where permission_key = any(array[
+where not exists (select 1 from public.rbac_role_permissions where role_key = 'itsm')
+and permission_key = any(array[
   'admin.parameters.manage','customer.read','customer.read.any',
   'activity.read','activity.read.any','activity.create','activity.update.any',
   'activity.technical.create','request.create','request.read.all','request.comment.all','request.manage'
-  ,'quote.read','quote.read.any','forecast.read','forecast.read.any'
+  ,'quote.read','quote.read.any','forecast.read','forecast.read.any','report.read.all'
+  ,'screen.crm.dashboard.view','screen.crm.customers.view','screen.crm.activities.view',
+  'screen.crm.quotes.view','screen.crm.forecast.view','screen.reports.view',
+  'screen.requests.view','screen.admin.parameters.view',
+  'screen.crm.nova_core.view','screen.crm.sales_process.view','screen.crm.customer_status_guide.view'
 ]::text[])
 on conflict do nothing;
 
 insert into public.rbac_role_permissions(role_key, permission_key)
 select 'user', permission_key from public.rbac_permissions
-where permission_key = any(array['request.create','request.read.own','request.comment.own']::text[])
+where not exists (select 1 from public.rbac_role_permissions where role_key = 'user')
+and permission_key = any(array[
+  'request.create','request.read.own','request.comment.own',
+  'screen.requests.view'
+]::text[])
 on conflict do nothing;
 
 -- Yeni minimal hedef alt sistemi seed (crm_minimal_targets_v1.sql).
@@ -2853,8 +2925,11 @@ values
   ('system_jira_weekly_pptx_enabled', 'aktif', 'Aktif', 'true', 10, '{"source":"seed","module":"Sistem Davranışları","category":"Jira"}'::jsonb),
   ('system_jira_debug_enabled', 'aktif', 'Aktif', 'true', 10, '{"source":"seed","module":"Sistem Davranışları","category":"Jira"}'::jsonb),
   ('system_pptx_download_enabled', 'aktif', 'Aktif', 'true', 10, '{"source":"seed","module":"Sistem Davranışları","category":"Rapor / PPTX"}'::jsonb),
-  ('system_oidc_enabled', 'aktif', 'Aktif', 'true', 10, '{"source":"seed","module":"Sistem Davranışları","category":"Kimlik"}'::jsonb),
-  ('system_oidc_group_role_sync_enabled', 'aktif', 'Aktif', 'true', 10, '{"source":"seed","module":"Sistem Davranışları","category":"Kimlik"}'::jsonb),
+  -- system_oidc_enabled / system_oidc_group_role_sync_enabled BURADA SEED EDİLMEZ:
+  -- tek kanonik satır aşağıdaki "Entra ID App Role tabanli SSO" seed bloğunda
+  -- (param_key = group_key ile). İki ayrı param_key ile aynı group_key'e satır
+  -- eklemek getSystemParameterValue()'nun (group_key bazlı, tek satır seçen)
+  -- hangi değeri okuyacağını sort_order/label sırasına bırakır — duplicate seed yasak.
   ('system_page_size', '25', '25', '25', 10, '{"source":"seed","module":"Sistem Davranışları","category":"Performans"}'::jsonb)
 on conflict (group_key, param_key) do nothing;
 
@@ -2933,10 +3008,13 @@ values
   ('system_oidc_app_role_mapping', 'crm_user', 'crm.user', 'user', 50, true, jsonb_build_object('source', 'seed', 'migration', '20260818_004'))
 on conflict (group_key, param_key) do nothing;
 
--- Entra App Role senkronizasyonu varsayilan olarak acik (eski 006).
--- AD tek dogruluk kaynagi: her girişte guncel App Role CRM roluene yazilsin.
+-- DEPRECATED: system_oidc_app_role_sync_enabled / system_oidc_app_role_mapping artık
+-- authorization kararını etkilemez (lib/auth/oidc.ts resolveEnterpriseUser App Role
+-- claim'ini yalnız audit metadata olarak tutar, rol/izin kaynağı auth_group_role_mappings'tir).
+-- Bu satır geriye dönük uyumluluk için değeri değiştirmeye devam eder ama kod tarafında
+-- okunmaz; admin UI'da "Kimlik" kategorisinde deprecated olarak görünür.
 update public.system_parameters
-set value = 'true'
+set value = 'true', meta = meta || jsonb_build_object('deprecated', true, 'note', 'authorization kaynağı değil, auth_group_role_mappings kullanılır')
 where group_key = 'system_oidc_app_role_sync_enabled'
   and param_key = 'system_oidc_app_role_sync_enabled';
 

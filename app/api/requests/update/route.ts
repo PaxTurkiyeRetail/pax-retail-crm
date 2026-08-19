@@ -3,7 +3,7 @@ import { revalidatePath } from 'next/cache';
 import { requireAllowedUserOrThrow } from '@/lib/authz';
 import { createPgAdminClient } from '@/lib/pg/admin';
 import { getAllowedUserNameForRequests } from '@/lib/request-users';
-import { canManageRequests } from '@/lib/roles';
+import { userHasPermission } from '@/lib/permissions';
 import { apiErrorResponse } from '@/lib/http/api-error';
 import {
   assertCanCommentRequest,
@@ -41,7 +41,7 @@ export async function POST(req: Request) {
       eventType = 'status_changed';
       eventPayload = { from: current.status, to: newStatus };
     } else if (action === 'assign') {
-      if (!canManageRequests(user.role)) {
+      if (!userHasPermission(user, 'request.manage')) {
         return NextResponse.json({ message: 'Atama yetkin yok' }, { status: 403 });
       }
       const assigneeId = payload.assignee_id || null;
@@ -55,7 +55,7 @@ export async function POST(req: Request) {
       eventType = current.assignee_id ? 'reassigned' : 'assigned';
       eventPayload = { from: current.assignee_id, to: assigneeId, to_name: assigneeName };
     } else if (action === 'priority') {
-      if (!canManageRequests(user.role)) {
+      if (!userHasPermission(user, 'request.manage')) {
         return NextResponse.json({ message: 'Öncelik değiştirme yetkin yok' }, { status: 403 });
       }
       updateData = { priority: payload.priority };

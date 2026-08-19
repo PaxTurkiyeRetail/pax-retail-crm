@@ -1,12 +1,9 @@
-import bcrypt from 'bcryptjs';
 import { NextResponse } from 'next/server';
 import { requireAdminOrThrow } from '@/lib/authz';
 import { db } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
-
-const VALID_ROLES = ['super_admin', 'admin', 'account_manager', 'itsm', 'user'] as const;
 
 const WEEKLY_TARGET_COLUMNS = [
   'weekly_target_sales_physical',
@@ -25,6 +22,10 @@ function toWeeklyTarget(value: unknown) {
   return Math.floor(parsed);
 }
 
+// Yalnız is_active (emergency CRM access block) ve iş hedefleri buradan
+// değiştirilebilir. role/password/secondary_roles bilinçli olarak
+// desteklenmiyor: rol otoritesi tek kaynak AD grup eşlemesidir
+// (auth_group_role_mappings → lib/auth/oidc.ts), burada manuel override edilemez.
 export async function PATCH(req: Request, ctx: { params: Promise<{ email: string }> }) {
   try {
     await requireAdminOrThrow();
@@ -42,18 +43,6 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ email: string
       values.push(body.full_name.trim());
       fields.push(`full_name = $${values.length}`);
     }
-    if (typeof body?.role === 'string') {
-      if (!VALID_ROLES.includes(body.role as any)) {
-        return NextResponse.json({ message: 'Geçersiz rol' }, { status: 400 });
-      }
-      values.push(body.role);
-      fields.push(`role = $${values.length}`);
-    }
-    if (typeof body?.password === 'string' && body.password.trim()) {
-      const passwordHash = await bcrypt.hash(body.password.trim(), 10);
-      values.push(passwordHash);
-      fields.push(`password_hash = $${values.length}`);
-    }
     for (const column of WEEKLY_TARGET_COLUMNS) {
       if (Object.prototype.hasOwnProperty.call(body ?? {}, column)) {
         values.push(toWeeklyTarget(body?.[column]));
@@ -67,22 +56,6 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ email: string
 
     values.push(email.toLowerCase());
     await db.query(`update public.allowed_users set ${fields.join(', ')} where lower(email) = $${values.length}`, values);
-    return NextResponse.json({ ok: true });
-  } catch (e: any) {
-    return NextResponse.json({ message: e?.message || 'Yetkisiz' }, { status: e?.status || 401 });
-  }
-}
-
-export async function DELETE(_req: Request, ctx: { params: Promise<{ email: string }> }) {
-  try {
-    await requireAdminOrThrow();
-    const { email } = await ctx.params;
-    const userResult = await db.query(`select id from public.allowed_users where lower(email) = lower($1) limit 1`, [email]);
-    const userId = userResult.rows[0]?.id;
-    if (userId) {
-      await db.query(`delete from public.user_sessions where user_id = $1`, [userId]);
-    }
-    await db.query(`delete from public.allowed_users where lower(email) = lower($1)`, [email]);
     return NextResponse.json({ ok: true });
   } catch (e: any) {
     return NextResponse.json({ message: e?.message || 'Yetkisiz' }, { status: e?.status || 401 });

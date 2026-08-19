@@ -389,57 +389,57 @@ export default function PanelShell({
     const operations: NavItem[] = [];
     const reports: NavItem[] = [];
 
-    if (allowed('request.read.own') || allowed('request.read.all') || allowed('request.create'))
+    if ((allowed('request.read.own') || allowed('request.read.all') || allowed('request.create')) && allowed('screen.requests.view'))
       overview.push({
         href: "/requests",
         label: "Talepler",
         iconKey: "requests",
       });
 
-    if (allowed('customer.read'))
+    if (allowed('customer.read') && allowed('screen.crm.dashboard.view'))
       overview.push({
         href: "/crm",
         label: "Genel Bakış",
         iconKey: "dashboard",
         exact: true,
       });
-    if (allowed('customer.read'))
+    if (allowed('customer.read') && allowed('screen.crm.customers.view'))
       operations.push({
         href: "/crm/customers",
         label: "Müşteriler",
         iconKey: "customers",
       });
-    if (allowed('activity.read'))
+    if (allowed('activity.read') && allowed('screen.crm.activities.view'))
       operations.push({
         href: "/crm/activities",
         label: "Aktiviteler",
         iconKey: "activity",
       });
-    if (allowed('quote.read'))
+    if (allowed('quote.read') && allowed('screen.crm.quotes.view'))
       operations.push({
         href: "/crm/quotes",
         label: "Teklifler",
         iconKey: "quotes",
       });
-    if (allowed('forecast.read'))
+    if (allowed('forecast.read') && allowed('screen.crm.forecast.view'))
       operations.push({
         href: "/crm/forecast",
         label: "Forecast",
         iconKey: "forecast",
       });
-    if (allowed('forecast.read'))
+    if (allowed('forecast.read') && allowed('screen.crm.blocker_impact.view'))
       operations.push({
         href: "/crm/blocker-impact",
         label: "Engel & Etki",
         iconKey: "blocker",
       });
-    if (allowed('report.read.all'))
+    if (allowed('report.read.all') && allowed('screen.crm.sales_radar.view'))
       operations.push({
         href: "/crm/sales-radar",
         label: "Satış Radarı",
         iconKey: "weekly",
       });
-    if (allowed('report.read.all')) {
+    if (allowed('report.read.all') && allowed('screen.reports.view')) {
       reports.push({
         href: "/crm/reports/quotes",
         label: "Teklif Raporları",
@@ -475,7 +475,7 @@ export default function PanelShell({
         label: "Yönetim Sunumu",
         iconKey: "weekly",
       });
-      if (allowed('admin.users.manage')) reports.push({
+      if (allowed('admin.users.manage') && allowed('screen.reports.user_activity.view')) reports.push({
         href: "/crm/reports/user-activity-presentation",
         label: "Kullanıcı Aktivite Sunumu",
         iconKey: "weekly",
@@ -513,7 +513,7 @@ export default function PanelShell({
     .join(" ");
   const reportsActive = pathname.startsWith("/crm/reports");
   const pageMeta = useMemo(() => routeMeta(pathname), [pathname]);
-  const showParameterManagement = allowed('admin.parameters.manage');
+  const showParameterManagement = allowed('admin.parameters.manage') && allowed('screen.admin.parameters.view');
   const showReports = Boolean(
     reportsGroup && (reportsOpen || reportsActive || collapsed),
   );
@@ -727,42 +727,57 @@ export default function PanelShell({
                     <strong>{displayName}</strong>
                     <span>{email?.trim() || roleLabel(role)}</span>
                   </div>
-                  {(showParameterManagement || allowed('admin.users.manage') || allowed('admin.backup.execute') || allowed('admin.rbac.manage')) && (
-                    <div className="pax-user-dropdown-section">
-                      {showParameterManagement && (
-                        <Link
-                          href="/admin/parameters"
-                          className="pax-user-dropdown-link"
-                        >
-                          Parametre Yönetimi
-                        </Link>
-                      )}
-                      {allowed('admin.backup.execute') && (
-                        <Link
-                          href="/admin/db-backup"
-                          className="pax-user-dropdown-link"
-                        >
-                          DB Yedeği
-                        </Link>
-                      )}
-                      {allowed('admin.users.manage') && (
-                        <Link
-                          href="/admin/users"
-                          className="pax-user-dropdown-link"
-                        >
-                          Kullanıcı Yönetimi
-                        </Link>
-                      )}
-                      {allowed('admin.rbac.manage') && (
-                        <Link
-                          href="/admin/rbac"
-                          className="pax-user-dropdown-link"
-                        >
-                          Rol ve Yetki Yönetimi
-                        </Link>
-                      )}
-                    </div>
-                  )}
+                  {(() => {
+                    const showBackup = allowed('admin.backup.execute') && allowed('screen.admin.backup.view');
+                    const showUsers = allowed('admin.users.manage') && allowed('screen.admin.users.view');
+                    const showRbac = allowed('admin.rbac.manage') && allowed('screen.admin.rbac.view');
+                    const showIdentity = allowed('admin.identity.manage') && allowed('screen.admin.identity.view');
+                    if (!(showParameterManagement || showBackup || showUsers || showRbac || showIdentity)) return null;
+                    return (
+                      <div className="pax-user-dropdown-section">
+                        {showParameterManagement && (
+                          <Link
+                            href="/admin/parameters"
+                            className="pax-user-dropdown-link"
+                          >
+                            Parametre Yönetimi
+                          </Link>
+                        )}
+                        {showBackup && (
+                          <Link
+                            href="/admin/db-backup"
+                            className="pax-user-dropdown-link"
+                          >
+                            DB Yedeği
+                          </Link>
+                        )}
+                        {showUsers && (
+                          <Link
+                            href="/admin/users"
+                            className="pax-user-dropdown-link"
+                          >
+                            Kullanıcı Yönetimi
+                          </Link>
+                        )}
+                        {showRbac && (
+                          <Link
+                            href="/admin/rbac"
+                            className="pax-user-dropdown-link"
+                          >
+                            Rol ve Yetki Yönetimi
+                          </Link>
+                        )}
+                        {showIdentity && (
+                          <Link
+                            href="/admin/identity"
+                            className="pax-user-dropdown-link"
+                          >
+                            Kimlik ve Erişim Yönetimi
+                          </Link>
+                        )}
+                      </div>
+                    );
+                  })()}
                   <LogoutButton />
                 </div>
               )}

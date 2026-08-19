@@ -1,5 +1,4 @@
 import crypto from 'crypto';
-import bcrypt from 'bcryptjs';
 import { cookies } from 'next/headers';
 import { db } from './db';
 
@@ -12,9 +11,11 @@ export type AuthUser = {
   full_name: string | null;
   is_active: boolean;
   role: string | null;
+  authSource: string | null;
+  effectiveRoles: string[] | null;
 };
 
-type TokenHashSupport = { sessions: boolean; passwordResets: boolean };
+type TokenHashSupport = { sessions: boolean };
 let tokenHashSupportPromise: Promise<TokenHashSupport> | null = null;
 
 export function hashOpaqueToken(token: string) {
@@ -27,57 +28,35 @@ export async function getTokenHashSupport(): Promise<TokenHashSupport> {
       select table_name, column_name
       from information_schema.columns
       where table_schema = 'public'
-        and (
-          (table_name = 'user_sessions' and column_name = 'session_token_hash') or
-          (table_name = 'password_reset_tokens' and column_name = 'token_hash')
-        )
+        and table_name = 'user_sessions' and column_name = 'session_token_hash'
     `,
   ).then((result) => ({
-    sessions: result.rows.some((row) => row.table_name === 'user_sessions' && row.column_name === 'session_token_hash'),
-    passwordResets: result.rows.some((row) => row.table_name === 'password_reset_tokens' && row.column_name === 'token_hash'),
+    sessions: result.rows.length > 0,
   }));
   return tokenHashSupportPromise;
 }
 
-export async function verifyUserCredentials(email: string, password: string): Promise<AuthUser | null> {
-  const result = await db.query(
-    `
-      select id, email, password_hash, full_name, is_active, role
-      from public.allowed_users
-      where lower(email) = lower($1)
-      limit 1
-    `,
-    [email],
-  );
-
-  const user = result.rows[0];
-  if (!user || !user.is_active || !user.password_hash) return null;
-
-  const ok = await bcrypt.compare(password, user.password_hash);
-  if (!ok) return null;
-
-  return {
-    id: String(user.id),
-    email: String(user.email),
-    full_name: user.full_name ? String(user.full_name) : null,
-    is_active: Boolean(user.is_active),
-    role: user.role ? String(user.role) : null,
-  };
-}
+// AD-only cutover: local password doğrulama kalıcı olarak kaldırıldı.
+// Session yalnız /auth/callback (Entra OIDC) üzerinden, createSession(id, 'active_directory')
+// ile oluşturulur — password_hash/bcrypt bu dosyada artık okunmaz/kullanılmaz.
 
 export function generateSessionToken() {
   return crypto.randomBytes(48).toString('hex');
 }
 
-export async function createSession(userId: string) {
+export async function createSession(
+  userId: string,
+  authSource: 'legacy' | 'active_directory',
+  effectiveRoles?: string[],
+) {
   const sessionToken = generateSessionToken();
   const expiresAt = new Date(Date.now() + AUTH_SESSION_TTL_HOURS * 60 * 60 * 1000);
   const support = await getTokenHashSupport();
 
   if (support.sessions) {
     await db.query(
-      `insert into public.user_sessions (user_id, session_token_hash, expires_at) values ($1, $2, $3)`,
-      [userId, hashOpaqueToken(sessionToken), expiresAt],
+      `insert into public.user_sessions (user_id, session_token_hash, expires_at, auth_source, effective_roles) values ($1, $2, $3, $4, $5)`,
+      [userId, hashOpaqueToken(sessionToken), expiresAt, authSource, effectiveRoles ?? null],
     );
   } else {
     await db.query(
@@ -99,7 +78,7 @@ export async function getUserBySessionToken(sessionToken: string): Promise<AuthU
   const result = support.sessions
     ? await db.query(
       `
-        select u.id, u.email, u.full_name, u.is_active, u.role
+        select u.id, u.email, u.full_name, u.is_active, u.role, s.auth_source, s.effective_roles
         from public.user_sessions s
         inner join public.allowed_users u on u.id = s.user_id
         where s.session_token_hash = $1 and s.expires_at > now()
@@ -127,6 +106,8 @@ export async function getUserBySessionToken(sessionToken: string): Promise<AuthU
     full_name: user.full_name ? String(user.full_name) : null,
     is_active: Boolean(user.is_active),
     role: user.role ? String(user.role) : null,
+    authSource: user.auth_source ? String(user.auth_source) : null,
+    effectiveRoles: Array.isArray(user.effective_roles) ? user.effective_roles.map(String) : null,
   };
 }
 

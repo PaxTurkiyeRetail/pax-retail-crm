@@ -3,8 +3,9 @@ import crypto from 'node:crypto';
 import { createRemoteJWKSet, jwtVerify, type JWTPayload } from 'jose';
 import { db } from '@/lib/db';
 import { ApiError } from '@/lib/http/api-error';
-import { normalizeRole, type AllowedRole } from '@/lib/roles';
+import { normalizeRole, type AllowedRole, ROLE_PRIORITY } from '@/lib/roles';
 import { getSystemParameterBoolean } from '@/lib/system-parameters';
+import { getUserGroupIds } from '@/lib/auth/graph';
 
 type Discovery = {
   authorization_endpoint: string;
@@ -19,14 +20,6 @@ type OidcTransaction = {
   verifier: string;
   next: string;
   exp: number;
-};
-
-const ROLE_PRIORITY: Record<AllowedRole, number> = {
-  user: 1,
-  account_manager: 2,
-  itsm: 3,
-  admin: 4,
-  super_admin: 5,
 };
 
 let discoveryPromise: Promise<Discovery> | null = null;
@@ -166,47 +159,62 @@ function claimString(claims: JWTPayload, ...names: string[]) {
 export async function resolveEnterpriseUser(claims: JWTPayload) {
   await assertOidcRuntimeEnabled();
   const subject = claims.sub;
+  // Graph API kullanıcı arama immutable Entra Object ID (oid claim) ister.
+  // sub OIDC pairwise/app-özel identity key'idir, Graph'ta doğrudan kullanılamaz.
+  const objectId = claimString(claims, 'oid');
   const tenantId = claimString(claims, 'tid', 'tenant_id');
   const email = claimString(claims, 'preferred_username', 'email', 'upn')?.toLowerCase();
   const fullName = claimString(claims, 'name') ?? (email ? email.split('@')[0] : null);
-  if (!subject || !tenantId || !email) throw new ApiError('OIDC_CLAIMS_INVALID', 'Kimlik sağlayıcı gerekli hesap bilgilerini göndermedi.', 403);
+  if (!subject || !objectId || !tenantId || !email) throw new ApiError('OIDC_CLAIMS_INVALID', 'Kimlik sağlayıcı gerekli hesap bilgilerini göndermedi.', 403);
 
   const client = await db.connect();
   try {
     await client.query('begin');
 
-    // App Role önce çözülür: hesap yoksa dahi hangi rolle oluşturulacağı gerekir,
-    // hesap varsa da geçerli rol şartı (JIT dahil) her durumda zorunludur.
-    const mappingRows = await client.query(
-      `select label, value from public.system_parameters
-       where group_key = 'system_oidc_app_role_mapping' and is_active = true`,
-    );
-    const appRoleToCrmRole = new Map<string, AllowedRole>();
-    for (const row of mappingRows.rows as Array<{ label: string; value: string }>) {
-      const mapped = normalizeRole(row.value);
-      if (mapped) appRoleToCrmRole.set(row.label, mapped);
-    }
-    const appRoles = Array.isArray(claims.roles)
+    // Rol otoritesi TEK kaynaktır: auth_group_role_mappings üzerinden eşleşen
+    // AD grup üyeliği. Entra App Role claim'i (claims.roles) authorization için
+    // hiçbir şekilde kullanılmaz — sadece audit/telemetry metadata olarak
+    // audit event'e yazılır (aşağıda appRoleClaimsForAudit). Group sync kapalıysa
+    // veya kullanıcının eşleşen aktif grubu yoksa erişim fail-closed reddedilir;
+    // App Role'a veya varsayılan role asla düşülmez.
+    const appRoleClaimsForAudit = Array.isArray(claims.roles)
       ? claims.roles.filter((value): value is string => typeof value === 'string')
       : [];
-    const matchedRoles = appRoles
-      .map((appRole) => appRoleToCrmRole.get(appRole))
-      .filter((role): role is AllowedRole => Boolean(role));
-    if (!matchedRoles.length) {
-      throw new ApiError('OIDC_NO_APP_ROLE', 'Hesabınıza CRM erişim yetkisi atanmamış.', 403);
+
+    const groupRoleSyncEnabled = await getSystemParameterBoolean('system_oidc_group_role_sync_enabled', false);
+    if (!groupRoleSyncEnabled) {
+      throw new ApiError('OIDC_GROUP_SYNC_DISABLED', 'AD grup rol eşlemesi yapılandırılmadı. Erişim reddedildi.', 503);
     }
-    const bestRole = matchedRoles.sort((a, b) => ROLE_PRIORITY[b] - ROLE_PRIORITY[a])[0];
+    const groupIds = await getUserGroupIds(tenantId, objectId);
+    let groupRoleMatches: AllowedRole[] = [];
+    if (groupIds.length) {
+      const groupMappingRows = await client.query(
+        `select distinct role from public.auth_group_role_mappings
+         where tenant_id = $1 and group_id = any($2) and is_active = true`,
+        [tenantId, groupIds],
+      );
+      groupRoleMatches = groupMappingRows.rows
+        .map((row: { role: string }) => normalizeRole(row.role))
+        .filter((role): role is AllowedRole => Boolean(role));
+    }
+
+    const matchedRoles = Array.from(new Set(groupRoleMatches));
+    if (!matchedRoles.length) {
+      throw new ApiError('OIDC_NO_GROUP_ROLE', 'Hesabınıza eşlenmiş AD grup rolü bulunamadı. Erişim reddedildi.', 403);
+    }
+    const sortedRoles = matchedRoles.sort((a, b) => ROLE_PRIORITY[b] - ROLE_PRIORITY[a]);
+    const bestRole = sortedRoles[0];
+    const secondaryRoles = sortedRoles.slice(1);
 
     let result = await client.query(
-      `select au.id, au.email, au.full_name, au.role, au.is_active
+      `select au.id, au.email, au.full_name, au.role, au.secondary_roles, au.is_active
        from public.auth_identities ai join public.allowed_users au on au.id = ai.user_id
        where ai.provider = 'active_directory' and ai.tenant_id = $1 and ai.subject = $2 limit 1 for update of ai`,
       [tenantId, subject],
     );
-    let isNewAccount = false;
     if (!result.rowCount) {
       result = await client.query(
-        `select id, email, full_name, role, is_active from public.allowed_users
+        `select id, email, full_name, role, secondary_roles, is_active from public.allowed_users
          where lower(email) = lower($1) limit 1 for update`,
         [email],
       );
@@ -215,42 +223,55 @@ export async function resolveEnterpriseUser(claims: JWTPayload) {
         throw new ApiError('OIDC_USER_DISABLED', 'CRM hesabınız devre dışı.', 403);
       }
       if (!candidate) {
-        // Kayıt yok: Entra tarafında geçerli App Role kanıtlanmış, JIT ile hesap açılır.
-        // allowed_users burada elle yönetilmiyor; tek otorite Entra Enterprise App atamasıdır.
+        // Kayıt yok: AD grup üzerinden geçerli rol kanıtlanmış, JIT ile hesap açılır.
+        // allowed_users burada elle yönetilmiyor; tek otorite auth_group_role_mappings'tir.
         const inserted = await client.query(
-          `insert into public.allowed_users (email, full_name, role, is_active)
-           values (lower($1), $2, $3, true)
-           returning id, email, full_name, role, is_active`,
-          [email, fullName, bestRole],
+          `insert into public.allowed_users (email, full_name, role, secondary_roles, is_active)
+           values (lower($1), $2, $3, $4, true)
+           returning id, email, full_name, role, secondary_roles, is_active`,
+          [email, fullName, bestRole, secondaryRoles],
         );
         candidate = inserted.rows[0];
-        isNewAccount = true;
         result = inserted;
       }
       await client.query(
-        `insert into public.auth_identities(provider, tenant_id, subject, user_id, email_at_link_time, last_login_at)
-         values ('active_directory',$1,$2,$3,$4,now())`,
-        [tenantId, subject, candidate.id, email],
+        `insert into public.auth_identities(provider, tenant_id, subject, object_id, user_id, email_at_link_time, last_login_at)
+         values ('active_directory',$1,$2,$3,$4,$5,now())`,
+        [tenantId, subject, objectId, candidate.id, email],
       );
     } else {
       await client.query(
-        `update public.auth_identities set last_login_at = now()
+        `update public.auth_identities set last_login_at = now(), object_id = $3
          where provider = 'active_directory' and tenant_id = $1 and subject = $2`,
-        [tenantId, subject],
+        [tenantId, subject, objectId],
       );
     }
 
     const user = result.rows[0];
     if (!user?.is_active) throw new ApiError('OIDC_USER_DISABLED', 'CRM hesabınız devre dışı.', 403);
 
-    const appRoleSyncEnabled = isNewAccount
-      || await getSystemParameterBoolean('system_oidc_app_role_sync_enabled', false);
-    if (appRoleSyncEnabled && bestRole !== normalizeRole(user.role)) {
-      await client.query('update public.allowed_users set role = $1 where id = $2', [bestRole, user.id]);
+    // AD grup üyeliği tek otorite olduğu için rol her girişte grup sonucuyla
+    // senkronize edilir (App Role sync parametresi artık rol atamasını etkilemez).
+    const currentSecondary: string[] = Array.isArray(user.secondary_roles) ? user.secondary_roles : [];
+    const secondaryChanged = currentSecondary.length !== secondaryRoles.length
+      || currentSecondary.some((role: string, index: number) => role !== secondaryRoles[index]);
+    if (bestRole !== normalizeRole(user.role) || secondaryChanged) {
+      await client.query('update public.allowed_users set role = $1, secondary_roles = $2 where id = $3', [bestRole, secondaryRoles, user.id]);
       user.role = bestRole;
+      user.secondary_roles = secondaryRoles;
     }
     await client.query('commit');
-    return { id: String(user.id), email: String(user.email), fullName: user.full_name ? String(user.full_name) : null, role: normalizeRole(user.role) };
+    return {
+      id: String(user.id),
+      email: String(user.email),
+      fullName: user.full_name ? String(user.full_name) : null,
+      role: normalizeRole(user.role),
+      // Multi-group union: kullanıcının eşleşen TÜM AD grup rolleri (öncelik sırasıyla).
+      // Runtime authorization bu tam kümeden hesaplanır — allowed_users.role yalnız
+      // JIT snapshot/display amaçlıdır (bkz. lib/authz.ts effective_roles kullanımı).
+      roles: sortedRoles,
+      appRoleClaims: appRoleClaimsForAudit,
+    };
   } catch (error) {
     await client.query('rollback').catch(() => undefined);
     throw error;

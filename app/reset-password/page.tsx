@@ -1,10 +1,6 @@
-import { Suspense } from 'react';
-import ResetPasswordClient from './ResetPasswordClient';
+import { redirect } from 'next/navigation';
 
+// AD-only cutover: parola değiştirme ekranı kalıcı olarak kapatıldı.
 export default function ResetPasswordPage() {
-  return (
-    <Suspense fallback={<main style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', padding: 24 }}>Yükleniyor...</main>}>
-      <ResetPasswordClient />
-    </Suspense>
-  );
+  redirect('/login');
 }

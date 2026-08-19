@@ -1,8 +1,9 @@
 import Link from 'next/link';
-import { requirePermissionOrThrow } from '@/lib/authz';
+import { requirePermissionOrThrow, requireScreenAccessOrThrow } from '@/lib/authz';
 
 export default async function QuotePdfDownloadPage({ params }: { params: Promise<{ quoteId: string }> }) {
   await requirePermissionOrThrow('quote.read');
+  await requireScreenAccessOrThrow('screen.crm.quotes.view');
   const { quoteId } = await params;
 
   return (

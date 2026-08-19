@@ -3,7 +3,7 @@ import { revalidatePath } from 'next/cache';
 import { requireAllowedUserOrThrow } from '@/lib/authz';
 import { createPgAdminClient } from '@/lib/pg/admin';
 import { getAllowedUserNameForRequests } from '@/lib/request-users';
-import { canManageRequests } from '@/lib/roles';
+import { userHasPermission } from '@/lib/permissions';
 import { z } from 'zod';
 import { apiErrorResponse, parseJsonBody } from '@/lib/http/api-error';
 import { tryRecordAuditEvent } from '@/lib/audit';
@@ -30,7 +30,7 @@ export async function POST(req: Request) {
     const { title, description, category_id, priority, assignee_id: rawAssigneeId, due_at, tags } = body;
     if (!title?.trim()) return NextResponse.json({ message: 'Başlık zorunlu' }, { status: 400 });
 
-    const assignee_id = canManageRequests(user.role) ? (rawAssigneeId || null) : null;
+    const assignee_id = userHasPermission(user, 'request.manage') ? (rawAssigneeId || null) : null;
 
     let sla_hours = 24;
     if (category_id) {

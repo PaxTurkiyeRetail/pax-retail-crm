@@ -1,4 +1,4 @@
-import { requireCrmAccessOrThrow } from '@/lib/authz';
+import { requireCrmAccessOrThrow, requireScreenAccessOrThrow } from '@/lib/authz';
 import NovaCoreClient from '@/components/nova-core/NovaCoreClient';
 import type { AllowedRole } from '@/lib/roles';
 import type { UserRole } from '@/lib/nova-core-data';
@@ -12,6 +12,7 @@ function toNovaRole(role: AllowedRole): UserRole {
 
 export default async function NovaCorePage() {
   const user = await requireCrmAccessOrThrow();
+  await requireScreenAccessOrThrow('screen.crm.nova_core.view');
 
   return (
     <div className="pax-page-container">

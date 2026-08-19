@@ -68,12 +68,12 @@ TRUST_PROXY_HEADERS=true
 AUTH_COOKIE_SECURE=true
 ```
 
-Grup eşlemeleri doğrulandıktan ve pilot kullanıcılar geçtiğinde yerel girişi kapatın:
-
-```env
-AUTH_LOCAL_LOGIN_ENABLED=false
-NEXT_PUBLIC_LOCAL_LOGIN_ENABLED=false
-```
+Yerel (email/parola) giriş mimari olarak kalıcı kapalıdır — `AUTH_LOCAL_LOGIN_ENABLED`
+gibi bir env flag ile tekrar açılamaz, böyle bir flag artık okunmuyor. `/api/auth/login`,
+`/api/auth/forgot-password`, `/api/auth/reset-password` her koşulda `410 LOCAL_AUTH_DISABLED`
+döner; local session oluşturmaz, parola değiştirmez, başka bir auth yoluna fallback etmez.
+`allowed_users.password_hash` kolonu canlı veri korunduğu için drop edilmedi, ama artık
+kimlik doğrulama kaynağı değildir. Tek giriş yolu kurumsal (Entra) OIDC'dir.
 
 AD/OIDC iki ayrı DB parametresiyle ayrıca fail-closed korunur. IT bilgileri gelene kadar
 `system_oidc_enabled=false` ve `system_oidc_group_role_sync_enabled=false` kalmalıdır.
