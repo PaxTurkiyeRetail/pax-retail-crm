@@ -5,6 +5,33 @@ import { ApiError } from '@/lib/http/api-error';
 type CachedToken = { token: string; expiresAt: number };
 const appOnlyTokenCache = new Map<string, CachedToken>();
 
+/** Object ID'yi loglarda tam göstermeden korelasyon için kısalt (ör. "a1b2c3ef...**89"). */
+function maskId(value: string): string {
+  if (value.length <= 8) return '***';
+  return `${value.slice(0, 8)}...${value.slice(-2)}`;
+}
+
+/** Graph/AAD hata gövdesinden secret/token içermeyen alanları çıkar. */
+async function extractGraphErrorDiagnostics(response: Response) {
+  const requestId = response.headers.get('request-id') ?? response.headers.get('x-ms-ags-diagnostic') ?? null;
+  const clientRequestId = response.headers.get('client-request-id') ?? null;
+  let code: string | null = null;
+  let message: string | null = null;
+  try {
+    const body = await response.json() as { error?: { code?: string; message?: string } | string; error_description?: string };
+    if (typeof body.error === 'object' && body.error) {
+      code = body.error.code ?? null;
+      message = body.error.message ?? null;
+    } else if (typeof body.error === 'string') {
+      code = body.error;
+      message = body.error_description ?? null;
+    }
+  } catch {
+    // gövde JSON değil / okunamadı — status/header teşhisi yine de loglanır
+  }
+  return { status: response.status, code, message, requestId, clientRequestId };
+}
+
 async function getAppOnlyAccessToken(tenantId: string): Promise<string> {
   const cached = appOnlyTokenCache.get(tenantId);
   if (cached && cached.expiresAt > Date.now() + 30_000) return cached.token;
@@ -26,6 +53,10 @@ async function getAppOnlyAccessToken(tenantId: string): Promise<string> {
     cache: 'no-store',
   });
   if (!response.ok) {
+    const diag = await extractGraphErrorDiagnostics(response);
+    console.error(
+      `[graph.getAppOnlyAccessToken] token request failed tenant=${maskId(tenantId)} status=${diag.status} code=${diag.code ?? 'n/a'} message=${diag.message ?? 'n/a'} request-id=${diag.requestId ?? 'n/a'}`,
+    );
     throw new ApiError('OIDC_GRAPH_TOKEN_FAILED', 'Kurumsal grup bilgisi alınamadı.', 503);
   }
   const json = await response.json() as { access_token?: string; expires_in?: number };
@@ -49,6 +80,10 @@ export async function getUserGroupIds(tenantId: string, userObjectId: string): P
       cache: 'no-store',
     });
     if (!response.ok) {
+      const diag = await extractGraphErrorDiagnostics(response);
+      console.error(
+        `[graph.getUserGroupIds] memberOf failed tenant=${maskId(tenantId)} oid=${maskId(userObjectId)} status=${diag.status} code=${diag.code ?? 'n/a'} message=${diag.message ?? 'n/a'} request-id=${diag.requestId ?? 'n/a'} client-request-id=${diag.clientRequestId ?? 'n/a'}`,
+      );
       throw new ApiError('OIDC_GRAPH_MEMBEROF_FAILED', 'Kurumsal grup bilgisi alınamadı.', 503);
     }
     const json = await response.json() as { value?: Array<{ id?: string }>; '@odata.nextLink'?: string };
