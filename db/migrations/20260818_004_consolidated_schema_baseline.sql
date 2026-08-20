@@ -2722,6 +2722,32 @@ and permission_key = any(array[
 ]::text[])
 on conflict do nothing;
 
+-- Backfill: screen.*.view permission'lari admin/account_manager/itsm/user icin
+-- guard'li bootstrap bloklarindan SONRA eklendigi icin ("where not exists" rol
+-- icin herhangi bir satir varsa atlar), canli DB'de bu roller screen.* satiri
+-- olmadan kalmisti -> requireScreenAccessOrThrow herkeste (super_admin haric)
+-- FORBIDDEN atiyordu. Composite PK (role_key,permission_key) + ON CONFLICT DO
+-- NOTHING sayesinde idempotent ve mevcut/ozellestirilmis satirlari bozmaz.
+insert into public.rbac_role_permissions(role_key, permission_key)
+select v.role_key, v.permission_key from (values
+  ('admin','screen.crm.dashboard.view'),('admin','screen.crm.customers.view'),('admin','screen.crm.activities.view'),
+  ('admin','screen.crm.quotes.view'),('admin','screen.crm.forecast.view'),('admin','screen.crm.blocker_impact.view'),
+  ('admin','screen.crm.sales_radar.view'),('admin','screen.reports.view'),('admin','screen.requests.view'),
+  ('admin','screen.admin.users.view'),('admin','screen.admin.parameters.view'),('admin','screen.admin.backup.view'),
+  ('admin','screen.crm.nova_core.view'),('admin','screen.crm.sales_process.view'),('admin','screen.crm.customer_status_guide.view'),
+  ('admin','screen.crm.approvals.view'),('admin','screen.reports.user_activity.view'),
+  ('account_manager','screen.crm.dashboard.view'),('account_manager','screen.crm.customers.view'),('account_manager','screen.crm.activities.view'),
+  ('account_manager','screen.crm.quotes.view'),('account_manager','screen.crm.forecast.view'),('account_manager','screen.crm.blocker_impact.view'),
+  ('account_manager','screen.crm.sales_radar.view'),('account_manager','screen.reports.view'),('account_manager','screen.requests.view'),
+  ('account_manager','screen.crm.nova_core.view'),('account_manager','screen.crm.sales_process.view'),('account_manager','screen.crm.customer_status_guide.view'),
+  ('itsm','screen.crm.dashboard.view'),('itsm','screen.crm.customers.view'),('itsm','screen.crm.activities.view'),
+  ('itsm','screen.crm.quotes.view'),('itsm','screen.crm.forecast.view'),('itsm','screen.reports.view'),
+  ('itsm','screen.requests.view'),('itsm','screen.admin.parameters.view'),
+  ('itsm','screen.crm.nova_core.view'),('itsm','screen.crm.sales_process.view'),('itsm','screen.crm.customer_status_guide.view'),
+  ('user','screen.requests.view')
+) as v(role_key, permission_key)
+on conflict do nothing;
+
 -- Yeni minimal hedef alt sistemi seed (crm_minimal_targets_v1.sql).
 insert into public.crm_target_definitions (code, name, description, unit, display_order)
 values
