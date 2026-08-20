@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
 
     const { claims, next } = await redeemAuthorizationCode({ code, state, transactionCookie, origin });
     const user = await resolveEnterpriseUser(claims);
-    const { sessionToken, expiresAt } = await createSession(user.id, 'active_directory', user.roles);
+    const { sessionToken } = await createSession(user.id, 'active_directory', user.roles);
     await recordAuditEvent({ actorId: user.id, actorEmail: user.email, action: 'auth.oidc.succeeded', resourceType: 'user_session', resourceId: user.id, metadata: { provider: 'active_directory', role: user.role, appRoleClaims: user.appRoleClaims } });
 
     const response = NextResponse.redirect(new URL(next, origin));
@@ -29,7 +29,9 @@ export async function GET(request: NextRequest) {
       httpOnly: true,
       secure: shouldUseSecureAuthCookie(request),
       sameSite: 'lax',
-      expires: expiresAt,
+      // expires yok: tarayıcı session cookie'si — sekme/tarayıcı komple kapanınca
+      // silinir, açılışta AD login tekrar istenir. Server taraf 12 saatlik TTL
+      // (user_sessions.expires_at) ayrıca korunmaya devam eder.
       path: '/',
       priority: 'high',
     });
