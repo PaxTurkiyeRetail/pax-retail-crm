@@ -406,27 +406,42 @@ export default function ParametersClient() {
         if (draftValue === undefined) continue;
         if (group.key === "system_jira_api_token" && !draftValue.trim())
           continue;
-        if (!row) continue;
-        if (draftValue.trim() === row.value) continue;
-        const res = await fetch("/api/admin/parameters", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            id: row.id,
-            label: row.label,
-            value: draftValue.trim(),
-            sortOrder: row.sort_order,
-            isActive: true,
-          }),
-        });
-        const data = await res.json();
-        if (!res.ok)
-          throw new Error(
-            data.message || `${group.title} kaydedilemedi.`,
+        if (row) {
+          if (draftValue.trim() === row.value) continue;
+          const res = await fetch("/api/admin/parameters", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              id: row.id,
+              label: row.label,
+              value: draftValue.trim(),
+              sortOrder: row.sort_order,
+              isActive: true,
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok)
+            throw new Error(data.message || `${group.title} kaydedilemedi.`);
+          setRows((items) =>
+            items.map((item) => (item.id === data.row.id ? data.row : item)),
           );
-        setRows((items) =>
-          items.map((item) => (item.id === data.row.id ? data.row : item)),
-        );
+        } else {
+          if (!draftValue.trim()) continue;
+          const res = await fetch("/api/admin/parameters", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              groupKey: group.key,
+              label: group.title,
+              value: draftValue.trim(),
+              sortOrder: 10,
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok)
+            throw new Error(data.message || `${group.title} kaydedilemedi.`);
+          setRows((items) => [...items, data.row]);
+        }
       }
       setJiraDraft({});
       setMessage("Jira ayarları kaydedildi.");
