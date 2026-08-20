@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { createSession } from '@/lib/auth';
+import { createSession, AUTH_SESSION_TTL_HOURS } from '@/lib/auth';
 import { shouldUseSecureAuthCookie } from '@/lib/auth-cookie';
 import { assertOidcRuntimeEnabled, redeemAuthorizationCode, resolveEnterpriseUser } from '@/lib/auth/oidc';
 import { ApiError } from '@/lib/http/api-error';
@@ -29,9 +29,9 @@ export async function GET(request: NextRequest) {
       httpOnly: true,
       secure: shouldUseSecureAuthCookie(request),
       sameSite: 'lax',
-      // expires yok: tarayıcı session cookie'si — sekme/tarayıcı komple kapanınca
-      // silinir, açılışta AD login tekrar istenir. Server taraf 12 saatlik TTL
-      // (user_sessions.expires_at) ayrıca korunmaya devam eder.
+      // maxAge server TTL ile eşit: tarayıcı kapansa da TTL dolana kadar
+      // tekrar AD login istenmez. Logout cookie'yi elle siler.
+      maxAge: AUTH_SESSION_TTL_HOURS * 60 * 60,
       path: '/',
       priority: 'high',
     });

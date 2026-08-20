@@ -567,17 +567,37 @@ export default function ParametersClient() {
                   className="parameters-form settings-single-form"
                   onSubmit={(e) => {
                     e.preventDefault();
-                    patchRow(primaryRow, {
+                    // Hassas alanda (token) değer boşsa mevcut değeri ezme;
+                    // sadece admin yeni bir değer yazdıysa gönder.
+                    const patch: { label: string; value?: string } = {
                       label: value || primaryRow.label,
-                      value: value || primaryRow.value,
-                    });
+                    };
+                    if (value.trim()) patch.value = value.trim();
+                    patchRow(primaryRow, patch);
+                    setValue("");
                   }}
                 >
                   <label className="pax-label">
-                    Değer
+                    {selectedGroup === "system_jira_api_token"
+                      ? "Yeni Değer (mevcut token maskeli gösterilir, değiştirmek için yaz)"
+                      : "Değer"}
                     <input
                       className="pax-input"
-                      value={value || primaryRow.value}
+                      type={
+                        selectedGroup === "system_jira_api_token"
+                          ? "password"
+                          : "text"
+                      }
+                      value={
+                        selectedGroup === "system_jira_api_token"
+                          ? value
+                          : value || primaryRow.value
+                      }
+                      placeholder={
+                        selectedGroup === "system_jira_api_token"
+                          ? primaryRow.value
+                          : undefined
+                      }
                       onChange={(e) => setValue(e.target.value)}
                     />
                   </label>

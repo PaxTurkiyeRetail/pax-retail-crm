@@ -489,6 +489,70 @@ export const SYSTEM_BEHAVIOR_PARAMETER_GROUPS = [
     type: "boolean",
   },
   {
+    key: "system_jira_base_url",
+    module: "Entegrasyonlar",
+    category: "Jira",
+    title: "Jira Base URL",
+    description: "Jira instance adresi (örn. https://firma.atlassian.net). Boşsa JIRA_BASE_URL env değişkenine düşer.",
+    type: "text",
+  },
+  {
+    key: "system_jira_email",
+    module: "Entegrasyonlar",
+    category: "Jira",
+    title: "Jira E-posta",
+    description: "Jira API kullanıcı e-postası. Boşsa JIRA_EMAIL env değişkenine düşer.",
+    type: "text",
+  },
+  {
+    key: "system_jira_api_token",
+    module: "Entegrasyonlar",
+    category: "Jira",
+    title: "Jira API Token",
+    description: "Jira API token (HASSAS). Listede maskelenir. Boşsa JIRA_API_TOKEN env değişkenine düşer.",
+    type: "text",
+  },
+  {
+    key: "system_jira_project_key",
+    module: "Entegrasyonlar",
+    category: "Jira",
+    title: "Jira Proje Anahtarı",
+    description: "Sorgulanacak Jira proje kodu (örn. RS). Boşsa JIRA_PROJECT_KEY env değişkenine düşer.",
+    type: "text",
+  },
+  {
+    key: "system_jira_company_field_id",
+    module: "Entegrasyonlar",
+    category: "Jira",
+    title: "Jira Firma Alan ID",
+    description: "Firma/organizasyon bilgisini taşıyan Jira custom field id. Boşsa JIRA_COMPANY_FIELD_ID env değişkenine düşer.",
+    type: "text",
+  },
+  {
+    key: "system_jira_customer_field_id",
+    module: "Entegrasyonlar",
+    category: "Jira",
+    title: "Jira Müşteri Alan ID",
+    description: "Müşteri bilgisini taşıyan Jira custom field id. Boşsa JIRA_CUSTOMER_FIELD_ID env değişkenine düşer.",
+    type: "text",
+  },
+  {
+    key: "system_jira_time_to_resolution_field_id",
+    module: "Entegrasyonlar",
+    category: "Jira",
+    title: "Jira Çözüm Süresi Alan ID",
+    description: "Çözüm süresi (SLA) bilgisini taşıyan Jira custom field id. Boşsa JIRA_TIME_TO_RESOLUTION_FIELD_ID env değişkenine düşer.",
+    type: "text",
+  },
+  {
+    key: "system_jira_retail_support_jql",
+    module: "Entegrasyonlar",
+    category: "Jira",
+    title: "Jira JQL Override",
+    description: "Haftalık ticket sorgusu için taban JQL (opsiyonel, boş bırakılabilir). Boşsa varsayılan 'project = <key>' JQL kullanılır, sonra JIRA_RETAIL_SUPPORT_JQL env değişkenine düşer.",
+    type: "text",
+  },
+  {
     key: "system_pptx_download_enabled",
     module: "Sistem Ayarları",
     category: "Raporlama",
@@ -643,6 +707,30 @@ export async function getActiveParametersByGroups(groupKeys: string[]) {
 }
 
 export type ParameterOptionsByGroup = Record<string, Array<{ label: string; value: string }>>;
+
+// Değeri client'a düz metin dönmemesi gereken parametre grupları (token vb).
+// route.ts GET/POST/PATCH cevaplarında maskParameterValue ile maskelenir.
+export const SENSITIVE_PARAMETER_GROUPS = new Set(["system_jira_api_token"]);
+
+// Tekil config-değeri grupları: param_key başka tabloda foreign-key gibi
+// kullanılmaz, bu yüzden değeri yerinde güncellenebilir (kanonik kod kilidi yok).
+export const EDITABLE_VALUE_PARAMETER_GROUPS = new Set([
+  "system_jira_base_url",
+  "system_jira_email",
+  "system_jira_api_token",
+  "system_jira_project_key",
+  "system_jira_company_field_id",
+  "system_jira_customer_field_id",
+  "system_jira_time_to_resolution_field_id",
+  "system_jira_retail_support_jql",
+]);
+
+export function maskParameterValue(value: string) {
+  const trimmed = String(value ?? "");
+  if (!trimmed) return "";
+  if (trimmed.length <= 4) return "••••";
+  return `••••${trimmed.slice(-4)}`;
+}
 
 export const PARAMETER_GROUPS_REQUIRING_ACTIVE_VALUE = new Set([
   "crm_sector",
@@ -1020,17 +1108,21 @@ export async function updateSystemParameter(input: {
     await assertParameterCanBeDeactivated(input.id);
   }
   const currentResult = await db.query(
-    "select value, version from public.system_parameters where id = $1",
+    "select value, version, group_key from public.system_parameters where id = $1",
     [input.id],
   );
-  const currentRow = currentResult.rows[0] as { value?: string; version?: number } | undefined;
+  const currentRow = currentResult.rows[0] as { value?: string; version?: number; group_key?: string } | undefined;
   if (!currentRow) return undefined;
   if (input.expectedVersion !== undefined && Number(currentRow.version) !== input.expectedVersion) {
     throw Object.assign(new Error("Parametre başka bir kullanıcı tarafından güncellendi. Listeyi yenileyip tekrar deneyin."), { status: 409 });
   }
+  const editableValueGroup = currentRow.group_key ? EDITABLE_VALUE_PARAMETER_GROUPS.has(currentRow.group_key) : false;
+  let nextValue: string | null = null;
   if (input.value !== undefined) {
     const currentValue = String(currentRow.value ?? "");
-    if (input.value.trim() !== currentValue) {
+    if (editableValueGroup) {
+      nextValue = input.value.trim();
+    } else if (input.value.trim() !== currentValue) {
       throw Object.assign(
         new Error("Kanonik parametre kodu değiştirilemez. Yeni bir değer oluşturup eski değeri pasife alın."),
         { status: 409 },
@@ -1041,7 +1133,7 @@ export async function updateSystemParameter(input: {
     `
       update public.system_parameters
       set label = coalesce($2, label),
-          value = value,
+          value = coalesce($7, value),
           sort_order = coalesce($3, sort_order),
           is_active = coalesce($4, is_active),
           version = version + 1,
@@ -1058,6 +1150,7 @@ export async function updateSystemParameter(input: {
       typeof input.isActive === "boolean" ? input.isActive : null,
       input.updatedByUserId ?? null,
       input.expectedVersion ?? null,
+      nextValue,
     ],
   );
   if (!result.rows[0] && input.expectedVersion !== undefined) {

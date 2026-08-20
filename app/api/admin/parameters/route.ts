@@ -9,8 +9,11 @@ import {
   getSystemParameterGroupKey,
   listPhaseParameters,
   listSystemParameters,
+  maskParameterValue,
+  SENSITIVE_PARAMETER_GROUPS,
   updatePhaseParameter,
   updateSystemParameter,
+  type SystemParameter,
 } from "@/lib/system-parameters";
 import { tryRecordAuditEvent } from '@/lib/audit';
 
@@ -24,6 +27,12 @@ const IDENTITY_GROUPS = new Set<string>([
   "system_oidc_app_role_sync_enabled",
   "system_oidc_app_role_mapping",
 ]);
+
+// Hassas parametre değerini (Jira API token vb) client'a düz metin dönmez.
+function maskSensitiveRow(row: SystemParameter): SystemParameter {
+  if (!SENSITIVE_PARAMETER_GROUPS.has(row.group_key)) return row;
+  return { ...row, value: maskParameterValue(row.value) };
+}
 
 function assertGroupManagementAccess(actor: AllowedUser, groupKey: string) {
   if (IDENTITY_GROUPS.has(groupKey) && !userHasPermission(actor, 'admin.identity.manage')) {
@@ -41,7 +50,9 @@ export async function GET() {
     const canManageIdentity = userHasPermission(actor, 'admin.identity.manage');
     return NextResponse.json({
       groups: ALL_PARAMETER_GROUPS.filter((group) => canManageIdentity || !IDENTITY_GROUPS.has(group.key)),
-      rows: rows.filter((row) => canManageIdentity || !IDENTITY_GROUPS.has(row.group_key)),
+      rows: rows
+        .filter((row) => canManageIdentity || !IDENTITY_GROUPS.has(row.group_key))
+        .map(maskSensitiveRow),
       phaseRows,
     });
   } catch (error: any) {
@@ -97,7 +108,7 @@ export async function POST(req: Request) {
       sortOrder,
     });
     await tryRecordAuditEvent({ actorId: actor.id, actorEmail: actor.email, action: 'parameter.created', resourceType: groupKey, resourceId: String(row.id), after: row });
-    return NextResponse.json({ row });
+    return NextResponse.json({ row: maskSensitiveRow(row) });
   } catch (error: any) {
     return NextResponse.json(
       { message: error?.message || "Parametre kaydedilemedi." },
@@ -162,7 +173,7 @@ export async function PATCH(req: Request) {
         { status: 404 },
       );
     await tryRecordAuditEvent({ actorId: actor.id, actorEmail: actor.email, action: 'parameter.updated', resourceType: String(row.group_key), resourceId: String(row.id), after: row });
-    return NextResponse.json({ row });
+    return NextResponse.json({ row: maskSensitiveRow(row) });
   } catch (error: any) {
     return NextResponse.json(
       { message: error?.message || "Parametre güncellenemedi." },

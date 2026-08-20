@@ -1,4 +1,5 @@
 import { externalJsonRequest } from '@/lib/integrations/http-client';
+import { getSystemParameterValue } from '@/lib/system-parameters';
 
 export type JiraWeeklyTicketPivotRow = {
   company: string;
@@ -80,6 +81,22 @@ function encodeBasicAuth(email: string, token: string) {
   return Buffer.from(`${email}:${token}`).toString('base64');
 }
 
+// DB'deki system_parameters önceliklidir; boşsa geriye dönük uyumluluk için
+// process.env.JIRA_* değişkenine düşer. Token gibi hassas değerler asla loglanmaz.
+async function jiraSetting(groupKey: string, envName: string, fallback = '') {
+  const dbValue = await getSystemParameterValue(groupKey, '');
+  if (dbValue.trim()) return dbValue.trim();
+  return cleanText(process.env[envName], fallback);
+}
+
+export async function getJiraCustomerFieldId() {
+  return jiraSetting('system_jira_customer_field_id', 'JIRA_CUSTOMER_FIELD_ID', '');
+}
+
+export async function getJiraTimeToResolutionFieldId() {
+  return jiraSetting('system_jira_time_to_resolution_field_id', 'JIRA_TIME_TO_RESOLUTION_FIELD_ID', '');
+}
+
 function fieldValueToCompany(value: any): string {
   if (Array.isArray(value)) {
     const first = value.map(fieldValueToCompany).find(Boolean);
@@ -100,22 +117,24 @@ function fieldValueToCompany(value: any): string {
   return cleanText(value, '');
 }
 
-function configuredCompanyFieldIds() {
-  const envField = cleanText(process.env.JIRA_COMPANY_FIELD_ID, '');
+async function configuredCompanyFieldIds() {
+  const envField = await jiraSetting('system_jira_company_field_id', 'JIRA_COMPANY_FIELD_ID', '');
   const organizationField = cleanText(process.env.JIRA_ORGANIZATION_FIELD_ID, '');
+  const customerField = await getJiraCustomerFieldId();
   // Jira Service Management kuruluş/firma alanı çoğu projede customfield_10002.
   // Paxturkey RS örneğinde firma burada geliyor: customfield_10002[0].name.
   return Array.from(new Set([
     envField,
     organizationField,
+    customerField,
     'customfield_10002',
     'organizations',
   ].filter(Boolean)));
 }
 
-function inferCompanyFromIssue(issue: any) {
+async function inferCompanyFromIssue(issue: any) {
   const fields = issue?.fields ?? {};
-  for (const fieldId of configuredCompanyFieldIds()) {
+  for (const fieldId of await configuredCompanyFieldIds()) {
     const value = fieldValueToCompany(fields[fieldId]);
     if (value) return value;
   }
@@ -167,9 +186,9 @@ function isOngoingStatus(issue: any) {
     || status.includes('waiting for support');
 }
 
-function buildCreatedUpdatedRangeJql(from: string, to: string) {
-  const projectKey = cleanText(process.env.JIRA_PROJECT_KEY, 'RS');
-  const baseFilter = cleanText(process.env.JIRA_RETAIL_SUPPORT_JQL, '');
+async function buildCreatedUpdatedRangeJql(from: string, to: string) {
+  const projectKey = await jiraSetting('system_jira_project_key', 'JIRA_PROJECT_KEY', 'RS');
+  const baseFilter = await jiraSetting('system_jira_retail_support_jql', 'JIRA_RETAIL_SUPPORT_JQL', '');
   const fromDate = parseDateOnly(from);
   const toDateExclusive = nextDate(to);
   const scope = baseFilter || `project = ${projectKey}`;
@@ -182,9 +201,9 @@ function isDateInRange(value: unknown, from: string, toExclusive: string) {
 }
 
 async function jiraFetchJson(path: string, init: RequestInit = {}) {
-  const baseUrl = cleanText(process.env.JIRA_BASE_URL, '').replace(/\/+$/, '');
-  const email = cleanText(process.env.JIRA_EMAIL, '');
-  const token = cleanText(process.env.JIRA_API_TOKEN, '');
+  const baseUrl = (await jiraSetting('system_jira_base_url', 'JIRA_BASE_URL', '')).replace(/\/+$/, '');
+  const email = await jiraSetting('system_jira_email', 'JIRA_EMAIL', '');
+  const token = await jiraSetting('system_jira_api_token', 'JIRA_API_TOKEN', '');
 
   if (!baseUrl || !email || !token) {
     return { ok: false, status: 0, json: null as any, text: 'Jira env eksik: JIRA_BASE_URL, JIRA_EMAIL, JIRA_API_TOKEN girilmedi.' };
@@ -208,11 +227,14 @@ async function jiraFetchJson(path: string, init: RequestInit = {}) {
 }
 
 export async function checkJiraIntegrationHealth() {
-  const baseUrl = cleanText(process.env.JIRA_BASE_URL, '').replace(/\/+$/, '');
-  const projectKey = cleanText(process.env.JIRA_PROJECT_KEY, 'RS');
-  const missing = ['JIRA_BASE_URL', 'JIRA_EMAIL', 'JIRA_API_TOKEN'].filter(
-    (name) => !cleanText(process.env[name], ''),
-  );
+  const baseUrl = (await jiraSetting('system_jira_base_url', 'JIRA_BASE_URL', '')).replace(/\/+$/, '');
+  const projectKey = await jiraSetting('system_jira_project_key', 'JIRA_PROJECT_KEY', 'RS');
+  const email = await jiraSetting('system_jira_email', 'JIRA_EMAIL', '');
+  const token = await jiraSetting('system_jira_api_token', 'JIRA_API_TOKEN', '');
+  const missing: string[] = [];
+  if (!baseUrl) missing.push('JIRA_BASE_URL');
+  if (!email) missing.push('JIRA_EMAIL');
+  if (!token) missing.push('JIRA_API_TOKEN');
   if (missing.length) {
     return { ok: false, configured: false, missing, baseHost: null, projectKey, identityStatus: 0, projectStatus: 0 };
   }
@@ -316,7 +338,7 @@ async function fetchJiraIssues(jql: string, fields: string[]) {
 }
 
 async function fetchJiraDiagnostics(fields: string[]) {
-  const projectKey = cleanText(process.env.JIRA_PROJECT_KEY, 'RS');
+  const projectKey = await jiraSetting('system_jira_project_key', 'JIRA_PROJECT_KEY', 'RS');
   const diagnostics: string[] = [];
   const recentJql = `project = ${projectKey} ORDER BY created DESC, key DESC`;
   const recent = await fetchJiraIssues(recentJql, fields);
@@ -335,6 +357,7 @@ async function fetchJiraDiagnostics(fields: string[]) {
     diagnostics.push(`GET /rest/api/3/field: HTTP ${fieldList.status}`);
     const fieldsMeta = Array.isArray(fieldList.json) ? fieldList.json : [];
     const sampleFields = sampleIssue?.fields ?? {};
+    const companyFieldIds = await configuredCompanyFieldIds();
     for (const meta of fieldsMeta) {
       const id = cleanText(meta?.id);
       if (!id || !(id in sampleFields)) continue;
@@ -343,7 +366,7 @@ async function fetchJiraDiagnostics(fields: string[]) {
       if (!value) continue;
       const haystack = normalizeText(`${id} ${name} ${value}`);
       if (
-        configuredCompanyFieldIds().includes(id)
+        companyFieldIds.includes(id)
         || haystack.includes('organization')
         || haystack.includes('firma')
         || haystack.includes('müşteri')
@@ -384,7 +407,7 @@ function emptyRow(company: string): JiraWeeklyTicketPivotRow {
 export async function buildJiraWeeklyTicketSummary(from: string, to: string): Promise<JiraWeeklyTicketSummary> {
   const fromDate = parseDateOnly(from);
   const toDate = parseDateOnly(to);
-  const companyFieldIds = configuredCompanyFieldIds();
+  const companyFieldIds = await configuredCompanyFieldIds();
   const fields = Array.from(new Set([
     'summary',
     'status',
@@ -411,7 +434,7 @@ export async function buildJiraWeeklyTicketSummary(from: string, to: string): Pr
     };
   }
 
-  const jql = buildCreatedUpdatedRangeJql(fromDate, toDate);
+  const jql = await buildCreatedUpdatedRangeJql(fromDate, toDate);
   const { issues, warning, diagnostics, searchEndpoint } = await fetchJiraIssues(jql, fields);
   const extraDiagnostics = await fetchJiraDiagnostics(fields);
 
@@ -424,7 +447,7 @@ export async function buildJiraWeeklyTicketSummary(from: string, to: string): Pr
 
   for (const issue of selectedIssues) {
     const key = cleanText(issue?.key, '');
-    const company = inferCompanyFromIssue(issue).toLocaleUpperCase('tr');
+    const company = (await inferCompanyFromIssue(issue)).toLocaleUpperCase('tr');
     const row = pivot.get(company) ?? emptyRow(company);
     const createdInRange = isDateInRange(issue?.fields?.created, fromDate, toDateExclusive);
 
@@ -485,19 +508,23 @@ export async function buildJiraWeeklyTicketSummary(from: string, to: string): Pr
       companyFieldId: companyFieldIds[0] ?? '',
       queryMode: 'created-updated-range',
       sampleIssueKey: cleanText(extraDiagnostics.recentIssues?.[0]?.key, ''),
-      sampleIssueCompany: extraDiagnostics.recentIssues?.[0] ? inferCompanyFromIssue(extraDiagnostics.recentIssues[0]).toLocaleUpperCase('tr') : '',
+      sampleIssueCompany: extraDiagnostics.recentIssues?.[0]
+        ? (await inferCompanyFromIssue(extraDiagnostics.recentIssues[0])).toLocaleUpperCase('tr')
+        : '',
       searchEndpoint,
       diagnostics: [...diagnostics, ...extraDiagnostics.diagnostics],
       availableStatuses: extraDiagnostics.availableStatuses,
       candidateCompanyFields: extraDiagnostics.candidateCompanyFields,
-      sampleIssues: (selectedIssues.length ? selectedIssues : extraDiagnostics.recentIssues).slice(0, 10).map((issue) => ({
-        key: cleanText(issue?.key, ''),
-        company: inferCompanyFromIssue(issue).toLocaleUpperCase('tr'),
-        status: statusName(issue),
-        created: cleanText(issue?.fields?.created, '').slice(0, 10),
-        resolved: cleanText(issue?.fields?.resolutiondate, '').slice(0, 10),
-        summary: cleanText(issue?.fields?.summary, ''),
-      })),
+      sampleIssues: await Promise.all(
+        (selectedIssues.length ? selectedIssues : extraDiagnostics.recentIssues).slice(0, 10).map(async (issue) => ({
+          key: cleanText(issue?.key, ''),
+          company: (await inferCompanyFromIssue(issue)).toLocaleUpperCase('tr'),
+          status: statusName(issue),
+          created: cleanText(issue?.fields?.created, '').slice(0, 10),
+          resolved: cleanText(issue?.fields?.resolutiondate, '').slice(0, 10),
+          summary: cleanText(issue?.fields?.summary, ''),
+        })),
+      ),
     },
   };
 }

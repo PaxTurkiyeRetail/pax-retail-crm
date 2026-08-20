@@ -3,7 +3,7 @@ import { cookies } from 'next/headers';
 import { db } from './db';
 
 const AUTH_COOKIE_NAME = process.env.AUTH_COOKIE_NAME ?? 'crm_session';
-const AUTH_SESSION_TTL_HOURS = Math.min(168, Math.max(1, Number(process.env.AUTH_SESSION_TTL_HOURS ?? '12')));
+export const AUTH_SESSION_TTL_HOURS = Math.min(168, Math.max(1, Number(process.env.AUTH_SESSION_TTL_HOURS ?? '12')));
 
 export type AuthUser = {
   id: string;

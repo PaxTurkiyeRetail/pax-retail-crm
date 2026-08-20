@@ -1,9 +1,12 @@
-import { requirePermissionOrThrow, requireScreenAccessOrThrow } from '@/lib/authz';
+import { redirect } from 'next/navigation';
+import { requireAllowedUserOrThrow, userHasPermission } from '@/lib/authz';
 import RbacClient from './RbacClient';
 
 export default async function RbacPage() {
-  await requirePermissionOrThrow('admin.rbac.manage');
-  await requireScreenAccessOrThrow('screen.admin.rbac.view');
+  const user = await requireAllowedUserOrThrow();
+  if (!userHasPermission(user, 'admin.rbac.manage') || !userHasPermission(user, 'screen.admin.rbac.view')) {
+    redirect('/crm');
+  }
 
   return (
     <div className="pax-page-container">

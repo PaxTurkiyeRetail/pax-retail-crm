@@ -2959,6 +2959,15 @@ values
   ('system_page_size', '25', '25', '25', 10, '{"source":"seed","module":"Sistem Davranışları","category":"Performans"}'::jsonb)
 on conflict (group_key, param_key) do nothing;
 
+-- Jira entegrasyon config parametreleri (env -> DB taşıma). Sadece varsayılan
+-- değeri güvenli olan proje anahtarı seed edilir; base_url/email/token/field id
+-- gibi hassas/ortam-özel değerler admin/parameters ekranından girilir, DB'de
+-- yoksa lib/jira-weekly-tickets.ts ilgili process.env.JIRA_* değişkenine düşer.
+insert into public.system_parameters (group_key, param_key, label, value, sort_order, is_active, meta)
+values
+  ('system_jira_project_key', 'rs', 'RS', 'RS', 10, true, '{"source":"seed","module":"Entegrasyonlar","category":"Jira"}'::jsonb)
+on conflict (group_key, param_key) do nothing;
+
 -- Teklif ürün kataloğu (quote_module_setup.sql).
 insert into public.quote_products (code, name, category, product_type, unit_label, currency, is_recurring, billing_period, description, specs, sort_order, is_active)
 values

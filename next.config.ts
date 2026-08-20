@@ -1,7 +1,12 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  experimental: { cpus: 2 },
+  experimental: {
+    cpus: 2,
+    // dynamic sayfalarda client Router Cache kapalı: RBAC yetki değişikliği
+    // menü/sayfa erişimine gecikmesiz yansısın (varsayılan 30sn stale pencere kaldırıldı).
+    staleTimes: { dynamic: 0 },
+  },
   reactStrictMode: true,
 
   poweredByHeader: false,
