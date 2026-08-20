@@ -3008,13 +3008,12 @@ values
   ('system_oidc_app_role_mapping', 'crm_user', 'crm.user', 'user', 50, true, jsonb_build_object('source', 'seed', 'migration', '20260818_004'))
 on conflict (group_key, param_key) do nothing;
 
--- DEPRECATED: system_oidc_app_role_sync_enabled / system_oidc_app_role_mapping artık
--- authorization kararını etkilemez (lib/auth/oidc.ts resolveEnterpriseUser App Role
--- claim'ini yalnız audit metadata olarak tutar, rol/izin kaynağı auth_group_role_mappings'tir).
--- Bu satır geriye dönük uyumluluk için değeri değiştirmeye devam eder ama kod tarafında
--- okunmaz; admin UI'da "Kimlik" kategorisinde deprecated olarak görünür.
+-- system_oidc_app_role_sync_enabled / system_oidc_app_role_mapping TEK authorization
+-- otoritesidir (lib/auth/oidc.ts resolveEnterpriseUser id_token.roles claim'ini bu
+-- eşlemeden geçirir). IT tarafında kullanıcılara AD grubu değil doğrudan Entra App
+-- Role atandığı için sync varsayılan olarak açık tutulur.
 update public.system_parameters
-set value = 'true', meta = meta || jsonb_build_object('deprecated', true, 'note', 'authorization kaynağı değil, auth_group_role_mappings kullanılır')
+set value = 'true', meta = (meta - 'deprecated' - 'note') || jsonb_build_object('source', 'seed', 'migration', '20260818_004')
 where group_key = 'system_oidc_app_role_sync_enabled'
   and param_key = 'system_oidc_app_role_sync_enabled';
 

@@ -5,7 +5,6 @@ import { db } from '@/lib/db';
 import { ApiError } from '@/lib/http/api-error';
 import { normalizeRole, type AllowedRole, ROLE_PRIORITY } from '@/lib/roles';
 import { getSystemParameterBoolean } from '@/lib/system-parameters';
-import { getUserGroupIds } from '@/lib/auth/graph';
 
 type Discovery = {
   authorization_endpoint: string;
@@ -171,36 +170,36 @@ export async function resolveEnterpriseUser(claims: JWTPayload) {
   try {
     await client.query('begin');
 
-    // Rol otoritesi TEK kaynaktır: auth_group_role_mappings üzerinden eşleşen
-    // AD grup üyeliği. Entra App Role claim'i (claims.roles) authorization için
-    // hiçbir şekilde kullanılmaz — sadece audit/telemetry metadata olarak
-    // audit event'e yazılır (aşağıda appRoleClaimsForAudit). Group sync kapalıysa
-    // veya kullanıcının eşleşen aktif grubu yoksa erişim fail-closed reddedilir;
-    // App Role'a veya varsayılan role asla düşülmez.
+    // Rol otoritesi TEK kaynaktır: Entra ID App Role claim'i (id_token.roles),
+    // system_oidc_app_role_mapping tablosundaki sabit eşlemeden geçirilir.
+    // IT tarafında kullanıcılara AD güvenlik grubu değil, doğrudan Entra App Role
+    // atanmış (crm.super_admin/crm.admin/...) — bu yüzden Graph memberOf çağrısına
+    // ihtiyaç yok. Sync kapalıysa veya eşleşen App Role yoksa erişim fail-closed
+    // reddedilir; varsayılan role asla düşülmez.
     const appRoleClaimsForAudit = Array.isArray(claims.roles)
       ? claims.roles.filter((value): value is string => typeof value === 'string')
       : [];
 
-    const groupRoleSyncEnabled = await getSystemParameterBoolean('system_oidc_group_role_sync_enabled', false);
-    if (!groupRoleSyncEnabled) {
-      throw new ApiError('OIDC_GROUP_SYNC_DISABLED', 'AD grup rol eşlemesi yapılandırılmadı. Erişim reddedildi.', 503);
+    const appRoleSyncEnabled = await getSystemParameterBoolean('system_oidc_app_role_sync_enabled', false);
+    if (!appRoleSyncEnabled) {
+      throw new ApiError('OIDC_APP_ROLE_SYNC_DISABLED', 'Entra App Role eşlemesi yapılandırılmadı. Erişim reddedildi.', 503);
     }
-    const groupIds = await getUserGroupIds(tenantId, objectId);
-    let groupRoleMatches: AllowedRole[] = [];
-    if (groupIds.length) {
-      const groupMappingRows = await client.query(
-        `select distinct role from public.auth_group_role_mappings
-         where tenant_id = $1 and group_id = any($2) and is_active = true`,
-        [tenantId, groupIds],
-      );
-      groupRoleMatches = groupMappingRows.rows
-        .map((row: { role: string }) => normalizeRole(row.role))
-        .filter((role): role is AllowedRole => Boolean(role));
+    const mappingRows = await client.query(
+      `select label, value from public.system_parameters
+       where group_key = 'system_oidc_app_role_mapping' and is_active = true`,
+    );
+    const appRoleToRole = new Map<string, AllowedRole>();
+    for (const row of mappingRows.rows as Array<{ label: string; value: string }>) {
+      const role = normalizeRole(row.value);
+      if (role && row.label) appRoleToRole.set(row.label.trim().toLowerCase(), role);
     }
-
-    const matchedRoles = Array.from(new Set(groupRoleMatches));
+    const matchedRoles = Array.from(new Set(
+      appRoleClaimsForAudit
+        .map((entraRole) => appRoleToRole.get(entraRole.trim().toLowerCase()))
+        .filter((role): role is AllowedRole => Boolean(role)),
+    ));
     if (!matchedRoles.length) {
-      throw new ApiError('OIDC_NO_GROUP_ROLE', 'Hesabınıza eşlenmiş AD grup rolü bulunamadı. Erişim reddedildi.', 403);
+      throw new ApiError('OIDC_NO_APP_ROLE', 'Hesabınıza eşlenmiş Entra App Role bulunamadı. Erişim reddedildi.', 403);
     }
     const sortedRoles = matchedRoles.sort((a, b) => ROLE_PRIORITY[b] - ROLE_PRIORITY[a]);
     const bestRole = sortedRoles[0];
@@ -223,8 +222,8 @@ export async function resolveEnterpriseUser(claims: JWTPayload) {
         throw new ApiError('OIDC_USER_DISABLED', 'CRM hesabınız devre dışı.', 403);
       }
       if (!candidate) {
-        // Kayıt yok: AD grup üzerinden geçerli rol kanıtlanmış, JIT ile hesap açılır.
-        // allowed_users burada elle yönetilmiyor; tek otorite auth_group_role_mappings'tir.
+        // Kayıt yok: Entra App Role üzerinden geçerli rol kanıtlanmış, JIT ile hesap açılır.
+        // allowed_users burada elle yönetilmiyor; tek otorite system_oidc_app_role_mapping'tir.
         const inserted = await client.query(
           `insert into public.allowed_users (email, full_name, role, secondary_roles, is_active)
            values (lower($1), $2, $3, $4, true)
@@ -250,8 +249,7 @@ export async function resolveEnterpriseUser(claims: JWTPayload) {
     const user = result.rows[0];
     if (!user?.is_active) throw new ApiError('OIDC_USER_DISABLED', 'CRM hesabınız devre dışı.', 403);
 
-    // AD grup üyeliği tek otorite olduğu için rol her girişte grup sonucuyla
-    // senkronize edilir (App Role sync parametresi artık rol atamasını etkilemez).
+    // Entra App Role tek otorite olduğu için rol her girişte claim sonucuyla senkronize edilir.
     const currentSecondary: string[] = Array.isArray(user.secondary_roles) ? user.secondary_roles : [];
     const secondaryChanged = currentSecondary.length !== secondaryRoles.length
       || currentSecondary.some((role: string, index: number) => role !== secondaryRoles[index]);
@@ -266,7 +264,7 @@ export async function resolveEnterpriseUser(claims: JWTPayload) {
       email: String(user.email),
       fullName: user.full_name ? String(user.full_name) : null,
       role: normalizeRole(user.role),
-      // Multi-group union: kullanıcının eşleşen TÜM AD grup rolleri (öncelik sırasıyla).
+      // Multi-role union: kullanıcının eşleşen TÜM Entra App Role'lerinin CRM karşılığı (öncelik sırasıyla).
       // Runtime authorization bu tam kümeden hesaplanır — allowed_users.role yalnız
       // JIT snapshot/display amaçlıdır (bkz. lib/authz.ts effective_roles kullanımı).
       roles: sortedRoles,
