@@ -129,6 +129,8 @@ export default function ParametersClient() {
   const [value, setValue] = useState("");
   const [sortOrder, setSortOrder] = useState("999");
   const [edit, setEdit] = useState<EditState>(null);
+  const [jiraDraft, setJiraDraft] = useState<Record<string, string>>({});
+  const [jiraSaving, setJiraSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -389,6 +391,51 @@ export default function ParametersClient() {
   }
 
   const primaryRow = visibleRows[0];
+  const isJiraCategory =
+    selectedModule === "Entegrasyonlar" && selectedCategory === "Jira";
+
+  async function saveJiraAll(e: React.FormEvent) {
+    e.preventDefault();
+    setJiraSaving(true);
+    setError("");
+    setMessage("");
+    try {
+      for (const group of categoryGroups) {
+        const row = rows.find((r) => r.group_key === group.key);
+        const draftValue = jiraDraft[group.key];
+        if (draftValue === undefined) continue;
+        if (group.key === "system_jira_api_token" && !draftValue.trim())
+          continue;
+        if (!row) continue;
+        if (draftValue.trim() === row.value) continue;
+        const res = await fetch("/api/admin/parameters", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: row.id,
+            label: row.label,
+            value: draftValue.trim(),
+            sortOrder: row.sort_order,
+            isActive: true,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok)
+          throw new Error(
+            data.message || `${group.title} kaydedilemedi.`,
+          );
+        setRows((items) =>
+          items.map((item) => (item.id === data.row.id ? data.row : item)),
+        );
+      }
+      setJiraDraft({});
+      setMessage("Jira ayarları kaydedildi.");
+    } catch (err: any) {
+      setError(err.message || "Jira ayarları kaydedilemedi.");
+    } finally {
+      setJiraSaving(false);
+    }
+  }
 
   return (
     <div className="parameters-workspace enterprise-settings">
@@ -524,24 +571,60 @@ export default function ParametersClient() {
             </span>
           </div>
 
-          <div
-            className="parameters-tabs"
-            role="tablist"
-            aria-label="Parametre grupları"
-          >
-            {categoryGroups.map((group) => (
-              <button
-                key={group.key}
-                type="button"
-                className={`parameters-tab${selectedGroup === group.key ? " active" : ""}`}
-                onClick={() => setSelectedGroup(group.key)}
-              >
-                {group.title}
-              </button>
-            ))}
-          </div>
+          {!isJiraCategory && (
+            <div
+              className="parameters-tabs"
+              role="tablist"
+              aria-label="Parametre grupları"
+            >
+              {categoryGroups.map((group) => (
+                <button
+                  key={group.key}
+                  type="button"
+                  className={`parameters-tab${selectedGroup === group.key ? " active" : ""}`}
+                  onClick={() => setSelectedGroup(group.key)}
+                >
+                  {group.title}
+                </button>
+              ))}
+            </div>
+          )}
 
-          {!isListModule(selectedModule) && primaryRow ? (
+          {isJiraCategory ? (
+            <form
+              className="parameters-form settings-single-form"
+              onSubmit={saveJiraAll}
+              style={{ display: "flex", flexDirection: "column", gap: 16 }}
+            >
+              {categoryGroups.map((group) => {
+                const row = rows.find((r) => r.group_key === group.key);
+                const isToken = group.key === "system_jira_api_token";
+                return (
+                  <label key={group.key} className="pax-label">
+                    {group.title}
+                    <input
+                      className="pax-input"
+                      type={isToken ? "password" : "text"}
+                      value={
+                        jiraDraft[group.key] ??
+                        (isToken ? "" : row?.value || "")
+                      }
+                      placeholder={isToken ? row?.value || "" : undefined}
+                      onChange={(e) =>
+                        setJiraDraft((d) => ({
+                          ...d,
+                          [group.key]: e.target.value,
+                        }))
+                      }
+                    />
+                  </label>
+                );
+              })}
+              <button className="pax-btn" type="submit" disabled={jiraSaving}>
+                {jiraSaving ? "Kaydediliyor..." : "Tümünü Kaydet"}
+              </button>
+            </form>
+          ) : !isListModule(selectedModule) && primaryRow ? (
             <div className="settings-control-panel">
               {isBooleanGroup(selectedDefinition) ? (
                 <label className="settings-switch-card">

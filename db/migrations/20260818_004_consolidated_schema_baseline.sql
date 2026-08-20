@@ -2968,6 +2968,21 @@ values
   ('system_jira_project_key', 'rs', 'RS', 'RS', 10, true, '{"source":"seed","module":"Entegrasyonlar","category":"Jira"}'::jsonb)
 on conflict (group_key, param_key) do nothing;
 
+-- Kalan Jira config grupları: boş değerle satır aç (param_key = group_key),
+-- böylece admin/parameters ekranı bu gruplar için tek-değer formunu gösterir
+-- (satır yoksa ekran generic liste-ekleme formuna düşüyordu, kafa karıştırıyordu).
+-- Değer boşken lib/jira-weekly-tickets.ts process.env.JIRA_* değişkenine düşmeye devam eder.
+insert into public.system_parameters (group_key, param_key, label, value, sort_order, is_active, meta)
+values
+  ('system_jira_base_url', 'system_jira_base_url', 'Jira Base URL', '', 10, true, '{"source":"seed","module":"Entegrasyonlar","category":"Jira"}'::jsonb),
+  ('system_jira_email', 'system_jira_email', 'Jira E-posta', '', 10, true, '{"source":"seed","module":"Entegrasyonlar","category":"Jira"}'::jsonb),
+  ('system_jira_api_token', 'system_jira_api_token', 'Jira API Token', '', 10, true, '{"source":"seed","module":"Entegrasyonlar","category":"Jira"}'::jsonb),
+  ('system_jira_company_field_id', 'system_jira_company_field_id', 'Jira Firma Alan ID', '', 10, true, '{"source":"seed","module":"Entegrasyonlar","category":"Jira"}'::jsonb),
+  ('system_jira_customer_field_id', 'system_jira_customer_field_id', 'Jira Müşteri Alan ID', '', 10, true, '{"source":"seed","module":"Entegrasyonlar","category":"Jira"}'::jsonb),
+  ('system_jira_time_to_resolution_field_id', 'system_jira_time_to_resolution_field_id', 'Jira Çözüm Süresi Alan ID', '', 10, true, '{"source":"seed","module":"Entegrasyonlar","category":"Jira"}'::jsonb),
+  ('system_jira_retail_support_jql', 'system_jira_retail_support_jql', 'Jira JQL Override', '', 10, true, '{"source":"seed","module":"Entegrasyonlar","category":"Jira"}'::jsonb)
+on conflict (group_key, param_key) do nothing;
+
 -- Teklif ürün kataloğu (quote_module_setup.sql).
 insert into public.quote_products (code, name, category, product_type, unit_label, currency, is_recurring, billing_period, description, specs, sort_order, is_active)
 values
