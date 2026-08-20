@@ -112,6 +112,9 @@ export async function createAuthorizationRequest(origin: string, next: string | 
   url.searchParams.set('nonce', nonce);
   url.searchParams.set('code_challenge', challenge);
   url.searchParams.set('code_challenge_method', 'S256');
+  // Microsoft'un kendi SSO session'ı (tarayıcıda ayrı, bizim kontrolümüz dışında)
+  // otomatik oturum açmasın diye her girişte kimlik bilgisi sorulmasını zorla.
+  url.searchParams.set('prompt', 'login');
   return {
     url,
     transaction: encodeOidcTransaction({ state, nonce, verifier, next: safeNext(next), exp: Date.now() + 10 * 60_000 }),
