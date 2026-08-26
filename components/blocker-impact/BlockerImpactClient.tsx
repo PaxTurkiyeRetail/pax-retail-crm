@@ -74,6 +74,7 @@ type Row = {
   shifted_quantity: number | null;
   shift_period_label: string | null;
   workflow_status: string | null;
+  notes: string | null;
   manager_note: string | null;
   reviewed_at: string | null;
   reviewed_by_name: string | null;
@@ -143,6 +144,7 @@ type FormState = {
   shiftMonth: string;
   shiftedQuantity: string;
   workflowStatus: 'open' | 'in_progress';
+  notes: string;
   managerNote: string;
   reviewed: boolean;
 };
@@ -174,6 +176,7 @@ function emptyForm(): FormState {
     shiftMonth: '',
     shiftedQuantity: '',
     workflowStatus: 'open',
+    notes: '',
     managerNote: '',
     reviewed: false,
   };
@@ -310,6 +313,7 @@ export default function BlockerImpactClient() {
       shiftMonth: row.shift_month ? String(row.shift_month) : '',
       shiftedQuantity: row.shifted_quantity ? String(row.shifted_quantity) : '',
       workflowStatus: row.workflow_status === 'in_progress' ? 'in_progress' : 'open',
+      notes: row.notes ?? '',
       managerNote: row.manager_note ?? '',
       reviewed: Boolean(row.reviewed_at),
     });
@@ -346,6 +350,7 @@ export default function BlockerImpactClient() {
           shift_month: form.shiftMonth,
           shifted_quantity: form.shiftedQuantity,
           workflow_status: form.workflowStatus,
+          notes: form.notes,
         }),
       }));
 
@@ -402,13 +407,13 @@ export default function BlockerImpactClient() {
       if (category) params.set('category', category);
       const response = await fetch(`/api/forecast/blockers/list?${params.toString()}`, { cache: 'no-store' });
       const json = await readJson(response) as ApiResponse;
-      const exportRows = json.rows ?? [];
+      const exportRows = (json.rows ?? []).filter((row) => row.blocker_id && row.effective_status !== 'pending');
       const blob = await buildBlockerImpactWorkbook([
         {
           name: 'Engel ve Etki Listesi',
-          widths: [22, 28, 20, 20, 16, 44, 24, 16, 20, 14, 20, 18],
+          widths: [22, 28, 20, 20, 16, 44, 24, 16, 20, 14, 20, 18, 34],
           rows: [
-            ['Account', 'Müşteri', 'Sektör', 'Forecast Özeti', 'Toplam Adet', 'Satışın Önündeki Engel', 'Kim Çözecek?', 'Çözüm Tarihi', 'Kayacağı Dönem', 'Kayacak Adet', 'Durum', 'Son Güncelleme'],
+            ['Account', 'Müşteri', 'Sektör', 'Forecast Özeti', 'Toplam Adet', 'Satışın Önündeki Engel', 'Kim Çözecek?', 'Çözüm Tarihi', 'Kayacağı Dönem', 'Kayacak Adet', 'Durum', 'Son Güncelleme', 'Açıklama'],
             ...exportRows.map((row) => [
               row.sorumlu ?? '-',
               row.musteri,
@@ -422,6 +427,7 @@ export default function BlockerImpactClient() {
               row.shifted_quantity ?? 0,
               statusLabel(row.effective_status),
               formatDateTime(row.updated_at),
+              row.notes ?? '-',
             ]),
           ],
         },
@@ -590,6 +596,7 @@ export default function BlockerImpactClient() {
                   <button type="button" className={form.hasBlocker === 'no' ? 'choice active success' : 'choice'} onClick={() => setForm((value) => ({ ...value, hasBlocker: 'no', blockerCategory: '', blockerDescription: '', resolutionOwnerType: '', resolutionOwnerName: '', resolutionDueDate: '', impactType: 'none', forecastId: '', shiftMonth: '', shiftedQuantity: '', workflowStatus: 'open' }))}><CheckCircle2 size={20} /><span><strong>Engel yok</strong><small>Satış süreci normal ilerliyor</small></span></button>
                   <button type="button" className={form.hasBlocker === 'yes' ? 'choice active danger' : 'choice'} onClick={() => setForm((value) => ({ ...value, hasBlocker: 'yes', forecastId: value.forecastId || selected.forecast_options?.[0]?.forecast_id || '' }))}><AlertTriangle size={20} /><span><strong>Engel var</strong><small>Takip edilmesi gereken konu var</small></span></button>
                 </div>
+                <div className="question-fields"><label><span>Açıklama</span><textarea rows={3} maxLength={500} value={form.notes} onChange={(event) => setForm((value) => ({ ...value, notes: event.target.value }))} placeholder="Engel olsun olmasın eklemek istediğiniz not..." /><small>{form.notes.length}/500</small></label></div>
                 {form.hasBlocker === 'yes' ? <div className="question-fields"><label><span>Engel türü *</span><select value={form.blockerCategory} onChange={(event) => setForm((value) => ({ ...value, blockerCategory: event.target.value }))}><option value="">Seçiniz</option>{BLOCKER_CATEGORIES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label><label><span>Engeli net olarak açıklayın *</span><textarea rows={4} maxLength={500} value={form.blockerDescription} onChange={(event) => setForm((value) => ({ ...value, blockerDescription: event.target.value }))} placeholder="Örnek: Müşterinin pilot mağaza listesini paylaşması bekleniyor." /><small>{form.blockerDescription.length}/500</small></label></div> : null}
               </section>
 

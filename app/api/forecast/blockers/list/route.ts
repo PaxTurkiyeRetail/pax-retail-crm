@@ -65,6 +65,7 @@ export async function GET(request: Request) {
             shifted_quantity,
             shift_period_label,
             workflow_status,
+            notes,
             manager_note,
             reviewed_at::text,
             reviewed_by_email,

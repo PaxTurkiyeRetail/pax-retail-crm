@@ -901,6 +901,9 @@ alter table public.auth_identities add column if not exists object_id text;
 -- session'larda null kalır, o durumda compatibility fallback allowed_users.role kullanır.
 alter table public.user_sessions add column if not exists effective_roles text[];
 
+-- crm_forecast_blockers: engel var/yok fark etmeksizin serbest açıklama alanı.
+alter table public.crm_forecast_blockers add column if not exists notes text;
+
 -- crm_forecast_blocker_history: müşteri bazlı takip (forecast_id nullable), forecast_blocker_impact_setup.sql.
 alter table public.crm_forecast_blocker_history add column if not exists customer_id uuid null;
 alter table public.crm_forecast_blocker_history add column if not exists forecast_id uuid null;
@@ -1779,6 +1782,7 @@ create view public.v_crm_forecast_blocker_impact as
             else ((lpad((b.shift_month)::text, 2, '0'::text) || '/'::text) || (b.shift_year)::text)
         end as shift_period_label,
     b.workflow_status,
+    b.notes,
     b.manager_note,
     b.reviewed_at,
     b.reviewed_by_email,

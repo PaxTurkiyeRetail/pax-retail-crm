@@ -24,6 +24,7 @@ export async function POST(request: Request) {
 
     const customer = await getCustomerForBlockerOrThrow(me, customerId);
     const hasBlocker = body.has_blocker === true;
+    const notes = String(body.notes ?? '').trim() || null;
     const actorName = String(me.full_name ?? me.email ?? '').trim();
 
     let forecastId: string | null = null;
@@ -105,13 +106,13 @@ export async function POST(request: Request) {
           insert into public.crm_forecast_blockers (
             customer_id, forecast_id, has_blocker, blocker_category, blocker_description,
             resolution_owner_type, resolution_owner_name, resolution_due_date,
-            impact_type, shift_year, shift_month, shifted_quantity, workflow_status,
+            impact_type, shift_year, shift_month, shifted_quantity, workflow_status, notes,
             submitted_at, submitted_by_email, submitted_by_name,
             created_by_email, created_by_name, updated_by_email, updated_by_name
           )
           values (
-            $1::uuid, $2::uuid, $3, $4, $5, $6, $7, $8::date, $9, $10, $11, $12, $13,
-            now(), $14, $15, $14, $15, $14, $15
+            $1::uuid, $2::uuid, $3, $4, $5, $6, $7, $8::date, $9, $10, $11, $12, $13, $14,
+            now(), $15, $16, $15, $16, $15, $16
           )
           on conflict (customer_id) do update set
             forecast_id = excluded.forecast_id,
@@ -126,6 +127,7 @@ export async function POST(request: Request) {
             shift_month = excluded.shift_month,
             shifted_quantity = excluded.shifted_quantity,
             workflow_status = excluded.workflow_status,
+            notes = excluded.notes,
             submitted_at = coalesce(public.crm_forecast_blockers.submitted_at, now()),
             submitted_by_email = coalesce(public.crm_forecast_blockers.submitted_by_email, excluded.submitted_by_email),
             submitted_by_name = coalesce(public.crm_forecast_blockers.submitted_by_name, excluded.submitted_by_name),
@@ -150,6 +152,7 @@ export async function POST(request: Request) {
           shiftMonth,
           shiftedQuantity,
           workflowStatus,
+          notes,
           me.email,
           actorName,
         ],
