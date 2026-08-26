@@ -400,7 +400,7 @@ export default function BlockerImpactClient() {
   async function exportWorkbook() {
     setExporting(true);
     try {
-      const params = new URLSearchParams({ page: '1', pageSize: '5000' });
+      const params = new URLSearchParams({ page: '1', pageSize: '5000', exportAll: '1' });
       if (q.trim()) params.set('q', q.trim());
       if (status) params.set('status', status);
       if (owner) params.set('owner', owner);
@@ -485,7 +485,7 @@ export default function BlockerImpactClient() {
           </div>
         </div>
         <div className="blocker-hero-actions">
-          {isAdmin ? <button type="button" className="blocker-btn light" onClick={() => void exportWorkbook()} disabled={exporting}><Download size={17} /> {exporting ? 'Hazırlanıyor...' : 'Yönetim Raporu'}</button> : null}
+          <button type="button" className="blocker-btn light" onClick={() => void exportWorkbook()} disabled={exporting}><Download size={17} /> {exporting ? 'Hazırlanıyor...' : 'Yönetim Raporu'}</button>
           <button type="button" className="blocker-btn light" onClick={() => void loadData()} disabled={loading}><RefreshCw size={17} className={loading ? 'spin' : ''} /> Yenile</button>
         </div>
       </section>

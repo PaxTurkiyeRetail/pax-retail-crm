@@ -26,7 +26,8 @@ export async function GET(request: Request) {
     const category = String(url.searchParams.get('category') ?? '').trim();
     const page = positiveInt(url.searchParams.get('page'), 1);
     const pageSize = Math.min(positiveInt(url.searchParams.get('pageSize'), 20), 5000);
-    const canSeeAll = userHasPermission(me, 'forecast.read.any');
+    const exportAll = String(url.searchParams.get('exportAll') ?? '').trim() === '1';
+    const canSeeAll = userHasPermission(me, 'forecast.read.any') || exportAll;
     const displayOwnerName = String(me.full_name ?? me.email).trim();
 
     let rows: any[];
