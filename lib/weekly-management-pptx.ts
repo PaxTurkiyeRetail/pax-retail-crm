@@ -1716,8 +1716,23 @@ function buildSlideReplacements(payload: WeeklyManagementPresentationPayload, mo
 
   const slide3: Record<number, string> = { 29: 'İlerlemeler, İlk Temaslar ve Tamamlananlar' };
 
+  // Satışçı sunumunda başlık iş koluna göre seçilir: seçilen satışçının
+  // müşterilerinin çoğunluğu Vertical sektörlerindeyse "Vertical Genel Durum
+  // Raporu", aksi halde "Retail Genel Durum Raporu" yazılır. Vertical
+  // sektörleri parametre meta'sından gelir (payload.verticalSectorValues).
+  const verticalSectorSet = new Set(
+    (payload.verticalSectorValues ?? []).map((value) => String(value).trim().toLowerCase()),
+  );
+  const verticalCustomerCount = payload.customers.filter((row) =>
+    verticalSectorSet.has(String(row.sector ?? '').trim().toLowerCase()),
+  ).length;
+  const generalStatusReportTitle =
+    mode === 'seller' && payload.customers.length > 0 && verticalCustomerCount * 2 >= payload.customers.length
+      ? 'Vertical Genel Durum Raporu'
+      : 'Retail Genel Durum Raporu';
+
   const slide4: Record<number, string> = {
-    0: 'Retail Genel Durum Raporu',
+    0: generalStatusReportTitle,
     1: formatMonthLabel(payload.filters.from),
     2: formatNumber(payload.summary.totalAccounts),
     5: formatNumber(payload.summary.totalPosDevices),

@@ -755,6 +755,9 @@ export type WeeklyManagementPresentationPayload = {
   customers: PresentationCustomer[];
   activities: ActivityRow[];
   phaseDefinitions: Array<{ phase_no: number; phase_name: string }>;
+  // crm_sector parametrelerinde meta.business_line = 'vertical' olan sektör
+  // değerleri; satışçı sunumu başlığında iş kolu ayrımı için kullanılır.
+  verticalSectorValues: string[];
 };
 
 type BaseCustomerRow = {
@@ -795,6 +798,24 @@ export async function buildWeeklyManagementPresentation(admin: any, options?: { 
   const selectedOwner = String(options?.owner ?? '').trim();
   const selectedSegment = String(options?.segment ?? '').trim();
   const sellerMode = Boolean(options?.sellerMode);
+
+  // Vertical iş kolu sektörleri etiketten değil parametre meta'sından okunur
+  // (meta.business_line = 'vertical'); eski genel "Vertical" değeri de
+  // geriye dönük uyum için kapsanır.
+  let verticalSectorValues: string[] = [];
+  try {
+    const sectorParamRows = await db.query(
+      "select value, meta from public.system_parameters where group_key = 'crm_sector'",
+    );
+    verticalSectorValues = (sectorParamRows.rows as Array<{ value: string | null; meta: any }>)
+      .filter((row) =>
+        String(row?.meta?.business_line ?? '').trim().toLowerCase() === 'vertical'
+        || String(row?.value ?? '').trim().toLowerCase() === 'vertical')
+      .map((row) => String(row?.value ?? '').trim())
+      .filter(Boolean);
+  } catch {
+    verticalSectorValues = [];
+  }
   const selectedOwnerNorm = normalizeForSearch(selectedOwner);
   const selectedOwnerIsBusinessPartnerGroup = ['is ortakları', 'is ortaklari', 'is ortağı', 'is ortagi'].includes(normalizeDashboardKey(selectedOwner));
 
@@ -1522,5 +1543,6 @@ export async function buildWeeklyManagementPresentation(admin: any, options?: { 
     customers: presentationCustomers,
     activities: visibleActivities,
     phaseDefinitions,
+    verticalSectorValues,
   } satisfies WeeklyManagementPresentationPayload;
 }
