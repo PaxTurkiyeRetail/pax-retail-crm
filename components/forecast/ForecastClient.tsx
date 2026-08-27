@@ -11,6 +11,7 @@ type Option = { label: string; value: string };
 type MonthOption = { label: string; value: number };
 type ForecastLine = {
   id: string;
+  product_id: string | null;
   product_code_snapshot: string | null;
   product_name_snapshot: string | null;
   quantity: number;
@@ -112,6 +113,8 @@ export default function ForecastClient() {
   const [onboarding, setOnboarding] = useState(false);
   const [draftLines, setDraftLines] = useState<ForecastDraftLine[]>(() => [emptyDraftLine(EMPTY_OPTIONS)]);
   const [openCustomerId, setOpenCustomerId] = useState('');
+  const [editingForecastId, setEditingForecastId] = useState('');
+  const [deletingId, setDeletingId] = useState('');
 
   const loadOptions = async () => {
     const res = await fetch('/api/forecast/options', { cache: 'no-store' });
@@ -182,7 +185,42 @@ export default function ForecastClient() {
 
   function openForm(customer: CustomerRow) {
     setOpenCustomerId(customer.musteri_id);
+    setEditingForecastId('');
     setDraftLines([emptyDraftLine(options)]);
+  }
+
+  function openEdit(customer: CustomerRow, line: ForecastLine) {
+    setOpenCustomerId(customer.musteri_id);
+    setEditingForecastId(line.id);
+    setDraftLines([emptyDraftLine(options, {
+      productId: line.product_id ?? '',
+      quantity: String(line.quantity),
+      forecastMonth: String(line.forecast_month),
+      forecastYear: String(line.forecast_year),
+      salesChannel: line.sales_channel,
+      probability: String(line.probability),
+      note: line.note ?? '',
+    })]);
+  }
+
+  async function deleteForecast(line: ForecastLine) {
+    if (!window.confirm('Bu forecast kaydini silmek istediginize emin misiniz?')) return;
+    setDeletingId(line.id);
+    try {
+      const res = await fetch('/api/forecast/delete', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id: line.id }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json?.message || 'Forecast silinemedi.');
+      appToast.success('Forecast silindi', 'Kayit basariyla silindi.');
+      await loadRows();
+    } catch (error: any) {
+      appToast.error('Forecast silinemedi', error?.message || 'Forecast silinemedi.');
+    } finally {
+      setDeletingId('');
+    }
   }
 
   function updateDraftLine(uid: string, patch: Partial<ForecastDraftLine>) {
@@ -222,27 +260,43 @@ export default function ForecastClient() {
     setSaving(true);
     setMessage(null);
     try {
-      const res = await fetch('/api/forecast/create', {
+      const isEdit = Boolean(editingForecastId);
+      const line = draftLines[0];
+      const res = await fetch(isEdit ? '/api/forecast/update' : '/api/forecast/create', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
+        body: JSON.stringify(isEdit ? {
+          id: editingForecastId,
+          product_id: line.productId,
+          quantity: Number(line.quantity),
+          forecast_month: Number(line.forecastMonth),
+          forecast_year: Number(line.forecastYear),
+          sales_channel: line.salesChannel,
+          probability: Number(line.probability),
+          note: line.note,
+        } : {
           customer_id: selectedCustomer.musteri_id,
-          items: draftLines.map((line) => ({
-            product_id: line.productId,
-            quantity: Number(line.quantity),
-            forecast_month: Number(line.forecastMonth),
-            forecast_year: Number(line.forecastYear),
-            sales_channel: line.salesChannel,
-            probability: Number(line.probability),
-            note: line.note,
+          items: draftLines.map((item) => ({
+            product_id: item.productId,
+            quantity: Number(item.quantity),
+            forecast_month: Number(item.forecastMonth),
+            forecast_year: Number(item.forecastYear),
+            sales_channel: item.salesChannel,
+            probability: Number(item.probability),
+            note: item.note,
           })),
         }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json?.message || 'Forecast kaydedilemedi.');
-      const savedCount = Number(json?.count ?? draftLines.length);
-      appToast.success('Forecast kaydedildi', `${selectedCustomer.musteri} için ${savedCount} ürün satırı eklendi.`);
+      if (isEdit) {
+        appToast.success('Forecast guncellendi', `${selectedCustomer.musteri} icin kayit guncellendi.`);
+      } else {
+        const savedCount = Number(json?.count ?? draftLines.length);
+        appToast.success('Forecast kaydedildi', `${selectedCustomer.musteri} için ${savedCount} ürün satırı eklendi.`);
+      }
       setOpenCustomerId('');
+      setEditingForecastId('');
       setDraftLines([emptyDraftLine(options)]);
       await loadRows();
     } catch (error: any) {
@@ -315,11 +369,11 @@ export default function ForecastClient() {
         <section className="premium-drawer-card forecast-entry-card">
           <div className="premium-section-head forecast-entry-head">
             <div>
-              <span>Forecast ekleniyor</span>
+              <span>{editingForecastId ? 'Forecast düzenleniyor' : 'Forecast ekleniyor'}</span>
               <h2>{selectedCustomer.musteri}</h2>
-              <p>Tek kayıtta birden fazla ürün satırı ekleyebilirsiniz. Dönem görünümü: <strong>{forecastPreview}</strong></p>
+              <p>{editingForecastId ? 'Seçili forecast satırını güncelleyin.' : 'Tek kayıtta birden fazla ürün satırı ekleyebilirsiniz.'} Dönem görünümü: <strong>{forecastPreview}</strong></p>
             </div>
-            <button type="button" className="premium-btn secondary" onClick={() => setOpenCustomerId('')}>Kapat</button>
+            <button type="button" className="premium-btn secondary" onClick={() => { setOpenCustomerId(''); setEditingForecastId(''); }}>Kapat</button>
           </div>
 
           <div className="forecast-entry-lines">
@@ -343,8 +397,10 @@ export default function ForecastClient() {
           </div>
 
           <div className="forecast-entry-footer">
-            <button type="button" className="premium-btn secondary" onClick={addDraftLine}>+ Ürün Satırı Ekle</button>
-            <button type="button" className="premium-btn primary" onClick={saveForecast} disabled={saving || onboarding}>{saving ? 'Kaydediliyor...' : `${draftLines.length} Satırı Kaydet`}</button>
+            {!editingForecastId ? <button type="button" className="premium-btn secondary" onClick={addDraftLine}>+ Ürün Satırı Ekle</button> : null}
+            <button type="button" className="premium-btn primary" onClick={saveForecast} disabled={saving || onboarding}>
+              {saving ? 'Kaydediliyor...' : editingForecastId ? 'Güncelle' : `${draftLines.length} Satırı Kaydet`}
+            </button>
           </div>
         </section>
       ) : null}
@@ -394,10 +450,13 @@ export default function ForecastClient() {
               <div className="forecast-list-col details">
                 <span className="forecast-col-label">Mevcut Forecast</span>
                 <div className="forecast-chip-list">
-                  {row.forecasts.slice(0, 4).map((line) => (
-                    <span key={line.id} className="forecast-soft-chip">{line.product_code_snapshot || line.product_name_snapshot} · {line.quantity} adet · {line.forecast_label} · %{line.probability}</span>
+                  {row.forecasts.map((line) => (
+                    <span key={line.id} className="forecast-soft-chip">
+                      {line.product_code_snapshot || line.product_name_snapshot} · {line.quantity} adet · {line.forecast_label} · %{line.probability}
+                      <button type="button" className="forecast-chip-action" onClick={() => openEdit(row, line)} title="Düzenle">✎</button>
+                      <button type="button" className="forecast-chip-action" onClick={() => deleteForecast(line)} disabled={deletingId === line.id} title="Sil">{deletingId === line.id ? '...' : '✕'}</button>
+                    </span>
                   ))}
-                  {row.forecasts.length > 4 ? <span className="forecast-soft-chip">+{row.forecasts.length - 4}</span> : null}
                   {!row.forecasts.length ? <span className="forecast-muted">Forecast yok</span> : null}
                 </div>
               </div>

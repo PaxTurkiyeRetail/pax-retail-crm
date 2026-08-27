@@ -117,6 +117,13 @@ type BudgetRow = {
   projected: number;
 };
 
+type ModelRow = {
+  productCode: string;
+  productName: string;
+  quantity: number;
+  customerCount: number;
+};
+
 type ApiResponse = {
   rows?: Row[];
   total?: number;
@@ -126,6 +133,7 @@ type ApiResponse = {
   summary?: Summary;
   completionByOwner?: CompletionRow[];
   budgetImpact?: BudgetRow[];
+  modelSummary?: ModelRow[];
   ownerOptions?: string[];
   onboardingNeeded?: boolean;
   message?: string;
@@ -230,6 +238,7 @@ export default function BlockerImpactClient() {
   const [summary, setSummary] = useState<Summary>(EMPTY_SUMMARY);
   const [completion, setCompletion] = useState<CompletionRow[]>([]);
   const [budget, setBudget] = useState<BudgetRow[]>([]);
+  const [modelSummary, setModelSummary] = useState<ModelRow[]>([]);
   const [ownerOptions, setOwnerOptions] = useState<string[]>([]);
   const [scope, setScope] = useState<'all' | 'own'>('own');
   const [total, setTotal] = useState(0);
@@ -269,6 +278,7 @@ export default function BlockerImpactClient() {
       setSummary(json.summary ?? EMPTY_SUMMARY);
       setCompletion(json.completionByOwner ?? []);
       setBudget(json.budgetImpact ?? []);
+      setModelSummary(json.modelSummary ?? []);
       setOwnerOptions(json.ownerOptions ?? []);
       setOnboarding(Boolean(json.onboardingNeeded));
       if (json.message && !json.onboardingNeeded) setMessage(json.message);
@@ -447,6 +457,14 @@ export default function BlockerImpactClient() {
             ...(json.budgetImpact ?? []).map((item) => [item.periodLabel, item.currentForecast, item.outgoing, item.incoming, item.projected]),
           ],
         },
+        {
+          name: 'Model Bazlı Forecast Özeti',
+          widths: [18, 30, 16, 16],
+          rows: [
+            ['Model Kodu', 'Model Adı', 'Toplam Adet', 'Müşteri Sayısı'],
+            ...(json.modelSummary ?? []).map((item) => [item.productCode, item.productName, item.quantity, item.customerCount]),
+          ],
+        },
       ]);
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement('a');
@@ -580,6 +598,14 @@ export default function BlockerImpactClient() {
           <div className="budget-callout"><AlertTriangle size={19} /><span><strong>{numberFormat(summary.riskQuantity)} adet</strong> açık engeller nedeniyle farklı bir aya kayma riski taşıyor.</span></div>
           <div className="blocker-table-wrap"><table className="blocker-table budget-table"><thead><tr><th>Ay</th><th>Mevcut Forecast</th><th>Ay Dışına Kayacak</th><th>Aya Gelecek</th><th>Risk Sonrası Görünüm</th></tr></thead><tbody>{budget.map((item) => <tr key={item.key}><td><strong>{item.periodLabel}</strong></td><td>{numberFormat(item.currentForecast)}</td><td><span className={item.outgoing ? 'budget-number outgoing' : 'budget-number'}>{item.outgoing ? `-${numberFormat(item.outgoing)}` : '0'}</span></td><td><span className={item.incoming ? 'budget-number incoming' : 'budget-number'}>{item.incoming ? `+${numberFormat(item.incoming)}` : '0'}</span></td><td><strong className="projected-number">{numberFormat(item.projected)}</strong></td></tr>)}</tbody></table></div>
           <div className="budget-mobile-list">{budget.map((item) => <article key={item.key}><div><strong>{item.periodLabel}</strong><span>Mevcut {numberFormat(item.currentForecast)}</span></div><div className="budget-flow"><span className="outgoing">-{numberFormat(item.outgoing)}</span><ArrowRight size={15} /><strong>{numberFormat(item.projected)}</strong><ArrowRight size={15} /><span className="incoming">+{numberFormat(item.incoming)}</span></div><small>Risk sonrası görünüm</small></article>)}</div>
+        </section>
+      ) : null}
+
+      {view === 'budget' && isAdmin ? (
+        <section className="blocker-report-card">
+          <div className="report-card-head"><div><span>Model Bazlı</span><h2>Forecast Özeti</h2><p>Tüm aktif Forecast'ların model bazında toplam adedi.</p></div><BarChart3 size={24} /></div>
+          <div className="blocker-table-wrap"><table className="blocker-table budget-table"><thead><tr><th>Model</th><th>Model Adı</th><th>Toplam Adet</th><th>Müşteri Sayısı</th></tr></thead><tbody>{modelSummary.map((item) => <tr key={item.productCode}><td><strong>{item.productCode}</strong></td><td>{item.productName}</td><td><strong className="projected-number">{numberFormat(item.quantity)}</strong></td><td>{numberFormat(item.customerCount)}</td></tr>)}</tbody></table></div>
+          <div className="budget-mobile-list">{modelSummary.map((item) => <article key={item.productCode}><div><strong>{item.productCode}</strong><span>{item.productName}</span></div><div className="budget-flow"><strong>{numberFormat(item.quantity)} adet</strong></div><small>{item.customerCount} müşteri</small></article>)}</div>
         </section>
       ) : null}
 
