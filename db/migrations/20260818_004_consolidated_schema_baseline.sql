@@ -2702,6 +2702,15 @@ and permission_key = any(array[
 ]::text[])
 on conflict do nothing;
 
+-- account_manager: musteri sorumlusu atama + tum forecast kayitlarini
+-- duzenleme/silme yetkisi (baseline ilk kurulumdan sonra eklendi; tablo
+-- zaten doluysa yukaridaki "where not exists" blogu calismaz, bu yuzden
+-- ayrica idempotent upsert edilir).
+insert into public.rbac_role_permissions(role_key, permission_key)
+select 'account_manager', permission_key from public.rbac_permissions
+where permission_key = any(array['customer.assign','forecast.write.any']::text[])
+on conflict (role_key, permission_key) do update set granted = true, updated_at = now();
+
 insert into public.rbac_role_permissions(role_key, permission_key)
 select 'itsm', permission_key from public.rbac_permissions
 where not exists (select 1 from public.rbac_role_permissions where role_key = 'itsm')
