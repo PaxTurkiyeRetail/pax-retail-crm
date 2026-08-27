@@ -221,11 +221,19 @@ function forecastTitle(option: ForecastOption) {
   return `${option.period_label} · ${product} · ${numberFormat(option.quantity)} adet`;
 }
 
-function customerPlanText(row: Row) {
-  if (!row.active_forecast_count) return 'Aktif Forecast yok';
-  if (row.active_forecast_count === 1) return `${row.forecast_period_label} · ${numberFormat(row.quantity)} adet`;
-  return `${numberFormat(row.active_forecast_count)} aktif Forecast · ${numberFormat(row.total_forecast_quantity)} adet`;
+function customerModelBreakdown(row: Row) {
+  const options = Array.isArray(row.forecast_options) ? row.forecast_options : [];
+  if (!options.length) return [];
+  const map = new Map<string, { code: string; quantity: number }>();
+  for (const option of options) {
+    const code = option.product_code || option.product_name || 'Diğer';
+    const current = map.get(code) ?? { code, quantity: 0 };
+    current.quantity += Number(option.quantity ?? 0);
+    map.set(code, current);
+  }
+  return Array.from(map.values()).sort((a, b) => b.quantity - a.quantity);
 }
+
 
 async function readJson(response: Response) {
   const json = await response.json().catch(() => ({}));
@@ -418,27 +426,46 @@ export default function BlockerImpactClient() {
       const response = await fetch(`/api/forecast/blockers/list?${params.toString()}`, { cache: 'no-store' });
       const json = await readJson(response) as ApiResponse;
       const exportRows = (json.rows ?? []).filter((row) => row.blocker_id && row.effective_status !== 'pending');
+
+      const modelCodeOrder: string[] = [];
+      const modelTotals = new Map<string, number>();
+      const rowBreakdowns = exportRows.map((row) => {
+        const breakdown = customerModelBreakdown(row);
+        for (const item of breakdown) {
+          if (!modelTotals.has(item.code)) {
+            modelCodeOrder.push(item.code);
+            modelTotals.set(item.code, 0);
+          }
+          modelTotals.set(item.code, (modelTotals.get(item.code) ?? 0) + item.quantity);
+        }
+        return breakdown;
+      });
+      const modelColumns = modelCodeOrder.sort((a, b) => (modelTotals.get(b) ?? 0) - (modelTotals.get(a) ?? 0));
+
       const blob = await buildBlockerImpactWorkbook([
         {
           name: 'Engel ve Etki Listesi',
-          widths: [22, 28, 20, 20, 16, 44, 24, 16, 20, 14, 20, 18, 34],
+          widths: [22, 28, 20, ...modelColumns.map(() => 12), 16, 44, 24, 16, 20, 14, 20, 18, 34],
           rows: [
-            ['Account', 'Müşteri', 'Sektör', 'Forecast Özeti', 'Toplam Adet', 'Satışın Önündeki Engel', 'Kim Çözecek?', 'Çözüm Tarihi', 'Kayacağı Dönem', 'Kayacak Adet', 'Durum', 'Son Güncelleme', 'Açıklama'],
-            ...exportRows.map((row) => [
-              row.sorumlu ?? '-',
-              row.musteri,
-              row.sektor ?? '-',
-              customerPlanText(row),
-              row.total_forecast_quantity ?? 0,
-              row.effective_status === 'pending' ? 'Yanıt bekliyor' : row.has_blocker ? row.blocker_description ?? '-' : 'Engel yok',
-              row.resolution_owner_name ?? '-',
-              formatDate(row.resolution_due_date),
-              row.shift_period_label ?? '-',
-              row.shifted_quantity ?? 0,
-              statusLabel(row.effective_status),
-              formatDateTime(row.updated_at),
-              row.notes ?? '-',
-            ]),
+            ['Account', 'Müşteri', 'Sektör', ...modelColumns, 'Toplam Adet', 'Satışın Önündeki Engel', 'Kim Çözecek?', 'Çözüm Tarihi', 'Kayacağı Dönem', 'Kayacak Adet', 'Durum', 'Son Güncelleme', 'Açıklama'],
+            ...exportRows.map((row, index) => {
+              const breakdownMap = new Map(rowBreakdowns[index].map((item) => [item.code, item.quantity]));
+              return [
+                row.sorumlu ?? '-',
+                row.musteri,
+                row.sektor ?? '-',
+                ...modelColumns.map((code) => breakdownMap.get(code) ?? 0),
+                row.total_forecast_quantity ?? 0,
+                row.effective_status === 'pending' ? 'Yanıt bekliyor' : row.has_blocker ? row.blocker_description ?? '-' : 'Engel yok',
+                row.resolution_owner_name ?? '-',
+                formatDate(row.resolution_due_date),
+                row.shift_period_label ?? '-',
+                row.shifted_quantity ?? 0,
+                statusLabel(row.effective_status),
+                formatDateTime(row.updated_at),
+                row.notes ?? '-',
+              ];
+            }),
           ],
         },
         {
