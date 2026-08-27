@@ -603,7 +603,7 @@ export default function BlockerImpactClient() {
 
       {view === 'budget' && isAdmin ? (
         <section className="blocker-report-card">
-          <div className="report-card-head"><div><span>Model Bazlı</span><h2>Forecast Özeti</h2><p>Tüm aktif Forecast'ların model bazında toplam adedi.</p></div><BarChart3 size={24} /></div>
+          <div className="report-card-head"><div><span>Model Bazlı</span><h2>Forecast Özeti</h2><p>Tüm aktif Forecast&apos;ların model bazında toplam adedi.</p></div><BarChart3 size={24} /></div>
           <div className="blocker-table-wrap"><table className="blocker-table budget-table"><thead><tr><th>Model</th><th>Model Adı</th><th>Toplam Adet</th><th>Müşteri Sayısı</th></tr></thead><tbody>{modelSummary.map((item) => <tr key={item.productCode}><td><strong>{item.productCode}</strong></td><td>{item.productName}</td><td><strong className="projected-number">{numberFormat(item.quantity)}</strong></td><td>{numberFormat(item.customerCount)}</td></tr>)}</tbody></table></div>
           <div className="budget-mobile-list">{modelSummary.map((item) => <article key={item.productCode}><div><strong>{item.productCode}</strong><span>{item.productName}</span></div><div className="budget-flow"><strong>{numberFormat(item.quantity)} adet</strong></div><small>{item.customerCount} müşteri</small></article>)}</div>
         </section>
