@@ -4,6 +4,7 @@ import { requirePermissionOrThrow, userHasPermission } from "@/lib/authz";
 import { tryRecordAuditEvent } from "@/lib/audit";
 import { createPgAdminClient } from "@/lib/pg/admin";
 import { HAVUZ_ACCOUNT_NAME, LEGACY_INTEGRATION_ENUM_VALUES } from "@/lib/crm";
+import { resolveCustomerTypeForSector } from "@/lib/report-only-customers";
 import { assertActiveParameterValue } from "@/lib/system-parameters";
 
 export const dynamic = 'force-dynamic';
@@ -90,6 +91,10 @@ export async function POST(req: Request) {
             return NextResponse.json({ message: error?.message || 'Geçersiz müşteri politikası.' }, { status: error?.status || 400 });
         }
     }
+    // Sektor IS ORTAGI ise musteri tipi de Is Ortagi'na cekilir; aksi halde
+    // aktivite ekrani is ortagi fazlari yerine 25 fazli musteri listesini
+    // gosterir. Siniflandirma yetkisi olmayan kullanicilar icin de gecerlidir.
+    customerType = resolveCustomerTypeForSector({ sektor, customerType });
     const requestedOwner = (body.sorumlu ?? "").trim() || myName;
     const requestedOwnerUserId = String(body.owner_user_id ?? '').trim() || null;
     let sorumlu = myName;

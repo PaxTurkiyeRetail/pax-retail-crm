@@ -3,6 +3,7 @@ import { revalidatePath } from 'next/cache';
 import { assertOwnedResourceAccess, requireCrmAccessOrThrow, userHasPermission } from '@/lib/authz';
 import { createPgAdminClient } from '@/lib/pg/admin';
 import { HAVUZ_ACCOUNT_NAME, LEGACY_INTEGRATION_ENUM_VALUES } from '@/lib/crm';
+import { resolveCustomerTypeForSector } from '@/lib/report-only-customers';
 import { tryRecordAuditEvent } from '@/lib/audit';
 import { assertActiveParameterValue } from '@/lib/system-parameters';
 
@@ -130,6 +131,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: error?.message || 'Geçersiz müşteri politikası.' }, { status: error?.status || 400 });
     }
   }
+
+  // Sektor IS ORTAGI'na cevrildiginde musteri tipi de Is Ortagi olur (yalnizca
+  // tip dokunulmamis 'standard' ise); boylece aktivite ekrani 14 fazli is ortagi
+  // listesini gosterir. Bilincli 'report_only' secimi korunur.
+  customerType = resolveCustomerTypeForSector({ sektor, customerType });
 
   const { error } = await admin
     .from('musteriler')

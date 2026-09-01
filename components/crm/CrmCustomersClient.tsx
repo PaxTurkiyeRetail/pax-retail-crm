@@ -17,6 +17,7 @@ function Users({ size = 16, strokeWidth = 1.75, style }: IconProps) { return <sv
 import { uniqueOptions, parsePhaseNo, sumPhaseRange } from '@/lib/utils';
 import CustomersHero from '@/components/crm/CustomersHero';
 import { HAVUZ_ACCOUNT_NAME } from '@/lib/crm';
+import { isBusinessPartnerSector, resolveCustomerTypeForSector } from '@/lib/report-only-customers';
 import { presentKunyeStatus } from '@/lib/kunye';
 import { customerStatusTone, deriveCustomerSegmentation, managementTypeTone } from '@/lib/customer-segmentation';
 import { appToast } from '@/lib/app-toast';
@@ -1395,7 +1396,18 @@ export default function CrmCustomersClient() {
 
               <label className="field">
                 <span className="label">Sektör</span>
-                <select className="select" value={sektor} onChange={(e) => setSektor(e.target.value)}>
+                <select
+                  className="select"
+                  value={sektor}
+                  onChange={(e) => {
+                    const nextSektor = e.target.value;
+                    setSektor(nextSektor);
+                    // Sektor IS ORTAGI secilirse musteri tipi otomatik Is Ortagi
+                    // olur (aktivite ekrani is ortagi fazlarini tipe gore getirir).
+                    // Kullanici isterse asagidaki alandan degistirebilir.
+                    setCustomerType((current) => resolveCustomerTypeForSector({ sektor: nextSektor, customerType: current }));
+                  }}
+                >
                   <option value="">Seçiniz</option>
                   {sectorFormOptions.map((name) => (
                     <option key={name} value={name}>{name}</option>
@@ -1452,6 +1464,11 @@ export default function CrmCustomersClient() {
                         <option key={item.value} value={item.value}>{item.label}</option>
                       ))}
                     </select>
+                    {isBusinessPartnerSector(sektor) && customerType !== 'business_partner' ? (
+                      <small className="muted">
+                        Sektör İŞ ORTAĞI seçili. Aktivite girişinde iş ortağı fazlarının gelmesi için tip “İş Ortağı” olmalıdır.
+                      </small>
+                    ) : null}
                   </label>
                   <label className="field">
                     <span className="label">Pipeline Politikası</span>
