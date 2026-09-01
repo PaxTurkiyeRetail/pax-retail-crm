@@ -143,6 +143,20 @@ export const KUNYE_PARAMETER_GROUPS = [
     title: "Memnuniyet",
     description: "Memnuniyet değerlendirme seçenekleri.",
   },
+  {
+    key: "kunye_is_kolu",
+    module: "Liste Yönetimleri",
+    category: "Müşteri Künye · Sınıflandırma",
+    title: "İş Kolu",
+    description: "Müşterinin hangi iş koluna ait olduğu (Retail / Vertical). Raporlarda iş kolu kırılımı bu alandan okunur.",
+  },
+  {
+    key: "kunye_satici_etiketi",
+    module: "Liste Yönetimleri",
+    category: "Müşteri Künye · Sınıflandırma",
+    title: "Satıcı Etiketi (Hunter / Farmer)",
+    description: "Hunter = yeni müşteri kazanımı, Farmer = mevcut portföyü büyütme. Kişi bazlı Hunter/Farmer listeleri bu alandan üretilir.",
+  },
 ] as const;
 
 export const DEFAULT_KUNYE_OPTIONS: Record<string, ParameterOption[]> = {
@@ -327,6 +341,16 @@ export const DEFAULT_KUNYE_OPTIONS: Record<string, ParameterOption[]> = {
     sortOrder: (index + 1) * 10,
   })),
   kunye_memnuniyet: ["Memnun", "Orta", "Memnun Değil"].map((value, index) => ({
+    label: value,
+    value,
+    sortOrder: (index + 1) * 10,
+  })),
+  kunye_is_kolu: ["Retail", "Vertical"].map((value, index) => ({
+    label: value,
+    value,
+    sortOrder: (index + 1) * 10,
+  })),
+  kunye_satici_etiketi: ["Hunter", "Farmer"].map((value, index) => ({
     label: value,
     value,
     sortOrder: (index + 1) * 10,

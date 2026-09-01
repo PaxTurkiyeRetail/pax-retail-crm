@@ -25,6 +25,8 @@ const FALLBACK_KUNYE_OPTIONS: KunyeOptionMap = {
   kunye_pos_mulkiyet: ['Kendisi', 'Banka', 'Bankada'].map((value) => ({ label: value, value })),
   kunye_saha_hizmeti_firmasi: ['Bilinmiyor', 'Teknoser', 'IBM', 'Payser', 'Diğer'].map((value) => ({ label: value, value })),
   kunye_memnuniyet: ['Memnun', 'Orta', 'Memnun Değil'].map((value) => ({ label: value, value })),
+  kunye_is_kolu: ['Retail', 'Vertical'].map((value) => ({ label: value, value })),
+  kunye_satici_etiketi: ['Hunter', 'Farmer'].map((value) => ({ label: value, value })),
 };
 
 function getOptions(options: KunyeOptionMap, key: string) {
@@ -63,6 +65,8 @@ type KunyeFormData = {
   pos_mulkiyet_bankalari: string[];
   saha_hizmeti_firmasi: string;
   
+  is_kolu: string;
+  satici_etiketi: string;
   genel_memnuniyet: string;
   problem_1: string;
   problem_2: string;
@@ -96,6 +100,8 @@ const EMPTY_FORM: KunyeFormData = {
   pos_mulkiyet: '',
   pos_mulkiyet_bankalari: [],
   saha_hizmeti_firmasi: '',
+  is_kolu: '',
+  satici_etiketi: '',
   genel_memnuniyet: '',
   problem_1: '',
   problem_2: '',
@@ -301,6 +307,39 @@ export default function QuickKunyeForm({ musteriId, musteriAdi, existingData }: 
                 className="pax-input"
                 style={{ width: '100%', minHeight: 48, fontSize: 16, background: 'var(--panel-soft)' }}
               />
+            </div>
+
+            {/* Is Kolu - musteri Retail mi Vertical mi */}
+            <div>
+              <label className="pax-label" style={{ display: 'block', marginBottom: 8 }}>
+                İş Kolu
+              </label>
+              <select
+                value={form.is_kolu}
+                onChange={(e) => updateForm('is_kolu', e.target.value)}
+                className="pax-input"
+                style={{ width: '100%', minHeight: 48, fontSize: 16 }}
+              >
+                <option value="">Seçin...</option>
+                {opt('kunye_is_kolu').map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+              </select>
+            </div>
+
+            {/* Satici Etiketi - Hunter (yeni kazanim) / Farmer (portfoy buyutme) */}
+            <div>
+              <label className="pax-label" style={{ display: 'block', marginBottom: 8 }}>
+                Satıcı Etiketi
+              </label>
+              <select
+                value={form.satici_etiketi}
+                onChange={(e) => updateForm('satici_etiketi', e.target.value)}
+                className="pax-input"
+                style={{ width: '100%', minHeight: 48, fontSize: 16 }}
+              >
+                <option value="">Seçin...</option>
+                {opt('kunye_satici_etiketi').map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+              </select>
+              <small className="muted">Hunter: yeni müşteri kazanımı · Farmer: mevcut portföyü büyütme</small>
             </div>
 
             {/* Mağaza Sayısı */}

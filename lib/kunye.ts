@@ -33,6 +33,10 @@ export type KunyePayload = {
   genel_memnuniyet?: string | null;
   risk?: string | null;
   entegrasyon_yapisi?: string | null;
+  // Is kolu (Retail / Vertical) ve satici etiketi (Hunter / Farmer): kunyedeki
+  // siniflandirma alanlari, parametrik listelerden beslenir.
+  is_kolu?: string | null;
+  satici_etiketi?: string | null;
   account?: string | null;
   problem_1?: string | null;
   problem_2?: string | null;
@@ -274,6 +278,8 @@ export function normalizeKunyePayload(input: Record<string, unknown>): KunyePayl
     genel_memnuniyet: trimOrNull(input.genel_memnuniyet),
     risk: trimOrNull(input.risk),
     entegrasyon_yapisi: trimOrNull(input.entegrasyon_yapisi),
+    is_kolu: trimOrNull(input.is_kolu),
+    satici_etiketi: trimOrNull(input.satici_etiketi),
     account: trimOrNull(input.account),
     problem_1:
       trimOrNull(input.genel_memnuniyet) && trimOrNull(input.genel_memnuniyet) !== 'Memnun'
@@ -359,6 +365,8 @@ export function mapKunyeDbToUi(
     genel_memnuniyet: normalizeGenelMemnuniyet(row.genel_memnuniyet),
     risk: trimOrNull(row.risk),
     entegrasyon_yapisi: trimOrNull(row.entegrasyon_yapisi),
+    is_kolu: trimOrNull(row.is_kolu),
+    satici_etiketi: trimOrNull(row.satici_etiketi),
     account: trimOrNull(row.account ?? row.musteri_account),
     problem_1: trimOrNull(row.problem_1),
     problem_2: trimOrNull(row.problem_2),
@@ -421,6 +429,8 @@ export function mapKunyeUiToDb(payload: KunyePayload): Record<string, any> {
     genel_memnuniyet: nullableText(payload.genel_memnuniyet),
     risk: nullableText(payload.risk),
     entegrasyon_yapisi: nullableText(payload.entegrasyon_yapisi),
+    is_kolu: nullableText(payload.is_kolu),
+    satici_etiketi: nullableText(payload.satici_etiketi),
     account: nullableText(payload.account),
     problem_1:
       nullableText(payload.genel_memnuniyet) && nullableText(payload.genel_memnuniyet) !== 'Memnun'

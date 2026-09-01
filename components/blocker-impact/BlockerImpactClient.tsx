@@ -117,6 +117,13 @@ type BudgetRow = {
   projected: number;
 };
 
+type ModelRow = {
+  productCode: string;
+  productName: string;
+  quantity: number;
+  customerCount: number;
+};
+
 type ApiResponse = {
   rows?: Row[];
   total?: number;
@@ -126,6 +133,7 @@ type ApiResponse = {
   summary?: Summary;
   completionByOwner?: CompletionRow[];
   budgetImpact?: BudgetRow[];
+  modelSummary?: ModelRow[];
   ownerOptions?: string[];
   onboardingNeeded?: boolean;
   message?: string;
@@ -213,11 +221,19 @@ function forecastTitle(option: ForecastOption) {
   return `${option.period_label} · ${product} · ${numberFormat(option.quantity)} adet`;
 }
 
-function customerPlanText(row: Row) {
-  if (!row.active_forecast_count) return 'Aktif Forecast yok';
-  if (row.active_forecast_count === 1) return `${row.forecast_period_label} · ${numberFormat(row.quantity)} adet`;
-  return `${numberFormat(row.active_forecast_count)} aktif Forecast · ${numberFormat(row.total_forecast_quantity)} adet`;
+function customerModelBreakdown(row: Row) {
+  const options = Array.isArray(row.forecast_options) ? row.forecast_options : [];
+  if (!options.length) return [];
+  const map = new Map<string, { code: string; quantity: number }>();
+  for (const option of options) {
+    const code = option.product_code || option.product_name || 'Diğer';
+    const current = map.get(code) ?? { code, quantity: 0 };
+    current.quantity += Number(option.quantity ?? 0);
+    map.set(code, current);
+  }
+  return Array.from(map.values()).sort((a, b) => b.quantity - a.quantity);
 }
+
 
 async function readJson(response: Response) {
   const json = await response.json().catch(() => ({}));
@@ -230,6 +246,7 @@ export default function BlockerImpactClient() {
   const [summary, setSummary] = useState<Summary>(EMPTY_SUMMARY);
   const [completion, setCompletion] = useState<CompletionRow[]>([]);
   const [budget, setBudget] = useState<BudgetRow[]>([]);
+  const [modelSummary, setModelSummary] = useState<ModelRow[]>([]);
   const [ownerOptions, setOwnerOptions] = useState<string[]>([]);
   const [scope, setScope] = useState<'all' | 'own'>('own');
   const [total, setTotal] = useState(0);
@@ -269,6 +286,7 @@ export default function BlockerImpactClient() {
       setSummary(json.summary ?? EMPTY_SUMMARY);
       setCompletion(json.completionByOwner ?? []);
       setBudget(json.budgetImpact ?? []);
+      setModelSummary(json.modelSummary ?? []);
       setOwnerOptions(json.ownerOptions ?? []);
       setOnboarding(Boolean(json.onboardingNeeded));
       if (json.message && !json.onboardingNeeded) setMessage(json.message);
@@ -408,27 +426,46 @@ export default function BlockerImpactClient() {
       const response = await fetch(`/api/forecast/blockers/list?${params.toString()}`, { cache: 'no-store' });
       const json = await readJson(response) as ApiResponse;
       const exportRows = (json.rows ?? []).filter((row) => row.blocker_id && row.effective_status !== 'pending');
+
+      const modelCodeOrder: string[] = [];
+      const modelTotals = new Map<string, number>();
+      const rowBreakdowns = exportRows.map((row) => {
+        const breakdown = customerModelBreakdown(row);
+        for (const item of breakdown) {
+          if (!modelTotals.has(item.code)) {
+            modelCodeOrder.push(item.code);
+            modelTotals.set(item.code, 0);
+          }
+          modelTotals.set(item.code, (modelTotals.get(item.code) ?? 0) + item.quantity);
+        }
+        return breakdown;
+      });
+      const modelColumns = modelCodeOrder.sort((a, b) => (modelTotals.get(b) ?? 0) - (modelTotals.get(a) ?? 0));
+
       const blob = await buildBlockerImpactWorkbook([
         {
           name: 'Engel ve Etki Listesi',
-          widths: [22, 28, 20, 20, 16, 44, 24, 16, 20, 14, 20, 18, 34],
+          widths: [22, 28, 20, ...modelColumns.map(() => 12), 16, 44, 24, 16, 20, 14, 20, 18, 34],
           rows: [
-            ['Account', 'Müşteri', 'Sektör', 'Forecast Özeti', 'Toplam Adet', 'Satışın Önündeki Engel', 'Kim Çözecek?', 'Çözüm Tarihi', 'Kayacağı Dönem', 'Kayacak Adet', 'Durum', 'Son Güncelleme', 'Açıklama'],
-            ...exportRows.map((row) => [
-              row.sorumlu ?? '-',
-              row.musteri,
-              row.sektor ?? '-',
-              customerPlanText(row),
-              row.total_forecast_quantity ?? 0,
-              row.effective_status === 'pending' ? 'Yanıt bekliyor' : row.has_blocker ? row.blocker_description ?? '-' : 'Engel yok',
-              row.resolution_owner_name ?? '-',
-              formatDate(row.resolution_due_date),
-              row.shift_period_label ?? '-',
-              row.shifted_quantity ?? 0,
-              statusLabel(row.effective_status),
-              formatDateTime(row.updated_at),
-              row.notes ?? '-',
-            ]),
+            ['Account', 'Müşteri', 'Sektör', ...modelColumns, 'Toplam Adet', 'Satışın Önündeki Engel', 'Kim Çözecek?', 'Çözüm Tarihi', 'Kayacağı Dönem', 'Kayacak Adet', 'Durum', 'Son Güncelleme', 'Açıklama'],
+            ...exportRows.map((row, index) => {
+              const breakdownMap = new Map(rowBreakdowns[index].map((item) => [item.code, item.quantity]));
+              return [
+                row.sorumlu ?? '-',
+                row.musteri,
+                row.sektor ?? '-',
+                ...modelColumns.map((code) => breakdownMap.get(code) ?? 0),
+                row.total_forecast_quantity ?? 0,
+                row.effective_status === 'pending' ? 'Yanıt bekliyor' : row.has_blocker ? row.blocker_description ?? '-' : 'Engel yok',
+                row.resolution_owner_name ?? '-',
+                formatDate(row.resolution_due_date),
+                row.shift_period_label ?? '-',
+                row.shifted_quantity ?? 0,
+                statusLabel(row.effective_status),
+                formatDateTime(row.updated_at),
+                row.notes ?? '-',
+              ];
+            }),
           ],
         },
         {
@@ -445,6 +482,14 @@ export default function BlockerImpactClient() {
           rows: [
             ['Ay', 'Mevcut Forecast', 'Ay Dışına Kayacak', 'Aya Gelecek', 'Risk Sonrası Görünüm'],
             ...(json.budgetImpact ?? []).map((item) => [item.periodLabel, item.currentForecast, item.outgoing, item.incoming, item.projected]),
+          ],
+        },
+        {
+          name: 'Model Bazlı Forecast Özeti',
+          widths: [18, 30, 16, 16],
+          rows: [
+            ['Model Kodu', 'Model Adı', 'Toplam Adet', 'Müşteri Sayısı'],
+            ...(json.modelSummary ?? []).map((item) => [item.productCode, item.productName, item.quantity, item.customerCount]),
           ],
         },
       ]);
@@ -580,6 +625,14 @@ export default function BlockerImpactClient() {
           <div className="budget-callout"><AlertTriangle size={19} /><span><strong>{numberFormat(summary.riskQuantity)} adet</strong> açık engeller nedeniyle farklı bir aya kayma riski taşıyor.</span></div>
           <div className="blocker-table-wrap"><table className="blocker-table budget-table"><thead><tr><th>Ay</th><th>Mevcut Forecast</th><th>Ay Dışına Kayacak</th><th>Aya Gelecek</th><th>Risk Sonrası Görünüm</th></tr></thead><tbody>{budget.map((item) => <tr key={item.key}><td><strong>{item.periodLabel}</strong></td><td>{numberFormat(item.currentForecast)}</td><td><span className={item.outgoing ? 'budget-number outgoing' : 'budget-number'}>{item.outgoing ? `-${numberFormat(item.outgoing)}` : '0'}</span></td><td><span className={item.incoming ? 'budget-number incoming' : 'budget-number'}>{item.incoming ? `+${numberFormat(item.incoming)}` : '0'}</span></td><td><strong className="projected-number">{numberFormat(item.projected)}</strong></td></tr>)}</tbody></table></div>
           <div className="budget-mobile-list">{budget.map((item) => <article key={item.key}><div><strong>{item.periodLabel}</strong><span>Mevcut {numberFormat(item.currentForecast)}</span></div><div className="budget-flow"><span className="outgoing">-{numberFormat(item.outgoing)}</span><ArrowRight size={15} /><strong>{numberFormat(item.projected)}</strong><ArrowRight size={15} /><span className="incoming">+{numberFormat(item.incoming)}</span></div><small>Risk sonrası görünüm</small></article>)}</div>
+        </section>
+      ) : null}
+
+      {view === 'budget' && isAdmin ? (
+        <section className="blocker-report-card">
+          <div className="report-card-head"><div><span>Model Bazlı</span><h2>Forecast Özeti</h2><p>Tüm aktif Forecast&apos;ların model bazında toplam adedi.</p></div><BarChart3 size={24} /></div>
+          <div className="blocker-table-wrap"><table className="blocker-table budget-table"><thead><tr><th>Model</th><th>Model Adı</th><th>Toplam Adet</th><th>Müşteri Sayısı</th></tr></thead><tbody>{modelSummary.map((item) => <tr key={item.productCode}><td><strong>{item.productCode}</strong></td><td>{item.productName}</td><td><strong className="projected-number">{numberFormat(item.quantity)}</strong></td><td>{numberFormat(item.customerCount)}</td></tr>)}</tbody></table></div>
+          <div className="budget-mobile-list">{modelSummary.map((item) => <article key={item.productCode}><div><strong>{item.productCode}</strong><span>{item.productName}</span></div><div className="budget-flow"><strong>{numberFormat(item.quantity)} adet</strong></div><small>{item.customerCount} müşteri</small></article>)}</div>
         </section>
       ) : null}
 

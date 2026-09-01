@@ -204,6 +204,7 @@ export async function GET(request: Request) {
     };
 
     const visibleCustomerIds = allVisibleRows.map((row) => String(row.customer_id)).filter(Boolean);
+    let modelSummary: { productCode: string; productName: string; quantity: number; customerCount: number }[] = [];
     if (visibleCustomerIds.length > 0) {
       const forecastTotals = await db.query(
         `
@@ -219,6 +220,28 @@ export async function GET(request: Request) {
       for (const item of forecastTotals.rows) {
         ensurePeriod(Number(item.forecast_year), Number(item.forecast_month)).currentForecast += Number(item.quantity ?? 0);
       }
+
+      const modelTotals = await db.query(
+        `
+          select
+            coalesce(nullif(product_code_snapshot, ''), product_name_snapshot, 'Diğer') as product_code,
+            coalesce(nullif(product_name_snapshot, ''), product_code_snapshot, 'Diğer') as product_name,
+            sum(quantity)::integer as quantity,
+            count(distinct customer_id)::integer as customer_count
+          from public.crm_forecasts
+          where is_active = true
+            and customer_id = any($1::uuid[])
+          group by 1, 2
+          order by quantity desc
+        `,
+        [visibleCustomerIds],
+      );
+      modelSummary = modelTotals.rows.map((item: any) => ({
+        productCode: item.product_code,
+        productName: item.product_name,
+        quantity: Number(item.quantity ?? 0),
+        customerCount: Number(item.customer_count ?? 0),
+      }));
     }
 
     for (const row of allVisibleRows) {
@@ -250,6 +273,7 @@ export async function GET(request: Request) {
       summary,
       completionByOwner,
       budgetImpact,
+      modelSummary,
       ownerOptions,
       onboardingNeeded: false,
     });

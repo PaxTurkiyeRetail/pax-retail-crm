@@ -235,6 +235,7 @@ function routeMeta(pathname: string) {
     ],
     ["/crm/reports/user-activity-presentation", "Rapor Merkezi", "Kullanıcı Aktivite Sunumu"],
     ["/crm/reports/seller-presentation", "Rapor Merkezi", "Satışçı Sunumu"],
+    ["/crm/reports/seller-followup", "Rapor Merkezi", "Satışçı Takip Raporu"],
     ["/crm/reports/seller-summary", "Rapor Merkezi", "Satıcı Özeti"],
     ["/crm/reports/forecast", "Rapor Merkezi", "Forecast Raporu"],
     ["/crm/reports/quotes", "Rapor Merkezi", "Teklif Raporları"],
@@ -449,6 +450,11 @@ export default function PanelShell({
         href: "/crm/reports/forecast",
         label: "Forecast Raporu",
         iconKey: "forecast",
+      });
+      reports.push({
+        href: "/crm/reports/seller-followup",
+        label: "Satışçı Takip Raporu",
+        iconKey: "weekly",
       });
       reports.push({
         href: "/crm/reports/seller-summary",
