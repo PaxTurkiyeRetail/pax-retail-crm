@@ -20,6 +20,7 @@ type Body = {
   owner_user_id?: string | null;
   customer_type?: string | null;
   pipeline_policy?: string | null;
+  is_kolu?: string | null;
 };
 
 const legacyIntegrationValues = new Set<string>(LEGACY_INTEGRATION_ENUM_VALUES);
@@ -47,7 +48,7 @@ export async function POST(req: Request) {
   const admin = createPgAdminClient();
   const { data: currentRow, error: currentRowError } = await admin
     .from('musteriler')
-    .select('id,musteri,sorumlu,owner_user_id,sektor,entegrasyon_tipi,integration_type_key,satis_olasiligi,customer_type,pipeline_policy')
+    .select('id,musteri,sorumlu,owner_user_id,sektor,entegrasyon_tipi,integration_type_key,satis_olasiligi,customer_type,pipeline_policy,is_kolu')
     .eq('id', musteriId)
     .maybeSingle();
 
@@ -60,6 +61,9 @@ export async function POST(req: Request) {
   }
 
   const currentIntegration = String(currentRow.integration_type_key ?? currentRow.entegrasyon_tipi ?? '').trim() || null;
+  // İş Kolu: gönderilmediyse mevcut değer korunur (eski istemci uyumu); hiç yoksa Retail.
+  const currentIsKolu = String(currentRow.is_kolu ?? '').trim();
+  const isKolu = String(body.is_kolu ?? '').trim() || currentIsKolu || 'Retail';
   try {
     await Promise.all([
       sektor !== (currentRow.sektor ?? null)
@@ -71,6 +75,9 @@ export async function POST(req: Request) {
       satis_olasiligi !== (currentRow.satis_olasiligi ?? null)
         ? assertActiveParameterValue('crm_sales_probability', satis_olasiligi, { optional: true })
         : Promise.resolve(satis_olasiligi),
+      isKolu !== currentIsKolu
+        ? assertActiveParameterValue('kunye_is_kolu', isKolu)
+        : Promise.resolve(isKolu),
     ]);
   } catch (error: any) {
     return NextResponse.json({ message: error?.message || 'Geçersiz ana veri değeri.' }, { status: error?.status || 400 });
@@ -149,13 +156,14 @@ export async function POST(req: Request) {
       owner_user_id: ownerUserId,
       customer_type: customerType,
       pipeline_policy: pipelinePolicy,
+      is_kolu: isKolu,
       updated_by: actorName,
       updated_at: new Date().toISOString(),
     })
     .eq('id', musteriId);
 
   if (error) return NextResponse.json({ message: error.message }, { status: 400 });
-  await tryRecordAuditEvent({ actorId: me.id, actorEmail: me.email, action: 'customer.updated', resourceType: 'customer', resourceId: musteriId, before: currentRow, after: { musteri, sektor, entegrasyon_tipi, satis_olasiligi, sorumlu: resolvedOwner, owner_user_id: ownerUserId, customer_type: customerType, pipeline_policy: pipelinePolicy } });
+  await tryRecordAuditEvent({ actorId: me.id, actorEmail: me.email, action: 'customer.updated', resourceType: 'customer', resourceId: musteriId, before: currentRow, after: { musteri, sektor, entegrasyon_tipi, satis_olasiligi, sorumlu: resolvedOwner, owner_user_id: ownerUserId, customer_type: customerType, pipeline_policy: pipelinePolicy, is_kolu: isKolu } });
   revalidatePath('/crm/customers');
   return NextResponse.json({ ok: true, message: 'Müşteri kaydı güncellendi.' });
 }

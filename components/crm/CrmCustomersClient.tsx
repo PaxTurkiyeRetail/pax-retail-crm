@@ -42,6 +42,7 @@ type CrmRow = {
   satis_olasiligi?: string | null;
   customer_type?: string | null;
   pipeline_policy?: string | null;
+  is_kolu?: string | null;
 };
 
 type Me = { id: string; email: string; full_name: string | null; role: string; permissions?: string[] };
@@ -73,6 +74,8 @@ type FilterOptions = {
   salesProbabilityOptions: CatalogOption[];
   customerTypeOptions: CatalogOption[];
   pipelinePolicyOptions: CatalogOption[];
+  isKoluOptions: CatalogOption[];
+  verticalSectorValues: string[];
   defaultPageSize: number;
 };
 type PhaseBucket = { key: string; label: string; range: string; value: number; tone: string; filterValue: string };
@@ -118,6 +121,8 @@ const EMPTY_OPTIONS: FilterOptions = {
   salesProbabilityOptions: [],
   customerTypeOptions: [],
   pipelinePolicyOptions: [],
+  isKoluOptions: [],
+  verticalSectorValues: [],
   defaultPageSize: 25,
 };
 
@@ -315,6 +320,7 @@ export default function CrmCustomersClient() {
   const [entegrasyonTipi, setEntegrasyonTipi] = useState('');
   const [satisOlasiligi, setSatisOlasiligi] = useState('');
   const [customerType, setCustomerType] = useState('standard');
+  const [isKolu, setIsKolu] = useState('Retail');
   const [pipelinePolicy, setPipelinePolicy] = useState('phase_required');
 
   const [ownerFilter, setOwnerFilter] = useState('');
@@ -608,6 +614,7 @@ export default function CrmCustomersClient() {
     setEntegrasyonTipi('');
     setSatisOlasiligi('');
     setCustomerType('standard');
+    setIsKolu('Retail');
     setPipelinePolicy('phase_required');
   };
 
@@ -629,6 +636,7 @@ export default function CrmCustomersClient() {
     setEntegrasyonTipi(row.entegrasyon_tipi ?? '');
     setSatisOlasiligi(row.satis_olasiligi ?? '');
     setCustomerType(row.customer_type ?? 'standard');
+    setIsKolu(row.is_kolu ?? 'Retail');
     setPipelinePolicy(row.pipeline_policy ?? 'phase_required');
     setMsg(null);
     setOpen(true);
@@ -651,6 +659,7 @@ export default function CrmCustomersClient() {
         satis_olasiligi: satisOlasiligi.trim() || null,
         customer_type: customerType,
         pipeline_policy: pipelinePolicy,
+        is_kolu: isKolu,
       };
       if (mode === 'edit') body.musteriId = editingId;
 
@@ -1305,7 +1314,21 @@ export default function CrmCustomersClient() {
                 <tr key={r.musteri_id}>
                   <td>
                     <div style={{ display: 'grid', gap: 8 }}>
-                      <Link className="name" href={`/crm/${r.musteri_id}`}>{r.musteri}</Link>
+                      <Link
+                        className="name"
+                        href={`/crm/${r.musteri_id}`}
+                        title="Müşteri detayına git"
+                        style={{
+                          fontSize: 15,
+                          fontWeight: 800,
+                          color: "var(--accent, #4f46e5)",
+                          textDecoration: "underline",
+                          textDecorationColor: "color-mix(in srgb, currentColor 35%, transparent)",
+                          textUnderlineOffset: 3,
+                        }}
+                      >
+                        {r.musteri}
+                      </Link>
                       {(() => {
                         const segmentation = deriveCustomerSegmentation(r.aktif_faz_no);
                         const firmaTone = customerStatusTone(segmentation.firmaDurumu);
@@ -1402,6 +1425,9 @@ export default function CrmCustomersClient() {
                   onChange={(e) => {
                     const nextSektor = e.target.value;
                     setSektor(nextSektor);
+                    // Vertical alt sektörü seçildiyse İş Kolu otomatik Vertical önerilir
+                    // (kullanıcı isterse değiştirir). Diğer sektörler İş Kolu'na dokunmaz.
+                    if (filterOptions.verticalSectorValues.includes(nextSektor)) setIsKolu('Vertical');
                     // Sektor IS ORTAGI secilirse musteri tipi otomatik Is Ortagi
                     // olur (aktivite ekrani is ortagi fazlarini tipe gore getirir).
                     // Kullanici isterse asagidaki alandan degistirebilir.
@@ -1413,6 +1439,16 @@ export default function CrmCustomersClient() {
                     <option key={name} value={name}>{name}</option>
                   ))}
                 </select>
+              </label>
+
+              <label className="field">
+                <span className="label">İş Kolu</span>
+                <select className="select" value={isKolu} onChange={(e) => setIsKolu(e.target.value)}>
+                  {(filterOptions.isKoluOptions.length ? filterOptions.isKoluOptions : [{ label: 'Retail', value: 'Retail' }]).map((item) => (
+                    <option key={item.value} value={item.value}>{item.label}</option>
+                  ))}
+                </select>
+                <small className="muted">Retail / Vertical / Bank — raporlardaki iş kolu kırılımı buradan okunur.</small>
               </label>
 
               <label className="field">

@@ -429,7 +429,8 @@ export function mapKunyeUiToDb(payload: KunyePayload): Record<string, any> {
     genel_memnuniyet: nullableText(payload.genel_memnuniyet),
     risk: nullableText(payload.risk),
     entegrasyon_yapisi: nullableText(payload.entegrasyon_yapisi),
-    is_kolu: nullableText(payload.is_kolu),
+    // is_kolu bilinçli olarak YAZILMAZ: İş Kolu müşteri kartının alanıdır
+    // (musteriler.is_kolu); künye view'i onu m.is_kolu'dan okur (bkz. 008).
     satici_etiketi: nullableText(payload.satici_etiketi),
     account: nullableText(payload.account),
     problem_1:

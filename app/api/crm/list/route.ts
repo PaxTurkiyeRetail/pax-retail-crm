@@ -130,8 +130,10 @@ async function fetchReportOnlyCustomerRows(admin: any, params: {
 
   let query = admin
     .from('musteriler')
-    .select('id,musteri,sektor,entegrasyon_tipi,satis_olasiligi,sorumlu')
-    .or('sektor.ilike.İŞ ORTAĞI,sektor.ilike.IS ORTAGI')
+    .select('id,musteri,sektor,entegrasyon_tipi,satis_olasiligi,sorumlu,customer_type')
+    // İş ortağı artık sektörden değil müşteri tipinden tanınır (sektör alanı
+    // iş kolu düzenlemesiyle boşaltıldı; bkz. 20260902_008 migration).
+    .eq('customer_type', 'business_partner')
     .order('musteri', { ascending: true });
 
   if (params.owner) query = query.ilike('sorumlu', escapeIlike(params.owner));
@@ -142,7 +144,8 @@ async function fetchReportOnlyCustomerRows(admin: any, params: {
   if (error) throw error;
 
   return (data ?? [])
-    .filter((row: any) => isReportOnlyCustomer(row))
+    // Ham musteriler satırında report_only kolonu yok; iş ortağı kimliği
+    // customer_type üzerinden gelir (sorgu zaten business_partner filtreli).
     .filter((row: any) => !integrationNeedle || normalizeSearchText(row.entegrasyon_tipi).includes(integrationNeedle))
     .map((row: any) => ({
     musteri_id: row.id,
@@ -244,7 +247,7 @@ export async function GET(request: Request) {
     if (ids.length > 0) {
       const [{ data: kunyeler, error: kunyeErr }, { data: customerMeta, error: customerMetaError }] = await Promise.all([
         admin.from('v_musteri_kunye_status').select('*').in('musteri_id', ids),
-        admin.from('musteriler').select('id,owner_user_id,customer_type,pipeline_policy,integration_type_key').in('id', ids),
+        admin.from('musteriler').select('id,owner_user_id,customer_type,pipeline_policy,integration_type_key,is_kolu').in('id', ids),
       ]);
 
       if (!kunyeErr || !/relation .* does not exist/i.test(kunyeErr.message)) {
@@ -261,6 +264,7 @@ export async function GET(request: Request) {
         owner_user_id: customerMeta.owner_user_id ?? null,
         customer_type: customerMeta.customer_type ?? 'standard',
         pipeline_policy: customerMeta.pipeline_policy ?? 'phase_required',
+        is_kolu: customerMeta.is_kolu ?? null,
         entegrasyon_tipi: customerMeta.integration_type_key ?? row.entegrasyon_tipi ?? null,
       };
       if (isReportOnlyCustomer(row)) {

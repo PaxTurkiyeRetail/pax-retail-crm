@@ -3,7 +3,8 @@ import { createPgServerClient } from '@/lib/pg/server';
 import { createPgAdminClient } from '@/lib/pg/admin';
 import { requireCrmAccessOrThrow, userHasPermission } from '@/lib/authz';
 import { isReportOnlyCustomer } from '@/lib/report-only-customers';
-import { getCrmMasterDataOptions, getSystemParameterValue } from '@/lib/system-parameters';
+import { getCrmMasterDataOptions, getParameterOptionsByGroups, getSystemParameterValue } from '@/lib/system-parameters';
+import { db } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -47,11 +48,26 @@ export async function GET() {
       .limit(3000);
     if (visibleCustomerIds) query = query.in('musteri_id', visibleCustomerIds.length ? visibleCustomerIds : ['__none__']);
 
-    const [{ data, error }, masterData, defaultPageSizeRaw] = await Promise.all([
+    const [{ data, error }, masterData, defaultPageSizeRaw, isKoluOptionsByGroup] = await Promise.all([
       query,
       getCrmMasterDataOptions(),
       getSystemParameterValue('system_page_size', '25'),
+      getParameterOptionsByGroups(['kunye_is_kolu']),
     ]);
+
+    // Sektör seçilince İş Kolu'nun otomatik önerilmesi için: hangi sektör
+    // değerleri Vertical iş kolunun alt sektörü (parametre meta.business_line).
+    let verticalSectorValues: string[] = [];
+    try {
+      const sectorMetaRows = await db.query(
+        "select value from public.system_parameters where group_key = 'crm_sector' and meta->>'business_line' = 'vertical' and is_active = true",
+      );
+      verticalSectorValues = (sectorMetaRows.rows as Array<{ value: string | null }>)
+        .map((row) => String(row?.value ?? '').trim())
+        .filter(Boolean);
+    } catch {
+      verticalSectorValues = [];
+    }
     if (error) return NextResponse.json({ message: error.message }, { status: 500 });
 
     const rows = (data ?? []).filter((row: any) => !isReportOnlyCustomer(row));
@@ -78,6 +94,10 @@ export async function GET() {
       salesProbabilityOptions: masterData.crm_sales_probability ?? [],
       customerTypeOptions: masterData.crm_customer_type ?? [],
       pipelinePolicyOptions: masterData.crm_pipeline_policy ?? [],
+      isKoluOptions: isKoluOptionsByGroup.kunye_is_kolu ?? [],
+      // Sektör seçilince İş Kolu'nun otomatik önerilmesi için: hangi sektör
+      // değerleri Vertical iş kolunun alt sektörü (meta.business_line).
+      verticalSectorValues,
       defaultPageSize: Math.min(100, Math.max(10, Number(defaultPageSizeRaw) || 25)),
     });
   } catch (e: any) {

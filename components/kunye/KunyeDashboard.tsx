@@ -132,6 +132,15 @@ export default function KunyeDashboard({ kunye, musteriAdi, sektorVeSorumlu, akt
           {/* Segmentasyon badges + edit toggle */}
           {!editingSeg && (
             <div className="kd-badges">
+              {/* İş Kolu (müşteri kartından) ve Hunter/Farmer etiketi hero'da görünür */}
+              <span className="kd-badge" style={{ background: 'rgba(59,130,246,0.22)', border: '1px solid rgba(147,197,253,0.55)', color: '#dbeafe' }}>
+                🧭 {kunye?.is_kolu || 'Retail'}
+              </span>
+              {kunye?.satici_etiketi ? (
+                <span className="kd-badge" style={{ background: 'rgba(16,185,129,0.2)', border: '1px solid rgba(110,231,183,0.5)', color: '#d1fae5' }}>
+                  {kunye.satici_etiketi === 'Hunter' ? '🏹' : '🌱'} {kunye.satici_etiketi}
+                </span>
+              ) : null}
               <span className="kd-badge" style={{ background: firmaTone.bg, border: `1px solid ${firmaTone.border}`, color: firmaTone.color }}>
                 🏷️ {firmaDurumu}
               </span>

@@ -309,20 +309,19 @@ export default function QuickKunyeForm({ musteriId, musteriAdi, existingData }: 
               />
             </div>
 
-            {/* Is Kolu - musteri Retail mi Vertical mi */}
+            {/* Is Kolu: musteri kartinin alani, kunyede salt okunur gosterilir */}
             <div>
               <label className="pax-label" style={{ display: 'block', marginBottom: 8 }}>
                 İş Kolu
               </label>
-              <select
-                value={form.is_kolu}
-                onChange={(e) => updateForm('is_kolu', e.target.value)}
+              <input
+                type="text"
+                value={form.is_kolu || 'Retail'}
+                readOnly
                 className="pax-input"
-                style={{ width: '100%', minHeight: 48, fontSize: 16 }}
-              >
-                <option value="">Seçin...</option>
-                {opt('kunye_is_kolu').map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
-              </select>
+                style={{ width: '100%', minHeight: 48, fontSize: 16, background: 'var(--panel-soft)' }}
+              />
+              <small className="muted">Müşteri kartından (Müşteriler → Düzenle) değiştirilir.</small>
             </div>
 
             {/* Satici Etiketi - Hunter (yeni kazanim) / Farmer (portfoy buyutme) */}

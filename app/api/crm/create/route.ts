@@ -19,6 +19,7 @@ type Body = {
     owner_user_id?: string | null;
     customer_type?: string | null;
     pipeline_policy?: string | null;
+    is_kolu?: string | null;
 };
 
 const legacyIntegrationValues = new Set<string>(LEGACY_INTEGRATION_ENUM_VALUES);
@@ -60,12 +61,19 @@ export async function POST(req: Request) {
             ? String(body.satis_olasiligi).trim()
             : null;
 
+    // İş Kolu (Retail / Vertical / Bank): müşteri kartının zorunlu sınıflandırması.
+    // Boş gelirse Retail varsayılır; raporlar iş kolu kırılımını bu alandan okur.
+    const requestedIsKolu = String(body.is_kolu ?? '').trim() || 'Retail';
+
+    let isKolu = 'Retail';
     try {
-        await Promise.all([
+        const [, , , resolvedIsKolu] = await Promise.all([
             assertActiveParameterValue('crm_sector', sektor, { optional: true }),
             assertActiveParameterValue('crm_integration_type', entegrasyon_tipi, { optional: true }),
             assertActiveParameterValue('crm_sales_probability', satis_olasiligi, { optional: true }),
+            assertActiveParameterValue('kunye_is_kolu', requestedIsKolu),
         ]);
+        isKolu = resolvedIsKolu;
     } catch (error: any) {
         return NextResponse.json({ message: error?.message || 'Geçersiz ana veri değeri.' }, { status: error?.status || 400 });
     }
@@ -141,6 +149,7 @@ export async function POST(req: Request) {
             owner_user_id: ownerUserId,
             customer_type: customerType,
             pipeline_policy: pipelinePolicy,
+            is_kolu: isKolu,
         })
         .select("id")
         .single();
@@ -152,7 +161,7 @@ export async function POST(req: Request) {
         );
     }
 
-    await tryRecordAuditEvent({ actorId: me.id, actorEmail: me.email, action: 'customer.created', resourceType: 'customer', resourceId: String(data?.id), after: { musteri, sektor, entegrasyon_tipi, satis_olasiligi, sorumlu, owner_user_id: ownerUserId, customer_type: customerType, pipeline_policy: pipelinePolicy } });
+    await tryRecordAuditEvent({ actorId: me.id, actorEmail: me.email, action: 'customer.created', resourceType: 'customer', resourceId: String(data?.id), after: { musteri, sektor, entegrasyon_tipi, satis_olasiligi, sorumlu, owner_user_id: ownerUserId, customer_type: customerType, pipeline_policy: pipelinePolicy, is_kolu: isKolu } });
     revalidatePath('/crm/customers');
     return NextResponse.json({ ok: true, id: data?.id });
 }
