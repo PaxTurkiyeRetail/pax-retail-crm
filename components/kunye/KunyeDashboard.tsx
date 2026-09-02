@@ -272,6 +272,10 @@ export default function KunyeDashboard({ kunye, musteriAdi, sektorVeSorumlu, akt
       {/* ── QUICK FACTS ── */}
       {kunye && (() => {
         const facts = [
+          // Is kolu ve satici etiketi kunye doluluk skoruna dahil DEGIL; burada
+          // yalnizca gorunurluk icin gosterilir (raporlarda kirilim bu alanlardan).
+          kunye.is_kolu && { icon: '🧭', label: 'İş Kolu', val: kunye.is_kolu },
+          kunye.satici_etiketi && { icon: '🏷️', label: 'Satıcı Etiketi', val: kunye.satici_etiketi },
           kunye.magaza_sayisi && { icon: '🏪', label: 'Mağaza', val: kunye.magaza_sayisi },
           kunye.franchise_sayisi && kunye.franchise_sayisi !== '0' && { icon: '🔗', label: 'Franchise', val: kunye.franchise_sayisi },
           kunye.sabit_kasa_adedi && kunye.sabit_kasa_adedi !== 'Kullanılmıyor' && { icon: '🖥️', label: 'Sabit Kasa', val: kunye.sabit_kasa_adedi },
