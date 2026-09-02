@@ -284,7 +284,7 @@ export default function SellerFollowupClient() {
                       <th>Konu Kimde</th>
                       <th>Model / Adet</th>
                       <th>Takip Konusu</th>
-                      <th>Çözüm Tarihi</th>
+                      <th>Çözüm</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -303,7 +303,9 @@ export default function SellerFollowupClient() {
                         <td className="nowrap">{row.modelAdetLabel}</td>
                         <td>
                           {row.takipKonusu}
-                          {row.notes ? <span className="sfu-note">{row.notes}</span> : null}
+                          {row.notes && row.notes.trim() !== row.takipKonusu.trim()
+                            ? <span className="sfu-note">{row.notes}</span>
+                            : null}
                         </td>
                         <td className="nowrap">
                           <span className={`sfu-pill ${row.overdue ? 'overdue' : row.nearTerm ? 'near' : ''}`}>

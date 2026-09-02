@@ -89,10 +89,13 @@
 }
 .sfu-kpi {
   padding: 20px 22px;
-  border: 1px solid var(--border, #e2e8f0);
+  border: 1px solid #e2e8f0;
   border-radius: 20px;
-  background: var(--panel, #fff);
-  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.05);
+  /* Kart zemini bilinçli olarak her temada açık: koyu temada da beyaz kart +
+     koyu yazı kullanılır, tema token'ları karışık olduğu için okunurluk
+     tokene bırakılmaz. */
+  background: #ffffff;
+  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.08);
 }
 .sfu-kpi-value {
   font-size: 34px;
@@ -100,9 +103,10 @@
   line-height: 1.05;
   letter-spacing: -0.03em;
   font-variant-numeric: tabular-nums;
+  color: #0f172a;
 }
-.sfu-kpi-label { margin-top: 6px; font-size: 14px; font-weight: 800; }
-.sfu-kpi-hint { margin-top: 4px; font-size: 12px; line-height: 1.5; color: var(--muted, #64748b); }
+.sfu-kpi-label { margin-top: 6px; font-size: 14px; font-weight: 800; color: #1e293b; }
+.sfu-kpi-hint { margin-top: 4px; font-size: 12px; line-height: 1.5; color: #64748b; }
 .sfu-kpi.accent .sfu-kpi-value { color: #1d4ed8; }
 .sfu-kpi.warn .sfu-kpi-value { color: #b45309; }
 
@@ -112,8 +116,9 @@
   min-height: 40px;
   padding: 0 16px;
   border-radius: 999px;
-  border: 1px solid var(--border, #e2e8f0);
-  background: var(--panel, #fff);
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  color: #1e293b;
   font-weight: 800;
   font-size: 14px;
   cursor: pointer;
@@ -122,9 +127,10 @@
 
 /* --- Panel + tablo ---------------------------------------------------- */
 .sfu-panel {
-  border: 1px solid var(--border, #e2e8f0);
+  border: 1px solid #e2e8f0;
   border-radius: 20px;
-  background: var(--panel, #fff);
+  background: #ffffff;
+  color: #0f172a;
   overflow: hidden;
 }
 .sfu-panel-head {
@@ -136,17 +142,24 @@
   padding: 18px 20px;
   border-bottom: 1px solid var(--border, #e2e8f0);
 }
-.sfu-panel-head h2 { margin: 0; font-size: 17px; font-weight: 900; letter-spacing: -0.01em; }
-.sfu-panel-head span { font-size: 13px; color: var(--muted, #64748b); }
+.sfu-panel-head h2 { margin: 0; font-size: 17px; font-weight: 900; letter-spacing: -0.01em; color: #0f172a; }
+.sfu-panel-head span { font-size: 13px; color: #64748b; }
 
 .sfu-table-wrap { overflow-x: auto; }
-.sfu-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.sfu-table { width: 100%; border-collapse: collapse; font-size: 14px; table-layout: auto; }
+/* Kolon oranları: Takip Konusu geniş kalır, tarih kolonu kesilmez */
+.sfu-table th:nth-child(1), .sfu-table td:nth-child(1) { min-width: 160px; }
+.sfu-table th:nth-child(2), .sfu-table td:nth-child(2) { min-width: 130px; }
+.sfu-table th:nth-child(3), .sfu-table td:nth-child(3) { min-width: 150px; }
+.sfu-table th:nth-child(4), .sfu-table td:nth-child(4) { min-width: 260px; }
+.sfu-table th:nth-child(5), .sfu-table td:nth-child(5) { min-width: 120px; }
 .sfu-table th,
 .sfu-table td {
   padding: 12px 14px;
   text-align: left;
-  border-bottom: 1px solid var(--border, #eef2f7);
+  border-bottom: 1px solid #eef2f7;
   vertical-align: top;
+  color: #1e293b;
 }
 .sfu-table thead th {
   position: sticky;
@@ -159,12 +172,13 @@
   text-transform: uppercase;
   white-space: nowrap;
 }
-.sfu-table tbody tr:hover { background: var(--panel-soft, #f8fafc); }
+.sfu-table tbody tr:nth-child(even) { background: #f8fafc; }
+.sfu-table tbody tr:hover { background: #eef2ff; }
 .sfu-table td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .sfu-table td.nowrap { white-space: nowrap; }
-.sfu-customer { font-weight: 800; }
-.sfu-sector { display: block; margin-top: 2px; font-size: 12px; color: var(--muted, #64748b); }
-.sfu-note { display: block; margin-top: 4px; font-size: 12px; color: var(--muted, #64748b); line-height: 1.5; }
+.sfu-customer { font-weight: 800; color: #0f172a; }
+.sfu-sector { display: block; margin-top: 2px; font-size: 12px; color: #64748b; }
+.sfu-note { display: block; margin-top: 4px; font-size: 12px; color: #64748b; line-height: 1.5; }
 
 .sfu-pill {
   display: inline-flex;
@@ -180,7 +194,7 @@
 .sfu-pill.overdue { border-color: #fecaca; background: #fef2f2; color: #b91c1c; }
 .sfu-pill.near { border-color: #fde68a; background: #fffbeb; color: #b45309; }
 
-.sfu-empty { padding: 26px 20px; font-size: 14px; color: var(--muted, #64748b); }
+.sfu-empty { padding: 26px 20px; font-size: 14px; color: #64748b; }
 
 /* --- Sayfalama (10 firma / sayfa) ------------------------------------- */
 .sfu-pager {
@@ -190,16 +204,17 @@
   justify-content: space-between;
   gap: 10px;
   padding: 14px 20px;
-  border-top: 1px solid var(--border, #eef2f7);
+  border-top: 1px solid #eef2f7;
 }
-.sfu-pager-info { font-size: 13px; color: var(--muted, #64748b); }
+.sfu-pager-info { font-size: 13px; color: #64748b; }
 .sfu-pager-buttons { display: flex; gap: 8px; }
 .sfu-pager-buttons button {
   min-height: 36px;
   padding: 0 14px;
   border-radius: 10px;
-  border: 1px solid var(--border, #e2e8f0);
-  background: var(--panel, #fff);
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  color: #1e293b;
   font-weight: 700;
   cursor: pointer;
 }
@@ -208,22 +223,19 @@
 /* --- Hedef / gerçekleşme gösterimi ----------------------------------- */
 .sfu-target { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .sfu-target b { font-weight: 800; }
-.sfu-target span { color: var(--muted, #64748b); }
+.sfu-target span { color: #64748b; }
 .sfu-target.ok b { color: #15803d; }
 .sfu-target.miss b { color: #b45309; }
 .sfu-table tfoot td {
   padding: 12px 14px;
-  border-top: 2px solid var(--border, #e2e8f0);
-  background: var(--panel-soft, #f8fafc);
+  border-top: 2px solid #e2e8f0;
+  background: #f1f5f9;
+  color: #0f172a;
   font-weight: 800;
 }
 
-@media (prefers-color-scheme: dark) {
-  .sfu-table thead th { background: #1e293b; }
-  .sfu-pill { border-color: #334155; background: #1e293b; }
-  .sfu-pill.overdue { border-color: #7f1d1d; background: #2a1414; color: #fca5a5; }
-  .sfu-pill.near { border-color: #78350f; background: #2a1e0d; color: #fcd34d; }
-}
+/* Kartlar her temada açık zemin + koyu yazı kullandığı için ayrı koyu tema
+   bloğuna gerek yok; sayfanın dışındaki hero zaten koyu. */
 
 @media (max-width: 720px) {
   .sfu-hero { padding: 24px 20px; }

@@ -1013,11 +1013,13 @@ export default function CrmCustomersClient() {
 
         .table-wrap { overflow: auto; border: 1px solid var(--border); border-radius: 18px; }
         table { width: 100%; min-width: 980px; border-collapse: collapse; background: white; }
+        th { color: #e2e8f0 !important; }
         th {
           text-align: left; padding: 13px 14px; font-size: 11px; letter-spacing: .04em;
           text-transform: uppercase; color: var(--text-3); background: var(--surface-2); border-bottom: 1px solid #e2e8f0;
         }
-        td { padding: 14px; border-bottom: 1px solid #eef2f7; font-size: 13px; vertical-align: middle; color: var(--text); }
+        td { padding: 14px; border-bottom: 1px solid #eef2f7; font-size: 13px; vertical-align: middle; color: #1e293b; }
+        td.ct-cell { max-width: 150px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #334155; font-weight: 600; }
         .name { color: var(--text); font-weight: 900; text-decoration: none; }
         .name-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
         .phase-pill { min-height: 28px; padding: 0 10px; }
@@ -1296,7 +1298,7 @@ export default function CrmCustomersClient() {
         </div>
 
         <div className="table-wrap">
-          <table>
+          <table className="customers-table">
             <thead>
               <tr>
                 <th>Müşteri Adı</th>
@@ -1361,9 +1363,9 @@ export default function CrmCustomersClient() {
                       );
                     })()}
                   </td>
-                  <td>{r.sektor ?? '-'}</td>
-                  <td>{r.sorumlu ?? '-'}</td>
-                  <td>{r.kasa_firmasi ?? '-'}</td>
+                  <td className="ct-cell" title={r.sektor ?? undefined}>{r.sektor ?? '-'}</td>
+                  <td className="ct-cell" title={r.sorumlu ?? undefined}>{r.sorumlu ?? '-'}</td>
+                  <td className="ct-cell" title={r.kasa_firmasi ?? undefined}>{r.kasa_firmasi ?? '-'}</td>
                   <td className="kunye-column">
                     {r.report_only ? (
                       <span className="pill kunye-pill" style={{ background: '#f8fafc', color: '#475569', border: '1px solid #e2e8f0' }}>
@@ -1375,7 +1377,7 @@ export default function CrmCustomersClient() {
                       </span>
                     )}
                   </td>
-                  <td>{r.entegrasyon_tipi ?? '-'}</td>
+                  <td className="ct-cell">{r.entegrasyon_tipi ?? '-'}</td>
                   <td>
                     {canEditCustomer(r) ? <button type="button" className="ghost" onClick={() => openEdit(r)}>Düzenle</button> : null}
                   </td>
