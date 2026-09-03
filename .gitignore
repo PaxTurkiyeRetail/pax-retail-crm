@@ -16,3 +16,5 @@ __pycache__/
 # Veritabanı yedekleri asla depoya girmez (gerçek müşteri verisi içerir)
 *.dump
 .theme-audit/
+# Claude teslimatlarinin indigi klasor (ekran goruntuleri vb.) depoya girmez
+Claude outputs/
