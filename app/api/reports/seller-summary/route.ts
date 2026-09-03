@@ -49,7 +49,9 @@ export async function GET(request: Request) {
           .range(from, to)),
       fetchAllRows<any>((from, to) => admin
           .from('musteriler')
-          .select('id,customer_type,integration_type_key')
+          // sektor_onceki: İş Kolu ayrımında (008 migration) sektörü boşaltılan kayıtların
+          // eski değeri; 'sektörü doldurulmalı' takibi buradan üretilir.
+          .select('id,customer_type,integration_type_key,sektor_onceki')
           .order('id', { ascending: true })
           .range(from, to)),
     ]);
@@ -71,6 +73,7 @@ export async function GET(request: Request) {
         sektor,
         entegrasyon_tipi: String(policy?.integration_type_key ?? row.entegrasyon_tipi ?? '').trim() || '-',
         kayit_tipi: reportOnlyCustomerKind({ customer_type }) === 'business-partner' ? 'İş Ortağı' : 'Müşteri',
+        sektor_onceki: String(policy?.sektor_onceki ?? '').trim() || null,
       };
     });
 
@@ -150,6 +153,12 @@ export async function GET(request: Request) {
     const withoutPhase = total - withPhase;
     const activeCustomers = activeCustomerIdSet.size;
     const recentActivityGap = ids.filter((id) => !activeCustomerIdSet.has(id)).length;
+    // Sektörü boş kalan kayıtlar: eski Banka/Vertical/İş Ortağı sektörü İş Kolu'na
+    // taşınırken boşaltıldı; gerçek sektörü sahibinin doldurması bekleniyor.
+    const sectorMissingRows = enriched
+      .filter((row) => row.sektor === '-' && row.sektor_onceki)
+      .map((row) => ({ musteri: row.musteri, sorumlu: row.sorumlu, sektorOnceki: row.sektor_onceki as string }))
+      .sort((a, b) => a.sorumlu.localeCompare(b.sorumlu, 'tr') || a.musteri.localeCompare(b.musteri, 'tr'));
 
     const kpi = {
       total,
@@ -162,6 +171,7 @@ export async function GET(request: Request) {
       phaseCoveragePct: total ? Math.round((withPhase / total) * 100) : 0,
       kunyeCompletionPct: total ? Math.round((enriched.filter((row) => row.kunye_durumu === 'Var').length / total) * 100) : 0,
       recentActivityGap,
+      sectorMissing: sectorMissingRows.length,
     };
 
     return NextResponse.json({
@@ -180,6 +190,7 @@ export async function GET(request: Request) {
         .filter((row) => row.aktif_faz_no == null)
         .map((row) => ({ musteri: row.musteri, sorumlu: row.sorumlu, kunye: row.kunye_durumu, sektor: row.sektor })),
       noPhaseTotal: enriched.filter((row) => row.aktif_faz_no == null).length,
+      sectorMissingRows,
       recentActivities,
     });
   } catch (error: any) {

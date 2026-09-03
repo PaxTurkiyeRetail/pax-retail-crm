@@ -13,3 +13,6 @@ backups/
 .claude/
 __pycache__/
 *.pyc
+# Veritabanı yedekleri asla depoya girmez (gerçek müşteri verisi içerir)
+*.dump
+.theme-audit/

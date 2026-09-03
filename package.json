@@ -15,6 +15,7 @@
     "db:migrate": "node --env-file-if-exists=.env.local scripts/migrate.mjs",
     "db:preflight": "node --env-file-if-exists=.env.local scripts/preflight-live.mjs",
     "db:backup:predeploy": "node --env-file-if-exists=.env.local scripts/predeploy-backup.mjs",
+    "db:backup:daily": "node --env-file-if-exists=.env.local scripts/predeploy-backup.mjs --prefix daily --keep 14",
     "typecheck": "tsc --noEmit",
     "verify": "npm run check:build && npm run typecheck && npm run lint && npm run test && npm run build"
   },

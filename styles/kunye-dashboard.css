@@ -46,7 +46,7 @@
 .seg-actions { display: flex; gap: 8px; align-items: center; }
 .seg-save {
   padding: 7px 14px; border-radius: 10px; cursor: pointer;
-  background: white; color: var(--text); border: none;
+  background: white; color: #0f172a; border: none; /* beyaz buton: yazı her temada koyu */
   font-size: 12px; font-weight: 800; transition: opacity 150ms;
 }
 .seg-save:hover { opacity: 0.88; }

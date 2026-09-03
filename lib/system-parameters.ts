@@ -148,7 +148,7 @@ export const KUNYE_PARAMETER_GROUPS = [
     module: "Liste Yönetimleri",
     category: "Müşteri Künye · Sınıflandırma",
     title: "İş Kolu",
-    description: "Müşterinin hangi iş koluna ait olduğu (Retail / Vertical). Raporlarda iş kolu kırılımı bu alandan okunur.",
+    description: "Müşterinin iş kolu (Retail / Vertical / Bank). Kayıt yeri müşteri kartıdır; künye kartından ve müşteri formundan değiştirilir, raporlar bu alandan okur.",
   },
   {
     key: "kunye_satici_etiketi",
@@ -345,7 +345,7 @@ export const DEFAULT_KUNYE_OPTIONS: Record<string, ParameterOption[]> = {
     value,
     sortOrder: (index + 1) * 10,
   })),
-  kunye_is_kolu: ["Retail", "Vertical"].map((value, index) => ({
+  kunye_is_kolu: ["Retail", "Vertical", "Bank"].map((value, index) => ({
     label: value,
     value,
     sortOrder: (index + 1) * 10,
@@ -452,6 +452,39 @@ export const FORECAST_PARAMETER_GROUPS = [
     title: "Forecast Gerceklesme Oranlari",
     description: "Forecast kaydi icin secilecek olasilik yuzdeleri.",
     type: "text",
+  },
+] as const;
+
+export const NOTIFICATION_PARAMETER_GROUPS = [
+  {
+    key: "notify_request_assignee_enabled",
+    module: "Bildirim Merkezi",
+    category: "Talep Bildirimleri",
+    title: "Atanan Kişiye Mail",
+    description: "Yeni talep açıldığında ve talep atandığında atanan kişiye e-posta gönderilsin mi (true/false).",
+    type: "boolean",
+  },
+  {
+    key: "notify_request_resolved_enabled",
+    module: "Bildirim Merkezi",
+    category: "Talep Bildirimleri",
+    title: "Çözüm Bildirimi",
+    description: "Talep çözümlendiğinde talebi açan kişiye e-posta gönderilsin mi (true/false).",
+    type: "boolean",
+  },
+  {
+    key: "notify_request_cc",
+    module: "Bildirim Merkezi",
+    category: "Talep Bildirimleri",
+    title: "Her Talepte Bilgilendirilecekler",
+    description: "Her yeni talep bildiriminde ayrıca e-posta alacak sabit adresler (değer alanına e-posta yazın).",
+  },
+  {
+    key: "notify_allowed_domains",
+    module: "Bildirim Merkezi",
+    category: "Güvenlik",
+    title: "İzinli Alıcı Domain'leri",
+    description: "Bildirim e-postaları yalnızca bu domain'lerdeki adreslere gönderilir (örn. paxturkiye.com). Sistem dışı adresler de olabilir ama domain bu listede olmalıdır.",
   },
 ] as const;
 
@@ -600,6 +633,7 @@ export const ALL_PARAMETER_GROUPS = [
   ...CRM_MASTER_DATA_PARAMETER_GROUPS,
   ...FORECAST_PARAMETER_GROUPS,
   ...SYSTEM_BEHAVIOR_PARAMETER_GROUPS,
+  ...NOTIFICATION_PARAMETER_GROUPS,
 ] as const;
 
 export const DEFAULT_FORECAST_OPTIONS: Record<string, ParameterOption[]> = {
@@ -684,11 +718,22 @@ export const DEFAULT_SYSTEM_BEHAVIOR_OPTIONS: Record<
   system_page_size: [{ label: "25", value: "25", sortOrder: 10 }],
 };
 
+export const DEFAULT_NOTIFICATION_OPTIONS: Record<string, ParameterOption[]> = {
+  notify_request_assignee_enabled: [{ label: "Aktif", value: "true", sortOrder: 10 }],
+  notify_request_resolved_enabled: [{ label: "Aktif", value: "true", sortOrder: 10 }],
+  notify_request_cc: [],
+  notify_allowed_domains: [
+    { label: "paxturkiye.com", value: "paxturkiye.com", sortOrder: 10 },
+    { label: "axela.com.tr", value: "axela.com.tr", sortOrder: 20 },
+  ],
+};
+
 export const DEFAULT_PARAMETER_OPTIONS: Record<string, ParameterOption[]> = {
   ...DEFAULT_KUNYE_OPTIONS,
   ...DEFAULT_CRM_MASTER_DATA_OPTIONS,
   ...DEFAULT_FORECAST_OPTIONS,
   ...DEFAULT_SYSTEM_BEHAVIOR_OPTIONS,
+  ...DEFAULT_NOTIFICATION_OPTIONS,
 };
 
 export type ParameterGroupDefinition = (typeof ALL_PARAMETER_GROUPS)[number];

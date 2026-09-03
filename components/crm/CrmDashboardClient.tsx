@@ -69,8 +69,11 @@ type SellerSummary = {
     phaseCoveragePct: number;
     kunyeCompletionPct: number;
     recentActivityGap: number;
+    /** Sektörü boş kalan kayıt sayısı (eski Banka/Vertical/İş Ortağı → İş Kolu taşıması). */
+    sectorMissing: number;
   };
   phaseSummary: Array<{ label: string; value: number }>;
+  sectorMissingRows: Array<{ musteri: string; sorumlu: string; sektorOnceki: string }>;
 };
 
 const EMPTY_STATS: CrmStats = {
@@ -99,8 +102,9 @@ const EMPTY_TARGETS: TargetsPayload = {
 const EMPTY_SELLER: SellerSummary = {
   sellerOptions: [],
   selectedSeller: "",
-  kpi: { total: 0, kunyeTamam: 0, kunyeEksik: 0, kunyeYok: 0, activeCustomers: 0, withPhase: 0, withoutPhase: 0, phaseCoveragePct: 0, kunyeCompletionPct: 0, recentActivityGap: 0 },
+  kpi: { total: 0, kunyeTamam: 0, kunyeEksik: 0, kunyeYok: 0, activeCustomers: 0, withPhase: 0, withoutPhase: 0, phaseCoveragePct: 0, kunyeCompletionPct: 0, recentActivityGap: 0, sectorMissing: 0 },
   phaseSummary: [],
+  sectorMissingRows: [],
 };
 
 export default function CrmDashboardClient() {
@@ -131,7 +135,7 @@ export default function CrmDashboardClient() {
     if (selectedSeller && selectedSeller !== "all") params.set("seller", selectedSeller);
     fetch(`/api/reports/seller-summary${params.toString() ? `?${params.toString()}` : ""}`, { cache: "no-store" })
       .then((res) => res.ok ? res.json() : EMPTY_SELLER)
-      .then((data) => setSellerData({ ...EMPTY_SELLER, ...data }))
+      .then((data) => setSellerData({ ...EMPTY_SELLER, ...data, kpi: { ...EMPTY_SELLER.kpi, ...(data?.kpi ?? {}) } }))
       .catch(() => {})
       .finally(() => setSellerLoading(false));
   }, [selectedSeller]);
@@ -467,13 +471,30 @@ export default function CrmDashboardClient() {
                   </div>
                 ))}
               </div>
-              {(sellerData.kpi.withoutPhase > 0 || sellerData.kpi.kunyeEksik + sellerData.kpi.kunyeYok > 0) && (
+              {(sellerData.kpi.withoutPhase > 0 || sellerData.kpi.kunyeEksik + sellerData.kpi.kunyeYok > 0 || sellerData.kpi.sectorMissing > 0) && (
                 <div style={{ background: "#fffbeb", border: "1px solid #fcd34d", borderRadius: "var(--radius-md)", padding: 14 }}>
                   <div style={{ fontSize: 12, fontWeight: 700, color: "#92400e", marginBottom: 8 }}>Aksiyon Gerekli</div>
                   <div style={{ display: "grid", gap: 5, fontSize: 12, color: "#78716c" }}>
                     {sellerData.kpi.withoutPhase > 0 && <div>• Fazı girilmemiş: <strong>{sellerData.kpi.withoutPhase}</strong> firma</div>}
                     {(sellerData.kpi.kunyeEksik + sellerData.kpi.kunyeYok) > 0 && <div>• Künyesi eksik/yok: <strong>{sellerData.kpi.kunyeEksik + sellerData.kpi.kunyeYok}</strong> firma</div>}
                     {sellerData.kpi.recentActivityGap > 0 && <div>• Yakın aktivite yok: <strong>{sellerData.kpi.recentActivityGap}</strong> firma</div>}
+                    {sellerData.kpi.sectorMissing > 0 && (
+                      <div>
+                        • Sektörü boş kalan: <strong>{sellerData.kpi.sectorMissing}</strong> firma
+                        <span style={{ opacity: 0.8 }}> (eski Banka / Vertical / İş Ortağı kaydı — gerçek sektörü sahibi girmeli)</span>
+                        {sellerData.sectorMissingRows.length > 0 && (
+                          <div style={{ marginTop: 4, paddingLeft: 12, display: "grid", gap: 2 }}>
+                            {sellerData.sectorMissingRows.slice(0, 8).map((row) => (
+                              <div key={`${row.sorumlu}-${row.musteri}`}>
+                                <Link href={`/crm/customers?q=${encodeURIComponent(row.musteri)}`} style={{ color: "#92400e", fontWeight: 700, textDecoration: "underline" }}>{row.musteri}</Link>
+                                <span> · {row.sorumlu} · eski: {row.sektorOnceki}</span>
+                              </div>
+                            ))}
+                            {sellerData.sectorMissingRows.length > 8 && <div>… ve {sellerData.sectorMissingRows.length - 8} firma daha</div>}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

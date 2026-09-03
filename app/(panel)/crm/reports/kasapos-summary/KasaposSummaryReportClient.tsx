@@ -576,7 +576,7 @@ function MiniCard({ label, value }: { label: string; value: string }) {
 
 function MiniMeta({ label, value }: { label: string; value: string }) {
   return (
-    <div style={{ background: 'white', border: '1px solid var(--border)', borderRadius: 12, padding: '8px 10px' }}>
+    <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '8px 10px' }}>
       <div style={{ fontSize: 11, color: 'var(--text-3)', fontWeight: 700 }}>{label}</div>
       <div style={{ marginTop: 3, color: 'var(--text)', fontWeight: 800, fontSize: 13 }}>{value}</div>
     </div>

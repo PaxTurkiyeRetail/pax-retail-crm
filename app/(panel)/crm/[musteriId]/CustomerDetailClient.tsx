@@ -1,7 +1,7 @@
 'use client';
 
 import { useParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import QuickKunyeForm from '@/components/kunye/QuickKunyeForm';
 import KunyeDashboard from '@/components/kunye/KunyeDashboard';
 
@@ -22,32 +22,32 @@ export default function CustomerDetailPage() {
   const [kunye, setKunye] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        const [customerRes, kunyeRes] = await Promise.all([
-          fetch(`/api/crm/detail?id=${musteriId}`, { cache: 'no-store' }),
-          fetch(`/api/kunye?musteriId=${musteriId}`, { cache: 'no-store' })
-        ]);
-        
-        if (customerRes.ok) {
-          const data = await customerRes.json();
-          setCustomer(data.musteri);
-        }
-        
-        if (kunyeRes.ok) {
-          const data = await kunyeRes.json();
-          setKunye(data.kunye);
-        }
-      } catch (err) {
-        console.error('Veri yükleme hatası:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
+  // Müşteri + künye verisi. Künye formu kaydedilince ve İş Kolu rozetten
+  // değiştirilince yeniden çağrılır: üstteki kart ile alttaki form aynı değeri gösterir.
+  const loadData = useCallback(async () => {
+    try {
+      const [customerRes, kunyeRes] = await Promise.all([
+        fetch(`/api/crm/detail?id=${musteriId}`, { cache: 'no-store' }),
+        fetch(`/api/kunye?musteriId=${musteriId}`, { cache: 'no-store' })
+      ]);
 
-    loadData();
+      if (customerRes.ok) {
+        const data = await customerRes.json();
+        setCustomer(data.musteri);
+      }
+
+      if (kunyeRes.ok) {
+        const data = await kunyeRes.json();
+        setKunye(data.kunye);
+      }
+    } catch (err) {
+      console.error('Veri yükleme hatası:', err);
+    } finally {
+      setLoading(false);
+    }
   }, [musteriId]);
+
+  useEffect(() => { void loadData(); }, [loadData]);
 
   if (loading) {
     return (
@@ -79,6 +79,7 @@ export default function CustomerDetailPage() {
         sektorVeSorumlu={[customer.sektor, customer.sorumlu ? `Sorumlu: ${customer.sorumlu}` : null].filter(Boolean).join(' • ')}
         aktifFazNo={customer.aktif_faz_no}
         musteriId={customer.id}
+        onIsKoluChanged={() => void loadData()}
       />
 
       {/* Form */}
@@ -86,6 +87,7 @@ export default function CustomerDetailPage() {
         musteriId={customer.id}
         musteriAdi={customer.musteri}
         existingData={kunye}
+        onSaved={() => void loadData()}
       />
     </div>
   );

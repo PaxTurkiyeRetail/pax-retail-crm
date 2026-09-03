@@ -7,6 +7,11 @@ import { apiErrorResponse, ApiError } from '@/lib/http/api-error';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
+// pg sürücüsü timestamp kolonlarını Date nesnesi olarak döndürür (Supabase
+// döneminde metin geliyordu). Tarih alanları bu yüzden iki tipi de kabul eder;
+// gün anahtarı için doğrudan .slice() ÇAĞRILMAZ — dayKey() kullanılır.
+type DateLike = string | Date;
+
 type RequestStatsRow = {
   id: string;
   status: string;
@@ -16,11 +21,19 @@ type RequestStatsRow = {
   assignee_name: string | null;
   requester_id: string | null;
   requester_name: string | null;
-  created_at: string;
-  first_response_at: string | null;
-  resolved_at: string | null;
+  created_at: DateLike;
+  first_response_at: DateLike | null;
+  resolved_at: DateLike | null;
   sla_hours: number | null;
 };
+
+/** Date veya ISO metnini 'YYYY-MM-DD' gün anahtarına çevirir; geçersizse null. */
+function dayKey(value: DateLike | null | undefined): string | null {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toISOString().slice(0, 10);
+}
 
 export async function GET(req: Request) {
   try {
@@ -92,7 +105,7 @@ export async function GET(req: Request) {
       const trend = Array.from({ length: 14 }, (_, i) => {
         const d = new Date(now); d.setDate(d.getDate() - (13 - i));
         const key = d.toISOString().slice(0,10);
-        return { date:key, label:`${d.getDate()}/${d.getMonth()+1}`, count: all.filter(r => r.created_at.slice(0,10) === key).length };
+        return { date:key, label:`${d.getDate()}/${d.getMonth()+1}`, count: all.filter(r => dayKey(r.created_at) === key).length };
       });
 
       return NextResponse.json({
@@ -137,8 +150,8 @@ export async function GET(req: Request) {
       return {
         date: key,
         label: `${d.getDate()}/${d.getMonth()+1}`,
-        opened:   opened.filter(r => r.created_at.slice(0,10) === key).length,
-        resolved: assigned.filter(r => r.resolved_at?.slice(0,10) === key).length,
+        opened:   opened.filter(r => dayKey(r.created_at) === key).length,
+        resolved: assigned.filter(r => dayKey(r.resolved_at) === key).length,
       };
     });
 

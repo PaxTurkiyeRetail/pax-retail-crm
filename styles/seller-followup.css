@@ -1,5 +1,13 @@
 /* Satışçı Takip Raporu — Takip Listesi + Kişi Bazlı Aktivite sekmeleri.
-   Görsel referans: "TAKİP LİSTESİ — <Satıcı> PORTFÖYÜ" sunum sayfası. */
+   Görsel referans: "TAKİP LİSTESİ — <Satıcı> PORTFÖYÜ" sunum sayfası.
+
+   TEMA KURALI (tek sinyal): renkler yalnızca app/globals.css'teki token'lardan
+   gelir; token'lar da yalnızca <html data-theme="dark|light"> ile değişir.
+   Bu dosya `prefers-color-scheme` KULLANMAZ — PanelShell zaten işletim sistemi
+   tercihini okuyup data-theme'i yazıyor; ikinci bir sinyal eklemek koyu temada
+   "beyaz kart + beyaz yazı" ya da "koyu satır + koyu yazı" karışıklığı üretir.
+   Sabit hex yalnızca her iki temada da aynı kalması gereken yerlerde kullanılır
+   (lacivert tablo başlığı, koyu hero üstündeki beyaz yazı). */
 
 .sfu-page {
   display: grid;
@@ -8,6 +16,8 @@
 }
 
 /* --- Hero ------------------------------------------------------------- */
+/* Hero her iki temada da koyu lacivert gradient: içindeki yazılar bilinçli
+   olarak sabit beyaz. */
 .sfu-hero {
   position: relative;
   overflow: hidden;
@@ -45,7 +55,7 @@
   line-height: 1.1;
   letter-spacing: -0.03em;
 }
-.sfu-hero p { margin: 0; color: rgba(255, 255, 255, 0.76); font-size: 14px; line-height: 1.65; }
+.sfu-hero p { margin: 0; color: rgba(255, 255, 255, 0.82); font-size: 14px; line-height: 1.65; }
 .sfu-hero-actions { position: relative; z-index: 1; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 
 .sfu-btn {
@@ -63,23 +73,27 @@
 }
 .sfu-btn.light {
   color: #fff;
-  border-color: rgba(255, 255, 255, 0.24);
-  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.26);
+  background: rgba(255, 255, 255, 0.14);
 }
-.sfu-btn.light:hover { background: rgba(255, 255, 255, 0.2); }
+.sfu-btn.light:hover { background: rgba(255, 255, 255, 0.22); }
 .sfu-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
-.sfu-select {
+/* Hero içindeki seçim kutusu: koyu zemin üstünde durduğu için premium
+   katmanın genel input kuralını bilinçli olarak eziyoruz. */
+.sfu-hero .sfu-select {
   min-height: 42px;
   padding: 0 12px;
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.24);
-  background: rgba(255, 255, 255, 0.12);
-  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.26) !important;
+  background: rgba(255, 255, 255, 0.14) !important;
+  color: #fff !important;
   font-weight: 700;
   font-size: 14px;
 }
-.sfu-select option { color: #0f172a; }
+/* Açılan liste tarayıcı penceresinde çizilir: her temada okunur kalması için
+   zemin/yazı sabitlenir. */
+.sfu-hero .sfu-select option { background: #0f172a; color: #fff; }
 
 /* --- KPI kartları ----------------------------------------------------- */
 .sfu-kpis {
@@ -89,13 +103,11 @@
 }
 .sfu-kpi {
   padding: 20px 22px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--border);
   border-radius: 20px;
-  /* Kart zemini bilinçli olarak her temada açık: koyu temada da beyaz kart +
-     koyu yazı kullanılır, tema token'ları karışık olduğu için okunurluk
-     tokene bırakılmaz. */
-  background: #ffffff;
-  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.08);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-sm);
 }
 .sfu-kpi-value {
   font-size: 34px;
@@ -103,12 +115,23 @@
   line-height: 1.05;
   letter-spacing: -0.03em;
   font-variant-numeric: tabular-nums;
-  color: #0f172a;
+  color: var(--text);
 }
-.sfu-kpi-label { margin-top: 6px; font-size: 14px; font-weight: 800; color: #1e293b; }
-.sfu-kpi-hint { margin-top: 4px; font-size: 12px; line-height: 1.5; color: #64748b; }
-.sfu-kpi.accent .sfu-kpi-value { color: #1d4ed8; }
-.sfu-kpi.warn .sfu-kpi-value { color: #b45309; }
+.sfu-kpi-label { margin-top: 6px; font-size: 14px; font-weight: 800; color: var(--text-2); }
+.sfu-kpi-hint { margin-top: 4px; font-size: 12px; line-height: 1.5; color: var(--text-3); }
+.sfu-kpi.accent .sfu-kpi-value { color: var(--sfu-accent); }
+.sfu-kpi.warn .sfu-kpi-value { color: var(--sfu-warn); }
+
+/* Vurgu renkleri: açık temada koyu, koyu temada açık ton — ikisi de kendi
+   zemininde en az 4.5:1 kontrast verir. */
+.sfu-page {
+  --sfu-accent: #1d4ed8;
+  --sfu-warn: #b45309;
+}
+[data-theme="dark"] .sfu-page {
+  --sfu-accent: #93b4fd;
+  --sfu-warn: #fbbf24;
+}
 
 /* --- Sekmeler --------------------------------------------------------- */
 .sfu-tabs { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -116,21 +139,22 @@
   min-height: 40px;
   padding: 0 16px;
   border-radius: 999px;
-  border: 1px solid #e2e8f0;
-  background: #ffffff;
-  color: #1e293b;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-2);
   font-weight: 800;
   font-size: 14px;
   cursor: pointer;
 }
+.sfu-tab:hover { border-color: var(--accent-border); color: var(--text); }
 .sfu-tab.active { color: #fff; border-color: #1d4ed8; background: #1d4ed8; }
 
 /* --- Panel + tablo ---------------------------------------------------- */
 .sfu-panel {
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--border);
   border-radius: 20px;
-  background: #ffffff;
-  color: #0f172a;
+  background: var(--surface);
+  color: var(--text);
   overflow: hidden;
 }
 .sfu-panel-head {
@@ -140,10 +164,18 @@
   justify-content: space-between;
   gap: 10px;
   padding: 18px 20px;
-  border-bottom: 1px solid var(--border, #e2e8f0);
+  border-bottom: 1px solid var(--border);
 }
-.sfu-panel-head h2 { margin: 0; font-size: 17px; font-weight: 900; letter-spacing: -0.01em; color: #0f172a; }
-.sfu-panel-head span { font-size: 13px; color: #64748b; }
+.sfu-panel-head h2 { margin: 0; font-size: 17px; font-weight: 900; letter-spacing: -0.01em; color: var(--text); }
+.sfu-panel-head span { font-size: 13px; color: var(--text-3); }
+.sfu-panel-head input {
+  min-height: 36px;
+  padding: 0 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+}
 
 .sfu-table-wrap { overflow-x: auto; }
 .sfu-table { width: 100%; border-collapse: collapse; font-size: 14px; table-layout: auto; }
@@ -157,44 +189,53 @@
 .sfu-table td {
   padding: 12px 14px;
   text-align: left;
-  border-bottom: 1px solid #eef2f7;
+  border-bottom: 1px solid var(--border);
   vertical-align: top;
-  color: #1e293b;
+  color: var(--text-2);
 }
-.sfu-table thead th {
+/* Lacivert başlık her iki temada aynı kalır (sunum kimliği).
+   !important + .sfu-panel özgüllüğü: premium-enterprise.css'in genel
+   `.pax-main-inner table th` kuralı da !important taşıyor ve aksi halde
+   başlığı gri/soluk yapıyor. */
+.sfu-panel .sfu-table thead th {
   position: sticky;
   top: 0;
-  background: #1e3a8a;
-  color: #fff;
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.03em;
+  background: #1e3a8a !important;
+  color: #fff !important;
+  font-size: 12px !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.03em !important;
   text-transform: uppercase;
   white-space: nowrap;
+  border-bottom-color: #1e3a8a !important;
 }
-.sfu-table tbody tr:nth-child(even) { background: #f8fafc; }
-.sfu-table tbody tr:hover { background: #eef2ff; }
+/* Zebra: yazı renginin %4'ü şeffaf üstüne — açık temada hafif gri, koyu temada
+   hafif açık satır. Tek kural iki temada da doğru çalışır. */
+.sfu-table tbody tr:nth-child(even) { background: color-mix(in srgb, var(--text) 4%, transparent); }
+.sfu-table tbody tr:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
 .sfu-table td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .sfu-table td.nowrap { white-space: nowrap; }
-.sfu-customer { font-weight: 800; color: #0f172a; }
-.sfu-sector { display: block; margin-top: 2px; font-size: 12px; color: #64748b; }
-.sfu-note { display: block; margin-top: 4px; font-size: 12px; color: #64748b; line-height: 1.5; }
+.sfu-customer { font-weight: 800; color: var(--text); }
+.sfu-sector { display: block; margin-top: 2px; font-size: 12px; color: var(--text-3); }
+.sfu-note { display: block; margin-top: 4px; font-size: 12px; color: var(--text-3); line-height: 1.5; }
 
+/* Durum etiketleri: globals.css'teki chip token'ları (her temada tanımlı). */
 .sfu-pill {
   display: inline-flex;
   align-items: center;
   padding: 3px 9px;
   border-radius: 999px;
-  border: 1px solid #dbe4f0;
-  background: #f1f5fb;
+  border: 1px solid var(--chip-gray-bd);
+  background: var(--chip-gray-bg);
+  color: var(--chip-gray-color);
   font-size: 12px;
   font-weight: 700;
   white-space: nowrap;
 }
-.sfu-pill.overdue { border-color: #fecaca; background: #fef2f2; color: #b91c1c; }
-.sfu-pill.near { border-color: #fde68a; background: #fffbeb; color: #b45309; }
+.sfu-pill.overdue { border-color: var(--chip-red-bd); background: var(--chip-red-bg); color: var(--chip-red-color); }
+.sfu-pill.near { border-color: var(--chip-gold-bd); background: var(--chip-gold-bg); color: var(--chip-gold-color); }
 
-.sfu-empty { padding: 26px 20px; font-size: 14px; color: #64748b; }
+.sfu-empty { padding: 26px 20px; font-size: 14px; color: var(--text-3); }
 
 /* --- Sayfalama (10 firma / sayfa) ------------------------------------- */
 .sfu-pager {
@@ -204,38 +245,39 @@
   justify-content: space-between;
   gap: 10px;
   padding: 14px 20px;
-  border-top: 1px solid #eef2f7;
+  border-top: 1px solid var(--border);
 }
-.sfu-pager-info { font-size: 13px; color: #64748b; }
+.sfu-pager-info { font-size: 13px; color: var(--text-3); }
 .sfu-pager-buttons { display: flex; gap: 8px; }
 .sfu-pager-buttons button {
   min-height: 36px;
   padding: 0 14px;
   border-radius: 10px;
-  border: 1px solid #e2e8f0;
-  background: #ffffff;
-  color: #1e293b;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-2);
   font-weight: 700;
   cursor: pointer;
 }
+.sfu-pager-buttons button:hover:not(:disabled) { border-color: var(--accent-border); color: var(--text); }
 .sfu-pager-buttons button:disabled { opacity: 0.45; cursor: not-allowed; }
 
 /* --- Hedef / gerçekleşme gösterimi ----------------------------------- */
 .sfu-target { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .sfu-target b { font-weight: 800; }
-.sfu-target span { color: #64748b; }
-.sfu-target.ok b { color: #15803d; }
-.sfu-target.miss b { color: #b45309; }
+.sfu-target span { color: var(--text-3); }
+.sfu-target.ok b { color: var(--sfu-ok); }
+.sfu-target.miss b { color: var(--sfu-warn); }
+.sfu-page { --sfu-ok: #15803d; }
+[data-theme="dark"] .sfu-page { --sfu-ok: #4ade80; }
+
 .sfu-table tfoot td {
   padding: 12px 14px;
-  border-top: 2px solid #e2e8f0;
-  background: #f1f5f9;
-  color: #0f172a;
+  border-top: 2px solid var(--border);
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+  color: var(--text);
   font-weight: 800;
 }
-
-/* Kartlar her temada açık zemin + koyu yazı kullandığı için ayrı koyu tema
-   bloğuna gerek yok; sayfanın dışındaki hero zaten koyu. */
 
 @media (max-width: 720px) {
   .sfu-hero { padding: 24px 20px; }

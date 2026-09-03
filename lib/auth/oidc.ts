@@ -112,9 +112,16 @@ export async function createAuthorizationRequest(origin: string, next: string | 
   url.searchParams.set('nonce', nonce);
   url.searchParams.set('code_challenge', challenge);
   url.searchParams.set('code_challenge_method', 'S256');
-  // Microsoft'un kendi SSO session'ı (tarayıcıda ayrı, bizim kontrolümüz dışında)
-  // otomatik oturum açmasın diye her girişte kimlik bilgisi sorulmasını zorla.
-  url.searchParams.set('prompt', 'login');
+  // Microsoft'a ne sıklıkla kimlik sorulacağı OIDC_PROMPT ile yönetilir:
+  //   login          → (varsayılan, eski davranış) her yönlendirmede parola + MFA istenir;
+  //                    tarayıcıdaki Microsoft SSO oturumu yok sayılır.
+  //   select_account → hesap seçici gösterilir; oturum açıksa parola/MFA sorulmaz.
+  //   auto           → parametre gönderilmez; Microsoft oturumu geçerliyse sessiz giriş,
+  //                    değilse normal giriş. Sıklığı en aza indiren seçenek.
+  // MFA'nın kendisi (SMS/Authenticator, "bu cihazı hatırla", sign-in frequency)
+  // Entra ID Conditional Access politikasıdır; buradan değiştirilemez, IT ayarlar.
+  const prompt = String(process.env.OIDC_PROMPT ?? 'login').trim().toLowerCase();
+  if (prompt && prompt !== 'auto') url.searchParams.set('prompt', prompt);
   return {
     url,
     transaction: encodeOidcTransaction({ state, nonce, verifier, next: safeNext(next), exp: Date.now() + 10 * 60_000 }),
