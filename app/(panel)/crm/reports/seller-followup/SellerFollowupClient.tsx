@@ -1,11 +1,23 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import LiveBoard from '@/components/reports/LiveBoard';
 import '@/styles/seller-followup.css';
 
 // Satışçı Takip Raporu
 //   Sekme 1 — Takip Listesi: açık engeller (Engel & Etki verisinden), 10 firma/sayfa.
 //   Sekme 2 — Kişi Bazlı Aktivite: temas edilen müşteriler, kanal kırılımı + hedef.
+//   Sekme 3 — Canlı Ekran: kendi kendine dönen yönetici panosu (takım özeti + kişi
+//             slaytları). ?tab=live ile doğrudan açılır — TV/ikinci ekran için yer imi.
+
+type TabKey = 'followup' | 'activity' | 'live';
+const TAB_KEYS: TabKey[] = ['followup', 'activity', 'live'];
+
+function tabFromUrl(): TabKey {
+  if (typeof window === 'undefined') return 'followup';
+  const value = new URLSearchParams(window.location.search).get('tab');
+  return (TAB_KEYS as string[]).includes(value ?? '') ? (value as TabKey) : 'followup';
+}
 
 type FollowupRow = {
   customerId: string;
@@ -112,7 +124,19 @@ function TargetCell({ actual, target }: { actual: number; target: number }) {
 }
 
 export default function SellerFollowupClient() {
-  const [tab, setTab] = useState<'followup' | 'activity'>('followup');
+  const [tab, setTab] = useState<TabKey>('followup');
+
+  // Yer imiyle açılış (?tab=live) + sekme değişince URL'yi sessizce güncelle.
+  useEffect(() => { setTab(tabFromUrl()); }, []);
+  const switchTab = useCallback((next: TabKey) => {
+    setTab(next);
+    try {
+      const url = new URL(window.location.href);
+      if (next === 'followup') url.searchParams.delete('tab'); else url.searchParams.set('tab', next);
+      window.history.replaceState(null, '', url.toString());
+      window.dispatchEvent(new Event('pax:locationchange')); // menü aktifliği güncellensin
+    } catch {}
+  }, []);
   const [owner, setOwner] = useState('');
   const [payload, setPayload] = useState<FollowupPayload>(EMPTY_FOLLOWUP);
   const [loading, setLoading] = useState(true);
@@ -253,15 +277,24 @@ export default function SellerFollowupClient() {
       </section>
 
       <div className="sfu-tabs">
-        <button type="button" className={`sfu-tab ${tab === 'followup' ? 'active' : ''}`} onClick={() => setTab('followup')}>
+        <button type="button" className={`sfu-tab ${tab === 'followup' ? 'active' : ''}`} onClick={() => switchTab('followup')}>
           Takip Listesi
         </button>
-        <button type="button" className={`sfu-tab ${tab === 'activity' ? 'active' : ''}`} onClick={() => setTab('activity')}>
+        <button type="button" className={`sfu-tab ${tab === 'activity' ? 'active' : ''}`} onClick={() => switchTab('activity')}>
           Kişi Bazlı Aktivite
+        </button>
+        <button type="button" className={`sfu-tab ${tab === 'live' ? 'active' : ''}`} onClick={() => switchTab('live')} title="Kendi kendine dönen yönetici panosu">
+          ● Canlı Ekran
         </button>
       </div>
 
-      {tab === 'followup' ? (
+      {/* Canlı Ekran her zaman bağlı kalır (sekme dışındayken zamanlayıcıları durur);
+          böylece sekmeye dönüşte veri anında hazır. */}
+      <div style={{ display: tab === 'live' ? 'contents' : 'none' }}>
+        <LiveBoard active={tab === 'live'} />
+      </div>
+
+      {tab === 'live' ? null : tab === 'followup' ? (
         <section className="sfu-panel">
           <div className="sfu-panel-head">
             <h2>Takip Listesi</h2>

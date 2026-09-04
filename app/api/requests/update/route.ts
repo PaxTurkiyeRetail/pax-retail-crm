@@ -5,6 +5,7 @@ import { createPgAdminClient } from '@/lib/pg/admin';
 import { getAllowedUserNameForRequests } from '@/lib/request-users';
 import { userHasPermission } from '@/lib/permissions';
 import { apiErrorResponse } from '@/lib/http/api-error';
+import { notifyRequestAssigned, notifyRequestResolved } from '@/lib/notifications/requests';
 import {
   assertCanCommentRequest,
   assertCanManageRequest,
@@ -87,6 +88,15 @@ export async function POST(req: Request) {
       event_type: eventType,
       payload: eventPayload,
     });
+
+    // E-posta bildirimleri (Bildirim Merkezi) — fire-and-forget.
+    const updatedRequest = { ...current, ...updateData } as typeof current;
+    if (action === 'assign' && updateData.assignee_id) {
+      void notifyRequestAssigned(updatedRequest, String(updateData.assignee_id));
+    }
+    if (action === 'status' && (payload.status === 'resolved' || payload.status === 'closed') && current.status !== 'resolved' && current.status !== 'closed') {
+      void notifyRequestResolved(updatedRequest);
+    }
 
     revalidatePath('/requests');
     return NextResponse.json({ ok: true });

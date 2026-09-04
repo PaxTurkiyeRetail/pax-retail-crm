@@ -10,10 +10,59 @@ type KunyeDashboardProps = {
   sektorVeSorumlu?: string;
   aktifFazNo?: number | null;
   musteriId?: string;
+  /** İş Kolu rozetten değiştirilince (kayıt sonrası) üst bileşen veriyi yeniler. */
+  onIsKoluChanged?: (value: string) => void;
 };
 
-export default function KunyeDashboard({ kunye, musteriAdi, sektorVeSorumlu, aktifFazNo, musteriId }: KunyeDashboardProps) {
+// İş Kolu seçenekleri: parametre servisinden; erişilemezse sabit yedek.
+const IS_KOLU_FALLBACK = ['Retail', 'Vertical', 'Bank'];
+
+export default function KunyeDashboard({ kunye, musteriAdi, sektorVeSorumlu, aktifFazNo, musteriId, onIsKoluChanged }: KunyeDashboardProps) {
   const [segOverride, setSegOverride] = useState<{ firmaDurumu?: string; yonetimTipi?: string }>({});
+
+  // İş Kolu — künye kartından tek tıkla değiştirilir. Kayıt yeri müşteri kartı
+  // (musteriler.is_kolu, /api/crm/is-kolu); rozet kaydın ardından hemen yeni değeri gösterir.
+  const [isKoluOverride, setIsKoluOverride] = useState<string | null>(null);
+  const [editingIsKolu, setEditingIsKolu] = useState(false);
+  const [savingIsKolu, setSavingIsKolu] = useState(false);
+  const [isKoluMsg, setIsKoluMsg] = useState('');
+  const [isKoluOptions, setIsKoluOptions] = useState<string[]>(IS_KOLU_FALLBACK);
+  const isKolu = isKoluOverride ?? (kunye?.is_kolu || 'Retail');
+
+  const openIsKoluEditor = async () => {
+    setEditingIsKolu(true);
+    setIsKoluMsg('');
+    try {
+      const res = await fetch('/api/parameters/kunye', { cache: 'no-store' });
+      const data = await res.json().catch(() => ({}));
+      const values = (data?.options?.kunye_is_kolu ?? []).map((item: any) => String(item.value ?? '').trim()).filter(Boolean);
+      if (values.length) setIsKoluOptions(values);
+    } catch {}
+  };
+
+  const saveIsKolu = async (value: string) => {
+    if (!musteriId || !value || value === isKolu) { setEditingIsKolu(false); return; }
+    setSavingIsKolu(true);
+    setIsKoluMsg('');
+    try {
+      const res = await fetch('/api/crm/is-kolu', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ musteriId, is_kolu: value }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.message || 'İş Kolu güncellenemedi.');
+      setIsKoluOverride(String(data?.is_kolu ?? value));
+      setEditingIsKolu(false);
+      setIsKoluMsg('İş Kolu güncellendi.');
+      onIsKoluChanged?.(String(data?.is_kolu ?? value));
+      window.setTimeout(() => setIsKoluMsg(''), 2500);
+    } catch (err) {
+      setIsKoluMsg(err instanceof Error ? err.message : 'İş Kolu güncellenemedi.');
+    } finally {
+      setSavingIsKolu(false);
+    }
+  };
   const [editingSeg, setEditingSeg] = useState(false);
   const [savingSeg, setSavingSeg] = useState(false);
   const [segMsg, setSegMsg] = useState('');
@@ -132,10 +181,41 @@ export default function KunyeDashboard({ kunye, musteriAdi, sektorVeSorumlu, akt
           {/* Segmentasyon badges + edit toggle */}
           {!editingSeg && (
             <div className="kd-badges">
-              {/* İş Kolu (müşteri kartından) ve Hunter/Farmer etiketi hero'da görünür */}
-              <span className="kd-badge" style={{ background: 'rgba(59,130,246,0.22)', border: '1px solid rgba(147,197,253,0.55)', color: '#dbeafe' }}>
-                🧭 {kunye?.is_kolu || 'Retail'}
-              </span>
+              {/* İş Kolu (müşteri kartından): rozete tıkla → seç → anında kaydedilir */}
+              {editingIsKolu ? (
+                <span className="kd-badge" style={{ background: 'rgba(59,130,246,0.22)', border: '1px solid rgba(147,197,253,0.55)', color: '#dbeafe', gap: 6 }}>
+                  🧭
+                  <select
+                    autoFocus
+                    value={isKolu}
+                    disabled={savingIsKolu}
+                    onChange={(e) => void saveIsKolu(e.target.value)}
+                    onBlur={() => { if (!savingIsKolu) setEditingIsKolu(false); }}
+                    aria-label="İş Kolu seç"
+                    style={{ minHeight: 26, padding: '0 6px', borderRadius: 8, border: '1px solid rgba(147,197,253,0.55)', background: '#0f172a', color: '#dbeafe', font: 'inherit', fontWeight: 800 }}
+                  >
+                    {isKoluOptions.map((value) => <option key={value} value={value}>{value}</option>)}
+                  </select>
+                  {savingIsKolu ? <small style={{ opacity: 0.8 }}>kaydediliyor…</small> : null}
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  className="kd-badge"
+                  onClick={() => { if (musteriId) void openIsKoluEditor(); }}
+                  disabled={!musteriId}
+                  title={musteriId ? 'İş Kolunu değiştir (Retail / Vertical / Bank)' : undefined}
+                  aria-label={`İş Kolu: ${isKolu}. Değiştirmek için tıkla`}
+                  style={{ background: 'rgba(59,130,246,0.22)', border: '1px solid rgba(147,197,253,0.55)', color: '#dbeafe', cursor: musteriId ? 'pointer' : 'default', font: 'inherit' }}
+                >
+                  🧭 {isKolu} <span aria-hidden="true" style={{ opacity: 0.7, fontSize: '0.85em' }}>✎</span>
+                </button>
+              )}
+              {isKoluMsg ? (
+                <span className="kd-badge" style={{ background: 'rgba(255,255,255,0.10)', border: '1px solid rgba(255,255,255,0.2)', color: '#f8fafc' }}>
+                  {isKoluMsg}
+                </span>
+              ) : null}
               {kunye?.satici_etiketi ? (
                 <span className="kd-badge" style={{ background: 'rgba(16,185,129,0.2)', border: '1px solid rgba(110,231,183,0.5)', color: '#d1fae5' }}>
                   {kunye.satici_etiketi === 'Hunter' ? '🏹' : '🌱'} {kunye.satici_etiketi}
@@ -283,7 +363,7 @@ export default function KunyeDashboard({ kunye, musteriAdi, sektorVeSorumlu, akt
         const facts = [
           // Is kolu ve satici etiketi kunye doluluk skoruna dahil DEGIL; burada
           // yalnizca gorunurluk icin gosterilir (raporlarda kirilim bu alanlardan).
-          kunye.is_kolu && { icon: '🧭', label: 'İş Kolu', val: kunye.is_kolu },
+          isKolu && { icon: '🧭', label: 'İş Kolu', val: isKolu },
           kunye.satici_etiketi && { icon: '🏷️', label: 'Satıcı Etiketi', val: kunye.satici_etiketi },
           kunye.magaza_sayisi && { icon: '🏪', label: 'Mağaza', val: kunye.magaza_sayisi },
           kunye.franchise_sayisi && kunye.franchise_sayisi !== '0' && { icon: '🔗', label: 'Franchise', val: kunye.franchise_sayisi },

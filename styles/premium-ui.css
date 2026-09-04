@@ -9,8 +9,12 @@
   --premium-bg-c: #fdf2f8;
   --premium-ink: #0b1220;
   --premium-muted: #64748b;
-  --premium-accent: #4f46e5;
+  --premium-accent: #4f46e5;        /* ZEMİN/marka rengi (üstünde beyaz yazı) */
   --premium-accent-2: #7c3aed;
+  /* YAZI için vurgu: küçük etiket/kicker'lar buna bağlanır. --premium-accent
+     koyu temada geçersiz kılınmadığı için tüm ekranlarda koyu zemin üstünde
+     koyu indigo yazı (2.9:1) oluşuyordu; metin rengi ayrı token'a alındı. */
+  --premium-accent-text: #4f46e5;
   --premium-ring: rgba(79, 70, 229, .18);
   --premium-card: rgba(255, 255, 255, .82);
   --premium-card-solid: #ffffff;
@@ -25,6 +29,8 @@
   --premium-bg-c: #19142b;
   --premium-ink: #f8fafc;
   --premium-muted: #94a3b8;
+  --premium-accent-text: #a5b4fc;   /* koyu zeminde okunur indigo */
+  --premium-ring: rgba(129, 140, 248, .35);
   --premium-card: rgba(18, 24, 38, .82);
   --premium-card-solid: #111827;
   --premium-line: rgba(255, 255, 255, .08);
@@ -162,7 +168,7 @@ body {
 }
 
 .pax-topbar-title span {
-  color: var(--premium-accent);
+  color: var(--premium-accent-text);
 }
 
 .pax-topbar-title strong {
@@ -649,7 +655,7 @@ textarea:focus {
 .premium-section-head span,
 .premium-section-title span {
   display: inline-flex;
-  color: var(--premium-accent);
+  color: var(--premium-accent-text);
   font-size: 11px;
   font-weight: 950;
   letter-spacing: .11em;

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { assertActiveParameterValue } from '@/lib/system-parameters';
 import { revalidatePath } from 'next/cache';
 import { requireCrmAccessOrThrow } from '@/lib/authz';
 import { createPgAdminClient } from '@/lib/pg/admin';
@@ -103,6 +104,26 @@ export async function POST(req: Request) {
 
     const { error } = await admin.from('musteri_kunye_v2').upsert(record, { onConflict: 'musteri_id' });
     if (error) return NextResponse.json({ message: error.message }, { status: 400 });
+
+    // İş Kolu künyeden de değiştirilebilir; kayıt yeri her zaman MÜŞTERİ
+    // kartıdır (musteriler.is_kolu) — künye tablosuna yazılmaz, view müşteri
+    // kartından okur. Böylece iki ekran asla farklı değer gösteremez.
+    const requestedIsKolu = String(body.is_kolu ?? '').trim();
+    if (requestedIsKolu) {
+      try {
+        const validIsKolu = await assertActiveParameterValue('kunye_is_kolu', requestedIsKolu);
+        const { error: isKoluError } = await admin
+          .from('musteriler')
+          .update({ is_kolu: validIsKolu, updated_at: new Date().toISOString() })
+          .eq('id', musteriId);
+        if (isKoluError) return NextResponse.json({ message: isKoluError.message }, { status: 400 });
+      } catch (isKoluValidationError: any) {
+        return NextResponse.json(
+          { message: isKoluValidationError?.message || 'Geçersiz İş Kolu değeri.' },
+          { status: isKoluValidationError?.status || 400 },
+        );
+      }
+    }
 
     revalidatePath(`/crm/${musteriId}`);
     revalidatePath('/crm');

@@ -70,11 +70,23 @@
 
   /* Status chips */
   --chip-indigo-bg: #eff3ff; --chip-indigo-bd: #ced8ff; --chip-indigo-color: #4159d8;
-  --chip-gold-bg:   #fff7e8; --chip-gold-bd:   #f6d797; --chip-gold-color:   #b7791f;
-  --chip-green-bg:  #ebfbf4; --chip-green-bd:  #b8efd1; --chip-green-color:  #089669;
+  /* gold yazı rengi #b7791f iken kendi zemininde 3.4:1 kalıyordu (AA altı) → koyulaştırıldı */
+  --chip-gold-bg:   #fff7e8; --chip-gold-bd:   #f6d797; --chip-gold-color:   #92400e;
+  /* yeşil yazı #089669 iken kendi zemininde 3.5:1 kalıyordu (AA altı) → koyulaştırıldı */
+  --chip-green-bg:  #ebfbf4; --chip-green-bd:  #b8efd1; --chip-green-color:  #15803d;
   --chip-red-bg:    #fff1f2; --chip-red-bd:    #fecdd3; --chip-red-color:    #b91c1c;
   --chip-violet-bg: #f5f2ff; --chip-violet-bd: #ddd2ff; --chip-violet-color: #5b4ddb;
   --chip-gray-bg:   #f1f5f9; --chip-gray-bd:   #e2e8f0; --chip-gray-color:   #475569;
+
+  /* Takma adlar — ekranların bir kısmı başka projelerden gelen token adlarını
+     kullanıyor (--card, --panel, --shadow…). Tanımsız kaldıklarında kartlar
+     zeminsiz/gölgesiz çıkıyordu; hepsi ana tokenlara bağlanır ve temayı takip eder. */
+  --card:        var(--surface);
+  --panel:       var(--surface);
+  --panel-soft:  var(--surface-2);
+  --shadow:      var(--shadow-sm);
+  --text-1:      var(--text);
+  --muted:       var(--text-3);
 }
 
 /* ── DARK TEMA ── */
@@ -87,9 +99,9 @@
   --sb-badge-color:      #a78bfa;
   --sb-toggle-bg:        rgba(255,255,255,.04);
   --sb-toggle-border:    rgba(255,255,255,.09);
-  --sb-toggle-color:     #4b5272;
-  --sb-label:            #272b3e;
-  --sb-link:             #3d4264;
+  --sb-toggle-color:     #8b93b3;
+  --sb-label:            #555c7d;
+  --sb-link:             #8b93b3;
   --sb-link-hover-bg:    rgba(255,255,255,.045);
   --sb-link-hover-bd:    rgba(255,255,255,.07);
   --sb-link-hover-color: #9ca3af;
@@ -105,16 +117,16 @@
   --sb-avatar-bd:        rgba(91,91,214,.35);
   --sb-avatar-color:     #9b9eff;
   --sb-name:             #d0d4e8;
-  --sb-sub:              #2e3250;
+  --sb-sub:              #6b7394;
   --sb-logout-bg:        rgba(255,255,255,.03);
   --sb-logout-bd:        rgba(255,255,255,.07);
-  --sb-logout-color:     #3d4264;
+  --sb-logout-color:     #8b93b3;
   --sb-logout-hover-bg:  rgba(239,68,68,.09);
   --sb-logout-hover-bd:  rgba(239,68,68,.18);
   --sb-logout-hover-color: #f87171;
   --sb-theme-btn-bg:     rgba(255,255,255,.04);
   --sb-theme-btn-bd:     rgba(255,255,255,.09);
-  --sb-theme-btn-color:  #4b5272;
+  --sb-theme-btn-color:  #8b93b3;
 
   --surface:       #13151c;
   --surface-2:     #0e0f14;
@@ -125,8 +137,8 @@
 
   --text:          #e2e8f0;
   --text-2:        #cbd5e1;
-  --text-3:        #64748b;
-  --text-4:        #374151;
+  --text-3:        #94a3b8;
+  --text-4:        #64748b;
 
   --accent:        #818cf8;
   --accent-soft:   rgba(99,102,241,.12);
@@ -138,6 +150,41 @@
   --chip-red-bg:    rgba(185,28,28,.15);  --chip-red-bd:    rgba(185,28,28,.3);  --chip-red-color:    #f87171;
   --chip-violet-bg: rgba(91,77,219,.15);  --chip-violet-bd: rgba(91,77,219,.3);  --chip-violet-color: #a78bfa;
   --chip-gray-bg:   rgba(71,85,105,.2);   --chip-gray-bd:   rgba(71,85,105,.3);  --chip-gray-color:   #94a3b8;
+}
+
+/* ── AÇIK KART SÖZLEŞMESİ ──
+   Bazı kartlar tasarım gereği her temada AÇIK zeminli kalır (sunum benzeri
+   raporlar, takip tabloları, müşteri listesi bölümleri). Bu kartların içinde
+   var(--text*) / var(--border) / var(--surface*) kullanan her şey — premium
+   katmanın !important kuralları dahil — bu sınıf sayesinde koyu yazı / açık
+   zemin değerlerine döner. Koyu temada "beyaz kart üstünde soluk yazı" hatası
+   böylece kaynağında biter.
+
+   Kullanım: zemini sabit beyaz olan kapsayıcıya className="pax-light-surface"
+   ver (veya kendi CSS'inde bu token setini kopyala). Zemini temayı takip eden
+   kartlarda KULLANMA — onlarda var(--surface) zaten doğru rengi verir. */
+.pax-light-surface,
+[data-theme="dark"] .pax-light-surface {
+  --surface:       #ffffff;
+  --surface-2:     #f8fafc;
+  --border:        #e8ecf4;
+  --border-strong: rgba(79,70,229,.14);
+  --text:          #0f172a;
+  --text-2:        #334155;
+  --text-3:        #64748b;
+  --text-4:        #94a3b8;
+  --accent:        #4f46e5;
+  --accent-soft:   #eef2ff;
+  --accent-border: #c7d2fe;
+  --pe-card-solid: #ffffff;
+  --pe-border:     rgba(148,163,184,.22);
+  --card:          #ffffff;
+  --panel:         #ffffff;
+  --panel-soft:    #f8fafc;
+  --text-1:        #0f172a;
+  --muted:         #64748b;
+  color: var(--text);
+  color-scheme: light;
 }
 
 /* ── BASE ── */

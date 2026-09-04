@@ -304,7 +304,8 @@
 }
 
 .pax-main-inner :is(.field-label,.pax-label,.wa-field-label,.ph-field span,.parameters-kicker,.kicker,.eyebrow,.section-kicker,.panel-kicker,.det-kicker,.kd-eyebrow,.forecast-eyebrow,.seller-eyebrow,.wmp-eyebrow) {
-  color: var(--premium-accent) !important;
+  /* metin vurgusu: --premium-accent zemin rengi, koyu temada okunmuyordu */
+  color: var(--premium-accent-text, var(--premium-accent)) !important;
   font-weight: 950 !important;
   letter-spacing: .10em !important;
   text-transform: uppercase !important;

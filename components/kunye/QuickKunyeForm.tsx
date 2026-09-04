@@ -25,7 +25,7 @@ const FALLBACK_KUNYE_OPTIONS: KunyeOptionMap = {
   kunye_pos_mulkiyet: ['Kendisi', 'Banka', 'Bankada'].map((value) => ({ label: value, value })),
   kunye_saha_hizmeti_firmasi: ['Bilinmiyor', 'Teknoser', 'IBM', 'Payser', 'Diğer'].map((value) => ({ label: value, value })),
   kunye_memnuniyet: ['Memnun', 'Orta', 'Memnun Değil'].map((value) => ({ label: value, value })),
-  kunye_is_kolu: ['Retail', 'Vertical'].map((value) => ({ label: value, value })),
+  kunye_is_kolu: ['Retail', 'Vertical', 'Bank'].map((value) => ({ label: value, value })),
   kunye_satici_etiketi: ['Hunter', 'Farmer'].map((value) => ({ label: value, value })),
 };
 
@@ -113,9 +113,12 @@ type QuickKunyeFormProps = {
   musteriId: string;
   musteriAdi: string;
   existingData?: Partial<KunyeFormData>;
+  /** Kayıt başarıyla bitince çağrılır; üst sayfa künye + müşteri verisini yeniden çeker
+   *  (aksi halde üstteki künye kartı eski İş Kolu / etiket değerini gösterir). */
+  onSaved?: () => void;
 };
 
-export default function QuickKunyeForm({ musteriId, musteriAdi, existingData }: QuickKunyeFormProps) {
+export default function QuickKunyeForm({ musteriId, musteriAdi, existingData, onSaved }: QuickKunyeFormProps) {
   const router = useRouter();
   const [form, setForm] = useState<KunyeFormData>({
     ...EMPTY_FORM,
@@ -239,8 +242,10 @@ export default function QuickKunyeForm({ musteriId, musteriAdi, existingData }: 
         throw new Error(data.message || 'Kayıt başarısız');
       }
 
+      onSaved?.();
       router.refresh();
       router.push(`/crm/${musteriId}`);
+      setSaving(false);
     } catch (err: any) {
       setError(err.message || 'Bir hata oluştu');
       setSaving(false);
@@ -309,19 +314,21 @@ export default function QuickKunyeForm({ musteriId, musteriAdi, existingData }: 
               />
             </div>
 
-            {/* Is Kolu: musteri kartinin alani, kunyede salt okunur gosterilir */}
+            {/* Is Kolu: kayit yeri musteri karti; kunyeden de degistirilebilir
+                (API degeri musteriler.is_kolu'ya yazar, iki ekran hep ayni kalir) */}
             <div>
               <label className="pax-label" style={{ display: 'block', marginBottom: 8 }}>
                 İş Kolu
               </label>
-              <input
-                type="text"
+              <select
                 value={form.is_kolu || 'Retail'}
-                readOnly
+                onChange={(e) => updateForm('is_kolu', e.target.value)}
                 className="pax-input"
-                style={{ width: '100%', minHeight: 48, fontSize: 16, background: 'var(--panel-soft)' }}
-              />
-              <small className="muted">Müşteri kartından (Müşteriler → Düzenle) değiştirilir.</small>
+                style={{ width: '100%', minHeight: 48, fontSize: 16 }}
+              >
+                {opt('kunye_is_kolu').map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+              </select>
+              <small className="muted">Müşteri kartıyla senkron çalışır; buradan değiştirmek kartı da günceller.</small>
             </div>
 
             {/* Satici Etiketi - Hunter (yeni kazanim) / Farmer (portfoy buyutme) */}

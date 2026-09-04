@@ -44,8 +44,12 @@ type NavItem = {
 type NavGroup = { title: string; items: NavItem[] };
 type ReportsGroup = { title: string; iconKey: IconKey; items: NavItem[] };
 
-function isActive(pathname: string, item: NavItem) {
-  if (item.exact) return pathname === item.href;
+function isActive(pathname: string, item: NavItem, search = "") {
+  // Sorgu dizesi taşıyan menü girişleri (ör. ?tab=live) yalnız o sorguyla aktif olur;
+  // sorgusuz kardeşi ise yalnız sorgu YOKKEN aktif olur.
+  const [itemPath, itemQuery] = item.href.split("?");
+  if (itemQuery) return pathname === itemPath && search === `?${itemQuery}`;
+  if (item.exact) return pathname === item.href && !(search && search.includes("tab="));
   return pathname === item.href || pathname.startsWith(`${item.href}/`);
 }
 
@@ -284,6 +288,21 @@ export default function PanelShell({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  // Sorgu dizesi (ör. ?tab=live) menü aktifliği için: useSearchParams yerine
+  // window'dan okunur (Suspense zorunluluğu ve hydration farkı yaşanmasın).
+  // Sekme değişimleri replaceState ile yapıldığından sayfa "pax:locationchange"
+  // olayı yayınlar; popstate ile birlikte dinlenir.
+  const [search, setSearch] = useState("");
+  useEffect(() => {
+    const sync = () => setSearch(window.location.search);
+    sync();
+    window.addEventListener("popstate", sync);
+    window.addEventListener("pax:locationchange", sync);
+    return () => {
+      window.removeEventListener("popstate", sync);
+      window.removeEventListener("pax:locationchange", sync);
+    };
+  }, [pathname]);
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
@@ -455,6 +474,15 @@ export default function PanelShell({
         href: "/crm/reports/seller-followup",
         label: "Satışçı Takip Raporu",
         iconKey: "weekly",
+        exact: true,
+      });
+      // Yönetici panosu: aynı raporun kendi kendine dönen "Canlı Ekran" sekmesi.
+      // Ayrı menü girişi: TV/ikinci ekranda tek tıkla açılsın, yer imi olsun.
+      reports.push({
+        href: "/crm/reports/seller-followup?tab=live",
+        label: "Canlı Ekran",
+        iconKey: "dashboard",
+        exact: true,
       });
       reports.push({
         href: "/crm/reports/seller-summary",
@@ -601,7 +629,7 @@ export default function PanelShell({
               <div className="pax-section-label">{group.title}</div>
               <nav className="pax-nav-list">
                 {group.items.map((item) => {
-                  const active = isActive(pathname, item);
+                  const active = isActive(pathname, item, search);
                   return (
                     <Link
                       key={item.href}
@@ -648,7 +676,7 @@ export default function PanelShell({
                   aria-label="Raporlar"
                 >
                   {reportsGroup.items.map((item) => {
-                    const active = isActive(pathname, item);
+                    const active = isActive(pathname, item, search);
                     return (
                       <Link
                         key={item.href}

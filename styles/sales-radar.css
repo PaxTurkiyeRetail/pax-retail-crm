@@ -25,7 +25,7 @@
 .secondary, .primary { min-height: 40px; border-radius: 14px; padding: 0 16px; display: inline-flex; align-items: center; border: 1px solid rgba(255,255,255,0.2); text-decoration: none; font-weight: 700; font-size: 13px; position: relative; z-index: 1; transition: background 150ms; }
 .secondary { color: white; background: rgba(255,255,255,0.12); }
 .secondary:hover { background: rgba(255,255,255,0.2); }
-.primary { color: var(--text); background: white; border-color: white; }
+.primary { color: #0f172a; background: white; border-color: white; } /* beyaz buton: yazı her temada koyu */
 .primary:hover { background: var(--chip-indigo-bg); }
 .stats-row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 16px; }
 .card { padding: 20px; }

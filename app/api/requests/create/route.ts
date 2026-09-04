@@ -7,6 +7,7 @@ import { userHasPermission } from '@/lib/permissions';
 import { z } from 'zod';
 import { apiErrorResponse, parseJsonBody } from '@/lib/http/api-error';
 import { tryRecordAuditEvent } from '@/lib/audit';
+import { notifyRequestCreated } from '@/lib/notifications/requests';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -77,6 +78,10 @@ export async function POST(req: Request) {
         payload: { to: assignee_id, to_name: assignee_name },
       });
     }
+
+    // E-posta bildirimi (Bildirim Merkezi): atanan kişi + sabit bilgilendirme
+    // listesi. Fire-and-forget — talep kaydını asla bloklamaz/bozamaz.
+    void notifyRequestCreated(request);
 
     await tryRecordAuditEvent({
       actorId: user.id,

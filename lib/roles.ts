@@ -11,6 +11,7 @@ export type Permission =
   | 'admin.backup.execute'
   | 'admin.rbac.manage'
   | 'admin.identity.manage'
+  | 'admin.notifications.manage'
   | 'customer.read'
   | 'customer.read.any'
   | 'customer.create'
@@ -58,6 +59,7 @@ export type Permission =
   | 'screen.admin.users.view'
   | 'screen.admin.parameters.view'
   | 'screen.admin.identity.view'
+  | 'screen.admin.notifications.view'
   | 'screen.admin.rbac.view'
   | 'screen.admin.backup.view'
   | 'screen.crm.nova_core.view'
@@ -72,6 +74,7 @@ export const ALL_PERMISSIONS: readonly Permission[] = [
   'admin.backup.execute',
   'admin.rbac.manage',
   'admin.identity.manage',
+  'admin.notifications.manage',
   'customer.read',
   'customer.read.any',
   'customer.create',
@@ -119,6 +122,7 @@ export const ALL_PERMISSIONS: readonly Permission[] = [
   'screen.admin.users.view',
   'screen.admin.parameters.view',
   'screen.admin.identity.view',
+  'screen.admin.notifications.view',
   'screen.admin.rbac.view',
   'screen.admin.backup.view',
   'screen.crm.nova_core.view',
@@ -131,8 +135,8 @@ export const ALL_PERMISSIONS: readonly Permission[] = [
 const ROLE_PERMISSIONS: Readonly<Record<AllowedRole, ReadonlySet<Permission>>> = {
   super_admin: new Set(ALL_PERMISSIONS),
   admin: new Set(ALL_PERMISSIONS.filter((permission) => ![
-    'admin.rbac.manage', 'admin.identity.manage',
-    'screen.admin.rbac.view', 'screen.admin.identity.view',
+    'admin.rbac.manage', 'admin.identity.manage', 'admin.notifications.manage',
+    'screen.admin.rbac.view', 'screen.admin.identity.view', 'screen.admin.notifications.view',
   ].includes(permission))),
   account_manager: new Set([
     'customer.read',

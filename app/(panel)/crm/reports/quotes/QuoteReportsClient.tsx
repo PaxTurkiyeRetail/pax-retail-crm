@@ -330,7 +330,8 @@ const inputStyle: React.CSSProperties = {
   width: '100%',
   borderRadius: 14,
   border: '1px solid var(--border)',
-  background: '#fff',
+  background: 'var(--surface)',
+  color: 'var(--text)',
   padding: '12px 14px',
   outline: 'none',
 };
@@ -349,7 +350,7 @@ const buttonGhost: React.CSSProperties = {
   border: '1px solid var(--border)',
   borderRadius: 14,
   padding: '12px 16px',
-  background: '#fff',
+  background: 'var(--surface)',
   color: 'var(--text)',
   fontWeight: 800,
   cursor: 'pointer',
