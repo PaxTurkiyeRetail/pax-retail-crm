@@ -3128,6 +3128,11 @@ where p.group_key = 'crm_sector'
     select 1 from public.musteriler m where m.sektor = p.value
   );
 
+-- musteriler: is ortagi (customer_type='business_partner') alt turu — donanim
+-- firmasi / entegrasyon firmasi vb. ayrimi icin (20260904).
+alter table public.musteriler add column if not exists is_ortagi_tipi text null;
+comment on column public.musteriler.is_ortagi_tipi is 'Is ortagi alt turu (ör. Donanim Firmasi / Entegrasyon Firmasi). customer_type=business_partner kayitlarinda kullanilir.';
+
 -- =====================================================================
 -- SONU
 -- =====================================================================
