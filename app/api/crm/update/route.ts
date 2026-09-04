@@ -37,7 +37,7 @@ export async function POST(req: Request) {
   const musteriId = String(body.musteriId ?? '').trim();
   if (!musteriId) return NextResponse.json({ message: 'musteriId gerekli' }, { status: 400 });
 
-  const musteri = String(body.musteri ?? '').trim();
+  const musteri = String(body.musteri ?? '').trim().toLocaleUpperCase('tr-TR');
   if (!musteri) return NextResponse.json({ message: 'musteri gerekli' }, { status: 400 });
 
   const sektor = body.sektor ? String(body.sektor).trim() : null;
@@ -58,6 +58,17 @@ export async function POST(req: Request) {
     assertOwnedResourceAccess({ user: me, resource: currentRow, ownPermission: 'customer.update.own', anyPermission: 'customer.update.any' });
   } catch {
     return NextResponse.json({ message: 'Müşteri bulunamadı veya erişim yetkiniz yok.' }, { status: 404 });
+  }
+
+  if (musteri !== String(currentRow.musteri ?? '').trim().toLocaleUpperCase('tr-TR')) {
+    const { data: dupCustomer, error: dupError } = await admin
+      .from('musteriler')
+      .select('id')
+      .ilike('musteri', musteri)
+      .neq('id', musteriId)
+      .maybeSingle();
+    if (dupError) return NextResponse.json({ message: dupError.message }, { status: 500 });
+    if (dupCustomer) return NextResponse.json({ message: 'Mevcut müşteri: bu isimde bir kayıt zaten var.' }, { status: 409 });
   }
 
   const currentIntegration = String(currentRow.integration_type_key ?? currentRow.entegrasyon_tipi ?? '').trim() || null;

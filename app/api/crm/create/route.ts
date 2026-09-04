@@ -38,12 +38,25 @@ export async function POST(req: Request) {
 
     const body = (await req.json().catch(() => ({}))) as Body;
 
-    const musteri = (body.musteri ?? "").trim();
+    // Büyük harfe çevirip kaydediyoruz; aksi halde "Ovolt" / "OVOLT" gibi
+    // aynı şirket farklı yazımla iki kayıt olarak açılabiliyordu.
+    const musteri = (body.musteri ?? "").trim().toLocaleUpperCase('tr-TR');
     if (!musteri) {
         return NextResponse.json(
             { message: "musteri gerekli" },
             { status: 400 }
         );
+    }
+
+    const admin = createPgAdminClient();
+    const { data: existingCustomer, error: dupError } = await admin
+        .from('musteriler')
+        .select('id')
+        .ilike('musteri', musteri)
+        .maybeSingle();
+    if (dupError) return NextResponse.json({ message: dupError.message }, { status: 500 });
+    if (existingCustomer) {
+        return NextResponse.json({ message: 'Mevcut müşteri: bu isimde bir kayıt zaten var.' }, { status: 409 });
     }
 
     const sektor =
@@ -86,7 +99,6 @@ export async function POST(req: Request) {
         );
     }
 
-    const admin = createPgAdminClient();
     const canAssign = userHasPermission(me, 'customer.assign');
     const canManageClassification = userHasPermission(me, 'customer.classification.manage');
     let customerType = 'standard';
