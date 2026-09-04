@@ -53,11 +53,13 @@ export const LIVE_BOARD_RULES = {
   /** Hot Pipeline'a doğrudan giren fazlar (Teklif → Sözleşme + Rollout). */
   hotPhases: [10, 11, 12, 13, 14, 24] as readonly number[],
   /** TV'de listelenen maksimum fırsat sayısı. */
-  hotTeamLimit: 10,
-  hotOwnerLimit: 5,
-  pocLimit: 10,
-  alertLimit: 4,
-  recentActivities: 5,
+  hotTeamLimit: 20,
+  hotOwnerLimit: 10,
+  pocLimit: 20,
+  alertLimit: 6,
+  recentActivities: 8,
+  openQuotesLimit: 12,
+  closedQuotesLimit: 6,
 } as const;
 
 // Olasılık kaynağı (spec §9): CRM'deki mevcut yapı DOĞRUDAN kullanılır —
@@ -290,7 +292,10 @@ export type LiveBoardPayload = {
 };
 
 export type TeamSlideKey = 'pulse' | 'portfolio' | 'hot' | 'poc' | 'quotes' | 'alerts' | 'jira';
-export type LiveSlide = { type: 'team'; key: TeamSlideKey } | { type: 'owner'; index: number };
+/** Bir ekranın sığmayan devamı ayrı slayt olur: `page` 0'dan başlar, `pages` toplam. */
+export type LiveSlide =
+  | { type: 'team'; key: TeamSlideKey; page: number; pages: number }
+  | { type: 'owner'; index: number; page: number; pages: number };
 
 export const TEAM_SLIDE_TITLES: Record<TeamSlideKey, { title: string; sub: string }> = {
   pulse: { title: 'Business Pulse', sub: 'ciro · hedef · forecast · aktivite' },
@@ -332,31 +337,227 @@ export function rankOwners<T extends { owner: string; actual: WeeklyTargetCounte
     .map((row, index) => ({ ...row, rank: index + 1 }));
 }
 
+/* ------------------------------------------------------------------------ */
+/* Yerleşim ölçüleri ve sayfalama                                            */
+/* ------------------------------------------------------------------------ */
+
+/**
+ * Sabit kart/satır yükseklikleri (CSS px). CSS bu değerleri `--lb-*` değişkenleri
+ * olarak okur; kapasite hesabı da aynı sayılarla yapılır → tek doğruluk kaynağı.
+ * Taşma imkânsız: her liste `overflow:hidden`, her satır sabit yükseklik, sığmayan
+ * satır bir sonraki sayfaya geçer ("Seda 2/2").
+ */
+export type LayoutMetrics = {
+  compact: boolean;
+  bandH: number;        // kişi slaydı ticari bant
+  channelsH: number;    // kanal kırılımı + huni kartı
+  hotH: number;         // Hot Pipeline kartı (kişi)
+  actH: number;         // Son Hareketler satırı
+  leaderH: number;      // Kim hedefinde satırı
+  revenueH: number;     // Business Pulse ciro kartı
+  rowH: number;         // tablo satırı (Hot / POC)
+  quoteRowH: number;    // teklif satırı
+  ownerQuoteRowH: number;
+  alertH: number;       // uyarı satırı
+  kpiRowH: number;      // 6'lı KPI şeridi (Teklifler)
+  chipsH: number;       // uyarı sayaç şeridi
+  cardChrome: number;   // kart iç boşluğu + başlık
+  gap: number;          // kart aralığı
+  listGap: number;      // satır aralığı
+};
+
+// Ölçülmüş değerler (Playwright, 1920×1080 ve 1600×1000): satır içerikleri bu
+// yüksekliklere sığar. Değiştirirsen harness'ı koştur — kırpılan 0 olmalı.
+export const BASE_METRICS: LayoutMetrics = {
+  compact: false,
+  bandH: 84, channelsH: 330, hotH: 152, actH: 92, leaderH: 124, revenueH: 372,
+  rowH: 82, quoteRowH: 72, ownerQuoteRowH: 60, alertH: 82, kpiRowH: 124, chipsH: 76,
+  cardChrome: 68, gap: 14, listGap: 8,
+};
+export const COMPACT_METRICS: LayoutMetrics = {
+  compact: true,
+  bandH: 76, channelsH: 306, hotH: 164, actH: 90, leaderH: 112, revenueH: 330,
+  rowH: 74, quoteRowH: 66, ownerQuoteRowH: 60, alertH: 74, kpiRowH: 110, chipsH: 68,
+  cardChrome: 62, gap: 12, listGap: 6,
+};
+
+/** Kompakt eşik: gövde (slayt alanı) yüksekliği bundan küçükse küçük ölçüler. */
+export const COMPACT_BODY_HEIGHT = 780;
+
+export function layoutMetrics(bodyHeight: number): LayoutMetrics {
+  return bodyHeight > 0 && bodyHeight < COMPACT_BODY_HEIGHT ? COMPACT_METRICS : BASE_METRICS;
+}
+
+/** Bir listeye kaç satır sığar: (alan + aralık) / (satır + aralık), en az 1. */
+export function rowsThatFit(availableHeight: number, rowHeight: number, gap: number) {
+  return Math.max(1, Math.floor((availableHeight + gap) / (rowHeight + gap)));
+}
+
+export type Capacities = {
+  hot: number;        // kişi slaydı Hot Pipeline kartı sayısı
+  recent: number;     // kişi slaydı Son Hareketler
+  leader: number;     // Business Pulse sıralama satırı
+  tableRows: number;  // Hot / POC tablo satırı
+  openQuotes: number; // Teklifler: açık teklif satırı
+  closedQuotes: number;
+  alertItems: number; // uyarı grubu başına satır
+  alertGroups: number; // sayfa başına uyarı paneli (kolon)
+  portfolioRows: number; // Portföy ekranındaki bar/açıklama satırı
+  /** Business Pulse tek ekrana sığmıyor: ciro+sıralama / aktivite+dönüşüm olarak ikiye böl. */
+  pulseSplit: boolean;
+};
+
+/** Gövde yüksekliğinden (CSS px, iç boşluklar düşülmüş) liste kapasiteleri. */
+export function capacities(bodyHeight: number, bodyWidth = 1920): Capacities {
+  const m = layoutMetrics(bodyHeight);
+  const H = Math.max(360, bodyHeight || 900);
+  const colH = H - m.bandH - m.gap;                               // kişi slaydı kolonları
+  const hot = rowsThatFit(colH - m.cardChrome, m.hotH, m.listGap);
+  const recent = rowsThatFit(colH - m.channelsH - m.gap - m.cardChrome, m.actH, m.listGap);
+  const leader = rowsThatFit(H - m.cardChrome, m.leaderH, 10);
+  const tableRows = rowsThatFit(H - m.cardChrome - 28, m.rowH, 6);   // 28: tablo başlık satırı
+  // Teklifler: KPI şeridinin altında iki kolon; sol kolonda açık teklifler ve
+  // son kapananlar kartları üst üste (yüksekliği yarı yarıya paylaşırlar).
+  const quoteColH = (H - m.kpiRowH - m.gap - m.gap) / 2;
+  const openQuotes = rowsThatFit(quoteColH - m.cardChrome, m.quoteRowH, 6);
+  const closedQuotes = rowsThatFit(quoteColH - m.cardChrome, m.quoteRowH, 6);
+  const alertItems = rowsThatFit(H - m.chipsH - m.gap - m.cardChrome, m.alertH, m.listGap);
+  const alertGroups = bodyWidth >= 1500 ? 3 : bodyWidth >= 1000 ? 2 : 1;
+  // Portföy: 2×2 kart ızgarası; her kartın liste alanı yarım yükseklik.
+  const portfolioRows = rowsThatFit((H - m.gap) / 2 - m.cardChrome, m.compact ? 30 : 34, m.compact ? 8 : 10);
+  // Pulse iki satır ister: ciro kartı + (aktivite | dönüşüm). İkisi birlikte
+  // sığmıyorsa ekran ikiye bölünür (ölçülen eşik ~690 px).
+  const pulseSplit = H < 690;
+  return { hot, recent, leader, tableRows, openQuotes, closedQuotes: Math.max(1, closedQuotes), alertItems, alertGroups, portfolioRows, pulseSplit };
+}
+
+/**
+ * Uyarı panelleri: her tür kendi kartında, satır kapasitesini aşarsa aynı tür
+ * birden fazla panele bölünür ("Stale Opportunity 2/3"). Böylece hiçbir uyarı
+ * gizlenmez; paneller sayfalara `alertGroups` kadar dağıtılır.
+ */
+export type AlertPanel = { kind: AlertItem['kind']; rows: AlertItem[]; total: number; part: number; parts: number };
+
+export function alertPanels(
+  alerts: AlertItem[],
+  counts: Record<AlertItem['kind'], number>,
+  itemsCap: number,
+  order: AlertItem['kind'][],
+): AlertPanel[] {
+  const panels: AlertPanel[] = [];
+  const cap = Math.max(1, itemsCap);
+  for (const kind of order) {
+    const rows = alerts.filter((row) => row.kind === kind);
+    if (!rows.length) continue;
+    const parts = pageCount(rows.length, cap);
+    const size = perPage(rows.length, cap);
+    for (let part = 0; part < parts; part += 1) {
+      panels.push({ kind, rows: rows.slice(part * size, part * size + size), total: counts[kind] ?? rows.length, part, parts });
+    }
+  }
+  return panels;
+}
+
+export function pageCount(total: number, cap: number) {
+  return Math.max(1, Math.ceil(total / Math.max(1, cap)));
+}
+
+/**
+ * Sayfa başına satır: sayfa sayısı sabitken satırları sayfalara dengeli dağıtır.
+ * 20 satır / 8 kapasite = 3 sayfa → 7 + 7 + 6 (8 + 8 + 4 yerine); böylece son
+ * sayfa yarı boş kalmaz. Kapasitenin üstüne asla çıkmaz → taşma yine imkânsız.
+ */
+export function perPage(total: number, cap: number) {
+  const size = Math.max(1, cap);
+  if (total <= size) return size;
+  return Math.ceil(total / pageCount(total, size));
+}
+
+/** Sayfa dilimi: `page` 0'dan başlar. */
+export function pageSlice<T>(rows: T[], page: number, cap: number): T[] {
+  const size = perPage(rows.length, cap);
+  const start = Math.max(0, page) * size;
+  return rows.slice(start, start + size);
+}
+
+/** "8–14 / 20" tipi etiket için 1 tabanlı sınırlar. */
+export function pageBounds(total: number, page: number, cap: number) {
+  const size = perPage(total, cap);
+  const start = Math.max(0, page) * size;
+  return {
+    from: total ? Math.min(total, start + 1) : 0,
+    to: Math.min(total, start + size),
+    size,
+    paged: total > size,
+  };
+}
+
+/** Her ekranın kaç sayfa süreceği (veri uzunlukları ÷ kapasite). */
+export type PagePlan = { team: Partial<Record<TeamSlideKey, number>>; owners: number[] };
+
+export const ALERT_ORDER: AlertItem['kind'][] = ['overdue', 'poc_delay', 'stale', 'target_gap', 'customer_waiting', 'contract_waiting', 'expired_quote'];
+
+/**
+ * Veri uzunlukları + ölçülen kapasiteden sayfa sayıları. Bir ekranda birden fazla
+ * liste varsa en uzun olanı sayfa sayısını belirler (diğerleri kendi diliminde boş
+ * kalır — "bu sayfada gösterilecek kayıt yok" yerine kart gizlenir).
+ */
+export function buildPagePlan(payload: LiveBoardPayload, caps: Capacities): PagePlan {
+  const team: PagePlan['team'] = {
+    // Bölünmüş Pulse'ta son sayfa aktivite + dönüşüm ekranıdır.
+    pulse: pageCount(payload.owners.length, caps.leader) + (caps.pulseSplit ? 1 : 0),
+    portfolio: Math.max(
+      pageCount(payload.portfolio.byOwner.length, caps.portfolioRows),
+      pageCount(payload.portfolio.bySector.length, caps.portfolioRows),
+      pageCount(payload.portfolio.byPhaseGroup.length, caps.portfolioRows),
+    ),
+    hot: pageCount(payload.team.hot.length, caps.tableRows),
+    poc: pageCount(payload.team.poc.length, caps.tableRows),
+    quotes: Math.max(
+      pageCount(payload.quotes.open.length, caps.openQuotes),
+      pageCount(payload.quotes.recentClosed.length, caps.closedQuotes),
+    ),
+    alerts: pageCount(alertPanels(payload.team.alerts, payload.team.alertCounts, caps.alertItems, ALERT_ORDER).length, caps.alertGroups),
+    jira: 1,
+  };
+  const owners = payload.owners.map((owner) => Math.max(
+    pageCount(owner.hot.length, caps.hot),
+    pageCount(owner.recentActivities.length, caps.recent),
+  ));
+  return { team, owners };
+}
+
 /**
  * Slayt planı: takım ekranları ile kişi slaytları dönüşümlü akar
  * (2 takım → 2 kişi → 2 takım → …). Kişi bittiğinde kalan takım ekranları,
  * takım bittiğinde kalan kişiler eklenir. Döngü istemcide sonsuz tekrar eder.
- * Jira ekranı yalnız entegrasyon açıkken plana girer.
+ * Bir ekranın sayfaları ardışık gelir (Seda 1/2, Seda 2/2). Jira ekranı yalnız
+ * entegrasyon açıkken plana girer.
  */
 export function slidePlan(
   ownerCount: number,
-  options?: { jira?: boolean; teamBurst?: number; ownerBurst?: number },
+  options?: { jira?: boolean; teamBurst?: number; ownerBurst?: number; pages?: PagePlan },
 ): LiveSlide[] {
   const teamKeys: TeamSlideKey[] = ['pulse', 'portfolio', 'hot', 'poc', 'quotes', 'alerts'];
   if (options?.jira) teamKeys.push('jira');
   const teamBurst = Math.max(1, options?.teamBurst ?? LIVE_BOARD_TIMING.teamBurst);
   const ownerBurst = Math.max(1, options?.ownerBurst ?? LIVE_BOARD_TIMING.ownerBurst);
+  const teamPages = (key: TeamSlideKey) => Math.max(1, options?.pages?.team[key] ?? 1);
+  const ownerPages = (index: number) => Math.max(1, options?.pages?.owners[index] ?? 1);
 
   const plan: LiveSlide[] = [];
   let teamIndex = 0;
   let ownerIndex = 0;
   while (teamIndex < teamKeys.length || ownerIndex < ownerCount) {
     for (let i = 0; i < teamBurst && teamIndex < teamKeys.length; i += 1) {
-      plan.push({ type: 'team', key: teamKeys[teamIndex] });
+      const key = teamKeys[teamIndex];
+      const pages = teamPages(key);
+      for (let page = 0; page < pages; page += 1) plan.push({ type: 'team', key, page, pages });
       teamIndex += 1;
     }
     for (let i = 0; i < ownerBurst && ownerIndex < ownerCount; i += 1) {
-      plan.push({ type: 'owner', index: ownerIndex });
+      const pages = ownerPages(ownerIndex);
+      for (let page = 0; page < pages; page += 1) plan.push({ type: 'owner', index: ownerIndex, page, pages });
       ownerIndex += 1;
     }
   }

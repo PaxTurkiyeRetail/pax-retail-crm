@@ -6,7 +6,13 @@
    <html data-theme> ile değişir (prefers-color-scheme KULLANILMAZ).
    Anlam renkleri (--lb-ok/warn/danger/info) iki temada ayrı tanımlanır ve
    asla tek başına anlam taşımaz — yanında her zaman metin vardır.
-   Tasarım hedefi: 1920×1080, 3–5 m mesafeden okunur, kaydırma yok. */
+   Tasarım hedefi: 1920×1080, 3–5 m mesafeden okunur, kaydırma yok.
+
+   TAŞMA YOK: satır yükseklikleri bileşenin verdiği --lb-*-h değişkenlerinden
+   gelir (LayoutMetrics ile aynı sayılar); listelerde overflow:hidden ve
+   min-height:0 var. Sığmayan kayıt CSS ile kırpılmaz, bir sonraki SAYFAYA
+   (ayrı slayt) taşınır — bkz. capacities()/slidePlan(). [data-compact="1"]
+   küçük pencere/TV ölçeği için puntoları bir tık kısar. */
 
 .lb {
   --lb-accent: #1d4ed8;
@@ -61,7 +67,7 @@
 .lb .tone-neutral { color: inherit; }
 
 /* Tam ekran: pano ekranı doldurur. */
-.lb:fullscreen { border-radius: 0; border: none; min-height: 100vh; padding: 0; background: var(--app-bg); }
+.lb:fullscreen { border-radius: 0; border: none; min-height: 0; height: 100vh; padding: 0; background: var(--app-bg); }
 .lb:fullscreen .lb-body { padding: 22px 36px 16px; }
 .lb:fullscreen .lb-top { padding: 14px 36px; }
 .lb:fullscreen .lb-strip { padding: 0 36px 14px; }
@@ -110,8 +116,9 @@
 @keyframes lb-progress { from { width: 0; } to { width: 100%; } }
 
 /* --- Gövde / slayt ------------------------------------------------------ */
-.lb-body { flex: 1; padding: 18px 24px 14px; display: flex; min-height: 0; }
-.lb-slide { flex: 1; display: grid; gap: 16px; min-width: 0; animation: lb-in .45s ease both; align-content: stretch; }
+.lb-body { flex: 1; padding: 18px 24px 14px; display: flex; min-height: 0; overflow: hidden; }
+.lb-slide { flex: 1; display: grid; gap: var(--lb-gap, 14px); min-width: 0; min-height: 0; animation: lb-in .45s ease both; align-content: stretch; overflow: hidden; }
+.lb-slide > * { min-height: 0; min-width: 0; }
 @keyframes lb-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) {
   .lb-slide { animation: none; }
@@ -122,8 +129,9 @@
 .lb-muted { font-size: 13px; color: var(--text-3); font-weight: 600; line-height: 1.45; }
 
 /* Kartlar */
-.lb-card { border: 1px solid var(--border); border-radius: 18px; background: var(--surface-2); padding: 14px 16px; display: grid; gap: 12px; align-content: start; min-width: 0; }
+.lb-card { border: 1px solid var(--border); border-radius: 18px; background: var(--surface-2); padding: 14px 16px; display: grid; gap: 12px; align-content: start; min-width: 0; min-height: 0; overflow: hidden; }
 .lb-card.lb-grow { align-content: start; }
+.lb-card > * { min-width: 0; }
 .lb-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .lb-card-head h3 { margin: 0; font-size: 14px; font-weight: 900; letter-spacing: 0.02em; text-transform: uppercase; color: var(--text-2); }
 .lb-card-head span { font-size: 12px; color: var(--text-3); font-weight: 700; }
@@ -135,13 +143,13 @@
 .lb-kpis.six { grid-template-columns: repeat(6, minmax(0, 1fr)); }
 .lb-kpis.tight { gap: 8px; }
 .lb-kpis.tight .lb-kpi { padding: 10px 12px; }
-.lb-kpis.tight .lb-kpi-label { white-space: normal; line-height: 1.2; }
+.lb-kpis.tight .lb-kpi-label { white-space: normal; line-height: 1.2; overflow-wrap: anywhere; }
 .lb-kpi { position: relative; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--border); background: var(--surface); display: grid; gap: 3px; min-width: 0; }
 .lb-kpi-label { font-size: 11px; font-weight: 800; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.lb-kpi-value { font-size: clamp(24px, 2.1vw, 34px); font-weight: 900; letter-spacing: -0.03em; line-height: 1.05; color: var(--text); white-space: nowrap; }
+.lb-kpi-value { font-size: clamp(24px, 2.1vw, 34px); font-weight: 900; letter-spacing: -0.03em; line-height: 1.12; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lb-kpi.small .lb-kpi-value { font-size: clamp(19px, 1.5vw, 26px); }
 .lb-kpi-value small { font-size: 0.5em; font-weight: 800; color: var(--text-3); margin-left: 4px; letter-spacing: 0; }
-.lb-kpi-sub { font-size: 11.5px; color: var(--text-3); font-weight: 700; line-height: 1.3; }
+.lb-kpi-sub { font-size: 11.5px; color: var(--text-3); font-weight: 700; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .lb-kpi.tone-ok .lb-kpi-value { color: var(--lb-ok); }
 .lb-kpi.tone-warn .lb-kpi-value { color: var(--lb-warn); }
 .lb-kpi.tone-danger .lb-kpi-value { color: var(--lb-danger); }
@@ -168,7 +176,7 @@
 .lb-ring.tone-danger .value { stroke: var(--lb-danger); }
 .lb-ring.tone-neutral .value { stroke: var(--lb-neutral); }
 .lb-ring-center { position: absolute; inset: 0; display: grid; place-items: center; align-content: center; gap: 2px; padding: 0 14px; text-align: center; }
-.lb-ring-center strong { font-size: clamp(24px, 2.2vw, 34px); font-weight: 900; letter-spacing: -0.03em; line-height: 1; color: var(--text); }
+.lb-ring-center strong { font-size: clamp(24px, 2.2vw, 34px); font-weight: 900; letter-spacing: -0.03em; line-height: 1.12; color: var(--text); }
 .lb-ring-center span { font-size: 11px; font-weight: 800; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.04em; line-height: 1.25; }
 
 /* Parça-bütün halkası + açıklama */
@@ -199,8 +207,8 @@
 .lb-pill.tone-info { border-color: var(--chip-indigo-bd); background: var(--chip-indigo-bg); color: var(--chip-indigo-color); }
 
 /* Listeler */
-.lb-list { display: grid; gap: 8px; }
-.lb-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: start; padding: 8px 12px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); border-left-width: 4px; }
+.lb-list { display: grid; gap: var(--lb-list-gap, 8px); align-content: start; min-height: 0; overflow: hidden; }
+.lb-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 8px 12px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); border-left-width: 4px; height: var(--lb-item-h, auto); overflow: hidden; }
 .lb-item.tone-danger { border-left-color: var(--lb-danger); }
 .lb-item.tone-warn { border-left-color: var(--lb-warn); }
 .lb-item.tone-ok { border-left-color: var(--lb-ok); }
@@ -214,25 +222,44 @@
 
 /* Sıralama tablosu */
 .lb-board { display: grid; gap: 10px; }
-.lb-row { display: grid; grid-template-columns: 26px minmax(0, 1fr) 84px; align-items: center; gap: 12px; }
+.lb-row { display: grid; grid-template-columns: 24px minmax(0, 1fr) 80px; align-items: center; gap: 10px; }
 .lb-rank { font-size: 13px; font-weight: 900; color: var(--text-3); text-align: center; font-variant-numeric: tabular-nums; }
 .lb-rank.r1 { color: var(--lb-gold); } .lb-rank.r2 { color: var(--lb-silver); } .lb-rank.r3 { color: var(--lb-bronze); }
 .lb-row-main { display: grid; gap: 5px; min-width: 0; }
-.lb-row-name { display: flex; justify-content: space-between; gap: 10px; font-size: 14px; font-weight: 800; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.lb-row-name em { font-style: normal; color: var(--text-3); font-weight: 700; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.lb-row-num { text-align: right; font-weight: 900; font-size: 18px; color: var(--text); white-space: nowrap; line-height: 1; }
+.lb-row-name { display: flex; justify-content: space-between; gap: 10px; font-size: 14px; font-weight: 800; color: var(--text); min-width: 0; }
+.lb-row-name > span { min-width: 0; flex: 1 1 auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lb-row-name em { font-style: normal; color: var(--text-3); font-weight: 700; font-size: 12px; white-space: nowrap; flex: 0 0 auto; }
+.lb-row-num { text-align: right; font-weight: 900; font-size: 18px; color: var(--text); white-space: nowrap; line-height: 1.15; }
 .lb-row-num small { display: block; color: var(--text-3); font-weight: 700; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 3px; }
 .lb-row.rich { padding: 10px 12px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); }
 .lb-row.rich .lb-row-num { font-size: 24px; }
-.lb-row-facts { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 11.5px; color: var(--text-3); font-weight: 700; }
+.lb-row-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 12px; font-size: 11.5px; color: var(--text-3); font-weight: 700; min-width: 0; overflow: hidden; }
+.lb-row-facts > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lb-row-facts b { color: var(--text); font-weight: 900; }
 .lb-leader .lb-board { gap: 10px; }
 
+/* Satır yükseklikleri: kapasite hesabıyla birebir aynı (LayoutMetrics). */
+.lb-hot-col .lb-list, .lb-hot-col { --lb-item-h: var(--lb-hot-h); }
+.lb-center .lb-list .lb-item { height: var(--lb-act-h, 92px); }
+.lb-center .lb-list .lb-item-sub { -webkit-line-clamp: 2; }
+.lb-alerts .lb-list .lb-item { height: var(--lb-alert-h, 82px); }
+/* Uyarı başlığı tek satır: uzun firma adı + sahip satırı kutuyu şişirmesin. */
+.lb-alerts .lb-item-title { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lb-quote-table .lb-tr { height: var(--lb-quote-row-h, 62px); }
+.lb-owner-quotes .lb-tr { height: var(--lb-owner-quote-row-h, 48px); }
+.lb-owner-quotes .lb-tr.lb-th { height: 22px; }
+.lb-leader .lb-row.rich { height: var(--lb-leader-h, 118px); align-content: center; }
+.lb-band { height: var(--lb-band-h, 78px); }
+.lb-alert-chips { height: var(--lb-chips-h, 72px); }
+.lb-quotes > .lb-kpis { height: var(--lb-kpi-row-h, 104px); }
+.lb-quotes > .lb-kpis .lb-kpi { min-height: 0; align-content: start; }
+
 /* --- Business Pulse ---------------------------------------------------- */
-.lb-pulse { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 0.95fr); grid-template-rows: auto minmax(0, 1fr); }
+.lb-pulse { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr) minmax(0, 1.2fr); grid-template-rows: auto minmax(0, 1fr); }
 .lb-pulse .lb-revenue { grid-column: 1 / 3; }
 .lb-pulse .lb-leader { grid-row: 1 / 3; grid-column: 3; }
 .lb-revenue-body { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 18px; align-items: center; }
+.lb-revenue .lb-kpi-label { white-space: normal; line-height: 1.15; overflow-wrap: anywhere; }
 .lb-revenue-body .lb-pace { grid-column: 1 / -1; }
 .lb-pace { display: grid; gap: 6px; padding-top: 6px; border-top: 1px dashed var(--border); }
 .lb-pace-row { display: grid; grid-template-columns: 150px minmax(0, 1fr) 54px; gap: 12px; align-items: center; font-size: 13px; }
@@ -240,35 +267,41 @@
 .lb-pace-row strong { text-align: right; font-weight: 900; color: var(--text); }
 .lb-pace-note { font-size: 12.5px; font-weight: 800; }
 .lb-pace-note.tone-neutral { color: var(--text-3); }
-.lb-activity-wrap { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 16px; align-items: center; }
+.lb-activity-wrap { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; align-items: center; min-width: 0; }
 
 /* Kanal kırılımı */
 .lb-channels { display: grid; gap: 9px; }
 .lb-channels.compact { gap: 7px; }
 .lb-channel { display: grid; grid-template-columns: 118px minmax(0, 1fr) 76px; align-items: center; gap: 10px; }
-.lb-channel.total { padding-top: 6px; border-top: 1px dashed var(--border); }
+.lb-channel.total { display: flex; align-items: baseline; gap: 10px; padding-top: 8px; border-top: 1px dashed var(--border); }
+.lb-channel.total .lb-channel-label { flex: 0 0 auto; }
+.lb-channel.total .lb-channel-note { flex: 0 1 auto; min-width: 0; margin-left: auto; margin-right: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lb-channel.total .lb-channel-num { flex: 0 0 auto; }
 .lb-channel-label { font-size: 13px; font-weight: 800; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lb-channel-num { text-align: right; font-weight: 900; color: var(--text); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .lb-channel-num small { color: var(--text-3); font-weight: 700; }
 
 /* Dönüşüm satırı */
-.lb-funnel { display: flex; align-items: stretch; gap: 6px; padding-top: 10px; border-top: 1px dashed var(--border); }
-.lb-funnel-step { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; }
-.lb-funnel-box { flex: 1; min-width: 0; display: grid; gap: 1px; padding: 8px 10px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); text-align: center; }
-.lb-funnel-box strong { font-size: 20px; font-weight: 900; letter-spacing: -0.02em; color: var(--text); line-height: 1; }
+.lb-funnel { display: flex; align-items: stretch; gap: 6px; padding-top: 10px; border-top: 1px dashed var(--border); min-width: 0; }
+.lb-funnel-step { display: flex; align-items: center; gap: 4px; flex: 1 1 0; min-width: 0; }
+.lb-funnel-box { flex: 1 1 0; min-width: 0; display: grid; gap: 1px; padding: 8px 6px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); text-align: center; overflow: hidden; }
+.lb-funnel-box strong { font-size: 20px; font-weight: 900; letter-spacing: -0.02em; color: var(--text); line-height: 1.15; }
 .lb-funnel-box span { font-size: 10px; font-weight: 800; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.02em; line-height: 1.15; }
 .lb-funnel-box.zero strong { color: var(--text-3); }
 .lb-funnel-step i { color: var(--text-3); font-style: normal; font-weight: 900; font-size: 16px; }
 
 /* Pulse alt sıra: TV'de uzaktan okunacak büyüklük */
 .lb-pulse .lb-channels.compact { gap: 14px; }
-.lb-pulse .lb-channel { grid-template-columns: 132px minmax(0, 1fr) 90px; }
+.lb-pulse .lb-channel { grid-template-columns: minmax(100px, 124px) minmax(56px, 1fr) minmax(58px, 76px); gap: 8px; }
 .lb-pulse .lb-channel-label { font-size: 16px; }
 .lb-pulse .lb-channel-num { font-size: 18px; }
 .lb-pulse .lb-channel .lb-bar { height: 10px; }
 .lb-channel-note { font-size: 12px; color: var(--text-3); font-weight: 700; }
 .lb-channel-note b { color: var(--text); font-weight: 900; }
-.lb-pulse .lb-funnel { padding-top: 0; border-top: none; }
+.lb-pulse .lb-funnel { padding-top: 0; border-top: none; gap: 8px; }
+.lb-pulse .lb-funnel-step i { display: none; }
+.lb-pulse .lb-funnel-box { padding: 10px 2px; }
+.lb-pulse .lb-funnel-box span { font-size: 9.5px; letter-spacing: 0; white-space: nowrap; }
 .lb-pulse .lb-funnel-box { padding: 12px 10px; }
 .lb-pulse .lb-funnel-box strong { font-size: 30px; }
 .lb-pulse .lb-funnel-box span { font-size: 11px; }
@@ -276,13 +309,19 @@
 .lb-pulse .lb-kpis.tight .lb-kpi-value { font-size: clamp(26px, 2vw, 34px); }
 .lb-pulse .lb-kpis.tight .lb-kpi-label { font-size: 12px; }
 .lb-pulse .lb-kpis.tight .lb-kpi-sub { font-size: 12.5px; }
-.lb-leader .lb-row.rich { padding: 14px 16px; }
+.lb-leader .lb-row.rich { padding: 10px 16px; }
 .lb-leader .lb-row-name { font-size: 17px; }
 .lb-leader .lb-row-name em { font-size: 13.5px; }
-.lb-leader .lb-row-facts { font-size: 13px; gap: 6px 14px; }
+.lb-leader .lb-row-facts { font-size: 12.5px; gap: 4px 12px; }
 .lb-leader .lb-row.rich .lb-row-num { font-size: 30px; }
 .lb-leader .lb-row .lb-bar { height: 10px; }
 .lb-leader .lb-board { gap: 12px; }
+
+/* Bölünmüş Pulse: her parça kendi iki kolonunu doldurur. */
+.lb-pulse.part-revenue { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
+.lb-pulse.part-revenue .lb-revenue { grid-column: 1; }
+.lb-pulse.part-revenue .lb-leader { grid-column: 2; grid-row: 1; }
+.lb-pulse.part-activity { grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); grid-template-rows: minmax(0, 1fr); }
 
 /* --- Portföy ------------------------------------------------------------ */
 .lb-portfolio { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); }
@@ -296,9 +335,9 @@
 
 /* --- Tablo benzeri listeler (Hot Pipeline, POC, Teklifler) -------------- */
 .lb-single { grid-template-columns: 1fr; }
-.lb-table { display: grid; gap: 6px; }
-.lb-tr { display: grid; gap: 12px; align-items: center; padding: 9px 12px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); border-left-width: 4px; min-width: 0; }
-.lb-tr.lb-th { background: transparent; border: none; padding: 0 12px 0 16px; }
+.lb-table { display: grid; gap: 6px; align-content: start; min-height: 0; overflow: hidden; }
+.lb-tr { display: grid; gap: 12px; align-items: center; padding: 9px 12px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); border-left-width: 4px; min-width: 0; height: var(--lb-row-h, 66px); overflow: hidden; }
+.lb-tr.lb-th { background: transparent; border: none; padding: 0 12px 0 16px; height: 22px; }
 .lb-tr.lb-th span { font-size: 10.5px; font-weight: 900; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-3); }
 .lb-tr.tone-danger { border-left-color: var(--lb-danger); }
 .lb-tr.tone-warn { border-left-color: var(--lb-warn); }
@@ -314,18 +353,20 @@
 .lb-td-ago { font-weight: 800; white-space: nowrap; }
 .lb-td-next { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.35; }
 .lb-td-due { display: grid; gap: 3px; justify-items: end; text-align: right; }
+.lb-td-due small { white-space: nowrap; }
+.lb-td-money { display: grid; gap: 1px; align-content: center; }
 .lb-hot-table .lb-tr { grid-template-columns: minmax(150px, 1.1fr) minmax(120px, 0.9fr) minmax(110px, 0.8fr) minmax(120px, 0.8fr) minmax(110px, 0.7fr) minmax(200px, 1.6fr) 130px; }
-.lb-poc-table .lb-tr { grid-template-columns: minmax(150px, 1.1fr) minmax(130px, 1fr) minmax(110px, 0.8fr) 80px minmax(100px, 0.7fr) minmax(200px, 1.6fr) 150px; }
+.lb-poc-table .lb-tr { grid-template-columns: minmax(150px, 1.1fr) minmax(130px, 1fr) minmax(110px, 0.8fr) minmax(92px, 0.5fr) minmax(100px, 0.7fr) minmax(180px, 1.5fr) minmax(140px, 0.9fr); }
 .lb-quote-table .lb-tr { grid-template-columns: minmax(0, 1.5fr) minmax(90px, 0.7fr) auto minmax(110px, 0.9fr); }
-.lb-owner-quotes .lb-tr { grid-template-columns: minmax(0, 1.4fr) repeat(4, minmax(0, 0.8fr)); }
+.lb-owner-quotes .lb-tr { grid-template-columns: minmax(0, 1.3fr) repeat(4, minmax(0, 0.85fr)); }
+.lb-owner-quotes .lb-tr > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lb-owner-quotes .lb-tr > span { font-weight: 900; color: var(--text); font-variant-numeric: tabular-nums; }
 .lb-owner-quotes .lb-tr > span small { font-weight: 700; }
 
 /* --- Teklifler & Forecast --------------------------------------------- */
-.lb-quotes { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
-.lb-quotes .lb-kpis { grid-column: 1 / -1; }
-.lb-quotes .lb-stack { grid-column: 2; display: grid; gap: 14px; align-content: start; }
-.lb-quotes .lb-stack .lb-closed { grid-column: auto; }
+.lb-quotes { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) minmax(0, 1fr); }
+.lb-quotes > .lb-kpis { grid-column: 1 / -1; }
+.lb-quotes .lb-stack { grid-column: 2; grid-row: 2 / 4; display: grid; grid-template-rows: auto auto; gap: 14px; align-content: start; }
 .lb-quotes .lb-quote-table .lb-tr { padding: 8px 12px; }
 .lb-quotes .lb-kpi { padding: 10px 14px; }
 .lb-months { display: grid; grid-template-columns: repeat(auto-fit, minmax(44px, 1fr)); gap: 8px; align-items: end; }
@@ -338,8 +379,8 @@
 /* --- Uyarılar ---------------------------------------------------------- */
 .lb-alerts { grid-template-columns: 1fr; }
 .lb-alert-chips { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 10px; }
-.lb-alert-chip { display: grid; gap: 2px; padding: 10px 14px; border-radius: 14px; border: 1px solid var(--border); background: var(--surface); }
-.lb-alert-chip strong { font-size: 26px; font-weight: 900; letter-spacing: -0.03em; line-height: 1; color: var(--text); }
+.lb-alert-chip { display: grid; gap: 2px; padding: 8px 14px; border-radius: 14px; border: 1px solid var(--border); background: var(--surface); align-content: center; overflow: hidden; }
+.lb-alert-chip strong { font-size: 26px; font-weight: 900; letter-spacing: -0.03em; line-height: 1.15; color: var(--text); }
 .lb-alert-chip span { font-size: 11px; font-weight: 800; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lb-alert-chip.tone-danger strong { color: var(--lb-danger); }
 .lb-alert-chip.tone-warn strong { color: var(--lb-warn); }
@@ -366,7 +407,7 @@
 .lb-mini.two { grid-template-columns: repeat(2, 1fr); }
 .lb-profile .lb-mini-title { width: 100%; text-align: left; font-size: 11px; font-weight: 900; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-3); margin-top: 2px; }
 .lb-mini div { padding: 8px 6px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); display: grid; gap: 2px; min-width: 0; }
-.lb-mini strong { font-size: 18px; font-weight: 900; letter-spacing: -0.02em; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lb-mini strong { font-size: 18px; font-weight: 900; letter-spacing: -0.02em; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2; }
 .lb-mini strong small { font-size: 12px; color: var(--text-3); font-weight: 800; }
 .lb-mini span { font-size: 9.5px; font-weight: 800; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.02em; line-height: 1.15; }
 .lb-mini div.tone-ok strong { color: var(--lb-ok); } .lb-mini div.tone-warn strong { color: var(--lb-warn); }
@@ -381,13 +422,13 @@
 .lb-band-item { display: grid; gap: 1px; min-width: 0; padding: 4px 12px; border-left: 1px solid var(--border); }
 .lb-band-item:first-child { border-left: none; }
 .lb-band-item span { font-size: 10px; font-weight: 900; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.lb-band-item strong { font-size: 20px; font-weight: 900; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: -0.02em; line-height: 1.1; }
+.lb-band-item strong { font-size: 20px; font-weight: 900; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: -0.02em; line-height: 1.2; }
 .lb-band-item small { font-size: 11px; font-weight: 700; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lb-band-item.tone-ok strong { color: var(--lb-ok); } .lb-band-item.tone-warn strong { color: var(--lb-warn); } .lb-band-item.tone-danger strong { color: var(--lb-danger); }
 
 /* Hot Pipeline kartları (kişi slaytı) */
 .lb-hot-col { gap: 8px; }
-.lb-hot { display: grid; gap: 5px; padding: 9px 12px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); border-left-width: 4px; min-width: 0; }
+.lb-hot { display: grid; gap: 4px; padding: 9px 12px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); border-left-width: 4px; min-width: 0; height: var(--lb-hot-h, 132px); align-content: center; overflow: hidden; }
 .lb-hot.tone-danger { border-left-color: var(--lb-danger); }
 .lb-hot.tone-warn { border-left-color: var(--lb-warn); }
 .lb-hot.tone-ok { border-left-color: var(--lb-ok); }
@@ -407,30 +448,139 @@
 .lb-next b { color: var(--text); font-weight: 900; }
 
 /* --- Alt şerit (slayt gezinme) ------------------------------------------ */
-.lb-strip { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 24px 14px; align-items: center; }
+.lb-strip { display: flex; flex-wrap: nowrap; gap: 6px; padding: 0 24px 14px; align-items: center; overflow: hidden; flex: 0 0 auto; }
 .lb-dot { display: inline-flex; align-items: center; justify-content: center; min-width: 34px; height: 30px; padding: 0 9px; border-radius: 999px !important; border: 1px solid var(--border); background: var(--surface-2); color: var(--text-3); font-size: 11.5px; font-weight: 900; cursor: pointer; letter-spacing: 0.02em; }
 .lb-dot:hover { color: var(--text); border-color: var(--accent-border); }
 .lb-dot.active { background: var(--lb-accent); border-color: var(--lb-accent); color: #fff; }
 [data-theme="dark"] .lb-dot.active { color: #0f172a; }
 .lb-dot.team { min-width: 56px; }
-.lb-strip-note { margin-left: auto; font-size: 12px; color: var(--text-2); font-weight: 700; }
+.lb-dot i { font-style: normal; margin-left: 5px; padding: 0 5px; border-radius: 999px; background: color-mix(in srgb, currentColor 16%, transparent); font-size: 10px; font-weight: 900; }
+.lb-strip-note b { color: var(--text); font-weight: 900; margin-right: 10px; font-variant-numeric: tabular-nums; }
+.lb-strip-note { margin-left: auto; font-size: 12px; color: var(--text-2); font-weight: 700; white-space: nowrap; flex: 0 0 auto; }
+.lb-dot { flex: 0 0 auto; }
 .lb-kbd { display: inline-block; padding: 1px 6px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface-2); font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11px; color: var(--text-2); }
 
+/* --- Punto: TV'de 3–5 m'den okunur ------------------------------------- */
+.lb-card-head h3 { font-size: 15px; }
+.lb-card-head span { font-size: 13px; }
+.lb-muted { font-size: 14px; }
+.lb-kpi-label { font-size: 12.5px; }
+.lb-kpi-sub { font-size: 13px; }
+.lb-pill { font-size: 13px; padding: 4px 10px; }
+.lb-item-title { font-size: 15.5px; }
+.lb-item-sub { font-size: 13.5px; }
+.lb-item-side small { font-size: 12px; }
+.lb-tr > span { font-size: 14px; }
+.lb-tr > span small { font-size: 12px; }
+.lb-tr.lb-th span { font-size: 11.5px; }
+.lb-td-title strong { font-size: 16px; }
+.lb-td-title em { font-size: 12.5px; }
+.lb-hot-title strong { font-size: 16.5px; }
+.lb-hot-title em { font-size: 13px; }
+.lb-hot-models, .lb-hot-money, .lb-hot-foot { font-size: 13.5px; }
+.lb-legend-row { font-size: 14px; }
+.lb-legend-row em { font-size: 13px; }
+.lb-hbar-label { font-size: 14px; }
+.lb-channel-label { font-size: 14px; }
+.lb-channel-num { font-size: 15px; }
+.lb-mini strong { font-size: 19px; }
+.lb-mini span { font-size: 10px; }
+.lb-name { font-size: clamp(21px, 1.8vw, 28px); }
+.lb-name small { font-size: 13px; }
+.lb-band-item span { font-size: 10.5px; }
+.lb-band-item strong { font-size: 21px; }
+.lb-band-item small { font-size: 11.5px; }
+.lb-funnel-box strong { font-size: 22px; }
+.lb-funnel-box span { font-size: 10.5px; }
+.lb-alert-chip strong { font-size: 27px; }
+.lb-alert-chip span { font-size: 11.5px; }
+.lb-row-name { font-size: 15px; }
+.lb-row-facts { font-size: 13px; }
+
+/* Kompakt (küçük pencere / TV ölçeği): aynı düzen, bir tık küçük punto. */
+.lb[data-compact="1"] .lb-card { padding: 12px 14px; gap: 10px; }
+.lb[data-compact="1"] .lb-card-head h3 { font-size: 13.5px; }
+.lb[data-compact="1"] .lb-card-head span { font-size: 12px; }
+.lb[data-compact="1"] .lb-kpi { padding: 10px 12px; }
+.lb[data-compact="1"] .lb-kpi-value { font-size: clamp(20px, 1.8vw, 28px); }
+.lb[data-compact="1"] .lb-kpi.small .lb-kpi-value { font-size: clamp(17px, 1.4vw, 23px); }
+.lb[data-compact="1"] .lb-item-title { font-size: 14px; }
+.lb[data-compact="1"] .lb-item-sub { font-size: 12.5px; }
+.lb[data-compact="1"] .lb-tr > span { font-size: 13px; }
+.lb[data-compact="1"] .lb-td-title strong { font-size: 14.5px; }
+.lb[data-compact="1"] .lb-hot-title strong { font-size: 15px; }
+.lb[data-compact="1"] .lb-hot-models, .lb[data-compact="1"] .lb-hot-money, .lb[data-compact="1"] .lb-hot-foot { font-size: 12.5px; }
+.lb[data-compact="1"] .lb-band-item strong { font-size: 18px; }
+.lb[data-compact="1"] .lb-funnel-box strong { font-size: 19px; }
+.lb[data-compact="1"] .lb-alert-chip strong { font-size: 23px; }
+.lb[data-compact="1"] .lb-row-facts { font-size: 12px; }
+.lb[data-compact="1"] .lb-legend-row, .lb[data-compact="1"] .lb-hbar-label, .lb[data-compact="1"] .lb-channel-label { font-size: 13px; }
+.lb[data-compact="1"] .lb-name { font-size: clamp(18px, 1.5vw, 23px); }
+.lb[data-compact="1"] .lb-avatar { width: 72px; height: 72px; font-size: 26px; }
+.lb[data-compact="1"] .lb-profile { padding: 12px; gap: 7px; }
+.lb[data-compact="1"] .lb-mini { gap: 5px; }
+.lb[data-compact="1"] .lb-mini div { padding: 6px 4px; gap: 1px; }
+.lb[data-compact="1"] .lb-mini strong { font-size: 16.5px; }
+.lb[data-compact="1"] .lb-mini.two strong { font-size: 18px; }
+.lb[data-compact="1"] .lb-mini span { font-size: 9px; }
+.lb[data-compact="1"] .lb-ring-block { gap: 4px; }
+.lb[data-compact="1"] .lb-ring-title, .lb[data-compact="1"] .lb-ring-note { font-size: 10.5px; }
+.lb[data-compact="1"] .lb-name { line-height: 1.05; }
+.lb[data-compact="1"] .lb-name small { font-size: 11.5px; margin-top: 2px; }
+.lb[data-compact="1"] .lb-profile .lb-mini-title { font-size: 10px; }
+.lb[data-compact="1"] .lb-hot { gap: 3px; padding: 8px 10px; }
+.lb[data-compact="1"] .lb-hot-money { gap: 8px; }
+.lb[data-compact="1"] .lb-hot-meta { gap: 6px; }
+.lb[data-compact="1"] .lb-hot-foot { line-height: 1.3; }
+.lb[data-compact="1"] .lb-channel { gap: 8px; }
+.lb[data-compact="1"] .lb-channels { gap: 7px; }
+/* Kompakt Pulse: dönüşüm kartı satırı 12 px taşıyordu → KPI kutuları sıkılaştı. */
+.lb[data-compact="1"] .lb-pulse .lb-kpis.tight { gap: 6px; }
+.lb[data-compact="1"] .lb-pulse .lb-kpis.tight .lb-kpi { padding: 7px 10px; }
+.lb[data-compact="1"] .lb-pulse .lb-funnel-box { padding: 8px 2px; }
+.lb[data-compact="1"] .lb-top { padding: 10px 20px; }
+.lb[data-compact="1"] .lb-body { padding: 12px 18px 10px; }
+.lb[data-compact="1"] .lb-strip { padding: 0 18px 10px; }
+
 /* --- Daralan ekranlar --------------------------------------------------- */
+/* 1180–1400 px: TV yerleşimi korunur (kolonlar daralır, sayfalama satır sayısını
+   düşürür). Sütun sayısını burada azaltmak kartları dikey olarak eziyordu. */
 @media (max-width: 1400px) {
-  .lb-pulse { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
-  .lb-pulse .lb-revenue { grid-column: 1 / -1; }
-  .lb-pulse .lb-leader { grid-row: auto; grid-column: 1 / -1; }
-  .lb-owner { grid-template-columns: 260px minmax(0, 1fr); }
-  .lb-owner .lb-hot-col { grid-column: 1 / -1; }
-  .lb-band { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-  .lb-owner .lb-band { grid-column: 1 / -1; }
-  .lb-alert-chips { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-  .lb-alert-groups { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .lb-hot-table .lb-tr, .lb-poc-table .lb-tr { grid-template-columns: minmax(140px, 1.2fr) minmax(110px, 0.9fr) minmax(100px, 0.8fr) minmax(160px, 1.4fr) 130px; }
+  .lb-hot-table .lb-tr, .lb-poc-table .lb-tr { grid-template-columns: minmax(130px, 1.2fr) minmax(105px, 0.9fr) minmax(95px, 0.8fr) minmax(150px, 1.4fr) minmax(120px, 0.9fr); }
   .lb-hot-table .lb-tr > span:nth-child(4), .lb-hot-table .lb-tr > span:nth-child(5),
   .lb-poc-table .lb-tr > span:nth-child(4), .lb-poc-table .lb-tr > span:nth-child(5) { display: none; }
+  .lb-band-item { padding: 4px 8px; }
+  .lb-band-item strong { font-size: 16px; }
+  .lb-band-item small { display: none; }
+  .lb .lb-avatar, .lb[data-compact="1"] .lb-avatar { width: 58px; height: 58px; font-size: 21px; }
+  .lb .lb-rank-badge { min-width: 24px; height: 24px; font-size: 10px; right: -6px; bottom: -4px; }
+  .lb .lb-profile, .lb[data-compact="1"] .lb-profile { gap: 6px; padding: 10px; }
+  .lb .lb-mini div, .lb[data-compact="1"] .lb-mini div { padding: 4px 4px; }
+  .lb .lb-mini strong, .lb[data-compact="1"] .lb-mini strong { font-size: 15px; }
+  .lb .lb-mini.two strong, .lb[data-compact="1"] .lb-mini.two strong { font-size: 16px; }
+  .lb .lb-name small { margin-top: 1px; }
 }
+
+/* < 1180 px: TV değil (tarayıcı penceresi / mobil). Sabit yükseklikler kalkar,
+   pano normal akan bir yığın olur; sayfa kaydırır, hiçbir şey kırpılmaz. */
+@media (max-width: 1180px) {
+  .lb { min-height: 0; }
+  .lb-body { overflow: visible; }
+  .lb-slide, .lb-slide > *, .lb-card { overflow: visible; }
+  .lb-item, .lb-tr, .lb-hot, .lb-row.rich, .lb-band, .lb-alert-chips,
+  .lb-quotes > .lb-kpis, .lb-center .lb-list .lb-item, .lb-alerts .lb-list .lb-item,
+  .lb-quote-table .lb-tr, .lb-owner-quotes .lb-tr, .lb-leader .lb-row.rich { height: auto; }
+  .lb-alerts .lb-item-title { white-space: normal; }
+  .lb-pulse, .lb-portfolio, .lb-quotes, .lb-owner, .lb-alert-groups { grid-template-columns: 1fr; grid-template-rows: none; }
+  .lb-pulse .lb-revenue, .lb-pulse .lb-leader, .lb-owner .lb-band, .lb-owner .lb-hot-col,
+  .lb-quotes > .lb-kpis, .lb-quotes .lb-stack { grid-column: 1 / -1; grid-row: auto; }
+  .lb-band { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .lb-band-item small { display: block; }
+  .lb-alert-chips { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .lb-revenue-body, .lb-activity-wrap, .lb-donut-wrap { grid-template-columns: 1fr; justify-items: center; }
+  .lb-funnel { flex-wrap: wrap; }
+}
+
 @media (max-width: 900px) {
   .lb { min-height: 0; }
   .lb-top { grid-template-columns: 1fr; text-align: left; }
