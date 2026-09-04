@@ -11,7 +11,7 @@ export async function GET(request: Request) {
     await requireReportsAccessOrThrow();
     const url = new URL(request.url);
     const payload = await buildEntegrasyonRaporu({
-      owner: String(url.searchParams.get('owner') ?? '').trim(),
+      isKolu: String(url.searchParams.get('isKolu') ?? '').trim(),
     });
     return NextResponse.json(payload, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error: any) {

@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from 'react';
 type Row = {
   customerId: string;
   musteri: string;
-  sorumlu: string | null;
+  isKolu: string | null;
   aktifFazNo: number | null;
   aktifFazAdi: string | null;
   sonNot: string | null;
@@ -13,13 +13,13 @@ type Row = {
 };
 
 type Payload = {
-  filters: { owner: string };
+  filters: { isKolu: string };
   summary: { total: number };
   rows: Row[];
-  ownerOptions: string[];
+  isKoluOptions: string[];
 };
 
-const EMPTY: Payload = { filters: { owner: '' }, summary: { total: 0 }, rows: [], ownerOptions: [] };
+const EMPTY: Payload = { filters: { isKolu: '' }, summary: { total: 0 }, rows: [], isKoluOptions: [] };
 
 function xlsxEscape(value: unknown) {
   return String(value ?? '')
@@ -83,7 +83,7 @@ async function downloadStyledXlsx(filename: string, header: string[], dataRows: 
 }
 
 export default function EntegrasyonRaporuClient() {
-  const [owner, setOwner] = useState('');
+  const [isKolu, setIsKolu] = useState('');
   const [data, setData] = useState<Payload>(EMPTY);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -92,10 +92,10 @@ export default function EntegrasyonRaporuClient() {
   const exportExcel = useCallback(async () => {
     setExporting(true);
     try {
-      const header = ['Müşteri', 'Sorumlu', 'Aktif Faz', 'Son Not'];
+      const header = ['Müşteri', 'İş Kolu', 'Aktif Faz', 'Son Not'];
       const rows = data.rows.map((row) => [
         row.musteri,
-        row.sorumlu ?? '-',
+        row.isKolu ?? '-',
         row.aktifFazNo != null ? `Faz ${row.aktifFazNo}${row.aktifFazAdi ? ` — ${row.aktifFazAdi}` : ''}` : '-',
         row.sonNot ?? '-',
       ]);
@@ -105,12 +105,12 @@ export default function EntegrasyonRaporuClient() {
     }
   }, [data.rows]);
 
-  const load = useCallback(async (ownerFilter: string) => {
+  const load = useCallback(async (isKoluFilter: string) => {
     setLoading(true);
     setError('');
     try {
       const params = new URLSearchParams();
-      if (ownerFilter) params.set('owner', ownerFilter);
+      if (isKoluFilter) params.set('isKolu', isKoluFilter);
       const res = await fetch(`/api/reports/entegrasyon-raporu?${params.toString()}`, { cache: 'no-store' });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json?.message || 'Rapor yüklenemedi.');
@@ -122,7 +122,7 @@ export default function EntegrasyonRaporuClient() {
     }
   }, []);
 
-  useEffect(() => { void load(owner); }, [load, owner]);
+  useEffect(() => { void load(isKolu); }, [load, isKolu]);
 
   return (
     <main className="pax-page-container">
@@ -133,12 +133,12 @@ export default function EntegrasyonRaporuClient() {
         </p>
         <div style={{ display: 'flex', gap: 12, marginTop: 14, alignItems: 'center', flexWrap: 'wrap' }}>
           <select
-            value={owner}
-            onChange={(e) => setOwner(e.target.value)}
+            value={isKolu}
+            onChange={(e) => setIsKolu(e.target.value)}
             style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid var(--border-1, #ccc)' }}
           >
-            <option value="">Tüm Sorumlular</option>
-            {data.ownerOptions.map((o) => <option key={o} value={o}>{o}</option>)}
+            <option value="">Tüm İş Kolları</option>
+            {data.isKoluOptions.map((o) => <option key={o} value={o}>{o}</option>)}
           </select>
           <span style={{ fontSize: 13, color: 'var(--text-3)' }}>{data.summary.total} firma</span>
           <button
@@ -182,7 +182,7 @@ export default function EntegrasyonRaporuClient() {
                   }}
                 >
                   <td style={{ padding: '10px 14px', fontWeight: 600 }}>{row.musteri}</td>
-                  <td style={{ padding: '10px 14px' }}>{row.sorumlu ?? '—'}</td>
+                  <td style={{ padding: '10px 14px' }}>{row.isKolu ?? '—'}</td>
                   <td style={{ padding: '10px 14px', fontWeight: done ? 700 : 400, color: done ? '#15803d' : undefined }}>
                     {row.aktifFazNo != null ? `Faz ${row.aktifFazNo}${row.aktifFazAdi ? ` — ${row.aktifFazAdi}` : ''}` : '—'}
                     {done ? ' ✅' : ''}

@@ -10,7 +10,7 @@ import { db } from '@/lib/db';
 export type EntegrasyonRaporuRow = {
   customerId: string;
   musteri: string;
-  sorumlu: string | null;
+  isKolu: string | null;
   aktifFazNo: number | null;
   aktifFazAdi: string | null;
   sonNot: string | null;
@@ -18,10 +18,10 @@ export type EntegrasyonRaporuRow = {
 };
 
 export type EntegrasyonRaporuPayload = {
-  filters: { owner: string };
+  filters: { isKolu: string };
   summary: { total: number };
   rows: EntegrasyonRaporuRow[];
-  ownerOptions: string[];
+  isKoluOptions: string[];
 };
 
 function cleanText(value: unknown) {
@@ -29,15 +29,15 @@ function cleanText(value: unknown) {
   return text || null;
 }
 
-export async function buildEntegrasyonRaporu(options?: { owner?: string }): Promise<EntegrasyonRaporuPayload> {
-  const owner = String(options?.owner ?? '').trim();
+export async function buildEntegrasyonRaporu(options?: { isKolu?: string }): Promise<EntegrasyonRaporuPayload> {
+  const isKolu = String(options?.isKolu ?? '').trim();
 
   const result = await db.query(
     `
       select
         m.id::text as customer_id,
         m.musteri,
-        m.sorumlu,
+        m.is_kolu,
         mp.aktif_faz_no,
         ft.asama_adi as aktif_faz_adi,
         pe.notlar as son_not,
@@ -58,16 +58,16 @@ export async function buildEntegrasyonRaporu(options?: { owner?: string }): Prom
   );
 
   const allRows = result.rows as any[];
-  const ownerOptions = Array.from(
-    new Set(allRows.map((row) => String(row.sorumlu ?? '').trim()).filter(Boolean)),
+  const isKoluOptions = Array.from(
+    new Set(allRows.map((row) => String(row.is_kolu ?? '').trim()).filter(Boolean)),
   ).sort((a, b) => a.localeCompare(b, 'tr'));
 
   const rows: EntegrasyonRaporuRow[] = allRows
-    .filter((row) => !owner || String(row.sorumlu ?? '').trim() === owner)
+    .filter((row) => !isKolu || String(row.is_kolu ?? '').trim() === isKolu)
     .map((row) => ({
       customerId: String(row.customer_id),
       musteri: String(row.musteri ?? '').trim(),
-      sorumlu: cleanText(row.sorumlu),
+      isKolu: cleanText(row.is_kolu),
       aktifFazNo: row.aktif_faz_no != null ? Number(row.aktif_faz_no) : null,
       aktifFazAdi: cleanText(row.aktif_faz_adi),
       sonNot: cleanText(row.son_not),
@@ -75,9 +75,9 @@ export async function buildEntegrasyonRaporu(options?: { owner?: string }): Prom
     }));
 
   return {
-    filters: { owner },
+    filters: { isKolu },
     summary: { total: rows.length },
     rows,
-    ownerOptions,
+    isKoluOptions,
   };
 }
