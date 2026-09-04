@@ -1,6 +1,8 @@
 ﻿'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+
+const KOLU_SIRA: Record<string, number> = { Retail: 0, Vertical: 1 };
 
 type Row = {
   customerId: string;
@@ -89,22 +91,6 @@ export default function EntegrasyonRaporuClient() {
   const [error, setError] = useState('');
   const [exporting, setExporting] = useState(false);
 
-  const exportExcel = useCallback(async () => {
-    setExporting(true);
-    try {
-      const header = ['Müşteri', 'İş Kolu', 'Aktif Faz', 'Son Not'];
-      const rows = data.rows.map((row) => [
-        row.musteri,
-        row.isKolu ?? '-',
-        row.aktifFazNo != null ? `Faz ${row.aktifFazNo}${row.aktifFazAdi ? ` — ${row.aktifFazAdi}` : ''}` : '-',
-        row.sonNot ?? '-',
-      ]);
-      await downloadStyledXlsx('entegrasyon-raporu.xlsx', header, rows);
-    } finally {
-      setExporting(false);
-    }
-  }, [data.rows]);
-
   const load = useCallback(async (isKoluFilter: string) => {
     setLoading(true);
     setError('');
@@ -124,6 +110,31 @@ export default function EntegrasyonRaporuClient() {
 
   useEffect(() => { void load(isKolu); }, [load, isKolu]);
 
+  const sortedRows = useMemo(() => {
+    return [...data.rows].sort((a, b) => {
+      const sa = KOLU_SIRA[a.isKolu ?? ''] ?? 99;
+      const sb = KOLU_SIRA[b.isKolu ?? ''] ?? 99;
+      if (sa !== sb) return sa - sb;
+      return a.musteri.localeCompare(b.musteri, 'tr');
+    });
+  }, [data.rows]);
+
+  const exportExcel = useCallback(async () => {
+    setExporting(true);
+    try {
+      const header = ['Müşteri', 'İş Kolu', 'Aktif Faz', 'Son Not'];
+      const rows = sortedRows.map((row) => [
+        row.musteri,
+        row.isKolu ?? '-',
+        row.aktifFazNo != null ? `Faz ${row.aktifFazNo}${row.aktifFazAdi ? ` — ${row.aktifFazAdi}` : ''}` : '-',
+        row.sonNot ?? '-',
+      ]);
+      await downloadStyledXlsx('entegrasyon-raporu.xlsx', header, rows);
+    } finally {
+      setExporting(false);
+    }
+  }, [sortedRows]);
+
   return (
     <main className="pax-page-container">
       <div className="pax-card" style={{ padding: 20, marginBottom: 16 }}>
@@ -132,14 +143,24 @@ export default function EntegrasyonRaporuClient() {
           Entegrasyon Firması olarak işaretli iş ortaklarının aktif fazı ve son aktivite notu.
         </p>
         <div style={{ display: 'flex', gap: 12, marginTop: 14, alignItems: 'center', flexWrap: 'wrap' }}>
-          <select
-            value={isKolu}
-            onChange={(e) => setIsKolu(e.target.value)}
-            style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid var(--border-1, #ccc)' }}
-          >
-            <option value="">Tüm İş Kolları</option>
-            {data.isKoluOptions.map((o) => <option key={o} value={o}>{o}</option>)}
-          </select>
+          {['', 'Retail', 'Vertical'].map((opt) => (
+            <button
+              key={opt || 'all'}
+              type="button"
+              onClick={() => setIsKolu(opt)}
+              style={{
+                padding: '6px 14px',
+                borderRadius: 8,
+                border: '1px solid var(--border-1, #ccc)',
+                background: isKolu === opt ? '#1F4E79' : 'transparent',
+                color: isKolu === opt ? '#fff' : 'inherit',
+                fontWeight: isKolu === opt ? 600 : 400,
+                cursor: 'pointer',
+              }}
+            >
+              {opt || 'Tümü'}
+            </button>
+          ))}
           <span style={{ fontSize: 13, color: 'var(--text-3)' }}>{data.summary.total} firma</span>
           <button
             type="button"
@@ -169,9 +190,9 @@ export default function EntegrasyonRaporuClient() {
           <tbody>
             {loading ? (
               <tr><td colSpan={4} style={{ padding: 20, textAlign: 'center', color: 'var(--text-3)' }}>Yükleniyor…</td></tr>
-            ) : data.rows.length === 0 ? (
+            ) : sortedRows.length === 0 ? (
               <tr><td colSpan={4} style={{ padding: 20, textAlign: 'center', color: 'var(--text-3)' }}>Kayıt yok.</td></tr>
-            ) : data.rows.map((row) => {
+            ) : sortedRows.map((row) => {
               const done = row.aktifFazNo != null && row.aktifFazNo >= 9;
               return (
                 <tr
