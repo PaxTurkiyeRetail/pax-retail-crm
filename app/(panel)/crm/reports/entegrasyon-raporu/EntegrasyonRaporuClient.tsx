@@ -21,13 +21,6 @@ type Payload = {
 
 const EMPTY: Payload = { filters: { owner: '' }, summary: { total: 0 }, rows: [], ownerOptions: [] };
 
-function formatDate(value: string | null) {
-  if (!value) return '—';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '—';
-  return date.toLocaleDateString('tr-TR', { day: '2-digit', month: 'short', year: 'numeric' });
-}
-
 function xlsxEscape(value: unknown) {
   return String(value ?? '')
     .split('').filter((ch) => ch.charCodeAt(0) >= 32 || ch.charCodeAt(0) === 9).join('')
@@ -99,13 +92,12 @@ export default function EntegrasyonRaporuClient() {
   const exportExcel = useCallback(async () => {
     setExporting(true);
     try {
-      const header = ['Müşteri', 'Sorumlu', 'Aktif Faz', 'Son Not', 'Son Aktivite'];
+      const header = ['Müşteri', 'Sorumlu', 'Aktif Faz', 'Son Not'];
       const rows = data.rows.map((row) => [
         row.musteri,
         row.sorumlu ?? '-',
         row.aktifFazNo != null ? `Faz ${row.aktifFazNo}${row.aktifFazAdi ? ` — ${row.aktifFazAdi}` : ''}` : '-',
         row.sonNot ?? '-',
-        formatDate(row.sonEventTarihi),
       ]);
       await downloadStyledXlsx('entegrasyon-raporu.xlsx', header, rows);
     } finally {
@@ -172,25 +164,33 @@ export default function EntegrasyonRaporuClient() {
               <th style={{ padding: '10px 14px' }}>Sorumlu</th>
               <th style={{ padding: '10px 14px' }}>Aktif Faz</th>
               <th style={{ padding: '10px 14px' }}>Son Not</th>
-              <th style={{ padding: '10px 14px' }}>Son Aktivite</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={5} style={{ padding: 20, textAlign: 'center', color: 'var(--text-3)' }}>Yükleniyor…</td></tr>
+              <tr><td colSpan={4} style={{ padding: 20, textAlign: 'center', color: 'var(--text-3)' }}>Yükleniyor…</td></tr>
             ) : data.rows.length === 0 ? (
-              <tr><td colSpan={5} style={{ padding: 20, textAlign: 'center', color: 'var(--text-3)' }}>Kayıt yok.</td></tr>
-            ) : data.rows.map((row) => (
-              <tr key={row.customerId} style={{ borderBottom: '1px solid var(--border-1, #f1f5f9)' }}>
-                <td style={{ padding: '10px 14px', fontWeight: 600 }}>{row.musteri}</td>
-                <td style={{ padding: '10px 14px' }}>{row.sorumlu ?? '—'}</td>
-                <td style={{ padding: '10px 14px' }}>
-                  {row.aktifFazNo != null ? `Faz ${row.aktifFazNo}${row.aktifFazAdi ? ` — ${row.aktifFazAdi}` : ''}` : '—'}
-                </td>
-                <td style={{ padding: '10px 14px', maxWidth: 360 }}>{row.sonNot ?? '—'}</td>
-                <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>{formatDate(row.sonEventTarihi)}</td>
-              </tr>
-            ))}
+              <tr><td colSpan={4} style={{ padding: 20, textAlign: 'center', color: 'var(--text-3)' }}>Kayıt yok.</td></tr>
+            ) : data.rows.map((row) => {
+              const done = row.aktifFazNo != null && row.aktifFazNo >= 9;
+              return (
+                <tr
+                  key={row.customerId}
+                  style={{
+                    borderBottom: '1px solid var(--border-1, #f1f5f9)',
+                    background: done ? 'rgba(34,197,94,0.15)' : undefined,
+                  }}
+                >
+                  <td style={{ padding: '10px 14px', fontWeight: 600 }}>{row.musteri}</td>
+                  <td style={{ padding: '10px 14px' }}>{row.sorumlu ?? '—'}</td>
+                  <td style={{ padding: '10px 14px', fontWeight: done ? 700 : 400, color: done ? '#15803d' : undefined }}>
+                    {row.aktifFazNo != null ? `Faz ${row.aktifFazNo}${row.aktifFazAdi ? ` — ${row.aktifFazAdi}` : ''}` : '—'}
+                    {done ? ' ✅' : ''}
+                  </td>
+                  <td style={{ padding: '10px 14px', maxWidth: 360 }}>{row.sonNot ?? '—'}</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
