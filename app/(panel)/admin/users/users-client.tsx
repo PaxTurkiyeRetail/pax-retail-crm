@@ -20,6 +20,12 @@ type AllowedUser = {
   weekly_target_technical_online: number;
   weekly_target_unique_customers: number;
   weekly_target_total_activities: number;
+  /** İçinde bulunulan yıl (sunucu hesaplar). */
+  target_year: number;
+  /** Yıllık ciro hedefi (USD) — crm_target_values · sales_revenue. 0 = hedef yok. */
+  annual_revenue_target: number;
+  /** Yıllık cihaz hedefi (adet) — crm_target_values · device_count. 0 = hedef yok. */
+  annual_device_target: number;
 };
 
 const WEEKLY_TARGET_FIELDS: Array<{ key: keyof Pick<AllowedUser, 'weekly_target_sales_physical' | 'weekly_target_sales_online' | 'weekly_target_sales_phone' | 'weekly_target_sales_email' | 'weekly_target_technical_physical' | 'weekly_target_technical_online' | 'weekly_target_total_activities' | 'weekly_target_unique_customers'>; label: string; short: string }> = [
@@ -38,18 +44,35 @@ function normalizeWeeklyTargets(user: AllowedUser): AllowedUser {
   for (const field of WEEKLY_TARGET_FIELDS) {
     next[field.key] = Number(next[field.key] ?? 0) || 0;
   }
+  next.target_year = Number(next.target_year) || new Date().getFullYear();
+  next.annual_revenue_target = Number(next.annual_revenue_target ?? 0) || 0;
+  next.annual_device_target = Number(next.annual_device_target ?? 0) || 0;
   return next;
 }
 
 function targetPayload(user: AllowedUser) {
-  return Object.fromEntries(WEEKLY_TARGET_FIELDS.map((field) => [field.key, Number(user[field.key] ?? 0) || 0]));
+  return {
+    ...Object.fromEntries(WEEKLY_TARGET_FIELDS.map((field) => [field.key, Number(user[field.key] ?? 0) || 0])),
+    target_year: user.target_year,
+    annual_revenue_target: Number(user.annual_revenue_target ?? 0) || 0,
+    annual_device_target: Number(user.annual_device_target ?? 0) || 0,
+  };
+}
+
+function fmtUsd(value: number) {
+  return `$${Math.round(value).toLocaleString('tr-TR')}`;
 }
 
 function targetSummary(user: AllowedUser) {
+  const parts: string[] = [];
+  if (user.annual_revenue_target > 0) parts.push(`${user.target_year} ciro ${fmtUsd(user.annual_revenue_target)}`);
+  if (user.annual_device_target > 0) parts.push(`${user.annual_device_target.toLocaleString('tr-TR')} cihaz`);
   const filled = WEEKLY_TARGET_FIELDS.filter((field) => Number(user[field.key] ?? 0) > 0);
-  if (filled.length === 0) return 'Hedef girilmedi';
-  const total = WEEKLY_TARGET_FIELDS.reduce((sum, field) => sum + (Number(user[field.key] ?? 0) || 0), 0);
-  return `${filled.length} hedef / toplam ${total}`;
+  if (filled.length > 0) {
+    const total = WEEKLY_TARGET_FIELDS.reduce((sum, field) => sum + (Number(user[field.key] ?? 0) || 0), 0);
+    parts.push(`haftalık ${filled.length} hedef / toplam ${total}`);
+  }
+  return parts.length ? parts.join(' · ') : 'Hedef girilmedi';
 }
 
 function roleLabel(role: AllowedUser['role']) {
@@ -161,7 +184,7 @@ export default function UsersClient() {
                   <th>Rol (AD türevi)</th>
                   <th>AD Durumu</th>
                   <th>Son Giriş</th>
-                  <th>Haftalık Hedefler</th>
+                  <th>Hedefler (yıllık ciro · haftalık aktivite)</th>
                   <th>Aktif</th>
                   <th></th>
                 </tr>
@@ -231,12 +254,44 @@ export default function UsersClient() {
             <div className="modal-card weekly-target-modal">
               <div className="modal-head">
                 <div>
-                  <div id="weekly-target-modal-title" className="modal-title">Haftalık Hedefler</div>
+                  <div id="weekly-target-modal-title" className="modal-title">Hedefler</div>
                   <div className="modal-subtitle">{modalUser.full_name || modalUser.email}</div>
                 </div>
                 <button type="button" className="modal-close" onClick={() => setTargetModalEmail(null)} aria-label="Kapat">×</button>
               </div>
 
+              <div className="target-section-title">Yıllık Hedefler · {modalUser.target_year}</div>
+              <div className="target-section-hint">
+                Canlı Ekran (Command Center) ciro halkası ve forecast/gap hesabı bu değerlerden okunur.
+                Gerçekleşen = kazanılan tekliflerin tutarı. 0 bırakılırsa hedef tanımsız sayılır.
+              </div>
+              <div className="weekly-target-grid annual">
+                <label className="field">
+                  <span className="label">Yıllık Ciro Hedefi (USD)</span>
+                  <input
+                    className="input"
+                    type="number"
+                    min={0}
+                    step={1000}
+                    value={Number(modalUser.annual_revenue_target ?? 0)}
+                    onChange={(e) => setRows((s) => s.map((x) => x.email === modalUser.email ? { ...x, annual_revenue_target: Math.max(0, Number(e.target.value) || 0) } : x))}
+                  />
+                </label>
+                <label className="field">
+                  <span className="label">Yıllık Cihaz Hedefi (adet)</span>
+                  <input
+                    className="input"
+                    type="number"
+                    min={0}
+                    step={100}
+                    value={Number(modalUser.annual_device_target ?? 0)}
+                    onChange={(e) => setRows((s) => s.map((x) => x.email === modalUser.email ? { ...x, annual_device_target: Math.max(0, Number(e.target.value) || 0) } : x))}
+                  />
+                </label>
+              </div>
+
+              <div className="target-section-title">Haftalık Aktivite Hedefleri</div>
+              <div className="target-section-hint">Kanal başına haftalık adet. Boş bırakılan kanal Canlı Ekran&apos;da &quot;/ —&quot; olarak görünür.</div>
               <div className="weekly-target-grid">
                 {WEEKLY_TARGET_FIELDS.map((field) => (
                   <label key={`${modalUser.email}-${field.key}-modal`} className="field">

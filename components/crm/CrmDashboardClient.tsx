@@ -300,7 +300,7 @@ export default function CrmDashboardClient() {
                       </td>
                       <td style={{ fontSize: 12 }}>{row.konuKimde}</td>
                       <td style={{ fontSize: 12, whiteSpace: "nowrap" }}>{row.modelAdetLabel}</td>
-                      <td style={{ fontSize: 12, whiteSpace: "nowrap", color: row.overdue ? "#b91c1c" : row.nearTerm ? "#b45309" : "var(--text-2, #334155)", fontWeight: row.overdue ? 700 : 400 }}>
+                      <td style={{ fontSize: 12, whiteSpace: "nowrap", color: row.overdue ? "var(--chip-red-color)" : row.nearTerm ? "var(--chip-gold-color)" : "var(--text-2, #334155)", fontWeight: row.overdue ? 700 : 400 }}>
                         {row.cozumTarihi
                           ? new Date(`${row.cozumTarihi}T00:00:00`).toLocaleDateString("tr-TR", { day: "2-digit", month: "short", year: "2-digit" })
                           : "—"}
@@ -350,7 +350,7 @@ export default function CrmDashboardClient() {
                     <div style={{
                       height: "100%",
                       width: `${Math.min((targetActual.totalActivities / targetGoal.totalActivities) * 100, 100)}%`,
-                      background: targetActual.totalActivities >= targetGoal.totalActivities ? "#16a34a" : "var(--accent, #4f46e5)",
+                      background: targetActual.totalActivities >= targetGoal.totalActivities ? "var(--chip-green-color)" : "var(--accent, #4f46e5)",
                       borderRadius: 999,
                     }} />
                   </div>
@@ -367,7 +367,7 @@ export default function CrmDashboardClient() {
                   return (
                     <div key={key} style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 8, alignItems: "center", fontSize: 12, padding: "6px 0", borderBottom: "1px solid var(--border, #e5e7eb)" }}>
                       <span style={{ color: "var(--text-2, #334155)" }}>{label}</span>
-                      <span style={{ fontVariantNumeric: "tabular-nums", color: goal ? (reached ? "#15803d" : "#b45309") : "var(--text-2, #334155)", fontWeight: 700 }}>
+                      <span style={{ fontVariantNumeric: "tabular-nums", color: goal ? (reached ? "var(--chip-green-color)" : "var(--chip-gold-color)") : "var(--text-2, #334155)", fontWeight: 700 }}>
                         {actual}{goal ? ` / ${goal}` : ""}
                         {pct != null ? <span style={{ fontWeight: 500, color: "var(--text-3, #64748b)" }}> · %{pct}</span> : null}
                       </span>
@@ -401,25 +401,25 @@ export default function CrmDashboardClient() {
             <div className="pax-page-sub">Künye durumu ve faz dağılımı</div>
           </div>
           <div className="pax-grid-3">
-            <div style={{ background: "#f0fdf4", border: "1px solid #86efac", borderRadius: "var(--radius-lg)", padding: 16 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: "#15803d", marginBottom: 12 }}>Künye Durumu</div>
-              <div style={{ display: "grid", gap: 10, fontSize: 13, color: "var(--text-2)" }}>
+            <div style={{ background: "var(--chip-green-bg)", border: "1px solid var(--chip-green-bd)", borderRadius: "var(--radius-lg)", padding: 16 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "var(--chip-green-color)", marginBottom: 12 }}>Künye Durumu</div>
+              <div style={{ display: "grid", gap: 10, fontSize: 13, color: "var(--text)" }}>
                 <div style={{ display: "flex", justifyContent: "space-between" }}><span>Tamam</span><strong>{stats.kunyeVar}</strong></div>
                 <div style={{ display: "flex", justifyContent: "space-between" }}><span>Eksik</span><strong>{stats.kunyeEksik}</strong></div>
                 <div style={{ display: "flex", justifyContent: "space-between" }}><span>Yok</span><strong>{stats.kunyeYok}</strong></div>
               </div>
             </div>
-            <div style={{ background: "#eff6ff", border: "1px solid #93c5fd", borderRadius: "var(--radius-lg)", padding: 16 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: "#1e40af", marginBottom: 12 }}>Eksik Alanlar</div>
-              <div style={{ display: "grid", gap: 10, fontSize: 13, color: "var(--text-2)" }}>
+            <div style={{ background: "var(--chip-indigo-bg)", border: "1px solid var(--chip-indigo-bd)", borderRadius: "var(--radius-lg)", padding: 16 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "var(--chip-indigo-color)", marginBottom: 12 }}>Eksik Alanlar</div>
+              <div style={{ display: "grid", gap: 10, fontSize: 13, color: "var(--text)" }}>
                 <div style={{ display: "flex", justifyContent: "space-between" }}><span>POS modeli</span><strong>{stats.missingBreakdown.pos_modeli}</strong></div>
                 <div style={{ display: "flex", justifyContent: "space-between" }}><span>POS adedi</span><strong>{stats.missingBreakdown.toplam_pos_adedi}</strong></div>
                 <div style={{ display: "flex", justifyContent: "space-between" }}><span>Mağaza/Franchise</span><strong>{stats.missingBreakdown.magaza_veya_franchise}</strong></div>
               </div>
             </div>
-            <div style={{ background: "#fffbeb", border: "1px solid #fcd34d", borderRadius: "var(--radius-lg)", padding: 16 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: "#92400e", marginBottom: 12 }}>Portföy Yapısı</div>
-              <div style={{ display: "grid", gap: 10, fontSize: 13, color: "var(--text-2)" }}>
+            <div style={{ background: "var(--chip-gold-bg)", border: "1px solid var(--chip-gold-bd)", borderRadius: "var(--radius-lg)", padding: 16 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "var(--chip-gold-color)", marginBottom: 12 }}>Portföy Yapısı</div>
+              <div style={{ display: "grid", gap: 10, fontSize: 13, color: "var(--text)" }}>
                 <div style={{ display: "flex", justifyContent: "space-between" }}><span>Sektör sayısı</span><strong>{stats.sectors}</strong></div>
                 <div style={{ display: "flex", justifyContent: "space-between" }}><span>Sorumlu sayısı</span><strong>{stats.accounts}</strong></div>
                 <div style={{ display: "flex", justifyContent: "space-between" }}><span>Kasa firması</span><strong>{stats.kasaFirmasi}</strong></div>
@@ -472,9 +472,9 @@ export default function CrmDashboardClient() {
                 ))}
               </div>
               {(sellerData.kpi.withoutPhase > 0 || sellerData.kpi.kunyeEksik + sellerData.kpi.kunyeYok > 0 || sellerData.kpi.sectorMissing > 0) && (
-                <div style={{ background: "#fffbeb", border: "1px solid #fcd34d", borderRadius: "var(--radius-md)", padding: 14 }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: "#92400e", marginBottom: 8 }}>Aksiyon Gerekli</div>
-                  <div style={{ display: "grid", gap: 5, fontSize: 12, color: "#78716c" }}>
+                <div style={{ background: "var(--chip-gold-bg)", border: "1px solid var(--chip-gold-bd)", borderRadius: "var(--radius-md)", padding: 14 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "var(--chip-gold-color)", marginBottom: 8 }}>Aksiyon Gerekli</div>
+                  <div style={{ display: "grid", gap: 5, fontSize: 12, color: "var(--text-2)" }}>
                     {sellerData.kpi.withoutPhase > 0 && <div>• Fazı girilmemiş: <strong>{sellerData.kpi.withoutPhase}</strong> firma</div>}
                     {(sellerData.kpi.kunyeEksik + sellerData.kpi.kunyeYok) > 0 && <div>• Künyesi eksik/yok: <strong>{sellerData.kpi.kunyeEksik + sellerData.kpi.kunyeYok}</strong> firma</div>}
                     {sellerData.kpi.recentActivityGap > 0 && <div>• Yakın aktivite yok: <strong>{sellerData.kpi.recentActivityGap}</strong> firma</div>}
@@ -486,7 +486,7 @@ export default function CrmDashboardClient() {
                           <div style={{ marginTop: 4, paddingLeft: 12, display: "grid", gap: 2 }}>
                             {sellerData.sectorMissingRows.slice(0, 8).map((row) => (
                               <div key={`${row.sorumlu}-${row.musteri}`}>
-                                <Link href={`/crm/customers?q=${encodeURIComponent(row.musteri)}`} style={{ color: "#92400e", fontWeight: 700, textDecoration: "underline" }}>{row.musteri}</Link>
+                                <Link href={`/crm/customers?q=${encodeURIComponent(row.musteri)}`} style={{ color: "var(--chip-gold-color)", fontWeight: 700, textDecoration: "underline" }}>{row.musteri}</Link>
                                 <span> · {row.sorumlu} · eski: {row.sektorOnceki}</span>
                               </div>
                             ))}

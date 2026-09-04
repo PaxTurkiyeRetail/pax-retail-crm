@@ -143,22 +143,23 @@
 .seller-action-item {
   padding: 14px 16px;
   border-radius: 14px;
-  background: #fff7ed;
-  border: 1px solid #fdba74;
+  /* Tema token'ları: sabit pastel zemin + tema yazısı karışımı koyu temada okunmuyordu. */
+  background: var(--chip-gold-bg);
+  border: 1px solid var(--chip-gold-bd);
 }
 
 .seller-action-item strong {
   display: block;
   font-size: 32px;
   line-height: 1;
-  color: #c2410c;
+  color: var(--chip-gold-color);
   margin-bottom: 4px;
   font-weight: 800;
 }
 
 .seller-action-item span {
   font-size: 13px;
-  color: #7c2d12;
+  color: var(--text-2);
   line-height: 1.4;
 }
 
@@ -365,9 +366,9 @@
 }
 
 .seller-alert.seller-error {
-  background: #fef2f2;
-  border-color: #fecaca;
-  color: #b91c1c;
+  background: var(--chip-red-bg);
+  border-color: var(--chip-red-bd);
+  color: var(--chip-red-color);
 }
 
 /* Responsive */

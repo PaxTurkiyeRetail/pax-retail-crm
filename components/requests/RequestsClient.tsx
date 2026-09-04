@@ -93,10 +93,11 @@ export default function RequestsClient({ userRole, userId, canManage, onNewReque
         .req-card { background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:14px 16px; display:grid; gap:8px; text-decoration:none; transition:box-shadow .15s; }
         .req-card:hover { box-shadow:var(--shadow-md); border-color:var(--accent-border); }
         .req-card-top { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
-        .req-title { font-size:14px; font-weight:700; color:var(--text); line-height:1.4; }
+        .req-title { font-size:14px; font-weight:700; color:var(--text); line-height:1.4; min-width:0; }
         .req-meta  { display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
         .req-footer { display:flex; justify-content:space-between; align-items:center; gap:8px; }
-        .req-who   { font-size:11px; color:var(--text-3); }
+        .req-who   { font-size:12px; color:var(--text-2); font-weight:600; }
+        .req-age   { font-size:12px; color:var(--text-3); font-weight:700; white-space:nowrap; }
 
         .pager { display:flex; justify-content:center; gap:6px; flex-wrap:wrap; }
         .pager-btn { padding:8px 14px; border:1px solid var(--border); border-radius:10px; font-size:12px; background:var(--surface); color:var(--text); cursor:pointer; font-weight:600; }
@@ -162,21 +163,27 @@ export default function RequestsClient({ userRole, userId, canManage, onNewReque
       ) : (
         <div className="req-list">
           {rows.map(r => (
-            <Link key={r.id} href={`/requests/${r.id}`} className="req-card">
-              <div className="req-card-top">
-                <div className="req-title">{r.title}</div>
-                <Pill label={SLA_LABELS[r.sla_status]||r.sla_status} bg={SLA_BG[r.sla_status]||'#f1f5f9'} color={SLA_COLORS[r.sla_status]||'#475569'} />
-              </div>
-              <div className="req-meta">
-                <Pill label={STATUS_LABELS[r.status]||r.status} bg={STATUS_BG[r.status]||'#f1f5f9'} color={STATUS_COLOR[r.status]||'#475569'} />
-                <Pill label={r.priority} bg={PRIORITY_BG[r.priority]||'#f1f5f9'} color={PRIORITY_COLORS[r.priority]||'#475569'} />
-                {r.request_categories && (
-                  <Pill label={r.request_categories.name} bg={r.request_categories.color+'22'} color={r.request_categories.color} />
-                )}
-              </div>
-              <div className="req-footer">
-                <span className="req-who">{r.requester_name} → {r.assignee_name || 'Atanmamış'}</span>
-                <span style={{ fontSize:11, color:'var(--text-4)' }}>{timeAgo(r.created_at)}</span>
+            // styled-jsx yalnız bu dosyadaki DOM elemanlarını kapsar; <Link> bir bileşen
+            // olduğu için .req-card kuralları ona uygulanmıyordu (kart iç boşluğu
+            // kayboluyor, SLA rozeti kartın dışına taşıyordu). Kart artık Link'in
+            // içindeki div; Link yalnız tıklanabilir sarmalayıcı.
+            <Link key={r.id} href={`/requests/${r.id}`} style={{ display:'block', textDecoration:'none', color:'inherit' }}>
+              <div className="req-card">
+                <div className="req-card-top">
+                  <div className="req-title">{r.title}</div>
+                  <Pill label={SLA_LABELS[r.sla_status]||r.sla_status} bg={SLA_BG[r.sla_status]||'#f1f5f9'} color={SLA_COLORS[r.sla_status]||'#475569'} />
+                </div>
+                <div className="req-meta">
+                  <Pill label={STATUS_LABELS[r.status]||r.status} bg={STATUS_BG[r.status]||'#f1f5f9'} color={STATUS_COLOR[r.status]||'#475569'} />
+                  <Pill label={r.priority} bg={PRIORITY_BG[r.priority]||'#f1f5f9'} color={PRIORITY_COLORS[r.priority]||'#475569'} />
+                  {r.request_categories && (
+                    <Pill label={r.request_categories.name} bg={r.request_categories.color+'22'} color={r.request_categories.color} />
+                  )}
+                </div>
+                <div className="req-footer">
+                  <span className="req-who">{r.requester_name} → {r.assignee_name || 'Atanmamış'}</span>
+                  <span className="req-age">{timeAgo(r.created_at)}</span>
+                </div>
               </div>
             </Link>
           ))}

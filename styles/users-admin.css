@@ -81,8 +81,22 @@ td { padding: 11px 12px; border-bottom: 1px solid #eef2f7; font-size: 13px; vert
   display: grid;
   grid-template-columns: repeat(2, minmax(180px, 1fr));
   gap: 12px;
-  padding: 16px 0;
+  padding: 12px 0 16px;
 }
+.weekly-target-grid.annual { padding-bottom: 6px; }
+.target-section-title {
+  margin-top: 14px;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+.target-section-hint { margin-top: 4px; font-size: 12px; line-height: 1.45; color: var(--text-3); font-weight: 600; }
+.modal-head { border-bottom-color: var(--border); }
+.modal-subtitle { color: var(--text-3); }
+.modal-close { color: var(--text-2); }
+.modal-actions { border-top-color: var(--border); }
 .modal-actions {
   display: flex;
   justify-content: flex-end;

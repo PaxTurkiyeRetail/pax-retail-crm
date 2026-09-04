@@ -938,7 +938,8 @@ export default function CrmCustomersClient() {
         .action-desc { margin-top: 6px; font-size: 12px; line-height: 1.5; color: var(--text-3); }
 
         .search-shell { display: grid; grid-template-columns: minmax(0, 1.45fr) repeat(3, minmax(180px, 1fr)); gap: 12px; }
-        .field { display: grid; gap: 8px; }
+        /* align-content: start — komşu alanda açıklama satırı olsa bile select uzamaz. */
+        .field { display: grid; gap: 8px; align-content: start; }
         .field-label { font-size: 12px; font-weight: 900; color: var(--text-2); }
         .input, .select {
           width: 100%; min-height: 46px; border-radius: 14px; border: 1px solid var(--border);
@@ -1041,31 +1042,33 @@ export default function CrmCustomersClient() {
         .sector-value { font-size: 12px; font-weight: 900; color: var(--cc-accent); }
 
         .table-wrap { overflow: auto; border: 1px solid var(--border); border-radius: 18px; }
-        table { width: 100%; min-width: 980px; border-collapse: collapse; background: var(--surface); }
+        /* Tablo kaba sığar: sabit 980px taban genişliği kaldırıldı, uzun hücreler satır kırar
+           (yakınlaştırılmış tarayıcıda 'İşlem' kolonu kesiliyordu). overflow:auto yalnız yedek. */
+        table { width: 100%; min-width: 0; border-collapse: collapse; background: var(--surface); table-layout: auto; }
         th {
-          text-align: left; padding: 13px 14px; font-size: 11px; letter-spacing: .04em;
+          text-align: left; padding: 12px 10px; font-size: 11px; letter-spacing: .04em;
           text-transform: uppercase; color: var(--text-3); background: var(--surface-2); border-bottom: 1px solid var(--border);
         }
-        td { padding: 14px; border-bottom: 1px solid var(--border); font-size: 13px; vertical-align: middle; color: var(--text-2); }
-        td.ct-cell { max-width: 150px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-2); font-weight: 600; }
+        td { padding: 12px 10px; border-bottom: 1px solid var(--border); font-size: 13px; vertical-align: middle; color: var(--text-2); }
+        td.ct-cell { max-width: 180px; white-space: normal; overflow-wrap: anywhere; color: var(--text-2); font-weight: 600; line-height: 1.3; }
         tbody tr:nth-child(even) { background: color-mix(in srgb, var(--text) 4%, transparent); }
         .name { color: var(--text); font-weight: 900; text-decoration: none; }
         .name-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-        .phase-pill { min-height: 28px; padding: 0 10px; }
+        .pill.phase-pill { min-height: 28px; padding: 5px 10px; white-space: normal; text-align: center; line-height: 1.2; max-width: 100%; }
         .muted { color: var(--text-3); font-size: 12px; margin-top: 6px; }
         .pill {
           display: inline-flex; align-items: center; justify-content: center; min-height: 30px;
           padding: 0 12px; border-radius: 999px; font-size: 12px; font-weight: 900; white-space: nowrap;
         }
-        .phase-column, .kunye-column { width: 170px; text-align: center; }
-        .phase-pill, .kunye-pill { min-width: 118px; min-height: 32px; justify-content: center; }
+        .phase-column, .kunye-column { width: 140px; text-align: center; }
+        .phase-pill, .kunye-pill { min-width: 108px; min-height: 32px; justify-content: center; }
         .actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
         .link-btn {
           display: inline-flex; align-items: center; justify-content: center; min-height: 34px; padding: 0 12px;
           border-radius: 12px; border: 1px solid var(--border); background: var(--surface); color: var(--text);
           font-size: 12px; font-weight: 900; text-decoration: none; cursor: pointer;
         }
-        .phase-column { text-align: center; white-space: nowrap; }
+        .phase-column { text-align: center; }
         .pager {
           display: flex; align-items: center; justify-content: space-between; gap: 12px;
           flex-wrap: wrap; margin-top: 14px;
@@ -1479,7 +1482,6 @@ export default function CrmCustomersClient() {
                     <option key={item.value} value={item.value}>{item.label}</option>
                   ))}
                 </select>
-                <small className="muted">Retail / Vertical / Bank — raporlardaki iş kolu kırılımı buradan okunur.</small>
               </label>
 
               <label className="field">

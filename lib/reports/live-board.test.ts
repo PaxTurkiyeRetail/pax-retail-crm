@@ -1,12 +1,22 @@
 import { describe, expect, it } from 'vitest';
 import {
   LIVE_BOARD_TIMING,
+  agoLabel,
+  dayDiff,
+  dueLabel,
+  dueTone,
+  fmtMoney,
   initialsOf,
   istanbulDayKey,
+  paceTone,
+  pctOf,
+  phaseGroupOf,
   rankOwners,
   slideDurationMs,
   slidePlan,
+  staleTone,
   weekRangeLabel,
+  yearElapsedPct,
 } from './live-board-shared';
 import { emptyWeeklyCounters } from './weekly-targets-shared';
 
@@ -24,27 +34,39 @@ describe('initialsOf', () => {
 
 describe('rankOwners', () => {
   const counters = (total: number, unique: number) => ({ ...emptyWeeklyCounters(), totalActivities: total, uniqueCustomers: unique });
-  it('ranks by activities, then unique customers, then name', () => {
+  it('ranks by revenue attainment first, then activities, unique customers and name', () => {
+    const ranked = rankOwners([
+      { owner: 'Zeynep', actual: counters(5, 2), revenue: { attainmentPct: null } },
+      { owner: 'Ahmet', actual: counters(5, 2), revenue: { attainmentPct: null } },
+      { owner: 'Mert', actual: counters(9, 1), revenue: { attainmentPct: 40 } },
+      { owner: 'Ece', actual: counters(5, 4), revenue: { attainmentPct: 65 } },
+    ]);
+    expect(ranked.map((row) => `${row.rank}:${row.owner}`)).toEqual(['1:Ece', '2:Mert', '3:Ahmet', '4:Zeynep']);
+  });
+  it('falls back to activity ranking when nobody has a revenue target', () => {
     const ranked = rankOwners([
       { owner: 'Zeynep', actual: counters(5, 2) },
-      { owner: 'Ahmet', actual: counters(5, 2) },
       { owner: 'Mert', actual: counters(9, 1) },
       { owner: 'Ece', actual: counters(5, 4) },
     ]);
-    expect(ranked.map((row) => `${row.rank}:${row.owner}`)).toEqual(['1:Mert', '2:Ece', '3:Ahmet', '4:Zeynep']);
+    expect(ranked.map((row) => row.owner)).toEqual(['Mert', 'Ece', 'Zeynep']);
   });
 });
 
 describe('slidePlan', () => {
-  it('starts with the overview and revisits it every N owners', () => {
-    const plan = slidePlan(6, 4);
-    expect(plan.map((slide) => (slide.type === 'overview' ? 'O' : String(slide.index))).join(' ')).toBe('O 0 1 2 3 O 4 5');
+  const show = (plan: ReturnType<typeof slidePlan>) => plan.map((s) => (s.type === 'team' ? s.key : `#${s.index}`)).join(' ');
+  it('alternates two team screens with two people until both run out', () => {
+    expect(show(slidePlan(5))).toBe('pulse portfolio #0 #1 hot poc #2 #3 quotes alerts #4');
   });
-  it('shows only the overview when there is nobody to show', () => {
-    expect(slidePlan(0)).toEqual([{ type: 'overview' }]);
+  it('shows only the team screens when there is nobody to show', () => {
+    expect(show(slidePlan(0))).toBe('pulse portfolio hot poc quotes alerts');
   });
-  it('gives the overview more time than a person slide and scales with speed', () => {
-    expect(slideDurationMs({ type: 'overview' })).toBe(LIVE_BOARD_TIMING.overviewMs);
+  it('adds the Jira screen only when the integration is on', () => {
+    expect(show(slidePlan(0, { jira: true }))).toContain('jira');
+    expect(show(slidePlan(0))).not.toContain('jira');
+  });
+  it('gives team screens more time than a person slide and scales with speed', () => {
+    expect(slideDurationMs({ type: 'team', key: 'pulse' })).toBe(LIVE_BOARD_TIMING.teamMs);
     expect(slideDurationMs({ type: 'owner', index: 0 })).toBe(LIVE_BOARD_TIMING.ownerMs);
     expect(slideDurationMs({ type: 'owner', index: 0 }, 'fast')).toBeLessThan(LIVE_BOARD_TIMING.ownerMs);
     expect(slideDurationMs({ type: 'owner', index: 0 }, 'slow')).toBeGreaterThan(LIVE_BOARD_TIMING.ownerMs);
@@ -67,5 +89,60 @@ describe('weekRangeLabel', () => {
   });
   it('spells both months across a month boundary', () => {
     expect(weekRangeLabel('2026-08-31', '2026-09-06')).toBe('31 Ağu – 06 Eyl 2026');
+  });
+});
+
+describe('date rules', () => {
+  it('computes day differences and due/ago labels the way a manager reads them', () => {
+    expect(dayDiff('2026-09-04', '2026-09-14')).toBe(10);
+    expect(dayDiff('2026-09-04', '2026-08-30')).toBe(-5);
+    expect(dueLabel(10)).toBe('10 gün kaldı');
+    expect(dueLabel(-5)).toBe('5 gün gecikti');
+    expect(dueLabel(0)).toBe('bugün');
+    expect(dueLabel(null)).toBe('tarih yok');
+    expect(agoLabel(4)).toBe('4 gün önce');
+    expect(agoLabel(0)).toBe('bugün');
+  });
+  it('colours due dates and stale opportunities per the spec thresholds', () => {
+    expect(dueTone(-1)).toBe('danger');
+    expect(dueTone(3)).toBe('warn');
+    expect(dueTone(30)).toBe('ok');
+    expect(staleTone(6)).toBe('ok');
+    expect(staleTone(7)).toBe('warn');
+    expect(staleTone(14)).toBe('danger');
+    expect(staleTone(null)).toBe('neutral');
+  });
+  it('compares revenue pace with the elapsed share of the year', () => {
+    expect(yearElapsedPct('2026-01-01')).toBe(0);
+    expect(yearElapsedPct('2026-07-02')).toBeGreaterThanOrEqual(49);
+    expect(yearElapsedPct('2026-07-02')).toBeLessThanOrEqual(51);
+    expect(paceTone(70, 67)).toBe('ok');
+    expect(paceTone(60, 67)).toBe('warn');
+    expect(paceTone(50, 67)).toBe('danger');
+    expect(paceTone(null, 67)).toBeNull();
+  });
+});
+
+describe('numbers', () => {
+  it('formats USD compactly for a TV', () => {
+    expect(fmtMoney(1_120_000)).toBe('$1,12M');
+    expect(fmtMoney(82_000)).toBe('$82K');
+    expect(fmtMoney(950)).toBe('$950');
+    expect(fmtMoney(-70_000)).toBe('−$70K');
+    expect(fmtMoney(70_000, { sign: true })).toBe('+$70K');
+    expect(fmtMoney(null)).toBe('—');
+  });
+  it('returns null percentages when there is no target', () => {
+    expect(pctOf(50, 200)).toBe(25);
+    expect(pctOf(50, 0)).toBeNull();
+    expect(pctOf(50, null)).toBeNull();
+  });
+  it('maps phases to display groups', () => {
+    expect(phaseGroupOf(null)).toBe('none');
+    expect(phaseGroupOf(2)).toBe('lead');
+    expect(phaseGroupOf(10)).toBe('quote');
+    expect(phaseGroupOf(12)).toBe('poc');
+    expect(phaseGroupOf(15)).toBe('order');
+    expect(phaseGroupOf(24)).toBe('rollout');
   });
 });
