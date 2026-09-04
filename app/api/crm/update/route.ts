@@ -48,7 +48,7 @@ export async function POST(req: Request) {
   const admin = createPgAdminClient();
   const { data: currentRow, error: currentRowError } = await admin
     .from('musteriler')
-    .select('id,musteri,sorumlu,owner_user_id,sektor,entegrasyon_tipi,integration_type_key,satis_olasiligi,customer_type,pipeline_policy,is_kolu')
+    .select('id,musteri,sorumlu,owner_user_id,sektor,entegrasyon_tipi,integration_type_key,satis_olasiligi,customer_type,pipeline_policy,is_kolu,is_ortagi_tipi')
     .eq('id', musteriId)
     .maybeSingle();
 
@@ -155,6 +155,10 @@ export async function POST(req: Request) {
   // listesini gosterir. Bilincli 'report_only' secimi korunur.
   customerType = resolveCustomerTypeForSector({ sektor, customerType });
 
+  // Musteri Tipi business_partner disina cekildiginde is_ortagi_tipi
+  // (Entegrasyon/Donanim Firmasi) yetim kalmasin diye temizlenir.
+  const isOrtagiTipi = customerType === 'business_partner' ? (currentRow.is_ortagi_tipi ?? null) : null;
+
   const { error } = await admin
     .from('musteriler')
     .update({
@@ -166,6 +170,7 @@ export async function POST(req: Request) {
       sorumlu: resolvedOwner,
       owner_user_id: ownerUserId,
       customer_type: customerType,
+      is_ortagi_tipi: isOrtagiTipi,
       pipeline_policy: pipelinePolicy,
       is_kolu: isKolu,
       updated_by: actorName,
