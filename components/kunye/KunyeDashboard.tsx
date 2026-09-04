@@ -10,14 +10,18 @@ type KunyeDashboardProps = {
   sektorVeSorumlu?: string;
   aktifFazNo?: number | null;
   musteriId?: string;
+  customerType?: string | null;
+  isOrtagiTipi?: string | null;
   /** İş Kolu rozetten değiştirilince (kayıt sonrası) üst bileşen veriyi yeniler. */
   onIsKoluChanged?: (value: string) => void;
 };
 
 // İş Kolu seçenekleri: parametre servisinden; erişilemezse sabit yedek.
 const IS_KOLU_FALLBACK = ['Retail', 'Vertical', 'Bank'];
+// İş Ortağı Tipi seçenekleri (donanım/entegrasyon ayrımı).
+const IS_ORTAGI_TIPI_OPTIONS = ['Entegrasyon Firması', 'Donanım Firması'];
 
-export default function KunyeDashboard({ kunye, musteriAdi, sektorVeSorumlu, aktifFazNo, musteriId, onIsKoluChanged }: KunyeDashboardProps) {
+export default function KunyeDashboard({ kunye, musteriAdi, sektorVeSorumlu, aktifFazNo, musteriId, customerType, isOrtagiTipi, onIsKoluChanged }: KunyeDashboardProps) {
   const [segOverride, setSegOverride] = useState<{ firmaDurumu?: string; yonetimTipi?: string }>({});
 
   // İş Kolu — künye kartından tek tıkla değiştirilir. Kayıt yeri müşteri kartı
@@ -63,6 +67,37 @@ export default function KunyeDashboard({ kunye, musteriAdi, sektorVeSorumlu, akt
       setSavingIsKolu(false);
     }
   };
+  // İş Ortağı Tipi — sadece customer_type='business_partner' kayıtlarda görünür.
+  const [isOrtagiTipiOverride, setIsOrtagiTipiOverride] = useState<string | null>(null);
+  const [editingIsOrtagiTipi, setEditingIsOrtagiTipi] = useState(false);
+  const [savingIsOrtagiTipi, setSavingIsOrtagiTipi] = useState(false);
+  const [isOrtagiTipiMsg, setIsOrtagiTipiMsg] = useState('');
+  const currentIsOrtagiTipi = isOrtagiTipiOverride ?? (isOrtagiTipi || '');
+
+  const saveIsOrtagiTipi = async (value: string) => {
+    if (!musteriId || !value || value === currentIsOrtagiTipi) { setEditingIsOrtagiTipi(false); return; }
+    setSavingIsOrtagiTipi(true);
+    setIsOrtagiTipiMsg('');
+    try {
+      const res = await fetch('/api/crm/is-ortagi-tipi', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ musteriId, is_ortagi_tipi: value }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.message || 'İş Ortağı Tipi güncellenemedi.');
+      setIsOrtagiTipiOverride(String(data?.is_ortagi_tipi ?? value));
+      setEditingIsOrtagiTipi(false);
+      setIsOrtagiTipiMsg('İş Ortağı Tipi güncellendi.');
+      onIsKoluChanged?.(String(data?.is_ortagi_tipi ?? value));
+      window.setTimeout(() => setIsOrtagiTipiMsg(''), 2500);
+    } catch (err) {
+      setIsOrtagiTipiMsg(err instanceof Error ? err.message : 'İş Ortağı Tipi güncellenemedi.');
+    } finally {
+      setSavingIsOrtagiTipi(false);
+    }
+  };
+
   const [editingSeg, setEditingSeg] = useState(false);
   const [savingSeg, setSavingSeg] = useState(false);
   const [segMsg, setSegMsg] = useState('');
@@ -214,6 +249,42 @@ export default function KunyeDashboard({ kunye, musteriAdi, sektorVeSorumlu, akt
               {isKoluMsg ? (
                 <span className="kd-badge" style={{ background: 'rgba(255,255,255,0.10)', border: '1px solid rgba(255,255,255,0.2)', color: '#f8fafc' }}>
                   {isKoluMsg}
+                </span>
+              ) : null}
+              {customerType === 'business_partner' ? (
+                editingIsOrtagiTipi ? (
+                  <span className="kd-badge" style={{ background: 'rgba(168,85,247,0.22)', border: '1px solid rgba(216,180,254,0.55)', color: '#f3e8ff', gap: 6 }}>
+                    🔧
+                    <select
+                      autoFocus
+                      value={currentIsOrtagiTipi || IS_ORTAGI_TIPI_OPTIONS[0]}
+                      disabled={savingIsOrtagiTipi}
+                      onChange={(e) => void saveIsOrtagiTipi(e.target.value)}
+                      onBlur={() => { if (!savingIsOrtagiTipi) setEditingIsOrtagiTipi(false); }}
+                      aria-label="İş Ortağı Tipi seç"
+                      style={{ minHeight: 26, padding: '0 6px', borderRadius: 8, border: '1px solid rgba(216,180,254,0.55)', background: '#0f172a', color: '#f3e8ff', font: 'inherit', fontWeight: 800 }}
+                    >
+                      {IS_ORTAGI_TIPI_OPTIONS.map((value) => <option key={value} value={value}>{value}</option>)}
+                    </select>
+                    {savingIsOrtagiTipi ? <small style={{ opacity: 0.8 }}>kaydediliyor…</small> : null}
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    className="kd-badge"
+                    onClick={() => { if (musteriId) setEditingIsOrtagiTipi(true); }}
+                    disabled={!musteriId}
+                    title={musteriId ? 'İş Ortağı Tipini değiştir (Entegrasyon / Donanım)' : undefined}
+                    aria-label={`İş Ortağı Tipi: ${currentIsOrtagiTipi || 'Belirsiz'}. Değiştirmek için tıkla`}
+                    style={{ background: 'rgba(168,85,247,0.22)', border: '1px solid rgba(216,180,254,0.55)', color: '#f3e8ff', cursor: musteriId ? 'pointer' : 'default', font: 'inherit' }}
+                  >
+                    🔧 {currentIsOrtagiTipi || 'Tip Seç'} <span aria-hidden="true" style={{ opacity: 0.7, fontSize: '0.85em' }}>✎</span>
+                  </button>
+                )
+              ) : null}
+              {isOrtagiTipiMsg ? (
+                <span className="kd-badge" style={{ background: 'rgba(255,255,255,0.10)', border: '1px solid rgba(255,255,255,0.2)', color: '#f8fafc' }}>
+                  {isOrtagiTipiMsg}
                 </span>
               ) : null}
               {kunye?.satici_etiketi ? (

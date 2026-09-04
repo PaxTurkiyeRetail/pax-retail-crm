@@ -17,7 +17,7 @@ export async function GET(request: Request) {
     const admin = createPgAdminClient();
     const { data: musteri, error } = await admin
       .from('musteriler')
-      .select('id,musteri,sektor,entegrasyon_tipi,satis_olasiligi,sorumlu,owner_user_id')
+      .select('id,musteri,sektor,entegrasyon_tipi,satis_olasiligi,sorumlu,owner_user_id,customer_type,is_ortagi_tipi')
       .eq('id', musteriId)
       .maybeSingle();
 

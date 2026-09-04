@@ -12,6 +12,8 @@ type Customer = {
   sorumlu: string | null;
   aktif_faz_no?: number | null;
   aktif_faz_adi?: string | null;
+  customer_type?: string | null;
+  is_ortagi_tipi?: string | null;
 };
 
 export default function CustomerDetailPage() {
@@ -79,6 +81,8 @@ export default function CustomerDetailPage() {
         sektorVeSorumlu={[customer.sektor, customer.sorumlu ? `Sorumlu: ${customer.sorumlu}` : null].filter(Boolean).join(' • ')}
         aktifFazNo={customer.aktif_faz_no}
         musteriId={customer.id}
+        customerType={customer.customer_type}
+        isOrtagiTipi={customer.is_ortagi_tipi}
         onIsKoluChanged={() => void loadData()}
       />
 
