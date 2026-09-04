@@ -1,21 +1,30 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import '@/styles/live-board.css';
 import { WEEKLY_TARGET_LABELS, achievementPct } from '@/lib/reports/weekly-targets-shared';
 import {
+  ALERT_ORDER,
   LIVE_BOARD_RULES,
   LIVE_BOARD_SPEEDS,
   LIVE_BOARD_TIMING,
   TEAM_SLIDE_TITLES,
   agoLabel,
+  alertPanels,
+  buildPagePlan,
+  capacities,
   dueLabel,
   dueTone,
   fmtMoney,
+  layoutMetrics,
+  pageBounds,
+  pageCount,
+  pageSlice,
   slideDurationMs,
   slidePlan,
   staleTone,
   type AlertItem,
+  type Capacities,
   type Distribution,
   type Funnel,
   type HotItem,
@@ -42,6 +51,14 @@ import {
 //     duraklat · ← → gezin · F tam ekran · R yenile.
 //   • Renk dili (spec §15): yeşil = yolunda, turuncu = dikkat, kırmızı = aksiyon,
 //     mavi = devam eden süreç. Renk asla tek başına anlam taşımaz; yanında metin var.
+//
+// TAŞMA YOK — ÖLÇÜME DAYALI SAYFALAMA:
+//   Pano gövdesi ResizeObserver ile ölçülür → `capacities(yükseklik, genişlik)`
+//   her liste için kaç satırın sığdığını verir (satır yükseklikleri LayoutMetrics'te
+//   sabit; CSS aynı sayıları `--lb-*` değişkenlerinden okur) → sığmayan kayıtlar bir
+//   sonraki SAYFAYA taşınır ve ayrı slayt olur ("Seda Kesikoğlu 2/2", "Hot Pipeline 1/3").
+//   Böylece hiçbir kayıt gizlenmez, hiçbir şey kutudan taşmaz. Gövde küçükse
+//   (< COMPACT_BODY_HEIGHT) kompakt ölçüler devreye girer; büyük pencerede punto büyür.
 
 const SPEED_KEY = 'pax-live-board-speed';
 const CONTROLS_HIDE_MS = 3000;
@@ -80,6 +97,7 @@ function readSpeed(): LiveBoardSpeed {
   } catch {}
   return 'normal';
 }
+const SHORT_LABELS: Record<string, string> = { pulse: 'PULSE', portfolio: 'PORTFÖY', hot: 'HOT', poc: 'POC', quotes: 'TEKLİF', alerts: 'UYARI', jira: 'JIRA' };
 const TONE_WORD: Record<Tone, string> = { ok: 'yolunda', warn: 'dikkat', danger: 'aksiyon', info: 'devam ediyor', neutral: '' };
 
 /* --- Küçük parçalar ----------------------------------------------------- */
@@ -104,7 +122,7 @@ function Ring({ pct, tone, big, sub, size = 150, stroke = 12 }: { pct: number | 
 }
 
 /** Parça-bütün halkası (≤ 6 dilim) + açıklama listesi. Dilimler arası 2px yüzey boşluğu. */
-function Donut({ rows, center, centerLabel, colors, size = 168 }: { rows: Distribution; center: string; centerLabel: string; colors: string[]; size?: number }) {
+function Donut({ rows, shown, center, centerLabel, colors, size = 168 }: { rows: Distribution; shown?: Distribution; center: string; centerLabel: string; colors: string[]; size?: number }) {
   const total = rows.reduce((sum, row) => sum + row.value, 0);
   const radius = 40;
   const circumference = 2 * Math.PI * radius;
@@ -129,14 +147,17 @@ function Donut({ rows, center, centerLabel, colors, size = 168 }: { rows: Distri
         <div className="lb-ring-center"><strong>{center}</strong><span>{centerLabel}</span></div>
       </div>
       <div className="lb-legend">
-        {rows.map((row, index) => (
-          <div className="lb-legend-row" key={row.label}>
-            <i style={{ background: colors[index % colors.length] }} />
-            <span>{row.label}</span>
-            <strong>{fmt(row.value)}</strong>
-            <em>{total ? `%${Math.round((row.value / total) * 100)}` : ''}</em>
-          </div>
-        ))}
+        {(shown ?? rows).map((row) => {
+          const index = rows.findIndex((item) => item.label === row.label);
+          return (
+            <div className="lb-legend-row" key={row.label}>
+              <i style={{ background: colors[Math.max(0, index) % colors.length] }} />
+              <span>{row.label}</span>
+              <strong>{fmt(row.value)}</strong>
+              <em>{total ? `%${Math.round((row.value / total) * 100)}` : ''}</em>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -194,7 +215,7 @@ function Kpi({ label, value, sub, tone = 'neutral', small }: { label: string; va
 /** Ticari bant: tek satırda kişinin/takımın para durumu. */
 function MoneyBand({ r, pipeline, weekQuotes }: { r: RevenueBlock; pipeline: { poc: number }; weekQuotes: number }) {
   const items: Array<{ k: string; v: string; n: string; tone?: Tone }> = [
-    { k: 'YTD Ciro', v: r.target != null ? `${fmtMoney(r.actualYtd)} / ${fmtMoney(r.target)}` : fmtMoney(r.actualYtd), n: r.target != null ? `%${r.attainmentPct ?? 0} · zaman %${r.yearElapsedPct}` : 'yıllık hedef girilmedi', tone: r.pace ?? 'neutral' },
+    { k: 'YTD Ciro', v: fmtMoney(r.actualYtd), n: r.target != null ? `hedef ${fmtMoney(r.target)} · %${r.attainmentPct ?? 0}` : 'yıllık hedef girilmedi', tone: r.pace ?? 'neutral' },
     { k: 'Forecast · yıl sonu', v: fmtMoney(r.forecast), n: r.forecastPct != null ? `hedefin %${r.forecastPct}'i` : 'gerçekleşen + ağırlıklı pipeline' },
     { k: 'Gap', v: r.forecastGap == null ? '—' : fmtMoney(r.forecastGap, { sign: true }), n: r.forecastGap == null ? 'hedef yok' : r.forecastGap >= 0 ? 'hedefin üstünde' : 'hedefin altında', tone: r.forecastGap == null ? 'neutral' : r.forecastGap >= 0 ? 'ok' : 'danger' },
     { k: 'Pipeline', v: fmtMoney(r.pipeline), n: `${fmt(r.openQuotes)} açık teklif · ağırlıklı ${fmtMoney(r.weightedPipeline)}` },
@@ -218,17 +239,17 @@ function MoneyBand({ r, pipeline, weekQuotes }: { r: RevenueBlock; pipeline: { p
 /** Dönüşüm satırı: Aktivite → Firma → Faz ilerledi → Teklif → Sipariş. */
 function FunnelRow({ f }: { f: Funnel }) {
   const steps = [
-    { n: f.activities, l: 'Aktivite' },
-    { n: f.customers, l: 'Firma' },
-    { n: f.advanced, l: 'Faz İlerledi' },
-    { n: f.quotes, l: 'Teklif' },
-    { n: f.orders, l: 'Sipariş' },
+    { n: f.activities, l: 'Aktivite', t: 'Bu hafta girilen aktivite' },
+    { n: f.customers, l: 'Firma', t: 'Temas edilen tekil firma' },
+    { n: f.advanced, l: 'Faz ↑', t: 'Fazı ilerleyen müşteri' },
+    { n: f.quotes, l: 'Teklif', t: 'Bu hafta oluşturulan teklif' },
+    { n: f.orders, l: 'Sipariş', t: 'Kazanılan teklif ya da Sipariş fazına geçen müşteri' },
   ];
   return (
     <div className="lb-funnel" aria-label="Haftalık dönüşüm">
       {steps.map((step, index) => (
         <div className="lb-funnel-step" key={step.l}>
-          <div className={`lb-funnel-box ${step.n === 0 && index > 0 ? 'zero' : ''}`}>
+          <div className={`lb-funnel-box ${step.n === 0 && index > 0 ? 'zero' : ''}`} title={step.t}>
             <strong>{fmt(step.n)}</strong>
             <span>{step.l}</span>
           </div>
@@ -294,8 +315,8 @@ function HotCard({ item, showOwner }: { item: HotItem; showOwner?: boolean }) {
   );
 }
 
-function ActivityList({ rows, todayKey }: { rows: LiveActivity[]; todayKey: string }) {
-  if (!rows.length) return <div className="lb-muted">Bu hafta henüz hareket yok.</div>;
+function ActivityList({ rows, todayKey, empty }: { rows: LiveActivity[]; todayKey: string; empty?: string }) {
+  if (!rows.length) return <div className="lb-muted">{empty ?? 'Bu hafta henüz hareket yok.'}</div>;
   return (
     <div className="lb-list">
       {rows.map((row) => (
@@ -325,16 +346,22 @@ function ActivityList({ rows, todayKey }: { rows: LiveActivity[]; todayKey: stri
 
 /* --- Takım slaytları ------------------------------------------------------ */
 
-function PulseSlide({ data }: { data: LiveBoardPayload }) {
+function PulseSlide({ data, caps, page, compact }: { data: LiveBoardPayload; caps: Capacities; page: number; compact?: boolean }) {
   const { team, owners, range } = data;
+  const leaderPages = Math.max(1, Math.ceil(owners.length / Math.max(1, caps.leader)));
+  // Bölünmüş Pulse: ilk sayfa(lar) ciro + sıralama, son sayfa aktivite + dönüşüm.
+  const showActivity = !caps.pulseSplit || page >= leaderPages;
+  const showRevenue = !caps.pulseSplit || page < leaderPages;
+  const shownOwners = pageSlice(owners, Math.min(page, leaderPages - 1), caps.leader);
   const r = team.revenue;
   const attainmentBig = r.attainmentPct == null ? fmtMoney(r.actualYtd) : `%${r.attainmentPct}`;
   return (
-    <div className="lb-slide lb-pulse" key="pulse">
+    <div className={`lb-slide lb-pulse ${caps.pulseSplit ? (showActivity ? 'part-activity' : 'part-revenue') : ''}`} key="pulse">
+      {showRevenue ? (
       <div className="lb-card lb-revenue">
         <div className="lb-card-head"><h3>Ciro · {r.year}</h3><span>gerçekleşen = kazanılan teklifler · forecast = gerçekleşen + geçerli açık tekliflerin ağırlıklı değeri</span></div>
         <div className="lb-revenue-body">
-          <Ring pct={r.attainmentPct} tone={r.pace ?? 'neutral'} big={attainmentBig} sub={r.target != null ? `${fmtMoney(r.actualYtd)} / ${fmtMoney(r.target)}` : 'hedef yok'} size={178} stroke={11} />
+          <Ring pct={r.attainmentPct} tone={r.pace ?? 'neutral'} big={attainmentBig} sub={r.target != null ? `${fmtMoney(r.actualYtd)} / ${fmtMoney(r.target)}` : 'hedef yok'} size={compact ? 150 : 178} stroke={compact ? 10 : 11} />
           <div className="lb-kpis four">
             <Kpi label="Yıllık Hedef" value={fmtMoney(r.target)} sub={r.deviceTarget ? `${fmt(r.deviceTarget)} cihaz` : 'Kullanıcı Yönetimi → Hedefler'} small />
             <Kpi label="Kalan Hedef" value={fmtMoney(r.remaining)} sub={r.deviceTarget ? `${fmt(r.deviceActualYtd)} / ${fmt(r.deviceTarget)} cihaz` : `${fmt(r.deviceActualYtd)} cihaz kazanıldı`} small />
@@ -348,12 +375,14 @@ function PulseSlide({ data }: { data: LiveBoardPayload }) {
           <PaceCompare r={r} />
         </div>
       </div>
+      ) : null}
 
+      {showRevenue ? (
       <div className="lb-card lb-leader">
         <div className="lb-card-head"><h3>Kim hedefinde, kim geride?</h3><span>{team.ownerCount} kişi · {range.label}</span></div>
-        {owners.length ? (
+        {shownOwners.length ? (
           <div className="lb-board">
-            {owners.map((row) => {
+            {shownOwners.map((row) => {
               const rev = row.revenue;
               const hasRevenue = rev.target != null;
               const pct = hasRevenue ? rev.attainmentPct : row.achievementPct;
@@ -372,8 +401,10 @@ function PulseSlide({ data }: { data: LiveBoardPayload }) {
                       <span>Aktivite <b>{fmt(row.actual.totalActivities)}{row.target.totalActivities ? ` / ${fmt(row.target.totalActivities)}` : ''}</b></span>
                       <span>Forecast <b className={rev.forecastPct != null && rev.forecastPct < 100 ? 'tone-warn' : ''}>{rev.forecastPct != null ? `%${rev.forecastPct}` : fmtMoney(rev.forecast)}</b></span>
                       <span>Pipeline <b>{fmtMoney(rev.weightedPipeline)}</b></span>
-                      <span>Stale <b className={row.pipeline.staleCritical ? 'tone-danger' : ''}>{fmt(row.pipeline.stale)}</b></span>
-                      <span>Gecikmiş <b className={row.pipeline.overdueActions ? 'tone-danger' : ''}>{fmt(row.pipeline.overdueActions)}</b></span>
+                      <span>
+                        Stale <b className={row.pipeline.staleCritical ? 'tone-danger' : ''}>{fmt(row.pipeline.stale)}</b>
+                        {' · '}Gecikmiş <b className={row.pipeline.overdueActions ? 'tone-danger' : ''}>{fmt(row.pipeline.overdueActions)}</b>
+                      </span>
                     </div>
                   </div>
                   <div className={`lb-row-num tone-${tone}`}>{pct == null ? '—' : `%${pct}`}<small>{hasRevenue ? 'ciro' : 'aktivite'}</small></div>
@@ -383,11 +414,13 @@ function PulseSlide({ data }: { data: LiveBoardPayload }) {
           </div>
         ) : <div className="lb-muted">Rotasyonda satıcı yok (account_manager rolü).</div>}
       </div>
+      ) : null}
 
+      {showActivity ? (
       <div className="lb-card">
         <div className="lb-card-head"><h3>Aktivite · Hafta</h3><span>{range.label}</span></div>
         <div className="lb-activity-wrap">
-          <Ring pct={team.achievementPct} tone={pctTone(team.achievementPct)} big={team.achievementPct == null ? fmt(team.actual.totalActivities) : `%${team.achievementPct}`} sub={team.target.totalActivities ? `${fmt(team.actual.totalActivities)} / ${fmt(team.target.totalActivities)}` : 'hedef yok'} size={220} />
+          <Ring pct={team.achievementPct} tone={pctTone(team.achievementPct)} big={team.achievementPct == null ? fmt(team.actual.totalActivities) : `%${team.achievementPct}`} sub={team.target.totalActivities ? `${fmt(team.actual.totalActivities)} / ${fmt(team.target.totalActivities)}` : 'hedef yok'} size={compact ? 124 : 148} />
           <div className="lb-channels compact">
             {WEEKLY_TARGET_LABELS.map(({ key, label }) => (
               <div className="lb-channel" key={key}>
@@ -398,13 +431,15 @@ function PulseSlide({ data }: { data: LiveBoardPayload }) {
             ))}
             <div className="lb-channel total">
               <div className="lb-channel-label">Tekil firma</div>
-              <div className="lb-channel-note">bugün girilen aktivite: <b>{fmt(team.todayActivities)}</b></div>
+              <div className="lb-channel-note">bugün <b>{fmt(team.todayActivities)}</b> aktivite</div>
               <div className="lb-channel-num">{fmt(team.actual.uniqueCustomers)}</div>
             </div>
           </div>
         </div>
       </div>
+      ) : null}
 
+      {showActivity ? (
       <div className="lb-card">
         <div className="lb-card-head"><h3>Dönüşüm & Pipeline</h3><span>bu hafta · aktif süreç</span></div>
         <FunnelRow f={team.funnel} />
@@ -416,6 +451,7 @@ function PulseSlide({ data }: { data: LiveBoardPayload }) {
           {team.jira ? <Kpi label="Jira · Açık Ticket" value={fmt(team.jira.open)} sub={`${fmt(team.jira.customerWaiting)} müşteri bekleyen · ${fmt(team.jira.created)} yeni · ${fmt(team.jira.closed)} kapanan`} tone={team.jira.open ? 'warn' : 'ok'} small /> : null}
         </div>
       </div>
+      ) : null}
     </div>
   );
 }
@@ -437,9 +473,10 @@ function useIsDark() {
   return dark;
 }
 
-function PortfolioSlide({ data }: { data: LiveBoardPayload }) {
+function PortfolioSlide({ data, caps, page }: { data: LiveBoardPayload; caps: Capacities; page: number }) {
   const dark = useIsDark();
   const { portfolio } = data;
+  const cap = caps.portfolioRows;
   // Faz halkası: ≤ 6 dilim — Fazsız gri, sıralı gruplar tek renk rampası (ordinal).
   const phaseRows = useMemo(() => {
     const merged: Distribution = [];
@@ -457,19 +494,24 @@ function PortfolioSlide({ data }: { data: LiveBoardPayload }) {
   const kunyeColors = portfolio.kunye.map((row) => (row.tone === 'ok' ? 'var(--lb-ok)' : row.tone === 'warn' ? 'var(--lb-warn)' : dark ? '#475569' : '#cbd5e1'));
   const withPhase = phaseRows.filter((r) => r.label !== 'Fazsız').reduce((s, r) => s + r.value, 0);
   const kunyeDone = portfolio.kunye.find((r) => r.label === 'Tamam')?.value ?? 0;
+  // Her kart kendi sayfa sayısına göre döner → kısa liste bitince kart boş kalmaz.
+  const ownerPage = page % pageCount(portfolio.byOwner.length, cap);
+  const sectorPage = page % pageCount(portfolio.bySector.length, cap);
+  const ownerBounds = pageBounds(portfolio.byOwner.length, ownerPage, cap);
+  const sectorBounds = pageBounds(portfolio.bySector.length, sectorPage, cap);
   return (
     <div className="lb-slide lb-portfolio" key="portfolio">
       <div className="lb-card">
-        <div className="lb-card-head"><h3>Account Yapısı</h3><span>{fmt(portfolio.total)} firma · sorumlu başına</span></div>
-        <HBars rows={portfolio.byOwner} total={portfolio.total} />
+        <div className="lb-card-head"><h3>Account Yapısı</h3><span>{fmt(portfolio.total)} firma · sorumlu başına{ownerBounds.paged ? ` · ${ownerBounds.from}–${ownerBounds.to} / ${portfolio.byOwner.length}` : ''}</span></div>
+        <HBars rows={pageSlice(portfolio.byOwner, ownerPage, cap)} total={portfolio.total} maxRows={cap} />
       </div>
       <div className="lb-card">
         <div className="lb-card-head"><h3>Faz Dağılımı</h3><span>portföyün satış sürecindeki yeri</span></div>
-        <Donut rows={phaseRows} colors={phaseColors} center={`%${portfolio.total ? Math.round((withPhase / portfolio.total) * 100) : 0}`} centerLabel="fazı girilmiş" size={250} />
+        <Donut rows={phaseRows} shown={pageSlice(phaseRows, page % pageCount(phaseRows.length, cap), cap)} colors={phaseColors} center={`%${portfolio.total ? Math.round((withPhase / portfolio.total) * 100) : 0}`} centerLabel="fazı girilmiş" size={250} />
       </div>
       <div className="lb-card">
-        <div className="lb-card-head"><h3>Sektör Dağılımı</h3><span>iş ortakları hariç</span></div>
-        <HBars rows={portfolio.bySector} />
+        <div className="lb-card-head"><h3>Sektör Dağılımı</h3><span>iş ortakları hariç{sectorBounds.paged ? ` · ${sectorBounds.from}–${sectorBounds.to} / ${portfolio.bySector.length}` : ''}</span></div>
+        <HBars rows={pageSlice(portfolio.bySector, sectorPage, cap)} maxRows={cap} />
       </div>
       <div className="lb-card">
         <div className="lb-card-head"><h3>Künye Durumu</h3><span>veri kalitesi</span></div>
@@ -479,12 +521,14 @@ function PortfolioSlide({ data }: { data: LiveBoardPayload }) {
   );
 }
 
-function HotSlide({ data }: { data: LiveBoardPayload }) {
-  const rows = data.team.hot;
+function HotSlide({ data, caps, page }: { data: LiveBoardPayload; caps: Capacities; page: number }) {
+  const all = data.team.hot;
+  const rows = pageSlice(all, page, caps.tableRows);
+  const bounds = pageBounds(all.length, page, caps.tableRows);
   return (
     <div className="lb-slide lb-single" key="hot">
       <div className="lb-card lb-table-card">
-        <div className="lb-card-head"><h3>Sonuçlanmaya yakın {rows.length} fırsat</h3><span>teklif → sözleşme fazı · açık engel · değeri olan kayıtlar · sıra: vade + değer</span></div>
+        <div className="lb-card-head"><h3>Sonuçlanmaya yakın {all.length} fırsat{bounds.paged ? ` · ${bounds.from}–${bounds.to}` : ''}</h3><span>teklif → sözleşme fazı · açık engel · değeri olan kayıtlar · sıra: vade + değer</span></div>
         {rows.length ? (
           <div className="lb-table lb-hot-table">
             <div className="lb-tr lb-th"><span>Müşteri</span><span>Faz</span><span>Model / Adet</span><span>Değer</span><span>Son hareket</span><span>Next action</span><span>Hedef</span></div>
@@ -494,9 +538,10 @@ function HotSlide({ data }: { data: LiveBoardPayload }) {
                 <span><PhaseChip no={item.phaseNo} name={item.phaseName} /></span>
                 <span className="lb-td-models">{item.models || (item.quantity ? `${fmt(item.quantity)} adet` : '—')}</span>
                 <span className="lb-td-money">
-                  {item.quoteAmount ? <b>Teklif {fmtMoney(item.quoteAmount)}</b> : null}
-                  {item.potentialValue ? <b>≈{fmtMoney(item.potentialValue)} liste</b> : null}
-                  {item.weightedValue ? <small>ağırlıklı {fmtMoney(item.weightedValue)}</small> : !item.quoteAmount && !item.potentialValue ? <small>değer yok</small> : null}
+                  {item.quoteAmount
+                    ? <b>Teklif {fmtMoney(item.quoteAmount)}</b>
+                    : item.potentialValue ? <b>≈{fmtMoney(item.potentialValue)} liste</b> : <b className="lb-muted">değer yok</b>}
+                  {item.weightedValue ? <small>ağırlıklı {fmtMoney(item.weightedValue)}</small> : item.quoteAmount && item.potentialValue ? <small>≈{fmtMoney(item.potentialValue)} liste</small> : null}
                 </span>
                 <span className={`lb-td-ago tone-${staleTone(item.daysSinceActivity)}`}>{agoLabel(item.daysSinceActivity)}{item.lastActivityLabel ? <small>{item.lastActivityLabel}</small> : null}</span>
                 <span className="lb-td-next">{item.nextAction ?? <i className="lb-muted">girilmedi</i>}{item.actionOwner ? <small>{item.actionOwner}</small> : null}</span>
@@ -510,15 +555,17 @@ function HotSlide({ data }: { data: LiveBoardPayload }) {
   );
 }
 
-function PocSlide({ data }: { data: LiveBoardPayload }) {
-  const rows = data.team.poc;
-  const counts = { danger: rows.filter((r) => r.tone === 'danger').length, warn: rows.filter((r) => r.tone === 'warn').length };
+function PocSlide({ data, caps, page }: { data: LiveBoardPayload; caps: Capacities; page: number }) {
+  const all = data.team.poc;
+  const rows = pageSlice(all, page, caps.tableRows);
+  const counts = { danger: all.filter((r) => r.tone === 'danger').length, warn: all.filter((r) => r.tone === 'warn').length };
+  const pocBounds = pageBounds(all.length, page, caps.tableRows);
   return (
     <div className="lb-slide lb-single" key="poc">
       <div className="lb-card lb-table-card">
         <div className="lb-card-head">
           <h3>Konsinye · POC · Uçtan Uca Test · Rollout</h3>
-          <span>{fmt(data.team.pipeline.poc)} POC · {fmt(data.team.pipeline.rollout)} rollout · {counts.danger} gecikmiş · {counts.warn} dikkat</span>
+          <span>{fmt(data.team.pipeline.poc)} POC · {fmt(data.team.pipeline.rollout)} rollout · {counts.danger} gecikmiş · {counts.warn} dikkat{pocBounds.paged ? ` · ${pocBounds.from}–${pocBounds.to} / ${all.length}` : ''}</span>
         </div>
         {rows.length ? (
           <div className="lb-table lb-poc-table">
@@ -541,9 +588,17 @@ function PocSlide({ data }: { data: LiveBoardPayload }) {
   );
 }
 
-function QuotesSlide({ data }: { data: LiveBoardPayload }) {
+function QuotesSlide({ data, caps, page }: { data: LiveBoardPayload; caps: Capacities; page: number }) {
   const dark = useIsDark();
   const { quotes, forecast, team } = data;
+  const openRows = pageSlice(quotes.open, page, caps.openQuotes);
+  const openBounds = pageBounds(quotes.open.length, page, caps.openQuotes);
+  // Kapanan teklif listesi kısa: açık teklifler sayfalanırken bu kart boş
+  // kalmasın diye sayfa numarası kendi sayfa sayısına göre döner (mod).
+  const closedPages = pageCount(quotes.recentClosed.length, caps.closedQuotes);
+  const closedPage = closedPages > 0 ? page % closedPages : 0;
+  const closedRows = pageSlice(quotes.recentClosed, closedPage, caps.closedQuotes);
+  const closedBounds = pageBounds(quotes.recentClosed.length, closedPage, caps.closedQuotes);
   const r = team.revenue;
   const maxMonth = Math.max(1, ...forecast.byMonth.map((m) => m.quantity));
   return (
@@ -557,10 +612,13 @@ function QuotesSlide({ data }: { data: LiveBoardPayload }) {
         <Kpi label={`Forecast ${forecast.year} · adet`} value={fmt(forecast.totalQuantity)} sub={`ağırlıklı ${fmt(forecast.weightedQuantity)} · CRM forecast modülü`} />
       </div>
       <div className="lb-card">
-        <div className="lb-card-head"><h3>Açık Teklifler</h3><span>tutara göre · en büyük {Math.min(6, quotes.open.length)}</span></div>
-        {quotes.open.length ? (
+        <div className="lb-card-head">
+          <h3>Açık Teklifler</h3>
+          <span>tutara göre · {openBounds.paged ? `${openBounds.from}–${openBounds.to} / ${quotes.open.length}` : `${quotes.open.length} teklif`}</span>
+        </div>
+        {openRows.length ? (
           <div className="lb-table lb-quote-table">
-            {quotes.open.slice(0, 6).map((q) => (
+            {openRows.map((q) => (
               <div className={`lb-tr ${q.expired ? 'tone-warn' : 'tone-info'}`} key={q.quoteNo}>
                 <span className="lb-td-title"><strong>{q.musteri}</strong><em>{q.owner ?? '—'} · {q.quoteNo}</em></span>
                 <span className="lb-td-money"><b>{fmtMoney(q.amount)}</b><small>{fmt(q.devices)} cihaz</small></span>
@@ -569,7 +627,25 @@ function QuotesSlide({ data }: { data: LiveBoardPayload }) {
               </div>
             ))}
           </div>
-        ) : <div className="lb-muted">Açık teklif yok.</div>}
+        ) : <div className="lb-muted">{quotes.open.length ? 'Bu sayfada teklif yok.' : 'Açık teklif yok.'}</div>}
+      </div>
+      <div className="lb-card lb-closed">
+      <div className="lb-card-head">
+        <h3>Son Kapananlar{closedBounds.paged ? ` ${closedPage + 1}/${closedPages}` : ''}</h3>
+        <span>{quotes.lostReasons.length ? `kayıp nedenleri: ${quotes.lostReasons.map((x) => `${x.label} ${x.value}`).join(' · ')}` : 'kayıp yok'}</span>
+      </div>
+      {closedRows.length ? (
+        <div className="lb-table lb-quote-table">
+          {closedRows.map((q) => (
+            <div className={`lb-tr ${q.status === 'won' ? 'tone-ok' : 'tone-danger'}`} key={q.quoteNo}>
+              <span className="lb-td-title"><strong>{q.musteri}</strong><em>{q.owner ?? '—'} · {q.quoteNo}</em></span>
+              <span className="lb-td-money"><b>{fmtMoney(q.amount)}</b><small>{fmt(q.devices)} cihaz</small></span>
+              <span><Pill tone={q.status === 'won' ? 'ok' : 'danger'}>{q.status === 'won' ? 'Kazanıldı' : q.reason ?? 'Kaybedildi'}</Pill></span>
+              <span className="lb-td-due"><small>{fmtDate(q.date)}</small></span>
+            </div>
+          ))}
+        </div>
+      ) : <div className="lb-muted">Bu yıl kapanan teklif yok.</div>}
       </div>
       <div className="lb-stack">
         <div className="lb-card">
@@ -577,7 +653,7 @@ function QuotesSlide({ data }: { data: LiveBoardPayload }) {
           {quotes.byOwner.length ? (
             <div className="lb-table lb-owner-quotes">
               <div className="lb-tr lb-th"><span>Satıcı</span><span>Açık</span><span>Ağırlıklı</span><span>Kazanılan</span><span>Kayıp</span></div>
-              {quotes.byOwner.map((row) => (
+              {quotes.byOwner.slice(0, 6).map((row) => (
                 <div className="lb-tr" key={row.owner}>
                   <span className="lb-td-title"><strong>{row.owner}</strong></span>
                   <span>{fmt(row.open)}<small>{fmtMoney(row.openAmount)}</small></span>
@@ -606,21 +682,6 @@ function QuotesSlide({ data }: { data: LiveBoardPayload }) {
             </div>
           ) : <div className="lb-muted">Bu yıl için forecast girilmedi.</div>}
         </div>
-        <div className="lb-card lb-closed">
-        <div className="lb-card-head"><h3>Son Kapananlar</h3><span>{quotes.lostReasons.length ? `kayıp nedenleri: ${quotes.lostReasons.map((x) => `${x.label} ${x.value}`).join(' · ')}` : 'kayıp yok'}</span></div>
-        {quotes.recentClosed.length ? (
-          <div className="lb-table lb-quote-table">
-            {quotes.recentClosed.slice(0, 4).map((q) => (
-              <div className={`lb-tr ${q.status === 'won' ? 'tone-ok' : 'tone-danger'}`} key={q.quoteNo}>
-                <span className="lb-td-title"><strong>{q.musteri}</strong><em>{q.owner ?? '—'} · {q.quoteNo}</em></span>
-                <span className="lb-td-money"><b>{fmtMoney(q.amount)}</b><small>{fmt(q.devices)} cihaz</small></span>
-                <span><Pill tone={q.status === 'won' ? 'ok' : 'danger'}>{q.status === 'won' ? 'Kazanıldı' : q.reason ?? 'Kaybedildi'}</Pill></span>
-                <span className="lb-td-due"><small>{fmtDate(q.date)}</small></span>
-              </div>
-            ))}
-          </div>
-        ) : <div className="lb-muted">Bu yıl kapanan teklif yok.</div>}
-      </div>
       </div>
     </div>
   );
@@ -635,11 +696,11 @@ const ALERT_META: Record<AlertItem['kind'], { title: string; hint: string }> = {
   contract_waiting: { title: 'Contract Waiting', hint: 'sözleşme fazında bekleyen' },
   expired_quote: { title: 'Süresi Dolan Teklif', hint: 'kapatılmamış açık teklif' },
 };
-const ALERT_ORDER: AlertItem['kind'][] = ['overdue', 'poc_delay', 'stale', 'target_gap', 'customer_waiting', 'contract_waiting', 'expired_quote'];
 
-function AlertsSlide({ data }: { data: LiveBoardPayload }) {
+function AlertsSlide({ data, caps, page }: { data: LiveBoardPayload; caps: Capacities; page: number }) {
   const { alerts, alertCounts } = data.team;
-  const groups = ALERT_ORDER.map((kind) => ({ kind, rows: alerts.filter((a) => a.kind === kind), count: alertCounts[kind] })).filter((g) => g.count > 0);
+  const panels = alertPanels(alerts, alertCounts, caps.alertItems, ALERT_ORDER);
+  const shown = pageSlice(panels, page, caps.alertGroups);
   return (
     <div className="lb-slide lb-alerts" key="alerts">
       <div className="lb-alert-chips">
@@ -649,13 +710,16 @@ function AlertsSlide({ data }: { data: LiveBoardPayload }) {
           </div>
         ))}
       </div>
-      {groups.length ? (
+      {shown.length ? (
         <div className="lb-alert-groups">
-          {groups.map((group) => (
-            <div className="lb-card" key={group.kind}>
-              <div className="lb-card-head"><h3>{ALERT_META[group.kind].title} · {fmt(group.count)}</h3><span>{ALERT_META[group.kind].hint}</span></div>
+          {shown.map((panel) => (
+            <div className="lb-card" key={`${panel.kind}-${panel.part}`}>
+              <div className="lb-card-head">
+                <h3>{ALERT_META[panel.kind].title} · {fmt(panel.total)}{panel.parts > 1 ? ` · ${panel.part + 1}/${panel.parts}` : ''}</h3>
+                <span>{ALERT_META[panel.kind].hint}</span>
+              </div>
               <div className="lb-list">
-                {group.rows.map((a, index) => (
+                {panel.rows.map((a, index) => (
                   <div className={`lb-item tone-${a.tone}`} key={`${a.kind}-${a.title}-${index}`}>
                     <div className="lb-item-main">
                       <div className="lb-item-title">{a.title}{a.owner && a.owner !== a.title ? <em> · {a.owner}</em> : null}</div>
@@ -664,7 +728,6 @@ function AlertsSlide({ data }: { data: LiveBoardPayload }) {
                     {a.days != null ? <div className="lb-item-side"><Pill tone={a.tone}>{a.kind === 'overdue' || a.kind === 'poc_delay' ? `${a.days} gün gecikti` : a.kind === 'customer_waiting' ? `${a.days} gün önce` : `${a.days} gün hareketsiz`}</Pill></div> : null}
                   </div>
                 ))}
-                {group.count > group.rows.length ? <div className="lb-muted">… ve {group.count - group.rows.length} kayıt daha</div> : null}
               </div>
             </div>
           ))}
@@ -694,8 +757,18 @@ function JiraSlide({ data }: { data: LiveBoardPayload }) {
 
 /* --- Kişi slaytı (Sales Performance) --------------------------------------- */
 
-function OwnerSlide({ owner, todayKey }: { owner: LiveOwner; todayKey: string }) {
+function OwnerSlide({ owner, todayKey, caps, page, compact }: { owner: LiveOwner; todayKey: string; caps: Capacities; page: number; compact: boolean }) {
   const r = owner.revenue;
+  // Her liste kendi sayfa sayısına göre döner: kısa liste bitince kart boş
+  // kalmaz, baştan gösterilir (uzun liste sayfalanmaya devam eder).
+  const hotPages = pageCount(owner.hot.length, caps.hot);
+  const recentPages = pageCount(owner.recentActivities.length, caps.recent);
+  const hotPage = page % hotPages;
+  const recentPage = page % recentPages;
+  const hotRows = pageSlice(owner.hot, hotPage, caps.hot);
+  const recentRows = pageSlice(owner.recentActivities, recentPage, caps.recent);
+  const hotBounds = pageBounds(owner.hot.length, hotPage, caps.hot);
+  const recentBounds = pageBounds(owner.recentActivities.length, recentPage, caps.recent);
   const hasRevenueTarget = r.target != null;
   const ringPct = hasRevenueTarget ? r.attainmentPct : owner.achievementPct;
   const ringTone: Tone = hasRevenueTarget ? (r.pace ?? 'neutral') : pctTone(owner.achievementPct);
@@ -715,7 +788,7 @@ function OwnerSlide({ owner, todayKey }: { owner: LiveOwner; todayKey: string })
             tone={ringTone}
             big={ringPct == null ? (hasRevenueTarget ? fmtMoney(r.actualYtd) : fmt(owner.actual.totalActivities)) : `%${ringPct}`}
             sub={hasRevenueTarget ? `${fmtMoney(r.actualYtd)} / ${fmtMoney(r.target)}` : owner.target.totalActivities ? `${fmt(owner.actual.totalActivities)} / ${fmt(owner.target.totalActivities)}` : 'hedef yok'}
-            size={156}
+            size={compact ? 126 : 156}
           />
           {!hasRevenueTarget
             ? <span className="lb-ring-note">Yıllık ciro hedefi girilmedi</span>
@@ -757,14 +830,22 @@ function OwnerSlide({ owner, todayKey }: { owner: LiveOwner; todayKey: string })
           <FunnelRow f={owner.funnel} />
         </div>
         <div className="lb-card lb-grow">
-          <div className="lb-card-head"><h3>Son Hareketler</h3><span>bu hafta · faz etkisiyle</span></div>
-          <ActivityList rows={owner.recentActivities} todayKey={todayKey} />
+          <div className="lb-card-head">
+            <h3>Son Hareketler</h3>
+            <span>bu hafta · faz etkisiyle{recentBounds.paged ? ` · ${recentBounds.from}–${recentBounds.to} / ${owner.recentActivities.length}` : ''}</span>
+          </div>
+          <ActivityList rows={recentRows} todayKey={todayKey} />
         </div>
       </div>
 
       <div className="lb-card lb-hot-col">
-        <div className="lb-card-head"><h3>Hot Pipeline</h3><span>{owner.hot.length ? `en kritik ${owner.hot.length}` : ''}</span></div>
-        {owner.hot.length ? owner.hot.map((item) => <HotCard item={item} key={item.customerId} />) : <div className="lb-muted">Sonuçlanmaya yakın fırsat yok — teklif / forecast / engel kaydı girilince burada görünür.</div>}
+        <div className="lb-card-head">
+          <h3>Hot Pipeline</h3>
+          <span>{owner.hot.length ? (hotBounds.paged ? `${hotBounds.from}–${hotBounds.to} / ${owner.hot.length}` : `${owner.hot.length} fırsat`) : ''}</span>
+        </div>
+        {hotRows.length
+          ? hotRows.map((item) => <HotCard item={item} key={item.customerId} />)
+          : <div className="lb-muted">Sonuçlanmaya yakın fırsat yok — teklif / forecast / engel kaydı girilince burada görünür.</div>}
       </div>
     </div>
   );
@@ -787,11 +868,37 @@ export default function LiveBoard({ active }: { active: boolean }) {
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
   const hideTimer = useRef<number | null>(null);
   const wakeLock = useRef<any>(null);
+  const bodyRef = useRef<HTMLDivElement | null>(null);
+  // Gövdenin gerçek iç ölçüsü (padding düşülmüş). Kapasite hesabı buradan çıkar.
+  const [box, setBox] = useState({ h: 0, w: 0 });
+
+  // Ölçüm: pencere/tam ekran/zoom değişince yeniden. Ölçüm bitene kadar (h=0)
+  // kapasiteler varsayılan 1920×1080 değerleriyle hesaplanır.
+  useEffect(() => {
+    const node = bodyRef.current;
+    if (!node || typeof ResizeObserver === 'undefined') return;
+    const measure = () => {
+      const style = getComputedStyle(node);
+      const padY = parseFloat(style.paddingTop || '0') + parseFloat(style.paddingBottom || '0');
+      const padX = parseFloat(style.paddingLeft || '0') + parseFloat(style.paddingRight || '0');
+      const h = Math.round(node.clientHeight - padY);
+      const w = Math.round(node.clientWidth - padX);
+      setBox((prev) => (Math.abs(prev.h - h) < 4 && Math.abs(prev.w - w) < 4 ? prev : { h, w }));
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
+  const metrics = useMemo(() => layoutMetrics(box.h), [box.h]);
+  const caps = useMemo(() => capacities(box.h, box.w || 1920), [box.h, box.w]);
+  const pagePlan = useMemo(() => (data ? buildPagePlan(data, caps) : undefined), [data, caps]);
 
   const ownerCount = data?.owners.length ?? 0;
   const jiraOn = data?.status.jira === 'ok';
-  const plan = useMemo<LiveSlide[]>(() => slidePlan(ownerCount, { jira: jiraOn }), [ownerCount, jiraOn]);
-  const current = plan[Math.min(index, plan.length - 1)] ?? { type: 'team' as const, key: 'pulse' as const };
+  const plan = useMemo<LiveSlide[]>(() => slidePlan(ownerCount, { jira: jiraOn, pages: pagePlan }), [ownerCount, jiraOn, pagePlan]);
+  const current = plan[Math.min(index, plan.length - 1)] ?? { type: 'team' as const, key: 'pulse' as const, page: 0, pages: 1 };
   const durationMs = slideDurationMs(current, speed);
 
   const load = useCallback(async () => {
@@ -911,32 +1018,52 @@ export default function LiveBoard({ active }: { active: boolean }) {
   useEffect(() => () => { if (hideTimer.current) window.clearTimeout(hideTimer.current); }, []);
   const controlsHidden = fullscreen && !controlsVisible && !paused;
 
+  const pageSuffix = current.pages > 1 ? ` ${current.page + 1}/${current.pages}` : '';
   const title = current.type === 'team'
-    ? { main: TEAM_SLIDE_TITLES[current.key].title, sub: TEAM_SLIDE_TITLES[current.key].sub }
-    : { main: data?.owners[current.index]?.owner ?? '', sub: `Sales Performance · sıra #${data?.owners[current.index]?.rank ?? ''} · ${data?.range.label ?? ''}` };
+    ? { main: TEAM_SLIDE_TITLES[current.key].title + pageSuffix, sub: TEAM_SLIDE_TITLES[current.key].sub }
+    : {
+        main: (data?.owners[current.index]?.owner ?? '') + pageSuffix,
+        sub: `Sales Performance · sıra #${data?.owners[current.index]?.rank ?? ''} · ${data?.range.label ?? ''}`,
+      };
 
-  const slideLabel = (slide: LiveSlide) => (slide.type === 'team' ? TEAM_SLIDE_TITLES[slide.key].title : data?.owners[slide.index]?.owner ?? '');
-  const slideShort = (slide: LiveSlide) => {
-    if (slide.type === 'owner') return data?.owners[slide.index]?.initials ?? '';
-    const short: Record<string, string> = { pulse: 'PULSE', portfolio: 'PORTFÖY', hot: 'HOT', poc: 'POC', quotes: 'TEKLİF', alerts: 'UYARI', jira: 'JIRA' };
-    return short[slide.key] ?? slide.key;
-  };
+  // Şerit için ekran listesi (sayfalar tek girdide toplanır).
+  const screenNav = useMemo(() => {
+    const seen = new Map<string, { key: string; label: string; short: string; team: boolean; pages: number; firstIndex: number; active: boolean }>();
+    plan.forEach((slide, slideIndex) => {
+      const key = slide.type === 'team' ? `t:${slide.key}` : `o:${slide.index}`;
+      const existing = seen.get(key);
+      const isCurrent = slide.type === current.type
+        && (slide.type === 'team' ? slide.key === (current as any).key : slide.index === (current as any).index);
+      if (existing) {
+        existing.active = existing.active || isCurrent;
+        return;
+      }
+      const base = slide.type === 'team'
+        ? { label: TEAM_SLIDE_TITLES[slide.key].title, short: SHORT_LABELS[slide.key] ?? slide.key }
+        : { label: data?.owners[slide.index]?.owner ?? '', short: data?.owners[slide.index]?.initials ?? '' };
+      seen.set(key, { key, ...base, team: slide.type === 'team', pages: slide.pages, firstIndex: slideIndex, active: isCurrent });
+    });
+    return Array.from(seen.values());
+  }, [plan, current, data]);
 
   const renderSlide = () => {
     if (!data) return null;
+    const page = current.page;
     if (current.type === 'owner') {
       const owner = data.owners[current.index];
-      return owner ? <OwnerSlide owner={owner} todayKey={data.range.today} /> : <PulseSlide data={data} />;
+      return owner
+        ? <OwnerSlide owner={owner} todayKey={data.range.today} caps={caps} page={page} compact={metrics.compact} />
+        : <PulseSlide data={data} caps={caps} page={0} compact={metrics.compact} />;
     }
     switch (current.key) {
-      case 'pulse': return <PulseSlide data={data} />;
-      case 'portfolio': return <PortfolioSlide data={data} />;
-      case 'hot': return <HotSlide data={data} />;
-      case 'poc': return <PocSlide data={data} />;
-      case 'quotes': return <QuotesSlide data={data} />;
-      case 'alerts': return <AlertsSlide data={data} />;
+      case 'pulse': return <PulseSlide data={data} caps={caps} page={page} compact={metrics.compact} />;
+      case 'portfolio': return <PortfolioSlide data={data} caps={caps} page={page} />;
+      case 'hot': return <HotSlide data={data} caps={caps} page={page} />;
+      case 'poc': return <PocSlide data={data} caps={caps} page={page} />;
+      case 'quotes': return <QuotesSlide data={data} caps={caps} page={page} />;
+      case 'alerts': return <AlertsSlide data={data} caps={caps} page={page} />;
       case 'jira': return <JiraSlide data={data} />;
-      default: return <PulseSlide data={data} />;
+      default: return <PulseSlide data={data} caps={caps} page={0} compact={metrics.compact} />;
     }
   };
 
@@ -944,6 +1071,23 @@ export default function LiveBoard({ active }: { active: boolean }) {
     <section
       ref={boardRef}
       className="lb"
+      data-compact={metrics.compact ? '1' : '0'}
+      style={{
+        // Kapasite hesabıyla CSS aynı sayıları kullanır: satır yükseklikleri buradan.
+        '--lb-hot-h': `${metrics.hotH}px`,
+        '--lb-act-h': `${metrics.actH}px`,
+        '--lb-leader-h': `${metrics.leaderH}px`,
+        '--lb-row-h': `${metrics.rowH}px`,
+        '--lb-quote-row-h': `${metrics.quoteRowH}px`,
+        '--lb-owner-quote-row-h': `${metrics.ownerQuoteRowH}px`,
+        '--lb-alert-h': `${metrics.alertH}px`,
+        '--lb-band-h': `${metrics.bandH}px`,
+        '--lb-channels-h': `${metrics.channelsH}px`,
+        '--lb-chips-h': `${metrics.chipsH}px`,
+        '--lb-kpi-row-h': `${metrics.kpiRowH}px`,
+        '--lb-gap': `${metrics.gap}px`,
+        '--lb-list-gap': `${metrics.listGap}px`,
+      } as CSSProperties}
       onMouseMove={poke}
       onClick={poke}
       aria-label="PAX Retail Command Center canlı ekran"
@@ -987,7 +1131,7 @@ export default function LiveBoard({ active }: { active: boolean }) {
         <i key={`${index}-${cycle}-${speed}`} style={{ animationDuration: `${durationMs}ms` }} />
       </div>
 
-      <div className="lb-body">
+      <div className="lb-body" ref={bodyRef}>
         {loading && !data ? (
           <div className="lb-empty"><div><strong>Command Center hazırlanıyor…</strong>Ciro, hedefler, pipeline ve haftanın aktiviteleri yükleniyor.</div></div>
         ) : error && !data ? (
@@ -997,21 +1141,25 @@ export default function LiveBoard({ active }: { active: boolean }) {
 
       {data ? (
         <div className={`lb-strip ${controlsHidden ? 'lb-controls hidden' : ''}`}>
-          {plan.map((slide, slideIndex) => (
+          {/* Ekran başına tek nokta: sayfalar (Seda 1/2, 2/2) tek girdide toplanır,
+              tıklayınca o ekranın ilk sayfasına gider. Sayfalı ekranlarda oranı ⅟ ile
+              gösterilir; böylece 30+ slaytta şerit taşmaz. */}
+          {screenNav.map((screen) => (
             <button
               type="button"
-              key={`${slide.type}-${slide.type === 'owner' ? slide.index : slide.key}`}
-              className={`lb-dot ${slide.type === 'team' ? 'team' : ''} ${slideIndex === index ? 'active' : ''}`}
-              onClick={() => goTo(slideIndex)}
-              title={slideLabel(slide)}
-              aria-label={slideLabel(slide)}
+              key={screen.key}
+              className={`lb-dot ${screen.team ? 'team' : ''} ${screen.active ? 'active' : ''}`}
+              onClick={() => goTo(screen.firstIndex)}
+              title={`${screen.label}${screen.pages > 1 ? ` · ${screen.pages} sayfa` : ''}`}
+              aria-label={screen.label}
             >
-              {slideShort(slide)}
+              {screen.short}{screen.pages > 1 ? <i>{screen.active ? `${current.page + 1}/${screen.pages}` : screen.pages}</i> : null}
             </button>
           ))}
           <span className="lb-strip-note">
+            <b>{index + 1}/{plan.length}</b>
             <span className="lb-kbd">Boşluk</span> duraklat · <span className="lb-kbd">←</span><span className="lb-kbd">→</span> gezin · <span className="lb-kbd">F</span> TV modu
-            {error ? ` · son yenileme başarısız: ${error}` : ''}
+            {error ? ` · yenileme başarısız` : ''}
           </span>
         </div>
       ) : null}

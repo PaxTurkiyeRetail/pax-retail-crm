@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ALERT_ORDER,
   LIVE_BOARD_TIMING,
   agoLabel,
+  alertPanels,
+  capacities,
+  pageBounds,
+  pageCount,
+  pageSlice,
+  perPage,
+  rowsThatFit,
   dayDiff,
   dueLabel,
   dueTone,
@@ -54,7 +62,9 @@ describe('rankOwners', () => {
 });
 
 describe('slidePlan', () => {
-  const show = (plan: ReturnType<typeof slidePlan>) => plan.map((s) => (s.type === 'team' ? s.key : `#${s.index}`)).join(' ');
+  const show = (plan: ReturnType<typeof slidePlan>) => plan
+    .map((s) => (s.type === 'team' ? s.key : `#${s.index}`) + (s.pages > 1 ? `(${s.page + 1}/${s.pages})` : ''))
+    .join(' ');
   it('alternates two team screens with two people until both run out', () => {
     expect(show(slidePlan(5))).toBe('pulse portfolio #0 #1 hot poc #2 #3 quotes alerts #4');
   });
@@ -65,11 +75,64 @@ describe('slidePlan', () => {
     expect(show(slidePlan(0, { jira: true }))).toContain('jira');
     expect(show(slidePlan(0))).not.toContain('jira');
   });
+  it('expands a screen that needs more than one page into consecutive slides', () => {
+    const plan = slidePlan(2, { pages: { team: { hot: 3 }, owners: [2, 1] } });
+    expect(show(plan)).toBe('pulse portfolio #0(1/2) #0(2/2) #1 hot(1/3) hot(2/3) hot(3/3) poc quotes alerts');
+  });
   it('gives team screens more time than a person slide and scales with speed', () => {
-    expect(slideDurationMs({ type: 'team', key: 'pulse' })).toBe(LIVE_BOARD_TIMING.teamMs);
-    expect(slideDurationMs({ type: 'owner', index: 0 })).toBe(LIVE_BOARD_TIMING.ownerMs);
-    expect(slideDurationMs({ type: 'owner', index: 0 }, 'fast')).toBeLessThan(LIVE_BOARD_TIMING.ownerMs);
-    expect(slideDurationMs({ type: 'owner', index: 0 }, 'slow')).toBeGreaterThan(LIVE_BOARD_TIMING.ownerMs);
+    expect(slideDurationMs({ type: 'team', key: 'pulse', page: 0, pages: 1 })).toBe(LIVE_BOARD_TIMING.teamMs);
+    expect(slideDurationMs({ type: 'owner', index: 0, page: 0, pages: 1 })).toBe(LIVE_BOARD_TIMING.ownerMs);
+    expect(slideDurationMs({ type: 'owner', index: 0, page: 0, pages: 1 }, 'fast')).toBeLessThan(LIVE_BOARD_TIMING.ownerMs);
+    expect(slideDurationMs({ type: 'owner', index: 0, page: 0, pages: 1 }, 'slow')).toBeGreaterThan(LIVE_BOARD_TIMING.ownerMs);
+  });
+});
+
+describe('sayfalama (taşma yerine devam slaydı)', () => {
+  it('kaç satır sığdığını yüksekliğe göre hesaplar', () => {
+    expect(rowsThatFit(300, 60, 10)).toBe(4);   // 4×60 + 3×10 = 270 ≤ 300
+    expect(rowsThatFit(60, 60, 10)).toBe(1);
+    expect(rowsThatFit(10, 60, 10)).toBe(1);    // en az bir satır
+  });
+  it('sayfa dilimi ve sayfa sayısı tutarlı', () => {
+    const rows = [1, 2, 3, 4, 5, 6, 7];
+    expect(pageCount(rows.length, 3)).toBe(3);
+    expect(pageSlice(rows, 0, 3)).toEqual([1, 2, 3]);
+    expect(pageSlice(rows, 2, 3)).toEqual([7]);
+    expect(pageSlice(rows, 5, 3)).toEqual([]);
+    expect(pageCount(0, 3)).toBe(1);
+  });
+  it('satırları sayfalara dengeli dağıtır (son sayfa yarı boş kalmaz)', () => {
+    const rows = Array.from({ length: 20 }, (_, i) => i + 1);
+    expect(pageCount(rows.length, 8)).toBe(3);
+    expect(perPage(rows.length, 8)).toBe(7);              // 8+8+4 değil → 7+7+6
+    expect([0, 1, 2].map((p) => pageSlice(rows, p, 8).length)).toEqual([7, 7, 6]);
+    // hiçbir satır kaybolmaz, tekrar etmez
+    const seen = [0, 1, 2].flatMap((p) => pageSlice(rows, p, 8));
+    expect(seen).toEqual(rows);
+    // kapasitenin üstüne çıkmaz → taşma imkânsız
+    expect(perPage(rows.length, 8)).toBeLessThanOrEqual(8);
+    expect(pageBounds(20, 1, 8)).toMatchObject({ from: 8, to: 14, paged: true });
+    expect(pageBounds(5, 0, 8)).toMatchObject({ from: 1, to: 5, paged: false });
+  });
+  it('küçük ekranda daha az, büyük ekranda daha çok satır sığar', () => {
+    const small = capacities(700, 1366);
+    const big = capacities(1000, 1920);
+    expect(big.tableRows).toBeGreaterThan(small.tableRows);
+    expect(big.hot).toBeGreaterThanOrEqual(small.hot);
+    expect(small.alertGroups).toBeLessThanOrEqual(big.alertGroups);
+    for (const value of Object.values(small)) {
+      if (typeof value === 'number') expect(value).toBeGreaterThanOrEqual(1);
+    }
+  });
+  it('uyarıları türe göre panellere böler, hiçbirini gizlemez', () => {
+    const mk = (kind: any, n: number) => Array.from({ length: n }, (_, i) => ({ kind, title: `${kind}-${i}`, detail: '', owner: null, days: null, tone: 'warn' as const }));
+    const alerts = [...mk('overdue', 5), ...mk('stale', 2)];
+    const counts = { stale: 2, overdue: 5, target_gap: 0, poc_delay: 0, customer_waiting: 0, contract_waiting: 0, expired_quote: 0 };
+    const panels = alertPanels(alerts, counts, 2, ALERT_ORDER);
+    expect(panels.map((p) => `${p.kind} ${p.part + 1}/${p.parts} (${p.rows.length})`)).toEqual([
+      'overdue 1/3 (2)', 'overdue 2/3 (2)', 'overdue 3/3 (1)', 'stale 1/1 (2)',
+    ]);
+    expect(panels.reduce((sum, p) => sum + p.rows.length, 0)).toBe(alerts.length);
   });
 });
 

@@ -304,6 +304,45 @@ const Q_FORECAST_OWNERS = `
 `;
 
 /* ------------------------------------------------------------------------ */
+/* Jira (opsiyonel) — önbellekli                                             */
+/* ------------------------------------------------------------------------ */
+
+type JiraSummary = Awaited<ReturnType<typeof import('@/lib/jira-weekly-tickets')['buildJiraWeeklyTicketSummary']>>;
+const JIRA_TTL_MS = 10 * 60_000;
+const JIRA_TIMEOUT_MS = 20_000;
+const jiraCache: { key: string; at: number; value: JiraSummary | null; pending: Promise<JiraSummary | null> | null } = { key: '', at: 0, value: null, pending: null };
+
+/**
+ * Jira özeti pano yenilemesini bekletmesin: 10 dk önbellek; süresi geçmişse
+ * yeni çağrı arka planda başlar, eldeki eski özet hemen döner (stale-while-revalidate).
+ * Hiç özet yoksa en fazla 20 sn beklenir; sonra 'error' durumu.
+ */
+async function loadJiraSummary(from: string, to: string): Promise<JiraSummary | null> {
+  const key = `${from}..${to}`;
+  const fresh = jiraCache.key === key && Date.now() - jiraCache.at < JIRA_TTL_MS;
+  if (fresh && jiraCache.value) return jiraCache.value;
+  if (!jiraCache.pending) {
+    jiraCache.pending = (async () => {
+      try {
+        const { buildJiraWeeklyTicketSummary } = await import('@/lib/jira-weekly-tickets');
+        const value = await buildJiraWeeklyTicketSummary(from, to);
+        jiraCache.key = key; jiraCache.at = Date.now(); jiraCache.value = value;
+        return value;
+      } catch {
+        return null;
+      } finally {
+        jiraCache.pending = null;
+      }
+    })();
+  }
+  if (jiraCache.value && jiraCache.key === key) return jiraCache.value; // eski ama var: hemen dön
+  return Promise.race([
+    jiraCache.pending,
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), JIRA_TIMEOUT_MS)),
+  ]);
+}
+
+/* ------------------------------------------------------------------------ */
 /* Ana kurucu                                                                */
 /* ------------------------------------------------------------------------ */
 
@@ -705,11 +744,7 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
   const jiraByCompany = new Map<string, { open: number; customerWaiting: number }>();
   if (String(process.env.JIRA_BASE_URL ?? '').trim()) {
     try {
-      const { buildJiraWeeklyTicketSummary } = await import('@/lib/jira-weekly-tickets');
-      const summary = await Promise.race([
-        buildJiraWeeklyTicketSummary(from, to),
-        new Promise<null>((resolve) => setTimeout(() => resolve(null), 6_000)),
-      ]);
+      const summary = await loadJiraSummary(from, to);
       if (summary && summary.enabled !== false && !summary.warning) {
         jiraStatus = 'ok';
         jiraTeam = {
@@ -945,8 +980,8 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
       ],
     },
     quotes: {
-      open: openQuotesShown.slice(0, 8),
-      recentClosed: closedQuotesShown.slice(0, 6),
+      open: openQuotesShown.slice(0, R.openQuotesLimit),
+      recentClosed: closedQuotesShown.slice(0, R.closedQuotesLimit),
       byOwner: byOwnerQuotes,
       lostReasons: toDistribution(lostReasons),
     },
