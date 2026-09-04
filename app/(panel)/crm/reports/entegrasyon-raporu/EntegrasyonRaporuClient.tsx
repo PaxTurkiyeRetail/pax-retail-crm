@@ -97,7 +97,7 @@ export default function EntegrasyonRaporuClient() {
     try {
       const params = new URLSearchParams();
       if (isKoluFilter) params.set('isKolu', isKoluFilter);
-      const res = await fetch(`/api/reports/entegrasyon-raporu?${params.toString()}`, { cache: 'no-store' });
+      const res = await fetch(`/api/reports/entegrasyon-firmalari?${params.toString()}`, { cache: 'no-store' });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json?.message || 'Rapor yüklenemedi.');
       setData(json);
