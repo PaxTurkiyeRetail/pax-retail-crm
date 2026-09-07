@@ -90,6 +90,8 @@ type CustomerRow = {
   fc_priced: boolean | null;
   kunye_status: string | null;
   kunye_required_filled: number | null;
+  /** Hunter / Farmer (künye). Boşsa Hunter sayılır — yeni müşteri = Hunter (Çağdaş Bey, 07.09). */
+  satici_etiketi: string | null;
 };
 
 type EventRow = {
@@ -97,6 +99,8 @@ type EventRow = {
   musteri_id: string;
   created_by: string | null;
   created_at: Date | string;
+  /** Aktivitenin gerçekleştiği gün (YYYY-MM-DD). */
+  activity_date: string;
   aksiyon: string | null;
   durum: string | null;
   faz_no: number | null;
@@ -122,6 +126,7 @@ type DbQuoteRow = {
   valid_until: string | null;
   created_at: Date | string;
   closed_at: Date | string | null;
+  updated_at: Date | string | null;
 };
 
 type TargetRow = { scope_type: 'company' | 'user'; user_id: string | null; code: string; value: number };
@@ -152,6 +157,10 @@ function isoOf(value: Date | string | null | undefined): string | null {
 function stripAksiyon(value: string | null | undefined) {
   const raw = String(value ?? '').trim();
   return raw.replace(/^AKTIVITE:/, '').trim() || null;
+}
+/** Hunter / Farmer: künye etiketi; boş = Hunter (yeni müşteri varsayılanı, Çağdaş Bey 07.09). */
+function isFarmer(row: { satici_etiketi: string | null }) {
+  return String(row.satici_etiketi ?? '').trim().toLocaleLowerCase('tr') === 'farmer';
 }
 function worstTone(...tones: Tone[]): Tone {
   const order: Tone[] = ['danger', 'warn', 'ok', 'info', 'neutral'];
@@ -188,12 +197,14 @@ const Q_CUSTOMERS = `
   select m.id::text as id, m.musteri, m.sorumlu, m.owner_user_id::text as owner_user_id, m.sektor, m.customer_type,
          mp.aktif_faz_no, ft.asama_adi as faz_adi, mp.durum::text as faz_durum,
          mp.baslangic_tarihi::text as baslangic, fs.started::text as faz_baslangic, mp.hedef_tarihi::text as pipeline_hedef,
-         la.created_at as last_activity_at, la.aksiyon as last_aksiyon, la.durum::text as last_durum,
+         la.activity_date::text as last_activity_at, la.aksiyon as last_aksiyon, la.durum::text as last_durum,
          pa.hedef_tarihi::text as plan_date, pa.aksiyon as plan_aksiyon, pa.notlar as plan_not, pa.owner as plan_owner, pa.created_by as plan_by,
          fc.qty as fc_qty, fc.value::float8 as fc_value, fc.weighted::float8 as fc_weighted, fc.models as fc_models, fc.priced as fc_priced,
-         k.kunye_status, k.required_filled as kunye_required_filled
+         k.kunye_status, k.required_filled as kunye_required_filled,
+         kv.satici_etiketi
   from public.musteriler m
   left join public.musteri_pipeline mp on mp.musteri_id = m.id
+  left join public.musteri_kunye_v2 kv on kv.musteri_id = m.id
   left join public.faz_tanimlari ft on ft.faz_no = mp.aktif_faz_no
   left join public.v_musteri_kunye_status k on k.musteri_id = m.id
   left join lateral (
@@ -203,11 +214,13 @@ const Q_CUSTOMERS = `
     where pe.musteri_id = m.id and pe.faz_no = mp.aktif_faz_no
   ) fs on true
   left join lateral (
-    select pe.created_at, pe.aksiyon, pe.durum
+    -- Son gerçek hareket: aktivite tarihine göre (geç girilen kayıt gerçek gününe sayılır).
+    select pe.created_at, pe.aksiyon, pe.durum,
+           coalesce(pe.aktivite_tarihi, (pe.created_at at time zone 'Europe/Istanbul')::date) as activity_date
     from public.pipeline_eventleri pe
     where pe.musteri_id = m.id
       and not (pe.durum = 'Başlamadı' and pe.hedef_tarihi is not null)
-    order by pe.created_at desc
+    order by coalesce(pe.aktivite_tarihi, (pe.created_at at time zone 'Europe/Istanbul')::date) desc, pe.created_at desc
     limit 1
   ) la on true
   left join lateral (
@@ -248,18 +261,22 @@ const Q_CUSTOMERS = `
 // Haftanın gerçek hareketleri + faz bağlamı. prev_faz: müşterinin önceki gerçek
 // hareketinin fazı; plan_faz: bu hareketle birlikte (aynı kayıt anında)
 // planlanan sonraki aksiyonun fazı → "Faz 10 → 12 ↑" işareti buradan çıkar.
+// Hafta filtresi AKTİVİTE TARİHİNE göre (07.09: geç girilen kayıt gerçek gününe sayılır);
+// created_at kayıt zamanı olarak kalır → aktivite_tarihi < kayıt günü ise "geç girildi".
 const Q_WEEK_EVENTS = `
   with actual as (
     select pe.id, pe.musteri_id, pe.created_by, pe.created_at, pe.aksiyon, pe.durum, pe.faz_no, pe.notlar, pe.hedef_tarihi,
+           coalesce(pe.aktivite_tarihi, (pe.created_at at time zone 'Europe/Istanbul')::date) as activity_date,
            lag(pe.faz_no) over (partition by pe.musteri_id order by pe.created_at, pe.id) as prev_faz
     from public.pipeline_eventleri pe
     where not (pe.durum = 'Başlamadı' and pe.hedef_tarihi is not null)
       and pe.musteri_id in (
         select w.musteri_id from public.pipeline_eventleri w
-        where w.created_at >= $1::date and w.created_at < ($2::date + interval '1 day')
+        where coalesce(w.aktivite_tarihi, (w.created_at at time zone 'Europe/Istanbul')::date) between $1::date and $2::date
       )
   )
-  select a.id::text as id, a.musteri_id::text as musteri_id, a.created_by, a.created_at, a.aksiyon, a.durum::text as durum,
+  select a.id::text as id, a.musteri_id::text as musteri_id, a.created_by, a.created_at, a.activity_date::text as activity_date,
+         a.aksiyon, a.durum::text as durum,
          a.faz_no, a.prev_faz, a.notlar, m.musteri, m.sorumlu, pl.faz_no as plan_faz
   from actual a
   left join public.musteriler m on m.id = a.musteri_id
@@ -269,15 +286,15 @@ const Q_WEEK_EVENTS = `
     where p2.musteri_id = a.musteri_id and p2.durum = 'Başlamadı' and p2.hedef_tarihi is not null
       and p2.created_at >= a.created_at and p2.created_at < a.created_at + interval '15 seconds'
   ) pl on true
-  where a.created_at >= $1::date and a.created_at < ($2::date + interval '1 day')
-  order by a.created_at desc
+  where a.activity_date between $1::date and $2::date
+  order by a.activity_date desc, a.created_at desc
 `;
 
 const Q_QUOTES = `
   select q.id::text as id, q.quote_no, q.customer_id::text as customer_id, m.musteri, q.owner_name, q.status, q.closed_reason,
          q.probability, q.total_amount::float8 as total_amount, q.total_device_count,
          q.proposal_date::text as proposal_date, q.valid_until::text as valid_until,
-         q.created_at, coalesce(q.closed_at, case when q.status = 'closed' then q.updated_at end) as closed_at
+         q.created_at, q.updated_at, coalesce(q.closed_at, case when q.status = 'closed' then q.updated_at end) as closed_at
   from public.quotes q
   left join public.musteriler m on m.id = q.customer_id
 `;
@@ -289,7 +306,19 @@ const Q_TARGETS = `
   where td.is_active = true
     and tv.period_type = 'year'
     and tv.period_start <= $1::date and tv.period_end >= $1::date
-    and td.code in ('sales_revenue', 'device_count')
+    and td.code in ('sales_revenue', 'device_count', 'integration_count')
+`;
+
+// KasaPOS entegrasyonu: Entegrasyon Firması tipindeki iş ortakları; faz ≥ 9 =
+// entegrasyon tamamlandı (Entegrasyon Raporu'nun yeşil eşiği). Sorumlu bazında.
+const Q_INTEGRATIONS = `
+  select coalesce(nullif(trim(m.sorumlu), ''), 'Havuz Account') as owner,
+         count(*)::int as total,
+         count(*) filter (where mp.aktif_faz_no >= $1::int)::int as done
+  from public.musteriler m
+  left join public.musteri_pipeline mp on mp.musteri_id = m.id
+  where m.is_ortagi_tipi = 'Entegrasyon Firması'
+  group by 1
 `;
 
 const Q_FORECAST_MONTHS = `
@@ -363,7 +392,7 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
   ]);
   const { from, to } = targets.range;
 
-  const [ownerResult, customerResult, eventResult, quoteResult, targetResult, forecastMonthResult, forecastOwnerResult] = await Promise.all([
+  const [ownerResult, customerResult, eventResult, quoteResult, targetResult, forecastMonthResult, forecastOwnerResult, integrationResult] = await Promise.all([
     db.query(Q_OWNERS),
     db.query(Q_CUSTOMERS),
     db.query(Q_WEEK_EVENTS, [from, to]),
@@ -371,7 +400,12 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
     db.query(Q_TARGETS, [todayKey]),
     db.query(Q_FORECAST_MONTHS, [year]),
     db.query(Q_FORECAST_OWNERS, [year]),
+    db.query(Q_INTEGRATIONS, [R.integrationDonePhase]),
   ]);
+  const integrationByOwner = new Map<string, { total: number; done: number }>(
+    (integrationResult.rows as any[]).map((row) => [String(row.owner), { total: num(row.total), done: num(row.done) }]),
+  );
+  const integrationTeam = Array.from(integrationByOwner.values()).reduce((acc, row) => ({ total: acc.total + row.total, done: acc.done + row.done }), { total: 0, done: 0 });
 
   const ownerRows = ownerResult.rows as OwnerRow[];
   const ownerNames = ownerRows.map((row) => row.name);
@@ -403,11 +437,13 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
   /* --- Teklifler ------------------------------------------------------------ */
   type QuoteAgg = {
     open: number; openAmount: number; weighted: number; weightedValid: number; expiredOpen: number;
+    /** Pasif: açık ama geçerliliği bitmiş YA DA 30+ gün dokunulmamış (Çağdaş Bey, 07.09). */
+    passiveOpen: number;
     wonYtd: number; wonYtdAmount: number; wonYtdDevices: number; wonMonth: number; wonMonthAmount: number;
     lostYtd: number; lostYtdAmount: number; weekCount: number; weekAmount: number; monthCount: number; monthAmount: number;
   };
   const emptyQuoteAgg = (): QuoteAgg => ({
-    open: 0, openAmount: 0, weighted: 0, weightedValid: 0, expiredOpen: 0,
+    open: 0, openAmount: 0, weighted: 0, weightedValid: 0, expiredOpen: 0, passiveOpen: 0,
     wonYtd: 0, wonYtdAmount: 0, wonYtdDevices: 0, wonMonth: 0, wonMonthAmount: 0,
     lostYtd: 0, lostYtdAmount: 0, weekCount: 0, weekAmount: 0, monthCount: 0, monthAmount: 0,
   });
@@ -432,12 +468,16 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
     const isWon = q.status === 'closed' && q.closed_reason === 'won';
     const isLost = q.status === 'closed' && LOST.has(String(q.closed_reason ?? ''));
     const expired = Boolean(isOpen && q.valid_until && q.valid_until < todayKey);
+    const touchedKey = dateKey(q.updated_at ?? q.created_at);
+    const untouchedDays = touchedKey ? dayDiff(touchedKey, todayKey) ?? 0 : 0;
+    const passive = isOpen && (expired || untouchedDays >= R.quotePassiveDays);
 
     if (createdKey >= from && createdKey <= to) { agg.weekCount += 1; agg.weekAmount += amount; }
     if (createdKey.slice(0, 7) === monthKey) { agg.monthCount += 1; agg.monthAmount += amount; }
     if (isOpen) {
       agg.open += 1; agg.openAmount += amount; agg.weighted += amount * prob / 100;
       if (expired) agg.expiredOpen += 1; else agg.weightedValid += amount * prob / 100;
+      if (passive) agg.passiveOpen += 1;
       if (q.customer_id) {
         const cur = openQuoteByCustomer.get(q.customer_id) ?? { amount: 0, weighted: 0 };
         cur.amount += amount; cur.weighted += amount * prob / 100;
@@ -476,24 +516,34 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
   const closedQuotesShown = closedQuoteRows.filter(ownedQuote).sort((a, b) => String(b.date).localeCompare(String(a.date)));
 
   /* --- Hedefler ------------------------------------------------------------ */
-  const targetByUser = new Map<string, { revenue: number | null; devices: number | null }>();
+  type UserTargets = { revenue: number | null; devices: number | null; integrations: number | null };
+  const emptyTargets = (): UserTargets => ({ revenue: null, devices: null, integrations: null });
+  const targetByUser = new Map<string, UserTargets>();
   let companyRevenueTarget: number | null = null;
   let companyDeviceTarget: number | null = null;
+  let companyIntegrationTarget: number | null = null;
   for (const row of targetRows) {
     const value = num(row.value) > 0 ? num(row.value) : null;
     if (row.scope_type === 'company') {
       if (row.code === 'sales_revenue') companyRevenueTarget = value;
       if (row.code === 'device_count') companyDeviceTarget = value;
+      if (row.code === 'integration_count') companyIntegrationTarget = value;
       continue;
     }
     if (!row.user_id) continue;
-    const cur = targetByUser.get(row.user_id) ?? { revenue: null, devices: null };
+    const cur = targetByUser.get(row.user_id) ?? emptyTargets();
     if (row.code === 'sales_revenue') cur.revenue = value;
     if (row.code === 'device_count') cur.devices = value;
+    if (row.code === 'integration_count') cur.integrations = value;
     targetByUser.set(row.user_id, cur);
   }
 
-  const revenueBlock = (agg: QuoteAgg, revenueTarget: number | null, deviceTarget: number | null): RevenueBlock => {
+  const revenueBlock = (
+    agg: QuoteAgg,
+    revenueTarget: number | null,
+    deviceTarget: number | null,
+    integration: { target: number | null; done: number; total: number },
+  ): RevenueBlock => {
     const forecast = agg.wonYtdAmount + agg.weightedValid;
     const attainmentPct = pctOf(agg.wonYtdAmount, revenueTarget);
     return {
@@ -511,6 +561,9 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
       expiredOpenQuotes: agg.expiredOpen,
       deviceTarget,
       deviceActualYtd: agg.wonYtdDevices,
+      integrationTarget: integration.target,
+      integrationDone: integration.done,
+      integrationTotal: integration.total,
       wonYtd: { count: agg.wonYtd, amount: agg.wonYtdAmount },
       wonMonth: { count: agg.wonMonth, amount: agg.wonMonthAmount },
       lostYtd: { count: agg.lostYtd, amount: agg.lostYtdAmount },
@@ -531,7 +584,9 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
     if (Number.isNaN(createdAt.getTime())) continue;
     const label = activityLabelFromRow(row);
     const kind = activityTargetKind(label);
-    if (istanbulDayKey(createdAt) === todayKey && kind !== 'other') {
+    const activityDay = String(row.activity_date ?? '').slice(0, 10) || istanbulDayKey(createdAt);
+    const lateEntry = activityDay < istanbulDayKey(createdAt);
+    if (activityDay === todayKey && kind !== 'other') {
       todayByOwner.set(creator, (todayByOwner.get(creator) ?? 0) + 1);
     }
     const phaseFrom = row.prev_faz == null ? null : Number(row.prev_faz);
@@ -558,6 +613,8 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
       list.push({
         id: String(row.id),
         at: createdAt.toISOString(),
+        date: activityDay,
+        late: lateEntry,
         musteri: text(row.musteri) ?? '—',
         label: label === '-' ? 'Not' : label,
         kind,
@@ -576,9 +633,11 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
   const phaseGroupCounts = new Map<string, number>();
   const sectorCounts = new Map<string, number>();
   const kunyeCounts = new Map<string, number>([['Tamam', 0], ['Eksik', 0], ['Yok', 0]]);
+  const farmerByOwnerLabel = new Map<string, number>();
   for (const row of customers) {
     const label = text(row.sorumlu) ?? 'Havuz Account';
     portfolioByOwnerLabel.set(label, (portfolioByOwnerLabel.get(label) ?? 0) + 1);
+    if (isFarmer(row)) farmerByOwnerLabel.set(label, (farmerByOwnerLabel.get(label) ?? 0) + 1);
     const group = PHASE_GROUPS.find((g) => g.key === phaseGroupOf(row.aktif_faz_no));
     if (group) phaseGroupCounts.set(group.label, (phaseGroupCounts.get(group.label) ?? 0) + 1);
     if (row.customer_type !== 'business_partner') {
@@ -799,7 +858,8 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
     const target: WeeklyTargetCounters = targetRow?.target ?? emptyWeeklyCounters();
     const rows = customersByOwner.get(owner) ?? [];
     const agg = quoteAggByOwner.get(owner) ?? emptyQuoteAgg();
-    const userTargets = targetByUser.get(ownerIdByName.get(owner) ?? '') ?? { revenue: null, devices: null };
+    const userTargets = targetByUser.get(ownerIdByName.get(owner) ?? '') ?? emptyTargets();
+    const ownerIntegration = integrationByOwner.get(owner) ?? { total: 0, done: 0 };
     const hotAll = rows.filter(isHotCandidate).map(toHotItem).sort(ownerHotSort);
     const hot = hotAll.slice(0, R.hotOwnerLimit);
     let jira: LiveOwner['jira'] = null;
@@ -826,8 +886,8 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
     return {
       owner,
       initials: initialsOf(owner),
-      portfolio: { total: rows.length, active: rows.filter(activeSince).length },
-      revenue: revenueBlock(agg, userTargets.revenue, userTargets.devices),
+      portfolio: { total: rows.length, active: rows.filter(activeSince).length, farmer: rows.filter(isFarmer).length, hunter: rows.filter((row) => !isFarmer(row)).length },
+      revenue: revenueBlock(agg, userTargets.revenue, userTargets.devices, { target: userTargets.integrations, ...ownerIntegration }),
       funnel,
       pipeline: pipelineStats(rows),
       actual,
@@ -846,9 +906,9 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
   // Sıra (rank) performansa göre hesaplanır; dönüş sırası ise sabit görüntüleme
   // sırası (OWNER_ORDER — Çağdaş Bey, 04.09). "Kim hedefinde" tablosu rank'a göre dizer.
   const owners: LiveOwner[] = rankOwners(unranked.filter((row) =>
+    // (Haftalık hedef tek başına yetmez: 013 ile her account_manager'a varsayılan 20 yazıldı.)
     row.portfolio.total > 0
     || row.actual.totalActivities > 0
-    || row.target.totalActivities > 0
     || row.revenue.target != null
     || row.revenue.openQuotes > 0
     || row.revenue.wonYtd.count > 0)).sort((a, b) => ownerOrderCompare(a.owner, b.owner));
@@ -864,6 +924,8 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
   const ownerDeviceTargets = owners.map((row) => row.revenue.deviceTarget).filter((v): v is number => v != null);
   const teamRevenueTarget = companyRevenueTarget ?? (ownerRevenueTargets.length ? ownerRevenueTargets.reduce((a, b) => a + b, 0) : null);
   const teamDeviceTarget = companyDeviceTarget ?? (ownerDeviceTargets.length ? ownerDeviceTargets.reduce((a, b) => a + b, 0) : null);
+  const ownerIntegrationTargets = owners.map((row) => row.revenue.integrationTarget).filter((v): v is number => v != null);
+  const teamIntegrationTarget = companyIntegrationTarget ?? (ownerIntegrationTargets.length ? ownerIntegrationTargets.reduce((a, b) => a + b, 0) : null);
 
   const teamActual = owners.reduce((acc, row) => addWeeklyCounters(acc, row.actual), emptyWeeklyCounters());
   const teamTarget = owners.reduce((acc, row) => addWeeklyCounters(acc, row.target), emptyWeeklyCounters());
@@ -946,11 +1008,20 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
         tone: 'warn',
       });
     }
+    // Portföy yükü (Çağdaş Bey, 07.09): "üzerinizde 50–60'dan fazla firma olmasın" —
+    // fazlası havuza devredilmeli. İş ortağı kayıtları sayılmaz.
+    if (row.portfolio.total >= R.portfolioLoadLimit) {
+      alerts.push({
+        kind: 'portfolio_load', title: row.owner, owner: row.owner, days: null,
+        detail: `${row.portfolio.total} firma tek sorumluda (sınır ${R.portfolioLoadLimit}) · ${row.portfolio.total - row.portfolio.active} tanesi 90 gündür hareketsiz`,
+        tone: row.portfolio.total >= R.portfolioLoadLimit * 1.25 ? 'danger' : 'warn',
+      });
+    }
   }
   const toneRank = (t: Tone) => (t === 'danger' ? 0 : t === 'warn' ? 1 : 2);
   alerts.sort((a, b) => toneRank(a.tone) - toneRank(b.tone) || (b.days ?? 0) - (a.days ?? 0) || a.title.localeCompare(b.title, 'tr'));
   const alertCounts: LiveBoardPayload['team']['alertCounts'] = {
-    stale: 0, overdue: 0, target_gap: 0, poc_delay: 0, customer_waiting: 0, contract_waiting: 0, expired_quote: 0,
+    stale: 0, overdue: 0, target_gap: 0, poc_delay: 0, customer_waiting: 0, contract_waiting: 0, expired_quote: 0, portfolio_load: 0,
   };
   for (const alert of alerts) alertCounts[alert.kind] += 1;
   // Ekranda tür başına en fazla R.alertLimit satır: tek tür (ör. 36 stale) diğerlerini boğmasın.
@@ -972,8 +1043,12 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
 
   const byOwnerQuotes = ownerNames.map((owner) => {
     const agg = quoteAggByOwner.get(owner) ?? emptyQuoteAgg();
-    return { owner, open: agg.open, openAmount: agg.openAmount, weighted: agg.weighted, won: agg.wonYtd, wonAmount: agg.wonYtdAmount, lost: agg.lostYtd };
-  }).filter((row) => row.open || row.won || row.lost).sort((a, b) => ownerOrderCompare(a.owner, b.owner));
+    return {
+      owner, open: agg.open, openAmount: agg.openAmount, weighted: agg.weighted, passive: agg.passiveOpen,
+      monthCreated: agg.monthCount, monthAmount: agg.monthAmount,
+      won: agg.wonYtd, wonAmount: agg.wonYtdAmount, lost: agg.lostYtd,
+    };
+  }).filter((row) => row.open || row.won || row.lost || row.monthCreated).sort((a, b) => ownerOrderCompare(a.owner, b.owner));
 
   return {
     generatedAt: new Date().toISOString(),
@@ -981,7 +1056,8 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
     status: { crm: 'ok', jira: jiraStatus },
     team: {
       ownerCount: owners.length,
-      revenue: revenueBlock(teamAgg, teamRevenueTarget, teamDeviceTarget),
+      // Entegrasyon takım toplamı: tüm entegrasyon firmaları (sorumlusu rotasyon dışı olsa da — çoğu Taha'da).
+      revenue: revenueBlock(teamAgg, teamRevenueTarget, teamDeviceTarget, { target: teamIntegrationTarget, ...integrationTeam }),
       funnel: teamFunnel,
       pipeline: pipelineStats(teamCustomers),
       actual: teamActual,
@@ -999,7 +1075,14 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
       total: customers.length,
       // Sabit sıra (Çağdaş Bey, 04.09); sayfalama olduğu için "Diğer"e katlama yok —
       // Lojistik gibi küçük sektörler de görünür.
-      byOwner: orderDistribution(toDistribution(portfolioByOwnerLabel), OWNER_ORDER),
+      byOwner: orderDistribution(toDistribution(portfolioByOwnerLabel), OWNER_ORDER).map((row) => {
+        const farmer = farmerByOwnerLabel.get(row.label) ?? 0;
+        return { ...row, split: farmer, hint: `${row.value - farmer} hunter · ${farmer} farmer` };
+      }),
+      hunterFarmer: [
+        { label: 'Hunter', value: customers.filter((row) => !isFarmer(row)).length, hint: 'yeni müşteri kazanımı' },
+        { label: 'Farmer', value: customers.filter(isFarmer).length, hint: 'mevcut portföyü büyütme' },
+      ],
       byPhaseGroup: PHASE_GROUPS.map((g) => ({ label: g.label, value: phaseGroupCounts.get(g.label) ?? 0 })).filter((row) => row.value > 0),
       bySector: orderDistribution(toDistribution(sectorCounts), SECTOR_ORDER),
       kunye: [

@@ -26,6 +26,8 @@ type AllowedUser = {
   annual_revenue_target: number;
   /** Yıllık cihaz hedefi (adet) — crm_target_values · device_count. 0 = hedef yok. */
   annual_device_target: number;
+  /** Yıllık KasaPOS entegrasyon hedefi (adet) — crm_target_values · integration_count. 0 = hedef yok. */
+  annual_integration_target: number;
 };
 
 const WEEKLY_TARGET_FIELDS: Array<{ key: keyof Pick<AllowedUser, 'weekly_target_sales_physical' | 'weekly_target_sales_online' | 'weekly_target_sales_phone' | 'weekly_target_sales_email' | 'weekly_target_technical_physical' | 'weekly_target_technical_online' | 'weekly_target_total_activities' | 'weekly_target_unique_customers'>; label: string; short: string }> = [
@@ -47,6 +49,7 @@ function normalizeWeeklyTargets(user: AllowedUser): AllowedUser {
   next.target_year = Number(next.target_year) || new Date().getFullYear();
   next.annual_revenue_target = Number(next.annual_revenue_target ?? 0) || 0;
   next.annual_device_target = Number(next.annual_device_target ?? 0) || 0;
+  next.annual_integration_target = Number(next.annual_integration_target ?? 0) || 0;
   return next;
 }
 
@@ -56,6 +59,7 @@ function targetPayload(user: AllowedUser) {
     target_year: user.target_year,
     annual_revenue_target: Number(user.annual_revenue_target ?? 0) || 0,
     annual_device_target: Number(user.annual_device_target ?? 0) || 0,
+    annual_integration_target: Number(user.annual_integration_target ?? 0) || 0,
   };
 }
 
@@ -67,6 +71,7 @@ function targetSummary(user: AllowedUser) {
   const parts: string[] = [];
   if (user.annual_revenue_target > 0) parts.push(`${user.target_year} ciro ${fmtUsd(user.annual_revenue_target)}`);
   if (user.annual_device_target > 0) parts.push(`${user.annual_device_target.toLocaleString('tr-TR')} cihaz`);
+  if (user.annual_integration_target > 0) parts.push(`${user.annual_integration_target.toLocaleString('tr-TR')} entegrasyon`);
   const filled = WEEKLY_TARGET_FIELDS.filter((field) => Number(user[field.key] ?? 0) > 0);
   if (filled.length > 0) {
     const total = WEEKLY_TARGET_FIELDS.reduce((sum, field) => sum + (Number(user[field.key] ?? 0) || 0), 0);
@@ -288,10 +293,23 @@ export default function UsersClient() {
                     onChange={(e) => setRows((s) => s.map((x) => x.email === modalUser.email ? { ...x, annual_device_target: Math.max(0, Number(e.target.value) || 0) } : x))}
                   />
                 </label>
+                <label className="field">
+                  <span className="label">Yıllık Entegrasyon Hedefi (adet)</span>
+                  <input
+                    className="input"
+                    type="number"
+                    min={0}
+                    step={1}
+                    value={Number(modalUser.annual_integration_target ?? 0)}
+                    onChange={(e) => setRows((s) => s.map((x) => x.email === modalUser.email ? { ...x, annual_integration_target: Math.max(0, Number(e.target.value) || 0) } : x))}
+                  />
+                  <small className="muted">KasaPOS entegrasyonu tamamlanan (faz 9+) entegrasyon firması sayısı</small>
+                </label>
               </div>
+              <div className="target-section-hint">Haftalık satış hedefi: 8 görüşme (fiziki + online) + 12 temas (telefon + e-posta) = 20 aktivite. Canlı Ekran kanalları bu iki grupta toplar.</div>
 
               <div className="target-section-title">Haftalık Aktivite Hedefleri</div>
-              <div className="target-section-hint">Kanal başına haftalık adet. Boş bırakılan kanal Canlı Ekran&apos;da &quot;/ —&quot; olarak görünür.</div>
+              <div className="target-section-hint">Kanal başına haftalık adet; Canlı Ekran Fiziki + Online = Görüşme, Telefon + E-posta = Temas olarak toplar. Boş grup &quot;/ —&quot; görünür.</div>
               <div className="weekly-target-grid">
                 {WEEKLY_TARGET_FIELDS.map((field) => (
                   <label key={`${modalUser.email}-${field.key}-modal`} className="field">

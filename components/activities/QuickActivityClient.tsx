@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { ACTIVITY_BACKDATE_DAYS, ACTIVITY_DATE_PICKER_ENABLED, activityDateBounds, istanbulDateKey } from '@/lib/activities/activity-date';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import TechnicalContactSelect from './TechnicalContactSelect';
@@ -96,8 +97,6 @@ export default function QuickActivityClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const editId = (searchParams.get('edit') || '').trim();
-  const initialCustomerId = (searchParams.get('customer_id') || '').trim();
-  const initialActivityType = (searchParams.get('activity_type') || '').trim();
   
   const [me, setMe] = useState<Me | null>(null);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -118,6 +117,9 @@ export default function QuickActivityClient() {
   const [bekleyenTaraf, setBekleyenTaraf] = useState<WaitingSide | ''>('');
   const [waitingSideOptions, setWaitingSideOptions] = useState<string[]>([...BEKLEYEN_TARAFLAR]);
   const [notlar, setNotlar] = useState('');
+  // Aktivite tarihi: varsayılan bugün; en fazla 2 gün geriye (Çağdaş Bey 07.09 — ara yol).
+  const dateBounds = useMemo(() => activityDateBounds(), []);
+  const [aktiviteTarihi, setAktiviteTarihi] = useState(() => istanbulDateKey());
   
   const [sonrakiAksiyonVar, setSonrakiAksiyonVar] = useState(true);
   const [sonrakiTarih, setSonrakiTarih] = useState('');
@@ -130,8 +132,6 @@ export default function QuickActivityClient() {
   const [editReady, setEditReady] = useState(false);
   const [phaseMetaLoading, setPhaseMetaLoading] = useState(false);
   const [partnerActivityAccess, setPartnerActivityAccess] = useState({ can_view: false, can_create: false, can_change_phase: false });
-  const [partnerSubtype, setPartnerSubtype] = useState('Entegrasyon Firması');
-  const [savingPartnerRelationship, setSavingPartnerRelationship] = useState(false);
 
   const canCreateTechnical = canCreateTechnicalActivity(me);
   const visibleActivityTypes = useMemo(() => {
@@ -227,14 +227,6 @@ export default function QuickActivityClient() {
   }, [aktiviteTipi, sonrakiTip, visibleActivityTypes, visibleNextActivityTypes]);
 
   useEffect(() => {
-    if (editId || !initialCustomerId) return;
-    setMusteriId(initialCustomerId);
-    if (visibleActivityTypes.includes(initialActivityType as ActivityType)) {
-      setAktiviteTipi(initialActivityType as ActivityType);
-    }
-  }, [editId, initialActivityType, initialCustomerId, visibleActivityTypes]);
-
-  useEffect(() => {
     if (editId) return;
     const preferredFaz = selectedCustomer?.son_kalinan_faz_no ?? selectedCustomer?.aktif_faz_no ?? null;
     setFazNo(preferredFaz != null ? Number(preferredFaz) : null);
@@ -269,8 +261,7 @@ export default function QuickActivityClient() {
     const loadPhaseMeta = async () => {
       setPhaseMetaLoading(true);
       try {
-        const context = isBusinessPartnerCustomer ? 'business_partner' : 'customer';
-        const res = await fetch(`/api/activities/meta?musteri_id=${encodeURIComponent(musteriId)}&faz_no=${encodeURIComponent(String(fazNo))}&activity_context=${context}`, { cache: 'no-store' });
+        const res = await fetch(`/api/activities/meta?musteri_id=${encodeURIComponent(musteriId)}&faz_no=${encodeURIComponent(String(fazNo))}`, { cache: 'no-store' });
         const data = await res.json().catch(() => ({}));
         if (!cancelled && res.ok) {
           if (data?.durum) setFazDurum(coercePhaseStatus(data.durum));
@@ -284,34 +275,7 @@ export default function QuickActivityClient() {
     return () => {
       cancelled = true;
     };
-  }, [musteriId, fazNo, isBusinessPartnerCustomer]);
-
-  async function addPartnerRelationship() {
-    if (!selectedCustomer || savingPartnerRelationship) return;
-    setSavingPartnerRelationship(true);
-    setError('');
-    try {
-      const res = await fetch('/api/crm/relationships', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          customer_id: selectedCustomer.musteri_id,
-          customer: Boolean(selectedCustomer.has_customer_role),
-          business_partner: true,
-          partner_subtype: partnerSubtype,
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.message || 'İş Ortağı ilişkisi eklenemedi.');
-      setCustomers((current) => current.map((customer) => customer.musteri_id === selectedCustomer.musteri_id
-        ? { ...customer, has_business_partner_role: true, is_business_partner: true }
-        : customer));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'İş Ortağı ilişkisi eklenemedi.');
-    } finally {
-      setSavingPartnerRelationship(false);
-    }
-  }
+  }, [musteriId, fazNo]);
 
   useEffect(() => {
     if (!editId) {
@@ -342,6 +306,7 @@ export default function QuickActivityClient() {
         setFazDurum(coercePhaseStatus(row.activity_status || 'Devam Ediyor'));
         setBekleyenTaraf(((row.partner_owner || '') as WaitingSide | ''));
         setNotlar(String(row.notlar ?? ''));
+        setAktiviteTarihi(String(row.aktivite_tarihi ?? '').slice(0, 10) || istanbulDateKey());
         setSonrakiAksiyonVar(false);
         setSonrakiTarih('');
         setSonrakiTip('Online Toplantı');
@@ -414,6 +379,7 @@ export default function QuickActivityClient() {
         faz_durum: fazDurum,
         bekleyen_taraf: bekleyenTaraf,
         notlar: notlar.trim(),
+        ...(ACTIVITY_DATE_PICKER_ENABLED || editId ? { aktivite_tarihi: aktiviteTarihi } : {}),
         ...(!isTechnicalActivity && !phaseOptionalCustomer && sonrakiAksiyonVar && {
           plan: {
             hedef_tarihi: sonrakiTarih,
@@ -533,20 +499,29 @@ export default function QuickActivityClient() {
             </select>
           </div>
 
-          {missingPartnerRelationship && <div style={{ padding: 14, background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 'var(--radius-md)', color: '#9a3412', display: 'grid', gap: 10 }}>
-            <strong>Bu firmanın aktif İş Ortağı rolü yok.</strong>
-            {me?.permissions?.includes('customer.classification.manage') ? <>
-              <span>Aktiviteden çıkmadan rolü ekleyip iş ortağı fazıyla devam edebilirsin.</span>
-              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                <select className="pax-input" value={partnerSubtype} onChange={(e) => setPartnerSubtype(e.target.value)} style={{ minHeight: 42, flex: '1 1 220px' }}>
-                  <option value="Entegrasyon Firması">Entegrasyon Firması</option>
-                  <option value="Donanım Firması">Donanım Firması</option>
-                </select>
-                <button type="button" className="pax-btn" disabled={savingPartnerRelationship} onClick={() => void addPartnerRelationship()}>
-                  {savingPartnerRelationship ? 'Ekleniyor...' : 'İş Ortağı Rolünü Ekle'}
-                </button>
-              </div>
-            </> : <span>Yetkili bir kullanıcı <Link href={`/crm/${musteriId}#company-relations`}>firma kartından İş Ortağı rolünü eklemeli</Link>.</span>}
+          {ACTIVITY_DATE_PICKER_ENABLED ? (
+          <div>
+            <label className="pax-label" style={{ display: 'block', marginBottom: 8 }}>Aktivite Tarihi *</label>
+            <input
+              type="date"
+              value={aktiviteTarihi}
+              min={editId ? undefined : dateBounds.min}
+              max={dateBounds.max}
+              onChange={(e) => setAktiviteTarihi(e.target.value)}
+              className="pax-input"
+              required
+              style={{ width: '100%', minHeight: 48, fontSize: 16 }}
+            />
+            <small className="muted">
+              {aktiviteTarihi && aktiviteTarihi < dateBounds.max
+                ? `Geçmiş güne giriliyor — kayıt "geç girildi" olarak işaretlenir.`
+                : `Varsayılan bugün; en fazla ${ACTIVITY_BACKDATE_DAYS} gün geriye girilebilir, ileri tarih girilemez.`}
+            </small>
+          </div>
+          ) : null}
+
+          {missingPartnerRelationship && <div style={{ padding: 14, background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 'var(--radius-md)', color: '#9a3412' }}>
+            Bu firmada aktif İş Ortağı ilişkisi yok. Önce <Link href={`/crm/${musteriId}#company-relations`}>firma kartından İş Ortağı ilişkisini ekleyin</Link>.
           </div>}
 
           {technicalMissingPhase && (
