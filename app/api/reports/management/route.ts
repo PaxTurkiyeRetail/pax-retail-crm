@@ -59,9 +59,9 @@ export async function GET() {
         fetchAllByCustomerIds<any>(
           admin,
           'pipeline_eventleri',
-          'musteri_id,durum,aksiyon,owner,partner_owner,created_at,hedef_tarihi,notlar',
+          'musteri_id,durum,aksiyon,owner,partner_owner,created_at,hedef_tarihi,notlar,activity_context',
           ids,
-          (query) => query.order('created_at', { ascending: false }),
+          (query) => query.eq('activity_context', 'customer').order('created_at', { ascending: false }),
         ),
       ]);
 

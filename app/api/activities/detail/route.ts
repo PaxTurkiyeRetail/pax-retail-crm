@@ -16,7 +16,7 @@ export async function GET(req: Request) {
     const admin = createPgAdminClient();
     const { data, error } = await admin
       .from('pipeline_eventleri')
-      .select('id,musteri_id,faz_no,durum,aksiyon,partner_owner,notlar,hedef_tarihi,created_at,created_by,created_by_user_id,created_by_email,is_blocked,blocked_note,blocked_at,blocked_by,activity_scope,affects_phase')
+      .select('id,musteri_id,faz_no,durum,aksiyon,partner_owner,notlar,hedef_tarihi,created_at,created_by,created_by_user_id,created_by_email,is_blocked,blocked_note,blocked_at,blocked_by,activity_scope,activity_context,affects_phase,technical_contact_id')
       .eq('id', activity_id)
       .single();
 

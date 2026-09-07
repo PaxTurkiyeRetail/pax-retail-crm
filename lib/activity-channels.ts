@@ -1,4 +1,4 @@
-export const ACTIVITY_CHANNEL_OPTIONS = ['Telefon', 'Yerinde Ziyaret', 'Online Toplantı', 'Teknik Ziyaret', 'Teknik Online', 'POM', 'E-posta', 'Diğer'] as const;
+export const ACTIVITY_CHANNEL_OPTIONS = ['Telefon', 'Yerinde Ziyaret', 'Online Toplantı', 'Teknik Ziyaret', 'Teknik Online', 'POM', 'E-posta', 'İş Ortaklığı Aktivitesi', 'Diğer'] as const;
 export type ActivityChannel = (typeof ACTIVITY_CHANNEL_OPTIONS)[number];
 
 export const TECHNICAL_ACTIVITY_CHANNELS = ['Teknik Ziyaret', 'Teknik Online', 'POM'] as const;
@@ -13,6 +13,7 @@ export function normalizeChannel(value: string | null | undefined): ActivityChan
   if (raw === 'Teknik Online') return 'Teknik Online';
   if (raw === 'POM') return 'POM';
   if (raw === 'E-posta') return 'E-posta';
+  if (raw === 'İş Ortaklığı Aktivitesi') return 'İş Ortaklığı Aktivitesi';
   return 'Diğer';
 }
 
@@ -24,6 +25,10 @@ export function isSalesChannel(channel: string | null | undefined) {
 export function isTechnicalChannel(channel: string | null | undefined) {
   const normalized = normalizeChannel(channel);
   return normalized === 'Teknik Ziyaret' || normalized === 'Teknik Online' || normalized === 'POM';
+}
+
+export function isBusinessPartnerActivity(channel: string | null | undefined) {
+  return normalizeChannel(channel) === 'İş Ortaklığı Aktivitesi';
 }
 
 export function activityScopeForChannel(channel: string | null | undefined): 'technical' | 'account' {

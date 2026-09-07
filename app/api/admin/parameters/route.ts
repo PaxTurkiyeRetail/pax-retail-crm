@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { requireSystemParametersAccessOrThrow, userHasPermission, type AllowedUser } from "@/lib/authz";
 import {
   ALL_PARAMETER_GROUPS,
+  KUNYE_PARAMETER_GROUPS,
+  CRM_MASTER_DATA_PARAMETER_GROUPS,
+  FORECAST_PARAMETER_GROUPS,
   createPhaseParameter,
   createSystemParameter,
   deletePhaseParameter,
@@ -21,6 +24,12 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 const PHASE_GROUPS = new Set<string>(["faz_tanimlari", "is_ortagi_faz_tanimlari"]);
+const LIST_GROUPS = new Set<string>([
+  ...KUNYE_PARAMETER_GROUPS.map(group => group.key),
+  ...CRM_MASTER_DATA_PARAMETER_GROUPS.map(group => group.key),
+  ...FORECAST_PARAMETER_GROUPS.map(group => group.key),
+  'notify_request_cc', 'notify_allowed_domains', 'system_oidc_app_role_mapping',
+]);
 const IDENTITY_GROUPS = new Set<string>([
   "system_oidc_enabled",
   "system_oidc_group_role_sync_enabled",
@@ -49,7 +58,9 @@ export async function GET() {
     ]);
     const canManageIdentity = userHasPermission(actor, 'admin.identity.manage');
     return NextResponse.json({
-      groups: ALL_PARAMETER_GROUPS.filter((group) => canManageIdentity || !IDENTITY_GROUPS.has(group.key)),
+      groups: ALL_PARAMETER_GROUPS.filter((group) => canManageIdentity || !IDENTITY_GROUPS.has(group.key)).map(group => ({
+        ...group, editorKind: PHASE_GROUPS.has(group.key) ? 'phase' : LIST_GROUPS.has(group.key) ? 'list' : 'setting',
+      })),
       rows: rows
         .filter((row) => canManageIdentity || !IDENTITY_GROUPS.has(row.group_key))
         .map(maskSensitiveRow),

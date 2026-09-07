@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import TechnicalContactSelect from './TechnicalContactSelect';
 
 type Customer = {
   musteri_id: string;
@@ -11,6 +12,10 @@ type Customer = {
   sektor?: string | null;
   report_only?: boolean | null;
   is_business_partner?: boolean | null;
+  has_customer_role?: boolean | null;
+  has_business_partner_role?: boolean | null;
+  partner_faz_no?: number | null;
+  partner_faz_adi?: string | null;
   aktif_faz_no: number | null;
   aktif_faz_adi: string | null;
   son_kalinan_faz_no?: number | null;
@@ -39,6 +44,7 @@ const AKTIVITE_TIPLERI = [
   'Teknik Ziyaret',
   'Teknik Online',
   'POM',
+  'İş Ortaklığı Aktivitesi',
   'Diğer'
 ] as const;
 
@@ -101,6 +107,9 @@ export default function QuickActivityClient() {
   const [loading, setLoading] = useState(true);
   
   const [musteriId, setMusteriId] = useState('');
+  const [contactSelection, setContactSelection] = useState<{ customerId: string; id: string | null } | null>(null);
+  const [originalContact, setOriginalContact] = useState<{ customerId: string; id: string | null } | null>(null);
+  const [originalActivityContext, setOriginalActivityContext] = useState<'customer' | 'business_partner' | null>(null);
   const [aktiviteTipi, setAktiviteTipi] = useState<ActivityType>('Online Toplantı');
   const [fazNo, setFazNo] = useState<number | null>(null);
   const [fazDurum, setFazDurum] = useState<PhaseStatus>('Devam Ediyor');
@@ -118,13 +127,15 @@ export default function QuickActivityClient() {
   const [editLoading, setEditLoading] = useState(false);
   const [editReady, setEditReady] = useState(false);
   const [phaseMetaLoading, setPhaseMetaLoading] = useState(false);
+  const [partnerActivityAccess, setPartnerActivityAccess] = useState({ can_view: false, can_create: false, can_change_phase: false });
 
   const canCreateTechnical = canCreateTechnicalActivity(me);
   const visibleActivityTypes = useMemo(() => {
-    return AKTIVITE_TIPLERI.filter((tip) => !isTechnicalActivityType(tip) || canCreateTechnical);
-  }, [canCreateTechnical]);
-  const visibleNextActivityTypes = useMemo(() => visibleActivityTypes.filter((tip) => !isTechnicalActivityType(tip)), [visibleActivityTypes]);
+    return AKTIVITE_TIPLERI.filter((tip) => (!isTechnicalActivityType(tip) || canCreateTechnical) && (tip !== 'İş Ortaklığı Aktivitesi' || partnerActivityAccess.can_view));
+  }, [canCreateTechnical, partnerActivityAccess.can_view]);
+  const visibleNextActivityTypes = useMemo(() => visibleActivityTypes.filter((tip) => !isTechnicalActivityType(tip) && tip !== 'İş Ortaklığı Aktivitesi'), [visibleActivityTypes]);
   const isTechnicalActivity = isTechnicalActivityType(aktiviteTipi);
+  const isPartnerActivityType = aktiviteTipi === 'İş Ortaklığı Aktivitesi';
 
   const selectedCustomer = useMemo(
     () => customers.find(c => c.musteri_id === musteriId) || null,
@@ -166,6 +177,7 @@ export default function QuickActivityClient() {
           const data = await activityOptionsRes.json();
           const values = (data.waitingSideOptions ?? []).map((item: { value?: string }) => String(item.value ?? '').trim()).filter(Boolean);
           if (values.length) setWaitingSideOptions(values);
+          setPartnerActivityAccess(data.businessPartnerActivityAccess ?? { can_view: false, can_create: false, can_change_phase: false });
         }
       } catch (err) {
         console.error('Data yükleme hatası:', err);
@@ -226,10 +238,18 @@ export default function QuickActivityClient() {
     }
   }, [isTechnicalActivity, selectedCustomer]);
 
-  const isBusinessPartnerCustomer = Boolean(selectedCustomer?.is_business_partner);
-  const phaseOptionalCustomer = isPhaseOptionalCustomer(selectedCustomer);
+  const isBusinessPartnerCustomer = isPartnerActivityType || (Boolean(editId) && originalActivityContext === 'business_partner') || Boolean(selectedCustomer?.is_business_partner && !selectedCustomer?.has_customer_role);
+  const phaseOptionalCustomer = !isPartnerActivityType && isPhaseOptionalCustomer(selectedCustomer);
   const phaseOptions = isBusinessPartnerCustomer ? partnerFazlar : fazlar;
   const phaseOptionalTechnicalCustomer = isTechnicalActivity && phaseOptionalCustomer;
+
+  useEffect(() => {
+    if (isPartnerActivityType) {
+      const partnerPhase = selectedCustomer?.partner_faz_no ?? null;
+      setFazNo(partnerPhase != null ? Number(partnerPhase) : null);
+      setSonrakiAksiyonVar(false);
+    }
+  }, [isPartnerActivityType, selectedCustomer]);
 
   useEffect(() => {
     if (!musteriId || fazNo == null) return;
@@ -274,6 +294,9 @@ export default function QuickActivityClient() {
 
         const row = data.row;
         setMusteriId(String(row.musteri_id ?? ''));
+        setOriginalContact({ customerId: String(row.musteri_id ?? ''), id: row.technical_contact_id || null });
+        setOriginalActivityContext(row.activity_context === 'business_partner' ? 'business_partner' : 'customer');
+        setContactSelection(null);
         setFazNo(row.faz_no != null ? Number(row.faz_no) : null);
         setAktiviteTipi(((row.activity_label || 'Diğer') as ActivityType));
         setFazDurum(coercePhaseStatus(row.activity_status || 'Devam Ediyor'));
@@ -301,6 +324,7 @@ export default function QuickActivityClient() {
   }, [editId]);
 
   const technicalMissingPhase = isTechnicalActivity && !phaseOptionalTechnicalCustomer && !fazNo;
+  const missingPartnerRelationship = isPartnerActivityType && !selectedCustomer?.has_business_partner_role;
 
   useEffect(() => {
     if (phaseOptionalCustomer) {
@@ -311,7 +335,7 @@ export default function QuickActivityClient() {
   }, [phaseOptionalCustomer]);
 
   const isValid = useMemo(() => {
-    if (!editReady || !musteriId || !aktiviteTipi || !notlar.trim()) {
+    if (!editReady || !musteriId || !aktiviteTipi || !notlar.trim() || missingPartnerRelationship) {
       return false;
     }
     if (!isTechnicalActivity && !phaseOptionalCustomer && (fazNo === null || !fazDurum || !bekleyenTaraf)) {
@@ -321,11 +345,12 @@ export default function QuickActivityClient() {
       return false;
     }
     if (isTechnicalActivity && !canCreateTechnical) return false;
+    if (isPartnerActivityType && (!partnerActivityAccess.can_create || !partnerActivityAccess.can_change_phase)) return false;
     if (!phaseOptionalCustomer && sonrakiAksiyonVar && (!sonrakiTarih || !sonrakiTip || isTechnicalActivityType(sonrakiTip))) {
       return false;
     }
     return true;
-  }, [editReady, musteriId, aktiviteTipi, fazNo, fazDurum, bekleyenTaraf, notlar, isTechnicalActivity, phaseOptionalCustomer, phaseOptionalTechnicalCustomer, canCreateTechnical, sonrakiAksiyonVar, sonrakiTarih, sonrakiTip]);
+  }, [editReady, musteriId, aktiviteTipi, fazNo, fazDurum, bekleyenTaraf, notlar, isTechnicalActivity, isPartnerActivityType, partnerActivityAccess, phaseOptionalCustomer, phaseOptionalTechnicalCustomer, canCreateTechnical, sonrakiAksiyonVar, sonrakiTarih, sonrakiTip, missingPartnerRelationship]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -342,6 +367,8 @@ export default function QuickActivityClient() {
       const payload = {
         ...(editId ? { activity_id: editId } : {}),
         musteri_id: musteriId,
+        activity_context: isBusinessPartnerCustomer ? 'business_partner' : 'customer',
+        ...(contactSelection?.customerId === musteriId ? { technical_contact_id: contactSelection.id } : {}),
         faz_no: fazNo,
         kanal: aktiviteTipi,
         faz_durum: fazDurum,
@@ -420,9 +447,11 @@ export default function QuickActivityClient() {
             />
             <select
               value={musteriId}
+              disabled={!!editId}
               onChange={(e) => {
                 const nextMusteriId = e.target.value;
                 setMusteriId(nextMusteriId);
+                setContactSelection(null);
                 if (!editId) {
                   const nextCustomer = customers.find(c => c.musteri_id === nextMusteriId) || null;
                   const preferredFaz = nextCustomer?.son_kalinan_faz_no ?? nextCustomer?.aktif_faz_no ?? null;
@@ -452,11 +481,21 @@ export default function QuickActivityClient() {
           </div>
 
           <div>
-            <label className="pax-label" style={{ display: 'block', marginBottom: 8 }}>Aktivite Tipi *</label>
+            {isBusinessPartnerCustomer && musteriId && <TechnicalContactSelect
+              key={musteriId} customerId={musteriId}
+              value={contactSelection?.customerId === musteriId ? contactSelection.id : originalContact?.customerId === musteriId ? originalContact.id : null}
+              originalId={originalContact?.customerId === musteriId ? originalContact.id : null}
+              onChange={id => setContactSelection({ customerId: musteriId, id })}
+            />}
+            <label className="pax-label" style={{ display: 'block', marginBottom: 8, marginTop: 16 }}>Aktivite Tipi *</label>
             <select value={aktiviteTipi} onChange={(e) => setAktiviteTipi(e.target.value as ActivityType)} className="pax-input" required style={{ width: '100%', minHeight: 48, fontSize: 16 }}>
               {visibleActivityTypes.map(tip => <option key={tip} value={tip}>{tip}</option>)}
             </select>
           </div>
+
+          {missingPartnerRelationship && <div style={{ padding: 14, background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 'var(--radius-md)', color: '#9a3412' }}>
+            Bu firmada aktif İş Ortağı ilişkisi yok. Önce <Link href={`/crm/${musteriId}#company-relations`}>firma kartından İş Ortağı ilişkisini ekleyin</Link>.
+          </div>}
 
           {technicalMissingPhase && (
             <div style={{ padding: 14, background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 'var(--radius-md)', color: '#9a3412', fontSize: 14 }}>

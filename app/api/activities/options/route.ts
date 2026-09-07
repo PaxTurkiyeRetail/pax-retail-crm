@@ -32,7 +32,7 @@ export async function GET() {
       customerQuery = customerQuery.eq('owner_user_id', me.id);
     }
 
-    const [{ data: events }, { data: customers }, { data: users }, parameterOptions] = await Promise.all([
+    const [{ data: events }, { data: customers }, { data: users }, parameterOptions, { data: partnerTypeAccess }] = await Promise.all([
       eventQuery,
       customerQuery,
       canReadAny ? admin
@@ -41,6 +41,9 @@ export async function GET() {
         .eq('is_active', true)
         .limit(200) : Promise.resolve({ data: [] as any[] }),
       getParameterOptionsByGroups(['activity_waiting_party']),
+      me.role === 'super_admin' ? Promise.resolve({ data: { can_view: true, can_create: true, can_change_phase: true } }) : admin
+        .from('activity_type_role_permissions').select('can_view,can_create,can_change_phase')
+        .eq('activity_type_key', 'business_partner_activity').eq('role_key', me.role).maybeSingle(),
     ]);
 
     return NextResponse.json({
@@ -53,6 +56,7 @@ export async function GET() {
       ]),
       responsibleOptions: uniqueSorted([...(customers ?? []).map((row: any) => row.sorumlu), BUSINESS_PARTNER_RESPONSIBLE]),
       waitingSideOptions: parameterOptions.activity_waiting_party ?? [],
+      businessPartnerActivityAccess: partnerTypeAccess ?? { can_view: false, can_create: false, can_change_phase: false },
     });
   } catch (e: any) {
     return NextResponse.json({ message: 'Yetkisiz' }, { status: e?.status || 401 });

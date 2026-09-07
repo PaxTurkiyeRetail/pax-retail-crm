@@ -10,6 +10,8 @@ type Params = {
   partner_owner?: string | null;
   notlar?: string | null;
   exclude_id?: string | null;
+  activity_context?: 'customer' | 'business_partner';
+  sync_legacy_pipeline?: boolean;
 };
 
 export async function completeActivitiesForSamePhase(params: Params) {
@@ -30,12 +32,14 @@ export async function completeActivitiesForSamePhase(params: Params) {
     .eq('faz_no', params.faz_no)
     .ilike('aksiyon', 'AKTIVITE:%')
     .neq('durum', 'Tamamlandı');
+  if (params.activity_context) query = query.eq('activity_context', params.activity_context);
 
   if (params.exclude_id) query = query.neq('id', params.exclude_id);
 
   const { error } = await query;
   if (error) throw error;
 
+  if (params.sync_legacy_pipeline === false) return;
   const { error: pipelineErr } = await admin.from('musteri_pipeline').upsert(
     {
       musteri_id: params.musteri_id,
@@ -55,7 +59,7 @@ export async function completeActivitiesForSamePhase(params: Params) {
 export async function completePreviousOpenActivities(params: Params) {
   const admin = createPgAdminClient();
 
-  const { error } = await admin
+  let query = admin
     .from('pipeline_eventleri')
     .update({
       durum: 'Tamamlandı',
@@ -68,6 +72,8 @@ export async function completePreviousOpenActivities(params: Params) {
     .lt('faz_no', params.faz_no)
     .ilike('aksiyon', 'AKTIVITE:%')
     .in('durum', ['Devam Ediyor', 'Başlamadı']);
+  if (params.activity_context) query = query.eq('activity_context', params.activity_context);
+  const { error } = await query;
 
   if (error) throw error;
 }

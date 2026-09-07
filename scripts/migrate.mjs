@@ -3,6 +3,7 @@ import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 import pg from 'pg';
+import { migrationSections } from './migration-sections.mjs';
 
 const { Client } = pg;
 const databaseUrl = process.env.DATABASE_URL;
@@ -17,6 +18,12 @@ const files = (await readdir(migrationsDirectory))
   .sort((a, b) => a.localeCompare(b));
 
 const client = new Client({ connectionString: databaseUrl });
+const migrations = [];
+for (const file of files) {
+  migrations.push(...migrationSections(file, await readFile(path.join(migrationsDirectory, file), 'utf8')));
+}
+migrations.sort((a, b) => a.version.localeCompare(b.version));
+if (new Set(migrations.map(m => m.version)).size !== migrations.length) throw new Error('Duplicate migration version.');
 await client.connect();
 
 try {
@@ -29,8 +36,7 @@ try {
     )
   `);
 
-  for (const file of files) {
-    const sql = await readFile(path.join(migrationsDirectory, file), 'utf8');
+  for (const { version: file, sql } of migrations) {
     const checksum = createHash('sha256').update(sql).digest('hex');
     const existing = await client.query(
       'select checksum from public.crm_schema_migrations where version = $1',

@@ -15,6 +15,10 @@ type ActivityCustomerRow = {
   aktif_faz_adi: string | null;
   report_only?: boolean | null;
   is_business_partner?: boolean | null;
+  has_customer_role?: boolean | null;
+  has_business_partner_role?: boolean | null;
+  partner_faz_no?: number | null;
+  partner_faz_adi?: string | null;
   son_kalinan_faz_no?: number | null;
   son_kalinan_faz_adi?: string | null;
   son_kalinan_faz_durumu?: string | null;
@@ -97,11 +101,18 @@ export async function GET(req: Request) {
       ...(crmRows ?? []).map((row: any) => String(row.musteri_id ?? '')).filter(Boolean),
       ...(selectedRow?.id ? [String(selectedRow.id)] : []),
     ]));
-    const policyResult = customerIds.length
-      ? await admin.from('musteriler').select('id,customer_type,pipeline_policy').in('id', customerIds)
-      : { data: [] as any[], error: null as any };
+    const [policyResult, rolesResult, partnerPipelineResult] = customerIds.length ? await Promise.all([
+      admin.from('musteriler').select('id,customer_type,pipeline_policy').in('id', customerIds),
+      admin.from('organization_roles').select('customer_id,role_key,is_active').in('customer_id', customerIds).eq('is_active', true),
+      admin.from('organization_pipeline_states').select('customer_id,active_phase_no,status').in('customer_id', customerIds).eq('context_key', 'business_partner'),
+    ]) : [{ data: [] as any[], error: null }, { data: [] as any[], error: null }, { data: [] as any[], error: null }];
     if (policyResult.error) return NextResponse.json({ message: policyResult.error.message }, { status: 500 });
     const policyById = new Map((policyResult.data ?? []).map((row: any) => [String(row.id), row]));
+    const rolesById = new Map<string, Set<string>>();
+    for (const row of rolesResult.data ?? []) {
+      const key = String((row as any).customer_id); const set = rolesById.get(key) ?? new Set<string>(); set.add(String((row as any).role_key)); rolesById.set(key, set);
+    }
+    const partnerPipelineById = new Map((partnerPipelineResult.data ?? []).map((row: any) => [String(row.customer_id), row]));
 
     const byId = new Map<string, ActivityCustomerRow>();
 
@@ -109,6 +120,8 @@ export async function GET(req: Request) {
       const id = String(row.musteri_id ?? '').trim();
       if (!id) return;
       const policy = policyById.get(id) as any;
+      const roleKeys = rolesById.get(id) ?? new Set<string>();
+      const partnerPipeline = partnerPipelineById.get(id) as any;
       byId.set(id, {
         musteri_id: id,
         musteri: String(row.musteri ?? '').trim(),
@@ -118,6 +131,10 @@ export async function GET(req: Request) {
         aktif_faz_adi: row.aktif_faz_adi ?? null,
         report_only: String(policy?.pipeline_policy ?? 'phase_required') === 'phase_optional',
         is_business_partner: String(policy?.customer_type ?? 'standard') === 'business_partner',
+        has_customer_role: roleKeys.has('customer'),
+        has_business_partner_role: roleKeys.has('business_partner'),
+        partner_faz_no: partnerPipeline?.active_phase_no != null ? Number(partnerPipeline.active_phase_no) : null,
+        partner_faz_adi: null,
       });
     });
 
@@ -129,6 +146,8 @@ export async function GET(req: Request) {
         const rowPolicy = policyById.get(id) as any;
         const rowPhaseOptional = String(rowPolicy?.pipeline_policy ?? row.pipeline_policy ?? 'phase_required') === 'phase_optional';
         const rowBusinessPartner = String(rowPolicy?.customer_type ?? row.customer_type ?? 'standard') === 'business_partner';
+        const roleKeys = rolesById.get(id) ?? new Set<string>();
+        const partnerPipeline = partnerPipelineById.get(id) as any;
 
         if (existing) {
           byId.set(id, {
@@ -138,6 +157,8 @@ export async function GET(req: Request) {
             sektor: existing.sektor ?? row.sektor ?? null,
             report_only: rowPhaseOptional,
             is_business_partner: Boolean(existing.is_business_partner) || rowBusinessPartner,
+            has_customer_role: roleKeys.has('customer'), has_business_partner_role: roleKeys.has('business_partner'),
+            partner_faz_no: partnerPipeline?.active_phase_no != null ? Number(partnerPipeline.active_phase_no) : null,
           });
           return;
         }
@@ -151,6 +172,10 @@ export async function GET(req: Request) {
           aktif_faz_adi: null,
           report_only: rowPhaseOptional,
           is_business_partner: rowBusinessPartner,
+          has_customer_role: roleKeys.has('customer'),
+          has_business_partner_role: roleKeys.has('business_partner'),
+          partner_faz_no: partnerPipeline?.active_phase_no != null ? Number(partnerPipeline.active_phase_no) : null,
+          partner_faz_adi: null,
           son_kalinan_faz_no: null,
           son_kalinan_faz_adi: null,
           son_kalinan_faz_durumu: null,

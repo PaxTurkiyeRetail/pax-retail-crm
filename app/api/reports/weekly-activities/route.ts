@@ -51,7 +51,7 @@ export async function GET(req: Request) {
     const data = await fetchAllRows<any>((rangeFrom, rangeTo) => {
       let query = admin
         .from('pipeline_eventleri')
-        .select('id,musteri_id,faz_no,durum,aksiyon,owner,partner_owner,notlar,created_at,created_by,musteriler(musteri,sorumlu,sektor,entegrasyon_tipi)')
+        .select('id,musteri_id,faz_no,durum,aksiyon,owner,partner_owner,notlar,created_at,created_by,activity_context,musteriler(musteri,sorumlu,sektor,entegrasyon_tipi)')
         .gte('created_at', `${from}T00:00:00`)
         .lte('created_at', `${to}T23:59:59`)
         .order('created_at', { ascending: false })
@@ -83,6 +83,7 @@ export async function GET(req: Request) {
         status: presentDurum(row.durum) ?? '-',
         channel: normalizeChannel(activityLabelFromRow(row)),
         notes: String(row.notlar ?? '').trim(),
+        activity_context: row.activity_context ?? 'customer',
       }));
 
     if (owner) rows = rows.filter((row) => row.created_by === owner);

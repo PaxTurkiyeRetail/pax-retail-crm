@@ -9,6 +9,7 @@ type ParamGroup = {
   title: string;
   description?: string;
   type?: "boolean" | "number" | "text" | "phase";
+  editorKind?: "list" | "phase" | "setting";
 };
 
 type ParamRow = {
@@ -125,6 +126,8 @@ export default function ParametersClient() {
   const [selectedModule, setSelectedModule] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
   const [selectedGroup, setSelectedGroup] = useState("");
+  const [groupSearch, setGroupSearch] = useState("");
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [label, setLabel] = useState("");
   const [value, setValue] = useState("");
   const [sortOrder, setSortOrder] = useState("999");
@@ -190,6 +193,7 @@ export default function ParametersClient() {
     moduleGroups[0] ||
     groups[0];
   const selectedMeta = moduleMeta(selectedModule);
+  const listEditor = selectedDefinition?.editorKind === 'list' || (!selectedDefinition?.editorKind && isListModule(selectedModule));
 
   useEffect(() => {
     const first = moduleGroups[0];
@@ -229,10 +233,18 @@ export default function ParametersClient() {
     [phaseRows, selectedGroup],
   );
 
-  const activeCount =
-    rows.filter((row) => row.is_active).length +
-    phaseRows.filter((row) => row.is_active).length;
-  const inactiveCount = rows.length + phaseRows.length - activeCount;
+  const selectedRows = [...rows, ...phaseRows].filter(row => moduleGroups.some(group => group.key === row.group_key));
+  const nextPosition = isPhaseGroup(selectedDefinition)
+    ? Math.max(0, ...visiblePhaseRows.map(row => row.faz_no)) + 1
+    : Math.max(0, ...visibleRows.map(row => row.sort_order)) + 10;
+  useEffect(() => {
+    setLabel(''); setValue(''); setSortOrder(String(nextPosition));
+  }, [selectedGroup, nextPosition]);
+  const activeCount = selectedRows.filter(row => row.is_active).length;
+  const inactiveCount = selectedRows.length - activeCount;
+  const searchResults = groupSearch.trim() ? groups.filter(group =>
+    [group.title, group.description, group.module, group.category].join(' ').toLocaleLowerCase('tr').includes(groupSearch.trim().toLocaleLowerCase('tr'))
+  ) : [];
 
   async function addParameter(e: React.FormEvent) {
     e.preventDefault();
@@ -454,6 +466,16 @@ export default function ParametersClient() {
 
   return (
     <div className="parameters-workspace enterprise-settings">
+      <section className="pax-card parameters-search" aria-label="Parametre bul">
+        <label className="pax-label" htmlFor="parameter-group-search">Hangi ayarı arıyorsunuz?</label>
+        <input id="parameter-group-search" className="pax-input" type="search" value={groupSearch} onChange={e => setGroupSearch(e.target.value)} placeholder="Örneğin: iş ortağı, faz, sektör..." />
+        {groupSearch.trim() && <div className="parameters-search-results">
+          {!searchResults.length && <p role="status">Eşleşen ayar bulunamadı.</p>}
+          {searchResults.map(group => <button type="button" className="parameters-search-result" key={group.key} onClick={() => {
+            setSelectedModule(group.module || 'Genel'); setSelectedCategory(group.category || 'Genel'); setSelectedGroup(group.key); setGroupSearch('');
+          }}><strong>{group.title}</strong><span>{group.module || 'Genel'} / {group.category || 'Genel'}</span></button>)}
+        </div>}
+      </section>
       {(error || message) && (
         <div
           className="pax-card parameters-alert"
@@ -463,44 +485,17 @@ export default function ParametersClient() {
         </div>
       )}
 
-      <div className="settings-overview">
-        {modules.map((moduleName) => {
-          const meta = moduleMeta(moduleName);
-          const groupCount = groups.filter(
-            (group) => (group.module || "Genel") === moduleName,
-          ).length;
-          const rowCount = rows.filter((row) =>
-            groups.some(
-              (group) =>
-                group.key === row.group_key &&
-                (group.module || "Genel") === moduleName,
-            ),
-          ).length;
-          return (
-            <button
-              key={moduleName}
-              type="button"
-              className={`settings-module-card tone-${meta.tone}${selectedModule === moduleName ? " active" : ""}`}
-              onClick={() => {
-                const first = groups.find(
-                  (group) => (group.module || "Genel") === moduleName,
-                );
-                setSelectedModule(moduleName);
-                if (first) {
-                  setSelectedCategory(first.category || "Genel");
-                  setSelectedGroup(first.key);
-                }
-              }}
-            >
-              <span className="settings-module-icon">{meta.icon}</span>
-              <strong>{moduleName}</strong>
-              <small>{meta.help}</small>
-              <em>
-                {groupCount} grup · {rowCount} değer
-              </em>
-            </button>
-          );
-        })}
+      <div className="pax-card parameters-area-picker">
+        <label className="pax-label" htmlFor="parameter-module">Ayar Alanı</label>
+        <select id="parameter-module" className="pax-input" value={selectedModule} onChange={e => {
+          const moduleName = e.target.value;
+          const first = groups.find(group => (group.module || "Genel") === moduleName);
+          setSelectedModule(moduleName);
+          if (first) { setSelectedCategory(first.category || "Genel"); setSelectedGroup(first.key); }
+        }}>
+          {modules.map(moduleName => <option key={moduleName} value={moduleName}>{moduleName}</option>)}
+        </select>
+        <p>{selectedMeta.help}</p>
       </div>
 
       <div className="parameters-metrics">
@@ -509,11 +504,11 @@ export default function ParametersClient() {
           <strong>{selectedModule}</strong>
         </div>
         <div className="pax-card parameters-metric">
-          <span>Aktif Değer</span>
+          <span>Seçili Alandaki Aktif Değer</span>
           <strong>{activeCount}</strong>
         </div>
         <div className="pax-card parameters-metric">
-          <span>Pasif Değer</span>
+          <span>Seçili Alandaki Pasif Değer</span>
           <strong>{inactiveCount}</strong>
         </div>
       </div>
@@ -576,7 +571,7 @@ export default function ParametersClient() {
             <span className={`settings-type-badge tone-${selectedMeta.tone}`}>
               {isPhaseGroup(selectedDefinition)
                 ? "Faz Yönetimi"
-                : isListModule(selectedModule)
+                : listEditor
                   ? "Liste Yönetimi"
                   : isBooleanGroup(selectedDefinition)
                     ? "Aç / Kapat"
@@ -589,7 +584,7 @@ export default function ParametersClient() {
           {!isJiraCategory && (
             <div
               className="parameters-tabs"
-              role="tablist"
+              role="group"
               aria-label="Parametre grupları"
             >
               {categoryGroups.map((group) => (
@@ -597,6 +592,7 @@ export default function ParametersClient() {
                   key={group.key}
                   type="button"
                   className={`parameters-tab${selectedGroup === group.key ? " active" : ""}`}
+                  aria-pressed={selectedGroup === group.key}
                   onClick={() => setSelectedGroup(group.key)}
                 >
                   {group.title}
@@ -604,6 +600,11 @@ export default function ParametersClient() {
               ))}
             </div>
           )}
+
+          {(listEditor || isPhaseGroup(selectedDefinition)) && <label className="parameters-check">
+            <input type="checkbox" checked={showAdvanced} onChange={e => setShowAdvanced(e.target.checked)} />
+            Gelişmiş alanları göster
+          </label>}
 
           {isJiraCategory ? (
             <form
@@ -639,7 +640,7 @@ export default function ParametersClient() {
                 {jiraSaving ? "Kaydediliyor..." : "Tümünü Kaydet"}
               </button>
             </form>
-          ) : !isListModule(selectedModule) && primaryRow ? (
+          ) : !listEditor && !isPhaseGroup(selectedDefinition) && primaryRow ? (
             <div className="settings-control-panel">
               {isBooleanGroup(selectedDefinition) ? (
                 <label className="settings-switch-card">
@@ -719,7 +720,7 @@ export default function ParametersClient() {
                   />
                 </label>
                 <label className="pax-label">
-                  Owner
+                  Sorumlu Ekip
                   <input
                     className="pax-input"
                     value={value}
@@ -747,7 +748,7 @@ export default function ParametersClient() {
                   <thead>
                     <tr>
                       <th>Faz</th>
-                      <th>Owner</th>
+                      <th>Sorumlu Ekip</th>
                       <th>Durum</th>
                       <th style={{ textAlign: "right" }}>İşlem</th>
                     </tr>
@@ -896,8 +897,8 @@ export default function ParametersClient() {
                     required
                   />
                 </label>
-                <label className="pax-label">
-                  Form/DB Değeri
+                <label className="pax-label" hidden={!showAdvanced}>
+                  Kayıt Değeri
                   <input
                     className="pax-input"
                     value={value}
@@ -905,8 +906,8 @@ export default function ParametersClient() {
                     placeholder="Boşsa görünen ad kullanılır"
                   />
                 </label>
-                <label className="pax-label">
-                  Sıra
+                <label className="pax-label" hidden={!showAdvanced}>
+                  Görüntüleme Sırası
                   <input
                     className="pax-input"
                     type="number"
@@ -924,8 +925,8 @@ export default function ParametersClient() {
                   <thead>
                     <tr>
                       <th>{displayValueLabel()}</th>
-                      <th>Form/DB Değeri</th>
-                      <th>Sıra</th>
+                      {showAdvanced && <th>Kayıt Değeri</th>}
+                      {showAdvanced && <th>Görüntüleme Sırası</th>}
                       <th>Durum</th>
                       <th style={{ textAlign: "right" }}>İşlem</th>
                     </tr>
@@ -933,11 +934,11 @@ export default function ParametersClient() {
                   <tbody>
                     {loading ? (
                       <tr>
-                        <td colSpan={5}>Yükleniyor...</td>
+                        <td colSpan={showAdvanced ? 5 : 3}>Yükleniyor...</td>
                       </tr>
                     ) : visibleRows.length === 0 ? (
                       <tr>
-                        <td colSpan={5}>Bu grupta parametre yok.</td>
+                        <td colSpan={showAdvanced ? 5 : 3}>Bu grupta parametre yok.</td>
                       </tr>
                     ) : (
                       visibleRows.map((row) => (
@@ -947,12 +948,10 @@ export default function ParametersClient() {
                         >
                           <td>
                             <strong>{row.label}</strong>
-                            <div className="parameters-row-key">
-                              {row.param_key}
-                            </div>
+                            {showAdvanced && <div className="parameters-row-key">{row.param_key}</div>}
                           </td>
-                          <td>{row.value}</td>
-                          <td>{row.sort_order}</td>
+                          {showAdvanced && <td>{row.value}</td>}
+                          {showAdvanced && <td>{row.sort_order}</td>}
                           <td>
                             <span
                               className={`parameters-status ${row.is_active ? "active" : "passive"}`}
@@ -1037,8 +1036,8 @@ export default function ParametersClient() {
                 required
               />
             </label>
-            <label className="pax-label">
-              {edit.type === "phase" ? "Owner" : "Kanonik Kod"}
+            <label className="pax-label" hidden={edit.type !== "phase" && !showAdvanced}>
+              {edit.type === "phase" ? "Sorumlu Ekip" : "Kayıt Değeri"}
               <input
                 className="pax-input"
                 value={edit.value}
@@ -1047,8 +1046,8 @@ export default function ParametersClient() {
                 disabled={edit.type !== "phase"}
               />
             </label>
-            <label className="pax-label">
-              Sıra
+            <label className="pax-label" hidden={!showAdvanced}>
+              Görüntüleme Sırası
               <input
                 className="pax-input"
                 type="number"

@@ -3136,3 +3136,278 @@ comment on column public.musteriler.is_ortagi_tipi is 'Is ortagi alt turu (ör. 
 -- =====================================================================
 -- SONU
 -- =====================================================================
+-- CRM_APPEND_MIGRATION: 20260907_012_pipeline_non_phase_activity_guard.sql
+-- Technical/annotation activities must not replace the account pipeline snapshot.
+-- Existing snapshots are intentionally not rebuilt in bulk by this migration.
+create or replace function public.rebuild_musteri_pipeline(p_musteri_id text)
+returns void language plpgsql as $$
+declare
+  v_row record;
+begin
+  select pe.musteri_id, pe.faz_no as aktif_faz_no,
+    coalesce(pe.durum, 'Devam Ediyor'::public.faz_durum_enum) as durum,
+    coalesce(pe.owner, ft.owner) as owner, pe.partner_owner, pe.hedef_tarihi
+  into v_row
+  from public.pipeline_eventleri pe
+  left join public.faz_tanimlari ft on ft.faz_no = pe.faz_no
+  where pe.musteri_id::text = p_musteri_id
+    and coalesce(pe.affects_phase, true)
+    and pe.activity_scope is distinct from 'technical'
+  order by pe.created_at desc, pe.id desc
+  limit 1;
+
+  if not found then
+    delete from public.musteri_pipeline where musteri_id::text = p_musteri_id;
+    return;
+  end if;
+
+  insert into public.musteri_pipeline
+    (musteri_id, aktif_faz_no, durum, owner, partner_owner, hedef_tarihi, updated_at)
+  values
+    (v_row.musteri_id, v_row.aktif_faz_no, v_row.durum, v_row.owner, v_row.partner_owner, v_row.hedef_tarihi, now())
+  on conflict (musteri_id) do update set
+    aktif_faz_no = excluded.aktif_faz_no, durum = excluded.durum,
+    owner = excluded.owner, partner_owner = excluded.partner_owner,
+    hedef_tarihi = excluded.hedef_tarihi, updated_at = excluded.updated_at;
+end;
+$$;
+
+create or replace function public.trg_sync_musteri_pipeline()
+returns trigger language plpgsql as $$
+declare
+  v_faz_owner text;
+  v_old_affects boolean;
+  v_new_affects boolean;
+begin
+  if tg_op <> 'INSERT' then
+    v_old_affects := coalesce(old.affects_phase, true) and old.activity_scope is distinct from 'technical';
+  end if;
+  if tg_op <> 'DELETE' then
+    v_new_affects := coalesce(new.affects_phase, true) and new.activity_scope is distinct from 'technical';
+  end if;
+
+  if tg_op = 'DELETE' then
+    if v_old_affects then
+      perform public.rebuild_musteri_pipeline(old.musteri_id::text);
+    end if;
+    return old;
+  end if;
+
+  if tg_op = 'INSERT' then
+    if not v_new_affects then return new; end if;
+    select owner into v_faz_owner from public.faz_tanimlari where faz_no = new.faz_no;
+    insert into public.musteri_pipeline
+      (musteri_id, aktif_faz_no, durum, owner, partner_owner, hedef_tarihi, updated_at)
+    values
+      (new.musteri_id, new.faz_no, coalesce(new.durum, 'Devam Ediyor'::public.faz_durum_enum),
+       coalesce(new.owner, v_faz_owner), new.partner_owner, new.hedef_tarihi, now())
+    on conflict (musteri_id) do update set
+      aktif_faz_no = excluded.aktif_faz_no, durum = excluded.durum,
+      owner = excluded.owner, partner_owner = excluded.partner_owner,
+      hedef_tarihi = excluded.hedef_tarihi, updated_at = excluded.updated_at;
+    return new;
+  end if;
+
+  if not v_old_affects and not v_new_affects then return new; end if;
+  if old.musteri_id is distinct from new.musteri_id and v_old_affects then
+    perform public.rebuild_musteri_pipeline(old.musteri_id::text);
+  end if;
+  -- Includes account -> technical and technical -> account conversions.
+  perform public.rebuild_musteri_pipeline(new.musteri_id::text);
+  return new;
+end;
+$$;
+-- CRM_APPEND_MIGRATION: 20260907_013_customer_technical_contacts.sql
+create table if not exists public.customer_technical_contacts (
+  id uuid primary key default gen_random_uuid(),
+  customer_id uuid not null references public.musteriler(id) on delete cascade,
+  full_name text not null check (length(btrim(full_name)) between 1 and 160),
+  phone text check (length(phone) <= 40),
+  email text check (length(email) <= 254),
+  title text check (length(title) <= 120),
+  is_active boolean not null default true,
+  version integer not null default 1 check (version > 0),
+  created_by_user_id uuid references public.allowed_users(id) on delete set null,
+  updated_by_user_id uuid references public.allowed_users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (id, customer_id)
+);
+create index if not exists idx_technical_contacts_customer_active
+  on public.customer_technical_contacts(customer_id, is_active, full_name);
+
+alter table public.pipeline_eventleri add column if not exists technical_contact_id uuid;
+do $contact_fk$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'pipeline_event_technical_contact_customer_fk' and conrelid = 'public.pipeline_eventleri'::regclass) then
+    alter table public.pipeline_eventleri
+  add constraint pipeline_event_technical_contact_customer_fk
+  foreign key (technical_contact_id, musteri_id)
+  references public.customer_technical_contacts(id, customer_id);
+  end if;
+end $contact_fk$;
+create index if not exists idx_pipeline_event_technical_contact
+  on public.pipeline_eventleri(technical_contact_id) where technical_contact_id is not null;
+
+comment on table public.customer_technical_contacts is 'Firma teknik irtibatları; çalışan/Entra hesabı değildir. Geçmişi korumak için pasife alınır.';
+-- CRM_APPEND_MIGRATION: 20260907_014_company_roles_and_activity_context.sql
+-- Additive multi-role model. Existing customer, quote, forecast and activity IDs stay unchanged.
+alter table public.musteriler add column if not exists is_ortagi_tipi text null;
+create table if not exists public.organization_roles (
+  id uuid primary key default gen_random_uuid(),
+  customer_id uuid not null references public.musteriler(id) on delete cascade,
+  role_key text not null check (role_key in ('customer','business_partner')),
+  subtype text null,
+  is_active boolean not null default true,
+  version integer not null default 1 check (version > 0),
+  created_by_user_id uuid null references public.allowed_users(id) on delete set null,
+  updated_by_user_id uuid null references public.allowed_users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique(customer_id, role_key)
+);
+create index if not exists idx_organization_roles_role_active on public.organization_roles(role_key,is_active,customer_id);
+
+insert into public.organization_roles(customer_id,role_key,subtype,is_active)
+select id,
+       case when customer_type='business_partner' then 'business_partner' else 'customer' end,
+       case when customer_type='business_partner' then is_ortagi_tipi else null end,
+       true
+from public.musteriler
+on conflict(customer_id,role_key) do nothing;
+create or replace function public.seed_organization_role() returns trigger language plpgsql as $fn$
+begin
+  insert into public.organization_roles(customer_id,role_key,subtype)
+  values(new.id,case when new.customer_type='business_partner' then 'business_partner' else 'customer' end,
+    case when new.customer_type='business_partner' then new.is_ortagi_tipi else null end)
+  on conflict(customer_id,role_key) do nothing;
+  return new;
+end $fn$;
+drop trigger if exists trg_seed_organization_role on public.musteriler;
+create trigger trg_seed_organization_role after insert on public.musteriler for each row execute function public.seed_organization_role();
+
+alter table public.pipeline_eventleri add column if not exists activity_context text null;
+update public.pipeline_eventleri e
+set activity_context=case when m.customer_type='business_partner' then 'business_partner' else 'customer' end
+from public.musteriler m
+where m.id=e.musteri_id and e.activity_context is null;
+alter table public.pipeline_eventleri drop constraint if exists pipeline_eventleri_activity_context_check;
+alter table public.pipeline_eventleri add constraint pipeline_eventleri_activity_context_check
+  check(activity_context in ('customer','business_partner'));
+create index if not exists idx_pipeline_events_customer_context_created
+  on public.pipeline_eventleri(musteri_id,activity_context,created_at desc);
+
+alter table public.pipeline_eventleri drop constraint if exists pipeline_eventleri_faz_no_fkey;
+create or replace function public.validate_activity_context_phase() returns trigger language plpgsql as $fn$
+declare effective_context text; phase_exists boolean;
+begin
+  if new.faz_no is null then return new; end if;
+  effective_context := new.activity_context;
+  if effective_context is null then
+    select case when customer_type='business_partner' then 'business_partner' else 'customer' end
+      into effective_context from public.musteriler where id=new.musteri_id;
+    new.activity_context := effective_context;
+  end if;
+  if not exists(select 1 from public.organization_roles where customer_id=new.musteri_id and role_key=effective_context and is_active) then
+    raise exception 'Firma % için aktif % ilişkisi bulunamadı',new.musteri_id,effective_context using errcode='23514';
+  end if;
+  if effective_context='business_partner' then
+    select exists(select 1 from public.is_ortagi_faz_tanimlari where faz_no=new.faz_no and is_active) into phase_exists;
+  else
+    select exists(select 1 from public.faz_tanimlari where faz_no=new.faz_no) into phase_exists;
+  end if;
+  if not phase_exists then raise exception 'Seçilen faz aktivite kapsamına ait değil' using errcode='23514'; end if;
+  return new;
+end $fn$;
+drop trigger if exists trg_validate_activity_context_phase on public.pipeline_eventleri;
+create trigger trg_validate_activity_context_phase before insert or update of musteri_id,faz_no,activity_context
+on public.pipeline_eventleri for each row execute function public.validate_activity_context_phase();
+
+create table if not exists public.organization_pipeline_states (
+  customer_id uuid not null references public.musteriler(id) on delete cascade,
+  context_key text not null check(context_key in ('customer','business_partner')),
+  active_phase_no integer null,
+  status text null,
+  owner text null,
+  partner_owner text null,
+  target_date date null,
+  updated_at timestamptz not null default now(),
+  primary key(customer_id,context_key)
+);
+insert into public.organization_pipeline_states(customer_id,context_key,active_phase_no,status,owner,partner_owner,target_date,updated_at)
+select p.musteri_id,case when m.customer_type='business_partner' then 'business_partner' else 'customer' end,
+       p.aktif_faz_no,p.durum,p.owner,p.partner_owner,p.hedef_tarihi,p.updated_at
+from public.musteri_pipeline p join public.musteriler m on m.id=p.musteri_id
+on conflict(customer_id,context_key) do nothing;
+
+create or replace function public.rebuild_organization_pipeline(p_customer_id uuid,p_context text) returns void language plpgsql as $fn$
+declare latest public.pipeline_eventleri%rowtype;
+begin
+  select * into latest from public.pipeline_eventleri
+   where musteri_id=p_customer_id and activity_context=p_context and coalesce(affects_phase,true)=true
+   order by created_at desc,id desc limit 1;
+  if latest.id is null then delete from public.organization_pipeline_states where customer_id=p_customer_id and context_key=p_context;
+  else insert into public.organization_pipeline_states(customer_id,context_key,active_phase_no,status,owner,partner_owner,target_date,updated_at)
+    values(p_customer_id,p_context,latest.faz_no,latest.durum,latest.owner,latest.partner_owner,latest.hedef_tarihi,coalesce(latest.updated_at,latest.created_at,now()))
+    on conflict(customer_id,context_key) do update set active_phase_no=excluded.active_phase_no,status=excluded.status,owner=excluded.owner,
+      partner_owner=excluded.partner_owner,target_date=excluded.target_date,updated_at=excluded.updated_at;
+  end if;
+end $fn$;
+create or replace function public.trg_sync_organization_pipeline() returns trigger language plpgsql as $fn$
+begin
+  if tg_op in ('UPDATE','DELETE') and old.activity_context is not null then perform public.rebuild_organization_pipeline(old.musteri_id,old.activity_context); end if;
+  if tg_op in ('INSERT','UPDATE') and new.activity_context is not null then perform public.rebuild_organization_pipeline(new.musteri_id,new.activity_context); end if;
+  return coalesce(new,old);
+end $fn$;
+drop trigger if exists trg_sync_organization_pipeline on public.pipeline_eventleri;
+create trigger trg_sync_organization_pipeline after insert or update or delete on public.pipeline_eventleri
+for each row execute function public.trg_sync_organization_pipeline();
+
+create table if not exists public.activity_type_role_permissions (
+  activity_type_key text not null,
+  role_key text not null references public.rbac_roles(role_key),
+  can_view boolean not null default false,
+  can_create boolean not null default false,
+  can_change_phase boolean not null default false,
+  updated_at timestamptz not null default now(),
+  primary key(activity_type_key,role_key)
+);
+insert into public.activity_type_role_permissions(activity_type_key,role_key,can_view,can_create,can_change_phase) values
+ ('business_partner_activity','account_manager',true,true,true),
+ ('business_partner_activity','admin',true,true,true),
+ ('business_partner_activity','itsm',true,false,false),
+ ('business_partner_activity','user',false,false,false)
+on conflict(activity_type_key,role_key) do nothing;
+
+-- Legacy snapshot remains authoritative for customer context and partner-only firms.
+-- A dual-role firm's partner activity must never move its customer/sales phase.
+create or replace function public.rebuild_musteri_pipeline(p_musteri_id text) returns void language plpgsql as $fn$
+declare v_row record;
+begin
+  select pe.musteri_id,pe.faz_no as aktif_faz_no,
+    coalesce(pe.durum,'Devam Ediyor'::public.faz_durum_enum) as durum,
+    coalesce(pe.owner,ft.owner) as owner,pe.partner_owner,pe.hedef_tarihi
+  into v_row from public.pipeline_eventleri pe
+  left join public.faz_tanimlari ft on ft.faz_no=pe.faz_no
+  where pe.musteri_id::text=p_musteri_id and coalesce(pe.affects_phase,true)
+    and pe.activity_scope is distinct from 'technical'
+    and (pe.activity_context='customer' or (pe.activity_context='business_partner' and not exists(
+      select 1 from public.organization_roles r where r.customer_id=pe.musteri_id and r.role_key='customer' and r.is_active)))
+  order by pe.created_at desc,pe.id desc limit 1;
+  if not found then delete from public.musteri_pipeline where musteri_id::text=p_musteri_id; return; end if;
+  insert into public.musteri_pipeline(musteri_id,aktif_faz_no,durum,owner,partner_owner,hedef_tarihi,updated_at)
+  values(v_row.musteri_id,v_row.aktif_faz_no,v_row.durum,v_row.owner,v_row.partner_owner,v_row.hedef_tarihi,now())
+  on conflict(musteri_id) do update set aktif_faz_no=excluded.aktif_faz_no,durum=excluded.durum,owner=excluded.owner,
+    partner_owner=excluded.partner_owner,hedef_tarihi=excluded.hedef_tarihi,updated_at=excluded.updated_at;
+end $fn$;
+create or replace function public.trg_sync_musteri_pipeline() returns trigger language plpgsql as $fn$
+declare old_sync boolean:=false; new_sync boolean:=false;
+begin
+  if tg_op<>'INSERT' then old_sync:=coalesce(old.affects_phase,true) and old.activity_scope is distinct from 'technical'
+    and (old.activity_context='customer' or (old.activity_context='business_partner' and not exists(select 1 from public.organization_roles r where r.customer_id=old.musteri_id and r.role_key='customer' and r.is_active))); end if;
+  if tg_op<>'DELETE' then new_sync:=coalesce(new.affects_phase,true) and new.activity_scope is distinct from 'technical'
+    and (new.activity_context='customer' or (new.activity_context='business_partner' and not exists(select 1 from public.organization_roles r where r.customer_id=new.musteri_id and r.role_key='customer' and r.is_active))); end if;
+  if old_sync then perform public.rebuild_musteri_pipeline(old.musteri_id::text); end if;
+  if new_sync then perform public.rebuild_musteri_pipeline(new.musteri_id::text); end if;
+  return coalesce(new,old);
+end $fn$;

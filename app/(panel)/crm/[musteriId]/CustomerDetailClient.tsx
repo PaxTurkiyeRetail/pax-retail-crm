@@ -4,6 +4,8 @@ import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import QuickKunyeForm from '@/components/kunye/QuickKunyeForm';
 import KunyeDashboard from '@/components/kunye/KunyeDashboard';
+import TechnicalContactsPanel from '@/components/kunye/TechnicalContactsPanel';
+import CompanyRelationshipsPanel from '@/components/kunye/CompanyRelationshipsPanel';
 
 type Customer = {
   id: string;
@@ -87,6 +89,8 @@ export default function CustomerDetailPage() {
       />
 
       {/* Form */}
+      <CompanyRelationshipsPanel customerId={customer.id} onChanged={() => void loadData()} />
+      <TechnicalContactsPanel key={customer.id} customerId={customer.id} />
       <QuickKunyeForm
         musteriId={customer.id}
         musteriAdi={customer.musteri}

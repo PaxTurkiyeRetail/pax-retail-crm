@@ -122,21 +122,30 @@ async function fetchReportOnlyCustomerRows(admin: any, params: {
   fazNo: number;
   kasaFirmasi: string;
   kunyeStatus: string;
+  visibleCustomerIds: string[] | null;
 }) {
   // Rapor müşterileri müşteri listesinde görünsün; fakat künye durumu,
   // kasa ve faz filtrelerinde yer almasın. Çünkü bu kayıtlar künye/faz
   // müşterisi değil, sadece teknik aktivite + yönetim sunumu kapsamındadır.
   if (Number.isFinite(params.fazNo) || params.kasaFirmasi || params.kunyeStatus) return [];
 
+  let roleQuery = admin.from('organization_roles').select('customer_id').eq('role_key', 'business_partner').eq('is_active', true).limit(10000);
+  if (params.visibleCustomerIds) roleQuery = roleQuery.in('customer_id', params.visibleCustomerIds);
+  const { data: roleRows, error: roleError } = await roleQuery;
+  if (roleError) throw roleError;
+  const partnerIds = Array.from(new Set((roleRows ?? []).map((row: any) => String(row.customer_id)).filter(Boolean)));
+  if (!partnerIds.length) return [];
+
   let query = admin
     .from('musteriler')
     .select('id,musteri,sektor,entegrasyon_tipi,satis_olasiligi,sorumlu,customer_type')
     // İş ortağı artık sektörden değil müşteri tipinden tanınır (sektör alanı
     // iş kolu düzenlemesiyle boşaltıldı; bkz. 20260902_008 migration).
-    .eq('customer_type', 'business_partner')
+    .in('id', partnerIds)
     .order('musteri', { ascending: true });
 
   if (params.owner) query = query.ilike('sorumlu', escapeIlike(params.owner));
+  if (params.visibleCustomerIds) query = query.in('id', params.visibleCustomerIds);
   if (params.sector) query = query.ilike('sektor', escapeIlike(params.sector));
   const integrationNeedle = normalizeSearchText(params.integration);
 
@@ -203,13 +212,14 @@ export async function GET(request: Request) {
       : await admin.from('musteriler').select('id').eq('owner_user_id', me.id).limit(10000);
     if (visibleCustomerResult.error) return NextResponse.json({ message: visibleCustomerResult.error.message }, { status: 500 });
     const visibleCustomerIds = canReadAny ? null : (visibleCustomerResult.data ?? []).map((row: any) => String(row.id ?? '')).filter(Boolean);
+    if (visibleCustomerIds?.length === 0) return NextResponse.json({ rows: [], total: 0, page, pageSize });
     const effectiveOwner = canReadAny ? owner : '';
 
     const needsClientFiltering = Boolean(kasaFirmasi || kunyeStatus || integration);
-    const shouldReturnAllLiteRows = (lite && includeAll) || needsClientFiltering;
-    // include_report_only artik tek basina tum musterileri cekmeye zorlamaz.
-    // Normal liste ekrani sayfa sayfa DB'den gelir; sadece arama/kunye/kasa gibi
-    // uygulama katmani filtresi gereken durumlarda toplu cekim yapilir.
+    const shouldReturnAllLiteRows = (lite && includeAll) || needsClientFiltering || includeReportOnly;
+    // Synthetic partner rows must be merged and scoped BEFORE pagination.
+    // Appending every partner to an already paginated page repeats records and
+    // makes both the page size and the total incorrect.
 
     let rows: any[] = [];
     let count: number | null = null;
@@ -217,7 +227,7 @@ export async function GET(request: Request) {
     if (shouldReturnAllLiteRows) {
       rows = (await fetchAllRows(pgClient, { owner: effectiveOwner, sector, integration, fazNo, q, lite, visibleCustomerIds })).filter((row: any) => includeReportOnly || !isReportOnlyCustomer(row));
       if (includeReportOnly) {
-        const reportOnlyRows = await fetchReportOnlyCustomerRows(admin, { owner: effectiveOwner, sector, integration, fazNo, kasaFirmasi, kunyeStatus });
+        const reportOnlyRows = await fetchReportOnlyCustomerRows(admin, { owner: effectiveOwner, sector, integration, fazNo, kasaFirmasi, kunyeStatus, visibleCustomerIds });
         rows = mergeRowsByCustomerId([...rows, ...reportOnlyRows]);
       }
       count = rows.length;
@@ -233,10 +243,6 @@ export async function GET(request: Request) {
       const result = await query;
       if (result.error) return NextResponse.json({ message: result.error.message }, { status: 500 });
       rows = (result.data ?? []).filter((row: any) => includeReportOnly || !isReportOnlyCustomer(row));
-      if (includeReportOnly) {
-        const reportOnlyRows = await fetchReportOnlyCustomerRows(admin, { owner: effectiveOwner, sector, integration, fazNo, kasaFirmasi, kunyeStatus });
-        rows = mergeRowsByCustomerId([...rows, ...reportOnlyRows]);
-      }
       count = Number(result.count ?? rows.length);
     }
 

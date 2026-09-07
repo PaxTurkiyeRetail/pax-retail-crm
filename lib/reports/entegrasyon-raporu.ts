@@ -3,7 +3,7 @@ import { db } from '@/lib/db';
 
 // Entegrasyon Raporu — Entegrasyon Firması olarak işaretli iş ortaklarının
 // hangi fazda olduğunu ve son aktivite notunu tek ekranda gösterir.
-// Kaynak: musteriler (is_ortagi_tipi='Entegrasyon Firması') + musteri_pipeline
+// Kaynak: organization_roles (business_partner / Entegrasyon Firması) + bağlamsal pipeline
 // (aktif_faz_no) + is_ortagi_faz_tanimlari (14 fazlı iş ortağı akışı) +
 // pipeline_eventleri (en son not).
 
@@ -38,21 +38,22 @@ export async function buildEntegrasyonRaporu(options?: { isKolu?: string }): Pro
         m.id::text as customer_id,
         m.musteri,
         m.is_kolu,
-        mp.aktif_faz_no,
+        mp.active_phase_no as aktif_faz_no,
         ft.asama_adi as aktif_faz_adi,
         pe.notlar as son_not,
         pe.created_at as son_event_tarihi
       from public.musteriler m
-      left join public.musteri_pipeline mp on mp.musteri_id = m.id
-      left join public.is_ortagi_faz_tanimlari ft on ft.faz_no = mp.aktif_faz_no
+      join public.organization_roles r on r.customer_id=m.id and r.role_key='business_partner' and r.is_active=true
+      left join public.organization_pipeline_states mp on mp.customer_id = m.id and mp.context_key='business_partner'
+      left join public.is_ortagi_faz_tanimlari ft on ft.faz_no = mp.active_phase_no
       left join lateral (
         select pe_1.notlar, pe_1.created_at
         from public.pipeline_eventleri pe_1
-        where pe_1.musteri_id = m.id
+        where pe_1.musteri_id = m.id and pe_1.activity_context='business_partner'
         order by pe_1.created_at desc
         limit 1
       ) pe on true
-      where m.is_ortagi_tipi = 'Entegrasyon Firması'
+      where r.subtype = 'Entegrasyon Firması'
       order by m.musteri asc
     `,
   );

@@ -88,8 +88,8 @@ export async function GET(req: Request) {
 
     const needsClientFiltering = Boolean(sla);
     const baseSelect = analyticsMode
-      ? 'id,musteri_id,faz_no,durum,aksiyon,owner,partner_owner,created_at,hedef_tarihi,created_by,is_blocked,activity_scope,musteriler(musteri,sektor,sorumlu,customer_type)'
-      : 'id,musteri_id,faz_no,iteration_no,event_type,durum,aksiyon,owner,partner_owner,notlar,created_at,hedef_tarihi,created_by,is_blocked,blocked_note,blocked_at,blocked_by,activity_scope,musteriler(musteri,sektor,entegrasyon_tipi,satis_olasiligi,sorumlu,customer_type)';
+      ? 'id,musteri_id,faz_no,durum,aksiyon,owner,partner_owner,created_at,hedef_tarihi,created_by,is_blocked,activity_scope,activity_context,musteriler(musteri,sektor,sorumlu,customer_type)'
+      : 'id,musteri_id,faz_no,iteration_no,event_type,durum,aksiyon,owner,partner_owner,notlar,created_at,hedef_tarihi,created_by,is_blocked,blocked_note,blocked_at,blocked_by,activity_scope,activity_context,musteriler(musteri,sektor,entegrasyon_tipi,satis_olasiligi,sorumlu,customer_type)';
 
     let query = admin
       .from('pipeline_eventleri')
@@ -169,7 +169,7 @@ export async function GET(req: Request) {
         const dueDate = row.hedef_tarihi ?? null;
         const activityStatus = presentDurum(row.durum);
         const customer = row?.musteriler ?? null;
-        const isBusinessPartner = reportOnlyCustomerKind(customer) === 'business-partner';
+        const isBusinessPartner = row.activity_context === 'business_partner' || (!row.activity_context && reportOnlyCustomerKind(customer) === 'business-partner');
         const phase: any = row.faz_no != null
           ? (isBusinessPartner ? partnerPhaseMap.get(Number(row.faz_no)) : customerPhaseMap.get(Number(row.faz_no)))
           : null;

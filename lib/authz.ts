@@ -11,6 +11,8 @@ import {
 } from '@/lib/roles';
 import { db } from '@/lib/db';
 import { userHasPermission } from '@/lib/permissions';
+import { isResourceOwner, type OwnedResource } from '@/lib/resource-ownership';
+export { isResourceOwner, type OwnedResource } from '@/lib/resource-ownership';
 
 export type AllowedUser = {
   id: string;
@@ -18,13 +20,6 @@ export type AllowedUser = {
   role: AllowedRole;
   full_name: string | null;
   permissions?: Permission[];
-};
-
-export type OwnedResource = {
-  owner_user_id?: string | null;
-  owner_email?: string | null;
-  owner_name?: string | null;
-  sorumlu?: string | null;
 };
 
 function authError(code: 'UNAUTHORIZED' | 'FORBIDDEN', status: 401 | 403) {
@@ -130,20 +125,6 @@ const getAllowedUserOrThrowBase = cache(async (): Promise<AllowedUser> => {
         : Array.from(permissionsForRole(role)),
   };
 });
-
-function normalizeIdentity(value: string | null | undefined) {
-  return String(value ?? '').trim().toLocaleLowerCase('tr-TR');
-}
-
-export function isResourceOwner(user: AllowedUser, resource: OwnedResource): boolean {
-  if (resource.owner_user_id && String(resource.owner_user_id) === user.id) return true;
-
-  const ownerEmail = normalizeIdentity(resource.owner_email);
-  if (ownerEmail && ownerEmail === normalizeIdentity(user.email)) return true;
-
-  const ownerName = normalizeIdentity(resource.owner_name ?? resource.sorumlu);
-  return Boolean(ownerName && user.full_name && ownerName === normalizeIdentity(user.full_name));
-}
 
 export function assertOwnedResourceAccess(args: {
   user: AllowedUser;

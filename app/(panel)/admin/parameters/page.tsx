@@ -1,5 +1,6 @@
 import { requireSystemParametersAccessOrThrow, requireScreenAccessOrThrow } from '@/lib/authz';
 import ParametersClient from './ParametersClient';
+import ActivityTypeAccessPanel from './ActivityTypeAccessPanel';
 
 export default async function ParametersPage() {
   await requireSystemParametersAccessOrThrow();
@@ -11,9 +12,10 @@ export default async function ParametersPage() {
         <span className="pax-hero-eyebrow">Kurumsal CRM · Ayarlar</span>
         <h1 className="pax-hero-title">Parametre Yönetimi</h1>
         <p className="pax-hero-description">
-          Bu ekran yalnızca parametre yönetimi yetkisi bulunan kullanıcılara görünür. Sistem Ayarları, Entegrasyonlar, Liste Yönetimleri ve Güvenlik/Tanı ayrı kartlarla yönetilir; künye seçenekleri Liste Yönetimleri → Müşteri Künye alt kırılımında düzenlenir.
+          Bir ayarı arayın veya ilgili alanı seçin. Müşteri ve iş ortağı fazları kendi gruplarında yönetilir.
         </p>
       </div>
+      <ActivityTypeAccessPanel />
       <ParametersClient />
     </div>
   );

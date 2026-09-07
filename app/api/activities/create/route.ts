@@ -1,20 +1,22 @@
 import { normalizeDurum } from '@/lib/activities/presentation';
 import { NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
-import { requireActivityCreateOrThrow, userHasPermission } from '@/lib/authz';
+import { assertOwnedResourceAccess, requireActivityCreateOrThrow, userHasPermission } from '@/lib/authz';
 import { createPgAdminClient } from '@/lib/pg/admin';
 import { completeActivitiesForSamePhase, completePreviousOpenActivities } from '@/lib/activity-phase-completion';
-import { activityScopeForChannel, affectsPhaseForChannel, isTechnicalChannel, normalizeChannel } from '@/lib/activity-channels';
+import { activityScopeForChannel, affectsPhaseForChannel, isBusinessPartnerActivity, isTechnicalChannel, normalizeChannel } from '@/lib/activity-channels';
 import { assertActiveParameterValue } from '@/lib/system-parameters';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-type ActivityKanal = 'Online Toplantı' | 'Yerinde Ziyaret' | 'Telefon' | 'E-posta' | 'Teknik Ziyaret' | 'Teknik Online' | 'POM' | 'Diğer';
+type ActivityKanal = 'Online Toplantı' | 'Yerinde Ziyaret' | 'Telefon' | 'E-posta' | 'Teknik Ziyaret' | 'Teknik Online' | 'POM' | 'İş Ortaklığı Aktivitesi' | 'Diğer';
 type ActivityDurum = 'Devam Ediyor' | 'Tamamlandı' | 'İhtiyaç Duyulmadı' | 'Başlamadı' | 'Bekleniyor' | null;
 type WaitingSide = string | null;
 
 type Body = {
+  technical_contact_id?: string | null;
+  activity_context?: 'customer' | 'business_partner';
   activity_id?: string | null;
   musteri_id?: string;
   kanal?: ActivityKanal;
@@ -104,6 +106,7 @@ export async function POST(req: Request) {
 
   const kanal = normalizeChannel((body.kanal ?? body.event_type ?? 'Diğer') as string) as ActivityKanal;
   const isTechnicalActivity = isTechnicalChannel(kanal);
+  const partnerActivity = isBusinessPartnerActivity(kanal);
   const canCreateTechnical = userHasPermission(me, 'activity.technical.create');
 
   if (isTechnicalActivity && !canCreateTechnical) {
@@ -111,6 +114,14 @@ export async function POST(req: Request) {
       { message: 'Teknik Ziyaret, Teknik Online ve POM aktivitelerini sadece ITSM, admin veya super admin kullanıcıları girebilir.' },
       { status: 403 }
     );
+  }
+
+  if (partnerActivity && me.role !== 'super_admin') {
+    const { data: typeAccess, error: typeAccessError } = await createPgAdminClient().from('activity_type_role_permissions')
+      .select('can_create,can_change_phase').eq('activity_type_key', 'business_partner_activity').eq('role_key', me.role).maybeSingle();
+    if (typeAccessError || !typeAccess?.can_create || !typeAccess?.can_change_phase) {
+      return NextResponse.json({ message: 'İş Ortaklığı Aktivitesi oluşturma ve faz değiştirme yetkiniz yok.' }, { status: 403 });
+    }
   }
 
   const activity_scope = activityScopeForChannel(kanal);
@@ -155,12 +166,63 @@ export async function POST(req: Request) {
     return NextResponse.json({ message: 'Müşteri bulunamadı' }, { status: 404 });
   }
 
+  let existingContactId: string | null = null;
+  let existingActivityContext: 'customer' | 'business_partner' | null = null;
+  if (activity_id) {
+    const { data: existing, error: existingError } = await admin
+      .from('pipeline_eventleri')
+      .select('id,musteri_id,created_by_user_id,created_by_email,created_by,activity_scope,activity_context,technical_contact_id')
+      .eq('id', activity_id)
+      .eq('musteri_id', musteri_id)
+      .maybeSingle();
+    if (existingError) return NextResponse.json({ message: 'Aktivite kontrol edilemedi.' }, { status: 500 });
+    if (!existing?.id) return NextResponse.json({ message: 'Bu firmaya ait aktivite bulunamadı.' }, { status: 404 });
+    existingContactId = existing.technical_contact_id ?? null;
+    existingActivityContext = existing.activity_context === 'business_partner' ? 'business_partner' : existing.activity_context === 'customer' ? 'customer' : null;
+    try {
+      assertOwnedResourceAccess({
+        user: me,
+        resource: { owner_user_id: existing.created_by_user_id, owner_email: existing.created_by_email, owner_name: existing.created_by },
+        ownPermission: 'activity.update.own',
+        anyPermission: 'activity.update.any',
+      });
+    } catch (error: any) {
+      return NextResponse.json({ message: 'Bu aktiviteyi düzenleme yetkiniz yok.' }, { status: error?.status || 403 });
+    }
+    if (existing.activity_scope === 'technical' && !canCreateTechnical) {
+      return NextResponse.json({ message: 'Teknik aktiviteyi düzenleme yetkiniz yok.' }, { status: 403 });
+    }
+  }
+
   if (!userHasPermission(me, 'activity.read.any') && !userHasPermission(me, 'customer.read.any') && String(customer.owner_user_id ?? '') !== me.id) {
     return NextResponse.json({ message: 'Bu müşteri için aktivite oluşturma yetkiniz yok.' }, { status: 403 });
   }
 
   const isBusinessPartnerCustomer = String(customer.customer_type ?? 'standard') === 'business_partner';
-  const phaseOptionalCustomer = String(customer.pipeline_policy ?? 'phase_required') === 'phase_optional';
+  const { data: relationships, error: relationshipError } = await admin.from('organization_roles')
+    .select('role_key,is_active').eq('customer_id', musteri_id).eq('is_active', true);
+  if (relationshipError) return NextResponse.json({ message: 'Firma ilişkileri kontrol edilemedi.' }, { status: 503 });
+  const relationshipKeys = new Set((relationships ?? []).map((row: any) => String(row.role_key)));
+  const activity_context: 'customer' | 'business_partner' = partnerActivity || existingActivityContext === 'business_partner' || (isBusinessPartnerCustomer && !relationshipKeys.has('customer')) ? 'business_partner' : 'customer';
+  if (!relationshipKeys.has(activity_context)) return NextResponse.json({ message: activity_context === 'business_partner' ? 'Bu firmada aktif İş Ortağı ilişkisi yok.' : 'Bu firmada aktif Müşteri ilişkisi yok.' }, { status: 400 });
+  const syncLegacyPipeline = activity_context === 'customer' || !relationshipKeys.has('customer');
+  const contactPatch: { technical_contact_id?: string | null } = {};
+  if (body.technical_contact_id !== undefined) {
+    const contactId = body.technical_contact_id;
+    if (contactId !== null) {
+      if (typeof contactId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(contactId)) {
+        return NextResponse.json({ message: 'Geçersiz teknik yetkili.' }, { status: 400 });
+      }
+      const { data: contact, error: contactError } = await admin.from('customer_technical_contacts')
+        .select('id,is_active').eq('id', contactId).eq('customer_id', musteri_id).maybeSingle();
+      if (contactError) return NextResponse.json({ message: 'Teknik yetkili kontrol edilemedi.' }, { status: 503 });
+      if (!contact || (!contact.is_active && contact.id !== existingContactId)) {
+        return NextResponse.json({ message: 'Bu firmaya ait aktif bir teknik yetkili seçin.' }, { status: 400 });
+      }
+    }
+    contactPatch.technical_contact_id = contactId;
+  }
+  const phaseOptionalCustomer = !partnerActivity && String(customer.pipeline_policy ?? 'phase_required') === 'phase_optional';
   if (phaseOptionalCustomer) {
     affects_phase = false;
     nextActivity = null;
@@ -187,22 +249,25 @@ export async function POST(req: Request) {
     { data: latestPartnerFromCustomer },
   ] = await Promise.all([
     faz_no != null
-      ? admin.from('pipeline_eventleri').select('iteration_no').eq('musteri_id', musteri_id).eq('faz_no', faz_no).order('created_at', { ascending: false }).limit(1).maybeSingle()
+      ? admin.from('pipeline_eventleri').select('iteration_no').eq('musteri_id', musteri_id).eq('activity_context', activity_context).eq('faz_no', faz_no).order('created_at', { ascending: false }).limit(1).maybeSingle()
       : Promise.resolve({ data: null }),
-    admin.from('musteri_pipeline').select('musteri_id,aktif_faz_no,durum,owner,partner_owner').eq('musteri_id', musteri_id).maybeSingle(),
+    activity_context === 'business_partner'
+      ? admin.from('organization_pipeline_states').select('customer_id,active_phase_no,status,owner,partner_owner').eq('customer_id', musteri_id).eq('context_key', activity_context).maybeSingle()
+      : admin.from('musteri_pipeline').select('musteri_id,aktif_faz_no,durum,owner,partner_owner').eq('musteri_id', musteri_id).maybeSingle(),
     faz_no != null
-      ? admin.from(isBusinessPartnerCustomer ? 'is_ortagi_faz_tanimlari' : 'faz_tanimlari').select('owner').eq('faz_no', faz_no).maybeSingle()
+      ? admin.from(activity_context === 'business_partner' ? 'is_ortagi_faz_tanimlari' : 'faz_tanimlari').select('owner').eq('faz_no', faz_no).maybeSingle()
       : Promise.resolve({ data: null }),
     faz_no != null
-      ? admin.from('pipeline_eventleri').select('partner_owner').eq('musteri_id', musteri_id).eq('faz_no', faz_no).not('partner_owner', 'is', null).order('created_at', { ascending: false }).limit(1).maybeSingle()
+      ? admin.from('pipeline_eventleri').select('partner_owner').eq('musteri_id', musteri_id).eq('activity_context', activity_context).eq('faz_no', faz_no).not('partner_owner', 'is', null).order('created_at', { ascending: false }).limit(1).maybeSingle()
       : Promise.resolve({ data: null }),
-    admin.from('pipeline_eventleri').select('partner_owner').eq('musteri_id', musteri_id).not('partner_owner', 'is', null).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+    admin.from('pipeline_eventleri').select('partner_owner').eq('musteri_id', musteri_id).eq('activity_context', activity_context).not('partner_owner', 'is', null).order('created_at', { ascending: false }).limit(1).maybeSingle(),
   ]);
 
   const iteration_no = Number((latestPhaseEvent as any)?.iteration_no ?? 1) || 1;
+  const currentPipelineStatus = currentPipeline?.status ?? currentPipeline?.durum;
   const canonicalDurum = isTechnicalActivity
-    ? (normalizeDurum(technicalSnapshot?.durum as ActivityDurum) ?? normalizeDurum(currentPipeline?.durum as ActivityDurum) ?? 'Devam Ediyor')
-    : (normalizeDurum(faz_durum ?? currentPipeline?.durum ?? 'Devam Ediyor') ?? 'Devam Ediyor');
+    ? (normalizeDurum(technicalSnapshot?.durum as ActivityDurum) ?? normalizeDurum(currentPipelineStatus as ActivityDurum) ?? 'Devam Ediyor')
+    : (normalizeDurum(faz_durum ?? currentPipelineStatus ?? 'Devam Ediyor') ?? 'Devam Ediyor');
   const fazOwner = String((isTechnicalActivity ? technicalSnapshot?.owner : null) ?? currentFaz?.owner ?? currentPipeline?.owner ?? customer.sorumlu ?? '').trim() || null;
   const resolvedBekleyenTarafRaw = isTechnicalActivity
     ? (technicalSnapshot?.partner_owner ?? currentPipeline?.partner_owner ?? latestPartnerFromSamePhase?.partner_owner ?? latestPartnerFromCustomer?.partner_owner ?? (phaseOptionalCustomer ? customer.sorumlu : null))
@@ -230,6 +295,7 @@ export async function POST(req: Request) {
     const { error: editErr } = await admin
       .from('pipeline_eventleri')
       .update({
+        ...contactPatch,
         faz_no,
         durum: canonicalDurum,
         aksiyon: `AKTIVITE:${kanal}`,
@@ -241,8 +307,10 @@ export async function POST(req: Request) {
         updated_at: new Date().toISOString(),
         activity_scope,
         affects_phase,
+        activity_context,
       })
-      .eq('id', targetId);
+      .eq('id', targetId)
+      .eq('musteri_id', musteri_id);
     if (editErr) return NextResponse.json({ message: editErr.message }, { status: 400 });
 
     if (affects_phase && canonicalDurum === 'Tamamlandı') {
@@ -257,6 +325,8 @@ export async function POST(req: Request) {
           partner_owner: resolvedBekleyenTaraf,
           notlar,
           exclude_id: targetId,
+          activity_context,
+          sync_legacy_pipeline: syncLegacyPipeline,
         });
       } catch (e: any) {
         return NextResponse.json({ message: e?.message || 'Aynı faz aktiviteleri tamamlanamadı' }, { status: 400 });
@@ -270,6 +340,7 @@ export async function POST(req: Request) {
       .from('pipeline_eventleri')
       .select('id')
       .eq('musteri_id', musteri_id)
+      .eq('activity_context', activity_context)
       .eq('faz_no', faz_no)
       .eq('durum', 'Başlamadı')
       .eq('aksiyon', `AKTIVITE:${kanal}`)
@@ -281,7 +352,7 @@ export async function POST(req: Request) {
     if (pending?.id) {
       const { error: updErr } = await admin
         .from('pipeline_eventleri')
-        .update({ durum: 'Tamamlandı', owner: fazOwner, partner_owner: resolvedBekleyenTaraf, notlar, updated_by_user_id: created_by_user_id, updated_by_email: created_by_email, updated_at: new Date().toISOString(), activity_scope, affects_phase })
+        .update({ ...contactPatch, durum: 'Tamamlandı', owner: fazOwner, partner_owner: resolvedBekleyenTaraf, notlar, updated_by_user_id: created_by_user_id, updated_by_email: created_by_email, updated_at: new Date().toISOString(), activity_scope, affects_phase, activity_context })
         .eq('id', pending.id);
       if (updErr) return NextResponse.json({ message: updErr.message }, { status: 400 });
 
@@ -296,6 +367,8 @@ export async function POST(req: Request) {
           partner_owner: resolvedBekleyenTaraf,
           notlar,
           exclude_id: pending.id,
+          activity_context,
+          sync_legacy_pipeline: syncLegacyPipeline,
         });
       } catch (e: any) {
         return NextResponse.json({ message: e?.message || 'Aynı faz aktiviteleri tamamlanamadı' }, { status: 400 });
@@ -307,6 +380,7 @@ export async function POST(req: Request) {
 
   if (!activityUpdated) {
     const { data: inserted, error: actErr } = await admin.from('pipeline_eventleri').insert({
+      ...contactPatch,
       musteri_id,
       faz_no,
       iteration_no,
@@ -323,6 +397,7 @@ export async function POST(req: Request) {
       created_by_email,
       activity_scope,
       affects_phase,
+      activity_context,
     }).select('id').single();
     if (actErr) return NextResponse.json({ message: actErr.message }, { status: 400 });
 
@@ -338,6 +413,8 @@ export async function POST(req: Request) {
           partner_owner: resolvedBekleyenTaraf,
           notlar,
           exclude_id: String((inserted as any)?.id ?? '').trim() || null,
+          activity_context,
+          sync_legacy_pipeline: syncLegacyPipeline,
         });
       } catch (e: any) {
         return NextResponse.json({ message: e?.message || 'Aynı faz aktiviteleri tamamlanamadı' }, { status: 400 });
@@ -363,9 +440,12 @@ export async function POST(req: Request) {
     if (isTechnicalChannel(hedef_aktivite)) {
       return NextResponse.json({ message: 'Sonraki aksiyon olarak Teknik Ziyaret, Teknik Online veya POM planlanamaz. Teknik aktiviteler ITSM tarafından mevcut faz üstünden girilmelidir.' }, { status: 400 });
     }
+    if (isBusinessPartnerActivity(hedef_aktivite)) {
+      return NextResponse.json({ message: 'İş Ortaklığı Aktivitesi sonraki aksiyon olarak planlanamaz; ilgili iş ortağı sürecinden ayrı kayıt açın.' }, { status: 400 });
+    }
 
     const hedef_not = String(nextActivity.hedef_not ?? '').trim() || null;
-    const { data: hedefFaz } = await admin.from(isBusinessPartnerCustomer ? 'is_ortagi_faz_tanimlari' : 'faz_tanimlari').select('owner').eq('faz_no', hedef_faz_no).maybeSingle();
+    const { data: hedefFaz } = await admin.from(activity_context === 'business_partner' ? 'is_ortagi_faz_tanimlari' : 'faz_tanimlari').select('owner').eq('faz_no', hedef_faz_no).maybeSingle();
     const nextOwner = String(hedefFaz?.owner ?? fazOwner ?? '').trim() || null;
 
     const { error: nErr } = await admin.from('pipeline_eventleri').insert({
@@ -385,6 +465,7 @@ export async function POST(req: Request) {
       created_by_email,
       activity_scope: 'account',
       affects_phase: true,
+      activity_context,
     });
     if (nErr) return NextResponse.json({ message: nErr.message }, { status: 400 });
 
@@ -409,17 +490,19 @@ export async function POST(req: Request) {
         actor_email: created_by_email,
         owner: fazOwner,
         partner_owner: resolvedBekleyenTaraf,
+        activity_context,
+        sync_legacy_pipeline: syncLegacyPipeline,
       });
     } catch (e: any) {
       return NextResponse.json({ message: e?.message || 'Önceki açık faz aktiviteleri tamamlanamadı' }, { status: 400 });
     }
   }
 
-  if (affects_phase) {
+  if (affects_phase && syncLegacyPipeline) {
     const { error: pipelineErr } = await admin.from('musteri_pipeline').upsert(pipelinePayload, { onConflict: 'musteri_id' });
     if (pipelineErr) return NextResponse.json({ message: `musteri_pipeline güncellenemedi: ${pipelineErr.message}` }, { status: 400 });
   }
 
   revalidatePath('/crm/activities');
-  return NextResponse.json({ ok: true, iteration_no, updated_existing: activityUpdated, pipeline: affects_phase ? pipelinePayload : null, activity_scope, affects_phase });
+  return NextResponse.json({ ok: true, iteration_no, updated_existing: activityUpdated, pipeline: affects_phase ? pipelinePayload : null, activity_scope, activity_context, affects_phase });
 }

@@ -503,7 +503,7 @@ export default function ActivitiesPage() {
   };
 
   return (
-    <main className="pax-page-container">
+    <main className="pax-page-container crm-activities-page">
 
       <ActivitiesDashboard
         slaHealthPct={slaHealthPct}
@@ -525,24 +525,23 @@ export default function ActivitiesPage() {
           <div className="command-main">
             <div className="command-search">
               <span style={{ color: 'var(--text-3)' }}>⌕</span>
-              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Müşteri, aktivite veya firma ara" />
+              <input aria-label="Müşteri, aktivite veya firma ara" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Müşteri, aktivite veya firma ara" />
             </div>
-            <div className="command-select-wrap">
+            <label className="command-select-wrap">
               <span className="command-label">Sorumlu</span>
               <select className="command-select" value={responsible} onChange={(e) => setResponsible(e.target.value)}>
                 <option value="">Tüm sorumlular</option>
                 {options.responsibleOptions.map((v) => <option key={v} value={v}>{v}</option>)}
               </select>
-            </div>
-            <div className="command-select-wrap">
+            </label>
+            <label className="command-select-wrap">
               <span className="command-label">Durum</span>
               <select className="command-select" value={status} onChange={(e) => setStatus(e.target.value)}>
                 <option value="">Tüm durumlar</option>
                 {options.statusOptions.map((v) => <option key={v} value={v}>{v}</option>)}
               </select>
-            </div>
+            </label>
           </div>
-          <div className="command-side" />
         </div>
 
         <div className="command-toolbar">
@@ -555,7 +554,7 @@ export default function ActivitiesPage() {
           <div className="command-actions">
             <button className={`segment-btn${timeRange === 'week' ? ' active' : ''}`} onClick={() => setTimeRange('week')}>Haftalık</button>
             <button className={`segment-btn${timeRange === 'month' ? ' active' : ''}`} onClick={() => setTimeRange('month')}>Aylık</button>
-            <button className={`segment-btn${timeRange === 'quarter' ? ' active' : ''}`} onClick={() => setTimeRange('quarter')}>Quarterly</button>
+            <button className={`segment-btn${timeRange === 'quarter' ? ' active' : ''}`} onClick={() => setTimeRange('quarter')}>Üç Aylık</button>
             <button className={`segment-btn${timeRange === 'all' ? ' active' : ''}`} onClick={() => setTimeRange('all')}>Tümü</button>
             <button className="command-action" onClick={() => setShowAdvanced((v) => !v)}>{showAdvanced ? 'Detaylı aramayı kapat' : 'Detaylı arama'}</button>
             <button className="command-action ghost" onClick={clearFilters}>Sıfırla</button>
