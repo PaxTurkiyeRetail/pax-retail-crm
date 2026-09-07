@@ -20,6 +20,7 @@ type Body = {
     customer_type?: string | null;
     pipeline_policy?: string | null;
     is_kolu?: string | null;
+    satici_etiketi?: string | null;
 };
 
 const legacyIntegrationValues = new Set<string>(LEGACY_INTEGRATION_ENUM_VALUES);
@@ -114,9 +115,7 @@ export async function POST(req: Request) {
     // Sektor IS ORTAGI ise musteri tipi de Is Ortagi'na cekilir; aksi halde
     // aktivite ekrani is ortagi fazlari yerine 25 fazli musteri listesini
     // gosterir. Siniflandirma yetkisi olmayan kullanicilar icin de gecerlidir.
-    if (!Object.prototype.hasOwnProperty.call(body, 'customer_type')) {
-        customerType = resolveCustomerTypeForSector({ sektor, customerType });
-    }
+    customerType = resolveCustomerTypeForSector({ sektor, customerType });
     const requestedOwner = (body.sorumlu ?? "").trim() || myName;
     const requestedOwnerUserId = String(body.owner_user_id ?? '').trim() || null;
     let sorumlu = myName;
@@ -173,6 +172,17 @@ export async function POST(req: Request) {
             { message: error.message },
             { status: 400 }
         );
+    }
+
+    // Hunter / Farmer etiketi künyede (musteri_kunye_v2.satici_etiketi) tutulur;
+    // yeni müşteri varsayılan olarak Hunter açılır (Çağdaş Bey, 07.09). İş ortağı
+    // kayıtlarına künye açılmaz (report-only), onlar atlanır.
+    const saticiEtiketi = String(body.satici_etiketi ?? '').trim() === 'Farmer' ? 'Farmer' : 'Hunter';
+    if (data?.id && customerType !== 'business_partner') {
+        const { error: kunyeError } = await admin
+            .from('musteri_kunye_v2')
+            .upsert({ musteri_id: String(data.id), satici_etiketi: saticiEtiketi, updated_by: myName, updated_at: new Date().toISOString() }, { onConflict: 'musteri_id' });
+        if (kunyeError) console.warn('[crm/create] satici_etiketi yazılamadı:', kunyeError.message);
     }
 
     await tryRecordAuditEvent({ actorId: me.id, actorEmail: me.email, action: 'customer.created', resourceType: 'customer', resourceId: String(data?.id), after: { musteri, sektor, entegrasyon_tipi, satis_olasiligi, sorumlu, owner_user_id: ownerUserId, customer_type: customerType, pipeline_policy: pipelinePolicy, is_kolu: isKolu } });

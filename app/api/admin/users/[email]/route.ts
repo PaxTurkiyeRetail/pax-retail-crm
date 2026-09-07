@@ -21,6 +21,8 @@ const WEEKLY_TARGET_COLUMNS = [
 const ANNUAL_TARGET_FIELDS = {
   annual_revenue_target: 'sales_revenue',
   annual_device_target: 'device_count',
+  /** KasaPOS entegrasyon hedefi (Çağdaş Bey, 07.09): faz ≥ 9'a ulaşan entegrasyon firması sayısı. */
+  annual_integration_target: 'integration_count',
 } as const;
 
 function toWeeklyTarget(value: unknown) {

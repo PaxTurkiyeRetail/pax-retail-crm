@@ -69,8 +69,9 @@ export async function buildWeeklyTargets(options?: {
       `
         select pe.aksiyon, pe.durum, pe.created_by, pe.musteri_id::text as musteri_id
         from public.pipeline_eventleri pe
-        where pe.created_at >= $1::date
-          and pe.created_at < ($2::date + interval '1 day')
+        -- Hafta filtresi AKTİVİTE TARİHİNE göre (07.09): Pazartesi girilen Cuma
+        -- aktivitesi geçen haftaya sayılır. Eski kayıtlarda aktivite_tarihi = kayıt günü.
+        where coalesce(pe.aktivite_tarihi, (pe.created_at at time zone 'Europe/Istanbul')::date) between $1::date and $2::date
           -- Planlanan "sonraki aksiyon" kayıtları (Başlamadı + hedef tarihli) gerçekleşmiş
           -- aktivite değildir; sayılmaz (04.09: her aktivite + planı 2 sayılıyordu).
           and not (pe.durum = 'Başlamadı' and pe.hedef_tarihi is not null)

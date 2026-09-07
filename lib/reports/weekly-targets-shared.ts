@@ -23,6 +23,23 @@ export const WEEKLY_TARGET_LABELS: Array<{ key: WeeklyTargetKind; label: string 
   { key: 'technicalOnline', label: 'Teknik Online' },
 ];
 
+/**
+ * Satış ekranlarındaki kanal grupları (Çağdaş Bey, 07.09): haftada 20 aktivite =
+ * 8 görüşme (fiziki ya da online) + 12 temas (telefon ya da e-posta). Teknik
+ * kanallar satış slaydında gösterilmez (ITSM'in işi). Hedef = gruptaki kanal
+ * hedeflerinin toplamı (Hedefleri Düzenle'de fiziki 8 / telefon 12 girilmesi yeter).
+ */
+export const SALES_CHANNEL_GROUPS: Array<{ key: 'meeting' | 'contact'; label: string; sub: string; kinds: WeeklyTargetKind[] }> = [
+  { key: 'meeting', label: 'Görüşme', sub: 'fiziki + online', kinds: ['salesPhysical', 'salesOnline'] },
+  { key: 'contact', label: 'Temas', sub: 'telefon + e-posta', kinds: ['salesPhone', 'salesEmail'] },
+];
+/** Haftalık varsayılan hedefler (account_manager): 8 görüşme + 12 temas = 20. */
+export const DEFAULT_WEEKLY_SALES_TARGETS = { meeting: 8, contact: 12, total: 20 } as const;
+
+export function sumKinds(counters: WeeklyTargetCounters, kinds: WeeklyTargetKind[]) {
+  return kinds.reduce((sum, kind) => sum + Number(counters[kind] ?? 0), 0);
+}
+
 export function emptyWeeklyCounters(): WeeklyTargetCounters {
   return {
     salesPhysical: 0,

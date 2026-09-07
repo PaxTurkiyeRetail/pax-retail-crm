@@ -56,6 +56,12 @@ export const LIVE_BOARD_RULES = {
   hotTeamLimit: 20,
   /** Kişi slaydı: en yakın hedef tarihli 5 fırsat, sayfalanmaz (Çağdaş Bey, 04.09). */
   hotOwnerLimit: 5,
+  /** Entegrasyon firması bu fazdan itibaren "entegre" sayılır (Entegrasyon Raporu yeşil eşiği). */
+  integrationDonePhase: 9,
+  /** Açık teklif bu kadar gün dokunulmadıysa "pasif" sayılır (Çağdaş Bey, 07.09: 30 gün cevap yoksa). */
+  quotePassiveDays: 30,
+  /** Bir sorumlunun üzerinde bu kadar ve fazla firma varsa "portföy yükü" uyarısı (Çağdaş Bey, 07.09: 50–60'ı geçmesin). */
+  portfolioLoadLimit: 60,
   pocLimit: 20,
   alertLimit: 6,
   recentActivities: 8,
@@ -118,6 +124,10 @@ export type RevenueBlock = {
   /** Yıllık cihaz hedefi (device_count) ve kazanılan cihaz adedi. */
   deviceTarget: number | null;
   deviceActualYtd: number;
+  /** KasaPOS entegrasyon hedefi (integration_count) ve tamamlanan (faz ≥ 9) / toplam entegrasyon firması. */
+  integrationTarget: number | null;
+  integrationDone: number;
+  integrationTotal: number;
   wonYtd: { count: number; amount: number };
   wonMonth: { count: number; amount: number };
   lostYtd: { count: number; amount: number };
@@ -194,7 +204,7 @@ export type PocItem = {
 };
 
 export type AlertItem = {
-  kind: 'stale' | 'overdue' | 'target_gap' | 'poc_delay' | 'customer_waiting' | 'contract_waiting' | 'expired_quote';
+  kind: 'stale' | 'overdue' | 'target_gap' | 'poc_delay' | 'customer_waiting' | 'contract_waiting' | 'expired_quote' | 'portfolio_load';
   title: string;
   detail: string;
   owner: string | null;
@@ -204,7 +214,11 @@ export type AlertItem = {
 
 export type LiveActivity = {
   id: string;
-  at: string;            // ISO
+  at: string;            // ISO — kayıt zamanı
+  /** Aktivitenin gerçekleştiği gün (YYYY-MM-DD); haftalık sayaçlar bunu kullanır. */
+  date: string;
+  /** Geç giriş: aktivite günü kayıt gününden önce (07.09 ara yolu, en fazla 2 gün). */
+  late: boolean;
   musteri: string;
   label: string;         // aktivite türü (Telefon, Yerinde Ziyaret, …)
   kind: string;          // hedef kovası ya da 'other'
@@ -219,7 +233,7 @@ export type LiveOwner = {
   owner: string;
   initials: string;
   rank: number;
-  portfolio: { total: number; active: number };
+  portfolio: { total: number; active: number; hunter: number; farmer: number };
   revenue: RevenueBlock;
   funnel: Funnel;
   pipeline: PipelineStats;
@@ -259,7 +273,15 @@ export type JiraBlock = {
   byCompany: JiraCompanyRow[];
 };
 
-export type Distribution = Array<{ label: string; value: number; tone?: Tone; /** Açıklama satırında küçük ek bilgi (ör. faz aralığı). */ hint?: string }>;
+export type Distribution = Array<{
+  label: string;
+  value: number;
+  tone?: Tone;
+  /** Açıklama satırında küçük ek bilgi (ör. faz aralığı) / bar tooltip'i. */
+  hint?: string;
+  /** Barın ikinci parçası (ör. farmer sayısı); toplam yine `value`. */
+  split?: number;
+}>;
 
 export type QuoteRow = {
   quoteNo: string;
@@ -296,7 +318,10 @@ export type LiveBoardPayload = {
   };
   portfolio: {
     total: number;
+    /** Sorumlu başına firma; `hint` = "60 hunter · 16 farmer". */
     byOwner: Distribution;
+    /** Hunter / Farmer dağılımı (künye etiketi; boş = Hunter). */
+    hunterFarmer: Distribution;
     byPhaseGroup: Distribution;
     bySector: Distribution;
     kunye: Distribution;
@@ -304,7 +329,14 @@ export type LiveBoardPayload = {
   quotes: {
     open: QuoteRow[];
     recentClosed: QuoteRow[];
-    byOwner: Array<{ owner: string; open: number; openAmount: number; weighted: number; won: number; wonAmount: number; lost: number }>;
+    /** Kişi bazında teklif yaşam döngüsü (Çağdaş Bey, 07.09: kaç girdi, kaçı pasif, kaçı kayıp, kaçı kazandı). */
+    byOwner: Array<{
+      owner: string; open: number; openAmount: number; weighted: number;
+      /** Açık ama geçerliliği bitmiş ya da 30+ gün dokunulmamış. */
+      passive: number;
+      monthCreated: number; monthAmount: number;
+      won: number; wonAmount: number; lost: number;
+    }>;
     lostReasons: Distribution;
   };
   forecast: {
@@ -437,7 +469,7 @@ export const BASE_METRICS: LayoutMetrics = {
 };
 export const COMPACT_METRICS: LayoutMetrics = {
   compact: true,
-  bandH: 76, channelsH: 306, hotH: 96, actH: 90, leaderH: 112, revenueH: 330,
+  bandH: 76, channelsH: 306, hotH: 100, actH: 90, leaderH: 112, revenueH: 330,
   rowH: 74, quoteRowH: 66, ownerQuoteRowH: 60, alertH: 74, kpiRowH: 110, chipsH: 68,
   cardChrome: 62, gap: 12, listGap: 6,
 };
@@ -560,7 +592,7 @@ export function pageBounds(total: number, page: number, cap: number) {
 /** Her ekranın kaç sayfa süreceği (veri uzunlukları ÷ kapasite). */
 export type PagePlan = { team: Partial<Record<TeamSlideKey, number>>; owners: number[] };
 
-export const ALERT_ORDER: AlertItem['kind'][] = ['overdue', 'poc_delay', 'stale', 'target_gap', 'customer_waiting', 'contract_waiting', 'expired_quote'];
+export const ALERT_ORDER: AlertItem['kind'][] = ['overdue', 'poc_delay', 'stale', 'target_gap', 'customer_waiting', 'contract_waiting', 'expired_quote', 'portfolio_load'];
 
 /**
  * Veri uzunlukları + ölçülen kapasiteden sayfa sayıları. Bir ekranda birden fazla

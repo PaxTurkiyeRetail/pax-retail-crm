@@ -101,7 +101,7 @@ const EMPTY_FORM: KunyeFormData = {
   pos_mulkiyet_bankalari: [],
   saha_hizmeti_firmasi: '',
   is_kolu: '',
-  satici_etiketi: '',
+  satici_etiketi: 'Hunter', // varsayılan Hunter (Çağdaş Bey, 07.09); Farmer'a künyeden geçilir
   genel_memnuniyet: '',
   problem_1: '',
   problem_2: '',
@@ -123,6 +123,8 @@ export default function QuickKunyeForm({ musteriId, musteriAdi, existingData, on
   const [form, setForm] = useState<KunyeFormData>({
     ...EMPTY_FORM,
     ...existingData,
+    // Kayıtta etiket boşsa Hunter göster (yeni müşteri = Hunter).
+    satici_etiketi: String(existingData?.satici_etiketi ?? '').trim() || 'Hunter',
     firma_adi: String(existingData?.firma_adi ?? musteriAdi ?? ''),
     bankalar: Array.isArray(existingData?.bankalar)
       ? existingData!.bankalar

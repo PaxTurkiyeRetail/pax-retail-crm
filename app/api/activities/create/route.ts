@@ -6,6 +6,7 @@ import { createPgAdminClient } from '@/lib/pg/admin';
 import { completeActivitiesForSamePhase, completePreviousOpenActivities } from '@/lib/activity-phase-completion';
 import { activityScopeForChannel, affectsPhaseForChannel, isBusinessPartnerActivity, isTechnicalChannel, normalizeChannel } from '@/lib/activity-channels';
 import { assertActiveParameterValue } from '@/lib/system-parameters';
+import { validateActivityDate } from '@/lib/activities/activity-date';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -40,6 +41,8 @@ type Body = {
   plan_aktivite?: ActivityKanal | null;
   plan_not?: string | null;
   plan_hedef_faz_no?: number | null;
+  /** Aktivitenin gerçekleştiği gün (YYYY-MM-DD). Boş = bugün; en fazla 2 gün geriye. */
+  aktivite_tarihi?: string | null;
 };
 
 const EMPTY_WAITING_SIDE_MESSAGE = 'Bekleyen Taraf boş olamaz. Lütfen seçim yapın; eski kayıt varsa backend fallback alacaktır.';
@@ -127,6 +130,10 @@ export async function POST(req: Request) {
   const activity_scope = activityScopeForChannel(kanal);
   let affects_phase = affectsPhaseForChannel(kanal);
   const notlar = (body.notlar ?? '').toString().trim() || null;
+  // Düzenlemede eski kaydın tarihi korunur (geri sınır yalnız yeni girişte).
+  const activityDate = validateActivityDate(body.aktivite_tarihi, undefined, { allowOld: Boolean(body.activity_id) });
+  if (!activityDate.ok) return NextResponse.json({ message: activityDate.message }, { status: 400 });
+  const aktivite_tarihi = activityDate.value;
   const requestedFazNo = body.faz_no ?? null;
   const faz_durum = normalizeDurum((body.faz_durum ?? body.durum ?? null) as ActivityDurum) as ActivityDurum;
   const explicitBekleyenTarafRaw =
@@ -302,6 +309,7 @@ export async function POST(req: Request) {
         owner: fazOwner,
         partner_owner: resolvedBekleyenTaraf,
         notlar,
+        aktivite_tarihi,
         updated_by_user_id: created_by_user_id,
         updated_by_email: created_by_email,
         updated_at: new Date().toISOString(),
@@ -352,7 +360,7 @@ export async function POST(req: Request) {
     if (pending?.id) {
       const { error: updErr } = await admin
         .from('pipeline_eventleri')
-        .update({ ...contactPatch, durum: 'Tamamlandı', owner: fazOwner, partner_owner: resolvedBekleyenTaraf, notlar, updated_by_user_id: created_by_user_id, updated_by_email: created_by_email, updated_at: new Date().toISOString(), activity_scope, affects_phase, activity_context })
+        .update({ ...contactPatch, durum: 'Tamamlandı', owner: fazOwner, partner_owner: resolvedBekleyenTaraf, notlar, aktivite_tarihi, updated_by_user_id: created_by_user_id, updated_by_email: created_by_email, updated_at: new Date().toISOString(), activity_scope, affects_phase, activity_context })
         .eq('id', pending.id);
       if (updErr) return NextResponse.json({ message: updErr.message }, { status: 400 });
 
@@ -391,6 +399,7 @@ export async function POST(req: Request) {
       partner_owner: resolvedBekleyenTaraf,
       baslangic_tarihi: null,
       hedef_tarihi: null,
+      aktivite_tarihi,
       notlar,
       created_by,
       created_by_user_id,

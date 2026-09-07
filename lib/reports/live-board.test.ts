@@ -154,7 +154,7 @@ describe('sayfalama (taşma yerine devam slaydı)', () => {
   it('uyarıları türe göre panellere böler, hiçbirini gizlemez', () => {
     const mk = (kind: any, n: number) => Array.from({ length: n }, (_, i) => ({ kind, title: `${kind}-${i}`, detail: '', owner: null, days: null, tone: 'warn' as const }));
     const alerts = [...mk('overdue', 5), ...mk('stale', 2)];
-    const counts = { stale: 2, overdue: 5, target_gap: 0, poc_delay: 0, customer_waiting: 0, contract_waiting: 0, expired_quote: 0 };
+    const counts = { stale: 2, overdue: 5, target_gap: 0, poc_delay: 0, customer_waiting: 0, contract_waiting: 0, expired_quote: 0, portfolio_load: 0 };
     const panels = alertPanels(alerts, counts, 2, ALERT_ORDER);
     expect(panels.map((p) => `${p.kind} ${p.part + 1}/${p.parts} (${p.rows.length})`)).toEqual([
       'overdue 1/3 (2)', 'overdue 2/3 (2)', 'overdue 3/3 (1)', 'stale 1/1 (2)',
