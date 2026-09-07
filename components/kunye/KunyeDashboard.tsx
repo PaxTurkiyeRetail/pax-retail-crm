@@ -2,7 +2,7 @@
 import '@/styles/kunye-dashboard.css';
 
 import { useMemo, useState } from 'react';
-import { deriveCustomerSegmentation, customerStatusTone, managementTypeTone, FIRMA_DURUMU_OPTIONS, YONETIM_TIPI_OPTIONS } from '@/lib/customer-segmentation';
+import { deriveCustomerSegmentation, customerStatusTone, managementTypeTone } from '@/lib/customer-segmentation';
 
 type KunyeDashboardProps = {
   kunye: any;
@@ -12,17 +12,20 @@ type KunyeDashboardProps = {
   musteriId?: string;
   customerType?: string | null;
   isOrtagiTipi?: string | null;
+  hasCustomerRole?: boolean;
+  hasBusinessPartnerRole?: boolean;
+  partnerSubtype?: string | null;
+  customerPhaseNo?: number | null;
+  customerPhaseStatus?: string | null;
+  partnerPhaseNo?: number | null;
+  partnerPhaseStatus?: string | null;
   /** İş Kolu rozetten değiştirilince (kayıt sonrası) üst bileşen veriyi yeniler. */
   onIsKoluChanged?: (value: string) => void;
 };
 
 // İş Kolu seçenekleri: parametre servisinden; erişilemezse sabit yedek.
 const IS_KOLU_FALLBACK = ['Retail', 'Vertical', 'Bank'];
-// İş Ortağı Tipi seçenekleri (donanım/entegrasyon ayrımı).
-const IS_ORTAGI_TIPI_OPTIONS = ['Entegrasyon Firması', 'Donanım Firması'];
-
-export default function KunyeDashboard({ kunye, musteriAdi, sektorVeSorumlu, aktifFazNo, musteriId, customerType, isOrtagiTipi, onIsKoluChanged }: KunyeDashboardProps) {
-  const [segOverride, setSegOverride] = useState<{ firmaDurumu?: string; yonetimTipi?: string }>({});
+export default function KunyeDashboard({ kunye, musteriAdi, sektorVeSorumlu, aktifFazNo, musteriId, customerType, isOrtagiTipi, hasCustomerRole, hasBusinessPartnerRole, partnerSubtype, customerPhaseNo, customerPhaseStatus, partnerPhaseNo, partnerPhaseStatus, onIsKoluChanged }: KunyeDashboardProps) {
 
   // İş Kolu — künye kartından tek tıkla değiştirilir. Kayıt yeri müşteri kartı
   // (musteriler.is_kolu, /api/crm/is-kolu); rozet kaydın ardından hemen yeni değeri gösterir.
@@ -67,46 +70,14 @@ export default function KunyeDashboard({ kunye, musteriAdi, sektorVeSorumlu, akt
       setSavingIsKolu(false);
     }
   };
-  // İş Ortağı Tipi — sadece customer_type='business_partner' kayıtlarda görünür.
-  const [isOrtagiTipiOverride, setIsOrtagiTipiOverride] = useState<string | null>(null);
-  const [editingIsOrtagiTipi, setEditingIsOrtagiTipi] = useState(false);
-  const [savingIsOrtagiTipi, setSavingIsOrtagiTipi] = useState(false);
-  const [isOrtagiTipiMsg, setIsOrtagiTipiMsg] = useState('');
-  const currentIsOrtagiTipi = isOrtagiTipiOverride ?? (isOrtagiTipi || '');
-
-  const saveIsOrtagiTipi = async (value: string) => {
-    if (!musteriId || !value || value === currentIsOrtagiTipi) { setEditingIsOrtagiTipi(false); return; }
-    setSavingIsOrtagiTipi(true);
-    setIsOrtagiTipiMsg('');
-    try {
-      const res = await fetch('/api/crm/is-ortagi-tipi', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ musteriId, is_ortagi_tipi: value }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.message || 'İş Ortağı Tipi güncellenemedi.');
-      setIsOrtagiTipiOverride(String(data?.is_ortagi_tipi ?? value));
-      setEditingIsOrtagiTipi(false);
-      setIsOrtagiTipiMsg('İş Ortağı Tipi güncellendi.');
-      onIsKoluChanged?.(String(data?.is_ortagi_tipi ?? value));
-      window.setTimeout(() => setIsOrtagiTipiMsg(''), 2500);
-    } catch (err) {
-      setIsOrtagiTipiMsg(err instanceof Error ? err.message : 'İş Ortağı Tipi güncellenemedi.');
-    } finally {
-      setSavingIsOrtagiTipi(false);
-    }
-  };
-
-  const [editingSeg, setEditingSeg] = useState(false);
-  const [savingSeg, setSavingSeg] = useState(false);
-  const [segMsg, setSegMsg] = useState('');
-
   const segmentation = useMemo(() => deriveCustomerSegmentation(aktifFazNo), [aktifFazNo]);
-  const firmaDurumu = (segOverride.firmaDurumu || segmentation.firmaDurumu) as string;
-  const yonetimTipi = (segOverride.yonetimTipi || segmentation.yonetimTipi) as string;
+  const firmaDurumu = segmentation.firmaDurumu as string;
+  const yonetimTipi = segmentation.yonetimTipi as string;
   const firmaTone = customerStatusTone(firmaDurumu as any);
   const yonetimTone = managementTypeTone(yonetimTipi as any);
+  const effectiveHasCustomerRole = hasCustomerRole ?? customerType !== 'business_partner';
+  const effectiveHasPartnerRole = hasBusinessPartnerRole ?? customerType === 'business_partner';
+  const effectivePartnerSubtype = partnerSubtype || isOrtagiTipi || 'Tür Belirtilmedi';
 
   const stats = useMemo(() => {
     if (!kunye) return { total: 30, filled: 0, percentage: 0, groups: [] as any[] };
@@ -184,22 +155,6 @@ export default function KunyeDashboard({ kunye, musteriAdi, sektorVeSorumlu, akt
   const statusLabel = stats.percentage >= 80 ? '✓ Eksiksiz' : stats.percentage >= 50 ? '⚠ Eksik Var' : '⚠ Çok Eksik';
   const completedCats = stats.groups.filter(g => g.filled === g.total).length;
 
-  const handleSaveSegmentation = async () => {
-    if (!musteriId) return;
-    setSavingSeg(true);
-    setSegMsg('');
-    try {
-      // In-memory override — backend bağlandığında burada API çağrısı yapılacak
-      setSegMsg('✓ Kaydedildi (demo mod)');
-      setEditingSeg(false);
-      setTimeout(() => setSegMsg(''), 3000);
-    } catch {
-      setSegMsg('Hata oluştu');
-    } finally {
-      setSavingSeg(false);
-    }
-  };
-
   return (
     <div style={{ display: 'grid', gap: 14 }}>
 
@@ -213,9 +168,7 @@ export default function KunyeDashboard({ kunye, musteriAdi, sektorVeSorumlu, akt
           <h2 className="kd-title">{musteriAdi}</h2>
           {sektorVeSorumlu && <p className="kd-sub">{sektorVeSorumlu}</p>}
 
-          {/* Segmentasyon badges + edit toggle */}
-          {!editingSeg && (
-            <div className="kd-badges">
+          <div className="kd-badges">
               {/* İş Kolu (müşteri kartından): rozete tıkla → seç → anında kaydedilir */}
               {editingIsKolu ? (
                 <span className="kd-badge" style={{ background: 'rgba(59,130,246,0.22)', border: '1px solid rgba(147,197,253,0.55)', color: '#dbeafe', gap: 6 }}>
@@ -251,42 +204,12 @@ export default function KunyeDashboard({ kunye, musteriAdi, sektorVeSorumlu, akt
                   {isKoluMsg}
                 </span>
               ) : null}
-              {customerType === 'business_partner' ? (
-                editingIsOrtagiTipi ? (
-                  <span className="kd-badge" style={{ background: 'rgba(168,85,247,0.22)', border: '1px solid rgba(216,180,254,0.55)', color: '#f3e8ff', gap: 6 }}>
-                    🔧
-                    <select
-                      autoFocus
-                      value={currentIsOrtagiTipi || IS_ORTAGI_TIPI_OPTIONS[0]}
-                      disabled={savingIsOrtagiTipi}
-                      onChange={(e) => void saveIsOrtagiTipi(e.target.value)}
-                      onBlur={() => { if (!savingIsOrtagiTipi) setEditingIsOrtagiTipi(false); }}
-                      aria-label="İş Ortağı Tipi seç"
-                      style={{ minHeight: 26, padding: '0 6px', borderRadius: 8, border: '1px solid rgba(216,180,254,0.55)', background: '#0f172a', color: '#f3e8ff', font: 'inherit', fontWeight: 800 }}
-                    >
-                      {IS_ORTAGI_TIPI_OPTIONS.map((value) => <option key={value} value={value}>{value}</option>)}
-                    </select>
-                    {savingIsOrtagiTipi ? <small style={{ opacity: 0.8 }}>kaydediliyor…</small> : null}
-                  </span>
-                ) : (
-                  <button
-                    type="button"
-                    className="kd-badge"
-                    onClick={() => { if (musteriId) setEditingIsOrtagiTipi(true); }}
-                    disabled={!musteriId}
-                    title={musteriId ? 'İş Ortağı Tipini değiştir (Entegrasyon / Donanım)' : undefined}
-                    aria-label={`İş Ortağı Tipi: ${currentIsOrtagiTipi || 'Belirsiz'}. Değiştirmek için tıkla`}
-                    style={{ background: 'rgba(168,85,247,0.22)', border: '1px solid rgba(216,180,254,0.55)', color: '#f3e8ff', cursor: musteriId ? 'pointer' : 'default', font: 'inherit' }}
-                  >
-                    🔧 {currentIsOrtagiTipi || 'Tip Seç'} <span aria-hidden="true" style={{ opacity: 0.7, fontSize: '0.85em' }}>✎</span>
-                  </button>
-                )
-              ) : null}
-              {isOrtagiTipiMsg ? (
-                <span className="kd-badge" style={{ background: 'rgba(255,255,255,0.10)', border: '1px solid rgba(255,255,255,0.2)', color: '#f8fafc' }}>
-                  {isOrtagiTipiMsg}
-                </span>
-              ) : null}
+              {effectiveHasCustomerRole ? <span className="kd-badge" style={{ background: 'rgba(59,130,246,0.22)', border: '1px solid rgba(147,197,253,0.55)', color: '#dbeafe' }}>
+                👤 Müşteri{customerPhaseNo != null ? ` · Faz ${customerPhaseNo}` : ''}{customerPhaseStatus ? ` · ${customerPhaseStatus}` : ''}
+              </span> : null}
+              {effectiveHasPartnerRole ? <span className="kd-badge" style={{ background: 'rgba(168,85,247,0.22)', border: '1px solid rgba(216,180,254,0.55)', color: '#f3e8ff' }}>
+                🤝 İş Ortağı · {effectivePartnerSubtype}{partnerPhaseNo != null ? ` · Faz ${partnerPhaseNo}` : ''}{partnerPhaseStatus ? ` · ${partnerPhaseStatus}` : ''}
+              </span> : null}
               {kunye?.satici_etiketi ? (
                 <span className="kd-badge" style={{ background: 'rgba(16,185,129,0.2)', border: '1px solid rgba(110,231,183,0.5)', color: '#d1fae5' }}>
                   {kunye.satici_etiketi === 'Hunter' ? '🏹' : '🌱'} {kunye.satici_etiketi}
@@ -304,54 +227,7 @@ export default function KunyeDashboard({ kunye, musteriAdi, sektorVeSorumlu, akt
               }}>
                 {statusLabel}
               </span>
-              <button className="kd-edit-btn" onClick={() => setEditingSeg(true)}>
-                ✏️ Segmentasyonu Düzenle
-              </button>
-              {segMsg && <span className="seg-msg">{segMsg}</span>}
             </div>
-          )}
-
-          {/* Segmentasyon editörü */}
-          {editingSeg && (
-            <div className="seg-editor">
-              <div className="seg-editor-title">✏️ Segmentasyonu Manuel Düzenle</div>
-              <div className="seg-row">
-                <div className="seg-field">
-                  <label>Firma Durumu</label>
-                  <select
-                    className="seg-select"
-                    value={segOverride.firmaDurumu || segmentation.firmaDurumu}
-                    onChange={e => setSegOverride(v => ({ ...v, firmaDurumu: e.target.value }))}
-                  >
-                    {FIRMA_DURUMU_OPTIONS.map(opt => (
-                      <option key={opt} value={opt}>{opt}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="seg-field">
-                  <label>Yönetim Tipi</label>
-                  <select
-                    className="seg-select"
-                    value={segOverride.yonetimTipi || segmentation.yonetimTipi}
-                    onChange={e => setSegOverride(v => ({ ...v, yonetimTipi: e.target.value }))}
-                  >
-                    {YONETIM_TIPI_OPTIONS.map(opt => (
-                      <option key={opt} value={opt}>{opt}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              <div className="seg-actions">
-                <button className="seg-save" onClick={handleSaveSegmentation} disabled={savingSeg}>
-                  {savingSeg ? 'Kaydediliyor...' : 'Kaydet'}
-                </button>
-                <button className="seg-cancel" onClick={() => { setEditingSeg(false); setSegOverride({}); }}>
-                  İptal
-                </button>
-                <span style={{ fontSize: 11, opacity: 0.6 }}>Faz verisi yoksa manuel olarak belirlenebilir</span>
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Donut */}

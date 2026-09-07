@@ -231,6 +231,9 @@ function IconMoon() {
 }
 
 function routeMeta(pathname: string) {
+  if (/^\/crm\/[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(pathname)) {
+    return { section: "Operasyon", title: "Firma Detayı" };
+  }
   const items: Array<[string, string, string]> = [
     [
       "/crm/reports/weekly-management-presentation",

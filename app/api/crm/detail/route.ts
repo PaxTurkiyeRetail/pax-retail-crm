@@ -30,6 +30,15 @@ export async function GET(request: Request) {
       .eq('musteri_id', musteriId)
       .maybeSingle();
 
+    const [{ data: roleRows }, { data: pipelineStates }] = await Promise.all([
+      admin.from('organization_roles').select('role_key,subtype,is_active').eq('customer_id', musteriId),
+      admin.from('organization_pipeline_states').select('context_key,active_phase_no,status').eq('customer_id', musteriId),
+    ]);
+    const customerRole = (roleRows ?? []).find((row: any) => row.role_key === 'customer');
+    const partnerRole = (roleRows ?? []).find((row: any) => row.role_key === 'business_partner');
+    const customerPipeline = (pipelineStates ?? []).find((row: any) => row.context_key === 'customer');
+    const partnerPipeline = (pipelineStates ?? []).find((row: any) => row.context_key === 'business_partner');
+
     const { data: kunye, error: kunyeError } = await admin.from('v_musteri_kunye_status').select('*').eq('musteri_id', musteriId).maybeSingle();
     if (kunyeError && !/relation .* does not exist/i.test(kunyeError.message)) {
       return NextResponse.json({ message: kunyeError.message }, { status: 500 });
@@ -38,8 +47,15 @@ export async function GET(request: Request) {
     const enrichedCustomer = (await appendLastStayedPhase([{
       ...musteri,
       musteri_id: musteriId,
-      aktif_faz_no: (phaseView as any)?.aktif_faz_no ?? null,
+      aktif_faz_no: customerPipeline?.active_phase_no ?? (phaseView as any)?.aktif_faz_no ?? null,
       aktif_faz_adi: (phaseView as any)?.aktif_faz_adi ?? null,
+      has_customer_role: Boolean(customerRole?.is_active),
+      has_business_partner_role: Boolean(partnerRole?.is_active),
+      partner_subtype: partnerRole?.subtype ?? null,
+      customer_phase_no: customerPipeline?.active_phase_no ?? null,
+      customer_phase_status: customerPipeline?.status ?? null,
+      partner_phase_no: partnerPipeline?.active_phase_no ?? null,
+      partner_phase_status: partnerPipeline?.status ?? null,
     }]))[0];
 
     const mappedKunye = mapKunyeDbToUi(kunye ?? null);

@@ -96,6 +96,8 @@ export default function QuickActivityClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const editId = (searchParams.get('edit') || '').trim();
+  const initialCustomerId = (searchParams.get('customer_id') || '').trim();
+  const initialActivityType = (searchParams.get('activity_type') || '').trim();
   
   const [me, setMe] = useState<Me | null>(null);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -223,6 +225,14 @@ export default function QuickActivityClient() {
       setSonrakiTip(visibleNextActivityTypes[0] ?? 'Online Toplantı');
     }
   }, [aktiviteTipi, sonrakiTip, visibleActivityTypes, visibleNextActivityTypes]);
+
+  useEffect(() => {
+    if (editId || !initialCustomerId) return;
+    setMusteriId(initialCustomerId);
+    if (visibleActivityTypes.includes(initialActivityType as ActivityType)) {
+      setAktiviteTipi(initialActivityType as ActivityType);
+    }
+  }, [editId, initialActivityType, initialCustomerId, visibleActivityTypes]);
 
   useEffect(() => {
     if (editId) return;
