@@ -261,7 +261,8 @@ export default function QuickActivityClient() {
     const loadPhaseMeta = async () => {
       setPhaseMetaLoading(true);
       try {
-        const res = await fetch(`/api/activities/meta?musteri_id=${encodeURIComponent(musteriId)}&faz_no=${encodeURIComponent(String(fazNo))}`, { cache: 'no-store' });
+        const activityContext = isBusinessPartnerCustomer ? 'business_partner' : 'customer';
+        const res = await fetch(`/api/activities/meta?musteri_id=${encodeURIComponent(musteriId)}&faz_no=${encodeURIComponent(String(fazNo))}&activity_context=${activityContext}`, { cache: 'no-store' });
         const data = await res.json().catch(() => ({}));
         if (!cancelled && res.ok) {
           if (data?.durum) setFazDurum(coercePhaseStatus(data.durum));
@@ -275,7 +276,7 @@ export default function QuickActivityClient() {
     return () => {
       cancelled = true;
     };
-  }, [musteriId, fazNo]);
+  }, [musteriId, fazNo, isBusinessPartnerCustomer]);
 
   useEffect(() => {
     if (!editId) {
