@@ -114,7 +114,9 @@ export async function POST(req: Request) {
     // Sektor IS ORTAGI ise musteri tipi de Is Ortagi'na cekilir; aksi halde
     // aktivite ekrani is ortagi fazlari yerine 25 fazli musteri listesini
     // gosterir. Siniflandirma yetkisi olmayan kullanicilar icin de gecerlidir.
-    customerType = resolveCustomerTypeForSector({ sektor, customerType });
+    if (!Object.prototype.hasOwnProperty.call(body, 'customer_type')) {
+        customerType = resolveCustomerTypeForSector({ sektor, customerType });
+    }
     const requestedOwner = (body.sorumlu ?? "").trim() || myName;
     const requestedOwnerUserId = String(body.owner_user_id ?? '').trim() || null;
     let sorumlu = myName;

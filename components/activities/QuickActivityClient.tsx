@@ -128,6 +128,8 @@ export default function QuickActivityClient() {
   const [editReady, setEditReady] = useState(false);
   const [phaseMetaLoading, setPhaseMetaLoading] = useState(false);
   const [partnerActivityAccess, setPartnerActivityAccess] = useState({ can_view: false, can_create: false, can_change_phase: false });
+  const [partnerSubtype, setPartnerSubtype] = useState('Entegrasyon Firması');
+  const [savingPartnerRelationship, setSavingPartnerRelationship] = useState(false);
 
   const canCreateTechnical = canCreateTechnicalActivity(me);
   const visibleActivityTypes = useMemo(() => {
@@ -257,7 +259,8 @@ export default function QuickActivityClient() {
     const loadPhaseMeta = async () => {
       setPhaseMetaLoading(true);
       try {
-        const res = await fetch(`/api/activities/meta?musteri_id=${encodeURIComponent(musteriId)}&faz_no=${encodeURIComponent(String(fazNo))}`, { cache: 'no-store' });
+        const context = isBusinessPartnerCustomer ? 'business_partner' : 'customer';
+        const res = await fetch(`/api/activities/meta?musteri_id=${encodeURIComponent(musteriId)}&faz_no=${encodeURIComponent(String(fazNo))}&activity_context=${context}`, { cache: 'no-store' });
         const data = await res.json().catch(() => ({}));
         if (!cancelled && res.ok) {
           if (data?.durum) setFazDurum(coercePhaseStatus(data.durum));
@@ -271,7 +274,34 @@ export default function QuickActivityClient() {
     return () => {
       cancelled = true;
     };
-  }, [musteriId, fazNo]);
+  }, [musteriId, fazNo, isBusinessPartnerCustomer]);
+
+  async function addPartnerRelationship() {
+    if (!selectedCustomer || savingPartnerRelationship) return;
+    setSavingPartnerRelationship(true);
+    setError('');
+    try {
+      const res = await fetch('/api/crm/relationships', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customer_id: selectedCustomer.musteri_id,
+          customer: Boolean(selectedCustomer.has_customer_role),
+          business_partner: true,
+          partner_subtype: partnerSubtype,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.message || 'İş Ortağı ilişkisi eklenemedi.');
+      setCustomers((current) => current.map((customer) => customer.musteri_id === selectedCustomer.musteri_id
+        ? { ...customer, has_business_partner_role: true, is_business_partner: true }
+        : customer));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'İş Ortağı ilişkisi eklenemedi.');
+    } finally {
+      setSavingPartnerRelationship(false);
+    }
+  }
 
   useEffect(() => {
     if (!editId) {
@@ -493,8 +523,20 @@ export default function QuickActivityClient() {
             </select>
           </div>
 
-          {missingPartnerRelationship && <div style={{ padding: 14, background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 'var(--radius-md)', color: '#9a3412' }}>
-            Bu firmada aktif İş Ortağı ilişkisi yok. Önce <Link href={`/crm/${musteriId}#company-relations`}>firma kartından İş Ortağı ilişkisini ekleyin</Link>.
+          {missingPartnerRelationship && <div style={{ padding: 14, background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 'var(--radius-md)', color: '#9a3412', display: 'grid', gap: 10 }}>
+            <strong>Bu firmanın aktif İş Ortağı rolü yok.</strong>
+            {me?.permissions?.includes('customer.classification.manage') ? <>
+              <span>Aktiviteden çıkmadan rolü ekleyip iş ortağı fazıyla devam edebilirsin.</span>
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                <select className="pax-input" value={partnerSubtype} onChange={(e) => setPartnerSubtype(e.target.value)} style={{ minHeight: 42, flex: '1 1 220px' }}>
+                  <option value="Entegrasyon Firması">Entegrasyon Firması</option>
+                  <option value="Donanım Firması">Donanım Firması</option>
+                </select>
+                <button type="button" className="pax-btn" disabled={savingPartnerRelationship} onClick={() => void addPartnerRelationship()}>
+                  {savingPartnerRelationship ? 'Ekleniyor...' : 'İş Ortağı Rolünü Ekle'}
+                </button>
+              </div>
+            </> : <span>Yetkili bir kullanıcı <Link href={`/crm/${musteriId}#company-relations`}>firma kartından İş Ortağı rolünü eklemeli</Link>.</span>}
           </div>}
 
           {technicalMissingPhase && (

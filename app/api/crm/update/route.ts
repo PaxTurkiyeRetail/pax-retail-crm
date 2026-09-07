@@ -153,7 +153,9 @@ export async function POST(req: Request) {
   // Sektor IS ORTAGI'na cevrildiginde musteri tipi de Is Ortagi olur (yalnizca
   // tip dokunulmamis 'standard' ise); boylece aktivite ekrani 14 fazli is ortagi
   // listesini gosterir. Bilincli 'report_only' secimi korunur.
-  customerType = resolveCustomerTypeForSector({ sektor, customerType });
+  if (!Object.prototype.hasOwnProperty.call(body, 'customer_type')) {
+    customerType = resolveCustomerTypeForSector({ sektor, customerType });
+  }
 
   // Musteri Tipi business_partner disina cekildiginde is_ortagi_tipi
   // (Entegrasyon/Donanim Firmasi) yetim kalmasin diye temizlenir.
