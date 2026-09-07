@@ -242,7 +242,7 @@ export default function QuickActivityClient() {
     }
   }, [isTechnicalActivity, selectedCustomer]);
 
-  const isBusinessPartnerCustomer = isPartnerActivityType || (Boolean(editId) && originalActivityContext === 'business_partner') || Boolean(selectedCustomer?.is_business_partner && !selectedCustomer?.has_customer_role);
+  const isBusinessPartnerCustomer = isPartnerActivityType || (Boolean(editId) && originalActivityContext === 'business_partner') || Boolean((selectedCustomer?.is_business_partner || selectedCustomer?.has_business_partner_role) && !selectedCustomer?.has_customer_role);
   const phaseOptionalCustomer = !isPartnerActivityType && isPhaseOptionalCustomer(selectedCustomer);
   const phaseOptions = isBusinessPartnerCustomer ? partnerFazlar : fazlar;
   const phaseOptionalTechnicalCustomer = isTechnicalActivity && phaseOptionalCustomer;
