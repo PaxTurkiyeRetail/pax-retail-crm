@@ -8,6 +8,7 @@ import {
   LIVE_BOARD_RULES,
   LIVE_BOARD_SPEEDS,
   LIVE_BOARD_TIMING,
+  PHASE_GROUPS,
   TEAM_SLIDE_TITLES,
   agoLabel,
   alertPanels,
@@ -18,6 +19,7 @@ import {
   fmtMoney,
   layoutMetrics,
   pageBounds,
+  pctOf,
   pageCount,
   pageSlice,
   slideDurationMs,
@@ -152,7 +154,7 @@ function Donut({ rows, shown, center, centerLabel, colors, size = 168 }: { rows:
           return (
             <div className="lb-legend-row" key={row.label}>
               <i style={{ background: colors[Math.max(0, index) % colors.length] }} />
-              <span>{row.label}</span>
+              <span>{row.label}{row.hint ? <small>{row.hint}</small> : null}</span>
               <strong>{fmt(row.value)}</strong>
               <em>{total ? `%${Math.round((row.value / total) * 100)}` : ''}</em>
             </div>
@@ -219,6 +221,7 @@ function MoneyBand({ r, pipeline, weekQuotes }: { r: RevenueBlock; pipeline: { p
     { k: 'Forecast · yıl sonu', v: fmtMoney(r.forecast), n: r.forecastPct != null ? `hedefin %${r.forecastPct}'i` : 'gerçekleşen + ağırlıklı pipeline' },
     { k: 'Gap', v: r.forecastGap == null ? '—' : fmtMoney(r.forecastGap, { sign: true }), n: r.forecastGap == null ? 'hedef yok' : r.forecastGap >= 0 ? 'hedefin üstünde' : 'hedefin altında', tone: r.forecastGap == null ? 'neutral' : r.forecastGap >= 0 ? 'ok' : 'danger' },
     { k: 'Pipeline', v: fmtMoney(r.pipeline), n: `${fmt(r.openQuotes)} açık teklif · ağırlıklı ${fmtMoney(r.weightedPipeline)}` },
+    { k: 'Cihaz · YTD', v: fmt(r.deviceActualYtd), n: r.deviceTarget ? `hedef ${fmt(r.deviceTarget)} · %${pctOf(r.deviceActualYtd, r.deviceTarget) ?? 0}` : 'kazanılan tekliflerdeki adet', tone: r.deviceTarget ? (pctOf(r.deviceActualYtd, r.deviceTarget) ?? 0) >= r.yearElapsedPct ? 'ok' : 'warn' : 'neutral' },
     { k: 'Aktif POC', v: fmt(pipeline.poc), n: 'konsinye · pilot · test' },
     { k: 'Teklif', v: fmt(weekQuotes), n: 'bu hafta oluşturulan' },
     { k: 'Sipariş · YTD', v: fmt(r.wonYtd.count), n: `${fmtMoney(r.wonYtd.amount)} kazanılan`, tone: r.wonYtd.count ? 'ok' : 'neutral' },
@@ -286,6 +289,13 @@ function PaceCompare({ r }: { r: RevenueBlock }) {
 }
 
 function HotCard({ item, showOwner }: { item: HotItem; showOwner?: boolean }) {
+  // 3 satır (≈100 px): başlık + hedef · faz + değer · son hareket + next action.
+  // Kişi slaydında 5 kart tek sayfaya sığar (Çağdaş Bey, 04.09).
+  const money = item.quoteAmount
+    ? `Teklif ${fmtMoney(item.quoteAmount)}${item.weightedValue ? ` · ağ. ${fmtMoney(item.weightedValue)}` : ''}`
+    : item.potentialValue
+      ? `≈${fmtMoney(item.potentialValue)} liste${item.weightedValue ? ` · ağ. ${fmtMoney(item.weightedValue)}` : ''}`
+      : '';
   return (
     <div className={`lb-hot tone-${item.tone}`}>
       <div className="lb-hot-head">
@@ -298,17 +308,12 @@ function HotCard({ item, showOwner }: { item: HotItem; showOwner?: boolean }) {
       <div className="lb-hot-meta">
         <PhaseChip no={item.phaseNo} name={item.phaseName} />
         {item.models ? <span className="lb-hot-models">{item.models}</span> : item.quantity ? <span className="lb-hot-models">{fmt(item.quantity)} adet</span> : null}
-      </div>
-      <div className="lb-hot-money">
-        {item.quoteAmount ? <span>Teklif <strong>{fmtMoney(item.quoteAmount)}</strong></span> : null}
-        {item.potentialValue ? <span>Potansiyel <strong>≈{fmtMoney(item.potentialValue)}</strong></span> : null}
-        {item.weightedValue ? <span>Ağırlıklı <strong>{fmtMoney(item.weightedValue)}</strong></span> : null}
-        {!item.quoteAmount && !item.potentialValue ? <span className="lb-muted">Değer girilmedi</span> : null}
+        <span className="lb-hot-money">{money ? <strong>{money}</strong> : <span className="lb-muted">değer girilmedi</span>}</span>
       </div>
       <div className="lb-hot-foot">
-        <span className={`lb-ago tone-${staleTone(item.daysSinceActivity)}`}>Son hareket: {agoLabel(item.daysSinceActivity)}{item.lastActivityLabel ? ` · ${item.lastActivityLabel}` : ''}</span>
+        <span className={`lb-ago tone-${staleTone(item.daysSinceActivity)}`} title={item.lastActivityLabel ?? undefined}>Son: {agoLabel(item.daysSinceActivity)}{item.lastActivityLabel ? ` · ${item.lastActivityLabel}` : ''}</span>
         {item.nextAction
-          ? <span className="lb-next" title={`${item.nextAction}${item.actionOwner ? ` · ${item.actionOwner}` : ''}`}><b>Next:</b> {item.nextAction}{item.actionOwner && item.actionOwner !== item.owner ? ` · ${item.actionOwner}` : ''}{item.targetDate ? ` · ${fmtDate(item.targetDate)}` : ''}</span>
+          ? <span className="lb-next" title={`${item.nextAction}${item.actionOwner ? ` · ${item.actionOwner}` : ''}${item.targetDate ? ` · ${fmtDate(item.targetDate)}` : ''}`}><b>Next:</b> {item.nextAction}{item.actionOwner && item.actionOwner !== item.owner ? ` · ${item.actionOwner}` : ''}{item.targetDate ? ` · ${fmtDate(item.targetDate)}` : ''}</span>
           : <span className="lb-next lb-muted">Next action girilmedi</span>}
       </div>
     </div>
@@ -347,7 +352,9 @@ function ActivityList({ rows, todayKey, empty }: { rows: LiveActivity[]; todayKe
 /* --- Takım slaytları ------------------------------------------------------ */
 
 function PulseSlide({ data, caps, page, compact }: { data: LiveBoardPayload; caps: Capacities; page: number; compact?: boolean }) {
-  const { team, owners, range } = data;
+  const { team, range } = data;
+  // "Kim hedefinde, kim geride?" performans sırasına göre (payload dönüş sırası sabit OWNER_ORDER'dır).
+  const owners = useMemo(() => [...data.owners].sort((a, b) => a.rank - b.rank), [data.owners]);
   const leaderPages = Math.max(1, Math.ceil(owners.length / Math.max(1, caps.leader)));
   // Bölünmüş Pulse: ilk sayfa(lar) ciro + sıralama, son sayfa aktivite + dönüşüm.
   const showActivity = !caps.pulseSplit || page >= leaderPages;
@@ -364,12 +371,12 @@ function PulseSlide({ data, caps, page, compact }: { data: LiveBoardPayload; cap
           <Ring pct={r.attainmentPct} tone={r.pace ?? 'neutral'} big={attainmentBig} sub={r.target != null ? `${fmtMoney(r.actualYtd)} / ${fmtMoney(r.target)}` : 'hedef yok'} size={compact ? 150 : 178} stroke={compact ? 10 : 11} />
           <div className="lb-kpis four">
             <Kpi label="Yıllık Hedef" value={fmtMoney(r.target)} sub={r.deviceTarget ? `${fmt(r.deviceTarget)} cihaz` : 'Kullanıcı Yönetimi → Hedefler'} small />
-            <Kpi label="Kalan Hedef" value={fmtMoney(r.remaining)} sub={r.deviceTarget ? `${fmt(r.deviceActualYtd)} / ${fmt(r.deviceTarget)} cihaz` : `${fmt(r.deviceActualYtd)} cihaz kazanıldı`} small />
+            <Kpi label="Kalan Hedef" value={fmtMoney(r.remaining)} sub={r.target != null ? `yılın %${r.yearElapsedPct}'i geçti` : 'hedef girilmedi'} small />
+            <Kpi label="Cihaz · YTD" value={fmt(r.deviceActualYtd)} sub={r.deviceTarget ? `hedef ${fmt(r.deviceTarget)} · %${pctOf(r.deviceActualYtd, r.deviceTarget) ?? 0}` : 'kazanılan tekliflerdeki adet'} tone={r.deviceTarget ? ((pctOf(r.deviceActualYtd, r.deviceTarget) ?? 0) >= r.yearElapsedPct ? 'ok' : 'warn') : 'neutral'} small />
             <Kpi label="Yıl Sonu Forecast" value={fmtMoney(r.forecast)} sub={r.forecastPct != null ? `hedefin %${r.forecastPct}'i` : 'weighted model'} tone={r.forecastPct == null ? 'neutral' : r.forecastPct >= 100 ? 'ok' : 'warn'} small />
             <Kpi label="Forecast Gap" value={r.forecastGap == null ? '—' : fmtMoney(r.forecastGap, { sign: true })} sub={r.forecastGap == null ? 'hedef yok' : r.forecastGap >= 0 ? 'hedefin üstünde' : 'hedefin altında'} tone={r.forecastGap == null ? 'neutral' : r.forecastGap >= 0 ? 'ok' : 'danger'} small />
             <Kpi label="Açık Pipeline" value={fmtMoney(r.pipeline)} sub={`${fmt(r.openQuotes)} teklif · ağırlıklı ${fmtMoney(r.weightedPipeline)}`} small />
             <Kpi label="Bu Ay Kazanılan" value={fmtMoney(r.wonMonth.amount)} sub={`${fmt(r.wonMonth.count)} sipariş · YTD ${fmt(r.wonYtd.count)}`} tone={r.wonMonth.count ? 'ok' : 'neutral'} small />
-            <Kpi label="Kaybedilen · YTD" value={fmt(r.lostYtd.count)} sub={fmtMoney(r.lostYtd.amount)} small />
             <Kpi label="Süresi Dolan Teklif" value={fmt(r.expiredOpenQuotes)} sub="açık ama geçerliliği bitmiş" tone={r.expiredOpenQuotes ? 'warn' : 'neutral'} small />
           </div>
           <PaceCompare r={r} />
@@ -441,14 +448,19 @@ function PulseSlide({ data, caps, page, compact }: { data: LiveBoardPayload; cap
 
       {showActivity ? (
       <div className="lb-card">
-        <div className="lb-card-head"><h3>Dönüşüm & Pipeline</h3><span>bu hafta · aktif süreç</span></div>
+        <div className="lb-card-head">
+          <h3>Dönüşüm & Pipeline</h3>
+          <span>
+            bu hafta · aktif süreç
+            {team.jira ? <> · <Pill tone={team.jira.open ? 'warn' : 'ok'} title={`${fmt(team.jira.customerWaiting)} müşteri bekleyen · ${fmt(team.jira.created)} yeni · ${fmt(team.jira.closed)} kapanan`}>Jira {fmt(team.jira.open)} açık</Pill></> : null}
+          </span>
+        </div>
         <FunnelRow f={team.funnel} />
         <div className="lb-kpis four tight">
           <Kpi label="Aktif Fırsat" value={fmt(team.pipeline.activeCustomers)} sub="firma · Faz 4–14" small />
           <Kpi label="Potansiyel" value={fmt(team.pipeline.potentialDevices)} sub={team.pipeline.potentialValue ? `adet · ≈${fmtMoney(team.pipeline.potentialValue)} liste` : 'adet · forecast girilmedi'} small />
           <Kpi label="POC · Rollout" value={`${fmt(team.pipeline.poc)} · ${fmt(team.pipeline.rollout)}`} sub="aktif süreç" tone="info" small />
           <Kpi label="Stale · Gecikmiş" value={`${fmt(team.pipeline.stale)} · ${fmt(team.pipeline.overdueActions)}`} sub={`${LIVE_BOARD_RULES.staleWarnDays}+ gün hareketsiz · tarihi geçen`} tone={team.pipeline.overdueActions || team.pipeline.staleCritical ? 'danger' : team.pipeline.stale ? 'warn' : 'ok'} small />
-          {team.jira ? <Kpi label="Jira · Açık Ticket" value={fmt(team.jira.open)} sub={`${fmt(team.jira.customerWaiting)} müşteri bekleyen · ${fmt(team.jira.created)} yeni · ${fmt(team.jira.closed)} kapanan`} tone={team.jira.open ? 'warn' : 'ok'} small /> : null}
         </div>
       </div>
       ) : null}
@@ -458,8 +470,9 @@ function PulseSlide({ data, caps, page, compact }: { data: LiveBoardPayload; cap
 
 // Sıralı (ordinal) mavi rampası — düşük faz → yüksek faz. Yüzeye en yakın adım
 // 2:1'i aşar (açık: ≥ adım 250, koyu: ≥ adım 600); ileri fazlar daha belirgin.
-const ORDINAL_LIGHT = ['#86b6ef', '#5598e7', '#2a78d6', '#1c5cab', '#104281'];
-const ORDINAL_DARK = ['#184f95', '#256abf', '#3987e5', '#6da7ec', '#9ec5f4'];
+// Sıralı (ordinal) mavi rampa: faz grupları soldan sağa ilerledikçe koyulaşır (8 adım).
+const ORDINAL_LIGHT = ['#a9cbf4', '#86b6ef', '#639fe9', '#4288e1', '#2a72d4', '#1e5db5', '#164a94', '#0f3873'];
+const ORDINAL_DARK = ['#163f78', '#1c519b', '#2664ba', '#3579d3', '#4d90e6', '#6da7ec', '#8fbdf1', '#b3d2f6'];
 
 function useIsDark() {
   const [dark, setDark] = useState(false);
@@ -477,17 +490,14 @@ function PortfolioSlide({ data, caps, page }: { data: LiveBoardPayload; caps: Ca
   const dark = useIsDark();
   const { portfolio } = data;
   const cap = caps.portfolioRows;
-  // Faz halkası: ≤ 6 dilim — Fazsız gri, sıralı gruplar tek renk rampası (ordinal).
-  const phaseRows = useMemo(() => {
-    const merged: Distribution = [];
-    for (const row of portfolio.byPhaseGroup) {
-      if (['Sözleşme', 'Sipariş & Teslimat', 'Eğitim & Devir', 'Rollout / Referans'].includes(row.label)) {
-        const tail = merged.find((r) => r.label === 'Sözleşme ve sonrası');
-        if (tail) tail.value += row.value; else merged.push({ label: 'Sözleşme ve sonrası', value: row.value });
-      } else merged.push({ ...row });
-    }
-    return merged;
-  }, [portfolio.byPhaseGroup]);
+  // Faz halkası: her faz grubu ayrı dilim (Çağdaş Bey, 04.09: "Sözleşme ve sonrası"
+  // anlaşılmıyordu) — Fazsız gri, sıralı gruplar tek renk rampası (ordinal).
+  // Açıklama satırları sayfalanır, hiçbir grup gizlenmez.
+  const phaseRows = useMemo<Distribution>(() => portfolio.byPhaseGroup.map((row) => {
+    const group = PHASE_GROUPS.find((g) => g.label === row.label);
+    const hint = group?.from != null ? (group.from === group.to ? `faz ${group.from}` : `faz ${group.from}–${group.to}`) : 'faz girilmemiş';
+    return { ...row, hint };
+  }), [portfolio.byPhaseGroup]);
   const ramp = dark ? ORDINAL_DARK : ORDINAL_LIGHT;
   let step = 0;
   const phaseColors = phaseRows.map((row) => (row.label === 'Fazsız' ? (dark ? '#475569' : '#cbd5e1') : ramp[Math.min(ramp.length - 1, step++)]));
@@ -739,17 +749,79 @@ function AlertsSlide({ data, caps, page }: { data: LiveBoardPayload; caps: Capac
   );
 }
 
-function JiraSlide({ data }: { data: LiveBoardPayload }) {
+function JiraSlide({ data, caps, page }: { data: LiveBoardPayload; caps: Capacities; page: number }) {
   const j = data.team.jira;
   if (!j) return <div className="lb-slide lb-single"><div className="lb-empty"><div><strong>Jira verisi yok</strong>Entegrasyon kapalı ya da yanıt vermedi.</div></div></div>;
+  const rows = pageSlice(j.byCompany, page, caps.jiraRows);
+  const bounds = pageBounds(j.byCompany.length, page, caps.jiraRows);
+  const openDist: Distribution = [
+    { label: 'Devam eden', value: j.ongoing, tone: 'info' },
+    { label: 'Geliştirme bekleyen', value: j.developmentWaiting, tone: 'warn' },
+    { label: 'Müşteri bekleyen', value: j.customerWaiting, tone: 'warn' },
+  ];
+  const openColors = ['var(--lb-info)', 'var(--lb-danger)', 'var(--lb-warn)'];
+  const weekMax = Math.max(1, j.created, j.closed);
+  const net = j.created - j.closed;
   return (
-    <div className="lb-slide lb-single" key="jira">
+    <div className="lb-slide lb-jira" key="jira">
       <div className="lb-kpis five">
         <Kpi label="Toplam Açık" value={fmt(j.open)} tone={j.open ? 'warn' : 'ok'} sub="devam + geliştirme + müşteri bekleyen" />
         <Kpi label="Bu Hafta Açılan" value={fmt(j.created)} sub={data.range.label} />
-        <Kpi label="Bu Hafta Kapanan" value={fmt(j.closed)} tone="ok" />
-        <Kpi label="Müşteri Bekleyen" value={fmt(j.customerWaiting)} tone={j.customerWaiting ? 'warn' : 'ok'} />
-        <Kpi label="Geliştirme Bekleyen" value={fmt(j.developmentWaiting)} tone={j.developmentWaiting ? 'warn' : 'ok'} />
+        <Kpi label="Bu Hafta Kapanan" value={fmt(j.closed)} tone="ok" sub={net > 0 ? `net +${fmt(net)} açık` : net < 0 ? `net ${fmt(net)} · eriyor` : 'açılan = kapanan'} />
+        <Kpi label="Müşteri Bekleyen" value={fmt(j.customerWaiting)} tone={j.customerWaiting ? 'warn' : 'ok'} sub="müşteriden yanıt / erişim bekleniyor" />
+        <Kpi label="Geliştirme Bekleyen" value={fmt(j.developmentWaiting)} tone={j.developmentWaiting ? 'danger' : 'ok'} sub="ürün / yazılım ekibinde" />
+      </div>
+      <div className="lb-card lb-table-card">
+        <div className="lb-card-head">
+          <h3>Firma Bazında</h3>
+          <span>açığa göre sıralı{bounds.paged ? ` · ${bounds.from}–${bounds.to} / ${j.byCompany.length}` : ` · ${j.byCompany.length} firma`}</span>
+        </div>
+        {rows.length ? (
+          <div className="lb-table lb-owner-quotes lb-jira-table">
+            <div className="lb-tr lb-th"><span>Firma</span><span>Açık</span><span>Devam</span><span>Geliştirme</span><span>Müşteri</span><span>Açılan</span><span>Kapanan</span></div>
+            {rows.map((row) => {
+              const open = row.ongoing + row.developmentWaiting + row.customerWaiting;
+              return (
+                <div className={`lb-tr ${open ? 'tone-warn' : 'tone-ok'}`} key={row.company}>
+                  <span className="lb-td-title"><strong>{row.company}</strong></span>
+                  <span className={open ? 'tone-warn' : ''}>{fmt(open)}</span>
+                  <span>{fmt(row.ongoing)}</span>
+                  <span className={row.developmentWaiting ? 'tone-danger' : ''}>{fmt(row.developmentWaiting)}</span>
+                  <span className={row.customerWaiting ? 'tone-warn' : ''}>{fmt(row.customerWaiting)}</span>
+                  <span>{fmt(row.created)}</span>
+                  <span className={row.closed ? 'tone-ok' : ''}>{fmt(row.closed)}</span>
+                </div>
+              );
+            })}
+          </div>
+        ) : <div className="lb-muted">Bu hafta hareketi ya da açık ticket&apos;ı olan firma yok.</div>}
+      </div>
+      <div className="lb-stack">
+        <div className="lb-card">
+          <div className="lb-card-head"><h3>Açık Ticket Dağılımı</h3><span>{fmt(j.open)} açık</span></div>
+          {j.open ? (
+            <Donut rows={openDist} colors={openColors} center={fmt(j.open)} centerLabel="açık ticket" size={200} />
+          ) : <div className="lb-muted">Açık ticket yok.</div>}
+        </div>
+        <div className="lb-card">
+          <div className="lb-card-head"><h3>Bu Hafta</h3><span>{data.range.label}</span></div>
+          <div className="lb-jira-week">
+            <div className="lb-channel">
+              <div className="lb-channel-label">Açılan</div>
+              <div className="lb-bar"><span className="tone-warn" style={{ width: `${Math.round((j.created / weekMax) * 100)}%` }} /></div>
+              <div className="lb-channel-num">{fmt(j.created)}</div>
+            </div>
+            <div className="lb-channel">
+              <div className="lb-channel-label">Kapanan</div>
+              <div className="lb-bar"><span className="tone-ok" style={{ width: `${Math.round((j.closed / weekMax) * 100)}%` }} /></div>
+              <div className="lb-channel-num">{fmt(j.closed)}</div>
+            </div>
+            <div className={`lb-jira-net tone-${net > 0 ? 'warn' : net < 0 ? 'ok' : 'neutral'}`}>
+              {net > 0 ? `Açık stok bu hafta ${fmt(net)} arttı` : net < 0 ? `Açık stok bu hafta ${fmt(-net)} azaldı` : 'Açılan ve kapanan eşit'}
+              <small>kaynak: Jira · Retail Support · 10 dk önbellek</small>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -757,18 +829,14 @@ function JiraSlide({ data }: { data: LiveBoardPayload }) {
 
 /* --- Kişi slaytı (Sales Performance) --------------------------------------- */
 
-function OwnerSlide({ owner, todayKey, caps, page, compact }: { owner: LiveOwner; todayKey: string; caps: Capacities; page: number; compact: boolean }) {
+function OwnerSlide({ owner, todayKey, caps, compact }: { owner: LiveOwner; todayKey: string; caps: Capacities; compact: boolean }) {
   const r = owner.revenue;
-  // Her liste kendi sayfa sayısına göre döner: kısa liste bitince kart boş
-  // kalmaz, baştan gösterilir (uzun liste sayfalanmaya devam eder).
-  const hotPages = pageCount(owner.hot.length, caps.hot);
-  const recentPages = pageCount(owner.recentActivities.length, caps.recent);
-  const hotPage = page % hotPages;
-  const recentPage = page % recentPages;
-  const hotRows = pageSlice(owner.hot, hotPage, caps.hot);
-  const recentRows = pageSlice(owner.recentActivities, recentPage, caps.recent);
-  const hotBounds = pageBounds(owner.hot.length, hotPage, caps.hot);
-  const recentBounds = pageBounds(owner.recentActivities.length, recentPage, caps.recent);
+  // Tek sayfa (Çağdaş Bey, 04.09): en yakın tarihli 5 fırsat, Son Hareketler
+  // sığdığı kadar; kalan "+N daha" notuyla belirtilir (ayrıntı Kişi Bazlı Aktivite'de).
+  const hotRows = owner.hot.slice(0, Math.min(LIVE_BOARD_RULES.hotOwnerLimit, caps.hot));
+  const hotMore = Math.max(0, (owner.hotTotal ?? owner.hot.length) - hotRows.length);
+  const recentRows = owner.recentActivities.slice(0, caps.recent);
+  const recentMore = owner.recentActivities.length - recentRows.length;
   const hasRevenueTarget = r.target != null;
   const ringPct = hasRevenueTarget ? r.attainmentPct : owner.achievementPct;
   const ringTone: Tone = hasRevenueTarget ? (r.pace ?? 'neutral') : pctTone(owner.achievementPct);
@@ -832,7 +900,7 @@ function OwnerSlide({ owner, todayKey, caps, page, compact }: { owner: LiveOwner
         <div className="lb-card lb-grow">
           <div className="lb-card-head">
             <h3>Son Hareketler</h3>
-            <span>bu hafta · faz etkisiyle{recentBounds.paged ? ` · ${recentBounds.from}–${recentBounds.to} / ${owner.recentActivities.length}` : ''}</span>
+            <span>bu hafta · faz etkisiyle{recentMore > 0 ? ` · +${recentMore} hareket daha` : ''}</span>
           </div>
           <ActivityList rows={recentRows} todayKey={todayKey} />
         </div>
@@ -841,7 +909,7 @@ function OwnerSlide({ owner, todayKey, caps, page, compact }: { owner: LiveOwner
       <div className="lb-card lb-hot-col">
         <div className="lb-card-head">
           <h3>Hot Pipeline</h3>
-          <span>{owner.hot.length ? (hotBounds.paged ? `${hotBounds.from}–${hotBounds.to} / ${owner.hot.length}` : `${owner.hot.length} fırsat`) : ''}</span>
+          <span>{hotRows.length ? (hotMore > 0 ? `en yakın ${hotRows.length} · +${hotMore} fırsat daha` : `${hotRows.length} fırsat · en yakın tarihli`) : ''}</span>
         </div>
         {hotRows.length
           ? hotRows.map((item) => <HotCard item={item} key={item.customerId} />)
@@ -1052,7 +1120,7 @@ export default function LiveBoard({ active }: { active: boolean }) {
     if (current.type === 'owner') {
       const owner = data.owners[current.index];
       return owner
-        ? <OwnerSlide owner={owner} todayKey={data.range.today} caps={caps} page={page} compact={metrics.compact} />
+        ? <OwnerSlide owner={owner} todayKey={data.range.today} caps={caps} compact={metrics.compact} />
         : <PulseSlide data={data} caps={caps} page={0} compact={metrics.compact} />;
     }
     switch (current.key) {
@@ -1062,7 +1130,7 @@ export default function LiveBoard({ active }: { active: boolean }) {
       case 'poc': return <PocSlide data={data} caps={caps} page={page} />;
       case 'quotes': return <QuotesSlide data={data} caps={caps} page={page} />;
       case 'alerts': return <AlertsSlide data={data} caps={caps} page={page} />;
-      case 'jira': return <JiraSlide data={data} />;
+      case 'jira': return <JiraSlide data={data} caps={caps} page={page} />;
       default: return <PulseSlide data={data} caps={caps} page={0} compact={metrics.compact} />;
     }
   };

@@ -20,6 +20,10 @@ import {
   paceTone,
   pctOf,
   phaseGroupOf,
+  OWNER_ORDER,
+  SECTOR_ORDER,
+  orderDistribution,
+  ownerOrderCompare,
   rankOwners,
   staleTone,
   weekRangeLabel,
@@ -683,6 +687,12 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
     || valueOf(b) - valueOf(a)
     || (a.daysToTarget ?? 9999) - (b.daysToTarget ?? 9999)
     || a.musteri.localeCompare(b.musteri, 'tr');
+  // Kişi slaydı (Çağdaş Bey, 04.09): "en yakın tarihli 5 fırsat" — hedef tarihi
+  // en yakın olan önce (gecikmişler en başta), tarihi olmayanlar sona, eşitlikte değer.
+  const ownerHotSort = (a: HotItem, b: HotItem) =>
+    (a.daysToTarget ?? 9999) - (b.daysToTarget ?? 9999)
+    || valueOf(b) - valueOf(a)
+    || a.musteri.localeCompare(b.musteri, 'tr');
 
   const toPocItem = (row: CustomerRow): PocItem => {
     const next = nextActionOf(row);
@@ -747,12 +757,25 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
       const summary = await loadJiraSummary(from, to);
       if (summary && summary.enabled !== false && !summary.warning) {
         jiraStatus = 'ok';
+        const byCompany = summary.rows
+          .map((row) => ({
+            company: row.company || '—',
+            ongoing: row.ongoing, developmentWaiting: row.developmentWaiting, customerWaiting: row.customerWaiting,
+            created: row.created, closed: row.closed,
+          }))
+          .filter((row) => row.ongoing + row.developmentWaiting + row.customerWaiting + row.created + row.closed > 0)
+          .sort((a, b) =>
+            (b.ongoing + b.developmentWaiting + b.customerWaiting) - (a.ongoing + a.developmentWaiting + a.customerWaiting)
+            || b.created - a.created
+            || a.company.localeCompare(b.company, 'tr'));
         jiraTeam = {
           open: summary.totalOngoing + summary.totalDevelopmentWaiting + summary.totalCustomerWaiting,
+          ongoing: summary.totalOngoing,
           created: summary.totalCreated,
           closed: summary.totalClosed,
           customerWaiting: summary.totalCustomerWaiting,
           developmentWaiting: summary.totalDevelopmentWaiting,
+          byCompany,
         };
         for (const row of summary.rows) {
           jiraByCompany.set(row.company.toLocaleUpperCase('tr'), {
@@ -777,7 +800,8 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
     const rows = customersByOwner.get(owner) ?? [];
     const agg = quoteAggByOwner.get(owner) ?? emptyQuoteAgg();
     const userTargets = targetByUser.get(ownerIdByName.get(owner) ?? '') ?? { revenue: null, devices: null };
-    const hot = rows.filter(isHotCandidate).map(toHotItem).sort(hotSort).slice(0, R.hotOwnerLimit);
+    const hotAll = rows.filter(isHotCandidate).map(toHotItem).sort(ownerHotSort);
+    const hot = hotAll.slice(0, R.hotOwnerLimit);
     let jira: LiveOwner['jira'] = null;
     if (jiraStatus === 'ok') {
       jira = { open: 0, customerWaiting: 0 };
@@ -812,19 +836,22 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
       todayActivities: todayByOwner.get(owner) ?? 0,
       quotes: { weekCount: agg.weekCount, weekAmount: agg.weekAmount, monthCount: agg.monthCount, monthAmount: agg.monthAmount },
       hot,
+      hotTotal: hotAll.length,
       recentActivities: weekActivitiesByOwner.get(owner) ?? [],
       jira,
     };
   });
   // Portföyü, hedefi, teklifi ve bu hafta aktivitesi olmayan hesaplar boş slayt
   // üretmesin (yeni açılmış / pasif satıcı hesapları).
+  // Sıra (rank) performansa göre hesaplanır; dönüş sırası ise sabit görüntüleme
+  // sırası (OWNER_ORDER — Çağdaş Bey, 04.09). "Kim hedefinde" tablosu rank'a göre dizer.
   const owners: LiveOwner[] = rankOwners(unranked.filter((row) =>
     row.portfolio.total > 0
     || row.actual.totalActivities > 0
     || row.target.totalActivities > 0
     || row.revenue.target != null
     || row.revenue.openQuotes > 0
-    || row.revenue.wonYtd.count > 0));
+    || row.revenue.wonYtd.count > 0)).sort((a, b) => ownerOrderCompare(a.owner, b.owner));
 
   /* --- Takım -------------------------------------------------------------- */
   const teamAgg = emptyQuoteAgg();
@@ -946,7 +973,7 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
   const byOwnerQuotes = ownerNames.map((owner) => {
     const agg = quoteAggByOwner.get(owner) ?? emptyQuoteAgg();
     return { owner, open: agg.open, openAmount: agg.openAmount, weighted: agg.weighted, won: agg.wonYtd, wonAmount: agg.wonYtdAmount, lost: agg.lostYtd };
-  }).filter((row) => row.open || row.won || row.lost).sort((a, b) => b.weighted - a.weighted || b.openAmount - a.openAmount);
+  }).filter((row) => row.open || row.won || row.lost).sort((a, b) => ownerOrderCompare(a.owner, b.owner));
 
   return {
     generatedAt: new Date().toISOString(),
@@ -970,9 +997,11 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
     },
     portfolio: {
       total: customers.length,
-      byOwner: toDistribution(portfolioByOwnerLabel, 8),
+      // Sabit sıra (Çağdaş Bey, 04.09); sayfalama olduğu için "Diğer"e katlama yok —
+      // Lojistik gibi küçük sektörler de görünür.
+      byOwner: orderDistribution(toDistribution(portfolioByOwnerLabel), OWNER_ORDER),
       byPhaseGroup: PHASE_GROUPS.map((g) => ({ label: g.label, value: phaseGroupCounts.get(g.label) ?? 0 })).filter((row) => row.value > 0),
-      bySector: toDistribution(sectorCounts, 7),
+      bySector: orderDistribution(toDistribution(sectorCounts), SECTOR_ORDER),
       kunye: [
         { label: 'Tamam', value: kunyeCounts.get('Tamam') ?? 0, tone: 'ok' },
         { label: 'Eksik', value: kunyeCounts.get('Eksik') ?? 0, tone: 'warn' },

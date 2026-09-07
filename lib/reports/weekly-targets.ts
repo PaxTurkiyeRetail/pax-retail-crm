@@ -71,6 +71,9 @@ export async function buildWeeklyTargets(options?: {
         from public.pipeline_eventleri pe
         where pe.created_at >= $1::date
           and pe.created_at < ($2::date + interval '1 day')
+          -- Planlanan "sonraki aksiyon" kayıtları (Başlamadı + hedef tarihli) gerçekleşmiş
+          -- aktivite değildir; sayılmaz (04.09: her aktivite + planı 2 sayılıyordu).
+          and not (pe.durum = 'Başlamadı' and pe.hedef_tarihi is not null)
       `,
       [from, to],
     ),

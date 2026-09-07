@@ -54,7 +54,8 @@ export const LIVE_BOARD_RULES = {
   hotPhases: [10, 11, 12, 13, 14, 24] as readonly number[],
   /** TV'de listelenen maksimum fırsat sayısı. */
   hotTeamLimit: 20,
-  hotOwnerLimit: 10,
+  /** Kişi slaydı: en yakın hedef tarihli 5 fırsat, sayfalanmaz (Çağdaş Bey, 04.09). */
+  hotOwnerLimit: 5,
   pocLimit: 20,
   alertLimit: 6,
   recentActivities: 8,
@@ -228,12 +229,37 @@ export type LiveOwner = {
   achievementPct: number | null;
   todayActivities: number;
   quotes: { weekCount: number; weekAmount: number; monthCount: number; monthAmount: number };
+  /** En yakın hedef tarihli 5 fırsat (LIVE_BOARD_RULES.hotOwnerLimit). */
   hot: HotItem[];
+  /** Kriterlere uyan toplam fırsat (5'ten fazlası "+N fırsat daha" notuyla belirtilir). */
+  hotTotal: number;
   recentActivities: LiveActivity[];
   jira: { open: number; customerWaiting: number } | null;
 };
 
-export type Distribution = Array<{ label: string; value: number; tone?: Tone }>;
+/** Jira · Retail Support özeti (haftalık pivot + firma kırılımı). */
+export type JiraCompanyRow = {
+  company: string;
+  /** Devam eden (ekipte). */
+  ongoing: number;
+  developmentWaiting: number;
+  customerWaiting: number;
+  created: number;
+  closed: number;
+};
+export type JiraBlock = {
+  /** devam + geliştirme bekleyen + müşteri bekleyen */
+  open: number;
+  ongoing: number;
+  created: number;
+  closed: number;
+  customerWaiting: number;
+  developmentWaiting: number;
+  /** Açık ticket'ı ya da bu hafta hareketi olan firmalar (açığa göre sıralı). */
+  byCompany: JiraCompanyRow[];
+};
+
+export type Distribution = Array<{ label: string; value: number; tone?: Tone; /** Açıklama satırında küçük ek bilgi (ör. faz aralığı). */ hint?: string }>;
 
 export type QuoteRow = {
   quoteNo: string;
@@ -266,7 +292,7 @@ export type LiveBoardPayload = {
     poc: PocItem[];
     alerts: AlertItem[];
     alertCounts: Record<AlertItem['kind'], number>;
-    jira: { open: number; created: number; closed: number; customerWaiting: number; developmentWaiting: number } | null;
+    jira: JiraBlock | null;
   };
   portfolio: {
     total: number;
@@ -323,6 +349,41 @@ export function initialsOf(name: string) {
  * Sıralama: ciro hedefi olan kişilerde ciro gerçekleşme %'si, yoksa haftalık
  * aktivite gerçekleşmesi → tekil firma → ad. Rank 1'den başlar.
  */
+/**
+ * Sabit görüntüleme sırası (Çağdaş Bey, 04.09 toplantısı): Account Yapısı, Kişi
+ * Bazında tablo ve kişi slaytlarının dönüş sırası bu listeye göre. Listede
+ * olmayan adlar sona, kendi aralarında alfabetik. "Kim hedefinde" sıralaması
+ * hariç — o performansa göre kalır.
+ */
+export const OWNER_ORDER: readonly string[] = [
+  'Cem Koç', 'Ömer Canatar', 'Furkan Kızılkurt', 'Erdi Toraman', 'Seda Kesikoğlu',
+  'İş Ortakları', 'Havuz Account', 'Yemek Kartları',
+];
+/** Sektör dağılımında öne alınan sektörler; kalanlar adede göre. */
+export const SECTOR_ORDER: readonly string[] = ['Hazır Giyim', 'Gıda Perakendesi', 'Ev & Yaşam / Yapı Market'];
+
+function normalizeName(value: string) {
+  return value.normalize('NFC').trim().toLocaleLowerCase('tr').replace(/\s+/g, ' ');
+}
+function orderIndex(order: readonly string[], name: string) {
+  const key = normalizeName(name);
+  const hit = order.findIndex((item) => normalizeName(item) === key);
+  return hit === -1 ? order.length : hit;
+}
+/** OWNER_ORDER'a göre karşılaştırıcı; liste dışı adlar sona (alfabetik). */
+export function ownerOrderCompare(a: string, b: string) {
+  return orderIndex(OWNER_ORDER, a) - orderIndex(OWNER_ORDER, b) || a.localeCompare(b, 'tr');
+}
+/** Dağılımı sabit sıraya göre dizer: önce listedekiler, sonra kalanlar adede göre. */
+export function orderDistribution<T extends { label: string; value: number }>(rows: T[], order: readonly string[]): T[] {
+  return [...rows].sort((a, b) => {
+    const ia = orderIndex(order, a.label);
+    const ib = orderIndex(order, b.label);
+    if (ia !== ib) return ia - ib;
+    return b.value - a.value || a.label.localeCompare(b.label, 'tr');
+  });
+}
+
 export function rankOwners<T extends { owner: string; actual: WeeklyTargetCounters; revenue?: { attainmentPct: number | null } }>(owners: T[]): Array<T & { rank: number }> {
   const score = (row: T) => {
     const rev = row.revenue?.attainmentPct;
@@ -370,13 +431,13 @@ export type LayoutMetrics = {
 // yüksekliklere sığar. Değiştirirsen harness'ı koştur — kırpılan 0 olmalı.
 export const BASE_METRICS: LayoutMetrics = {
   compact: false,
-  bandH: 84, channelsH: 330, hotH: 152, actH: 92, leaderH: 124, revenueH: 372,
+  bandH: 84, channelsH: 330, hotH: 106, actH: 92, leaderH: 124, revenueH: 372,
   rowH: 82, quoteRowH: 72, ownerQuoteRowH: 60, alertH: 82, kpiRowH: 124, chipsH: 76,
   cardChrome: 68, gap: 14, listGap: 8,
 };
 export const COMPACT_METRICS: LayoutMetrics = {
   compact: true,
-  bandH: 76, channelsH: 306, hotH: 164, actH: 90, leaderH: 112, revenueH: 330,
+  bandH: 76, channelsH: 306, hotH: 96, actH: 90, leaderH: 112, revenueH: 330,
   rowH: 74, quoteRowH: 66, ownerQuoteRowH: 60, alertH: 74, kpiRowH: 110, chipsH: 68,
   cardChrome: 62, gap: 12, listGap: 6,
 };
@@ -403,6 +464,7 @@ export type Capacities = {
   alertItems: number; // uyarı grubu başına satır
   alertGroups: number; // sayfa başına uyarı paneli (kolon)
   portfolioRows: number; // Portföy ekranındaki bar/açıklama satırı
+  jiraRows: number;      // Jira ekranı firma tablosu satırı
   /** Business Pulse tek ekrana sığmıyor: ciro+sıralama / aktivite+dönüşüm olarak ikiye böl. */
   pulseSplit: boolean;
 };
@@ -424,11 +486,14 @@ export function capacities(bodyHeight: number, bodyWidth = 1920): Capacities {
   const alertItems = rowsThatFit(H - m.chipsH - m.gap - m.cardChrome, m.alertH, m.listGap);
   const alertGroups = bodyWidth >= 1500 ? 3 : bodyWidth >= 1000 ? 2 : 1;
   // Portföy: 2×2 kart ızgarası; her kartın liste alanı yarım yükseklik.
-  const portfolioRows = rowsThatFit((H - m.gap) / 2 - m.cardChrome, m.compact ? 30 : 34, m.compact ? 8 : 10);
+  // Ölçülen: bar/açıklama satırı 24 px + 12 px aralık (kompakt 22 + 10); 26/24 güvenlik payı.
+  const portfolioRows = rowsThatFit((H - m.gap) / 2 - m.cardChrome, m.compact ? 24 : 26, m.compact ? 10 : 12);
   // Pulse iki satır ister: ciro kartı + (aktivite | dönüşüm). İkisi birlikte
   // sığmıyorsa ekran ikiye bölünür (ölçülen eşik ~690 px).
   const pulseSplit = H < 690;
-  return { hot, recent, leader, tableRows, openQuotes, closedQuotes: Math.max(1, closedQuotes), alertItems, alertGroups, portfolioRows, pulseSplit };
+  // Jira: KPI şeridi altında firma tablosu (kompakt satır) — 28: tablo başlığı.
+  const jiraRows = rowsThatFit(H - m.kpiRowH - m.gap - m.cardChrome - 28, m.ownerQuoteRowH, 6);
+  return { hot, recent, leader, tableRows, openQuotes, closedQuotes: Math.max(1, closedQuotes), alertItems, alertGroups, portfolioRows, jiraRows, pulseSplit };
 }
 
 /**
@@ -518,12 +583,11 @@ export function buildPagePlan(payload: LiveBoardPayload, caps: Capacities): Page
       pageCount(payload.quotes.recentClosed.length, caps.closedQuotes),
     ),
     alerts: pageCount(alertPanels(payload.team.alerts, payload.team.alertCounts, caps.alertItems, ALERT_ORDER).length, caps.alertGroups),
-    jira: 1,
+    jira: pageCount(payload.team.jira?.byCompany.length ?? 0, caps.jiraRows),
   };
-  const owners = payload.owners.map((owner) => Math.max(
-    pageCount(owner.hot.length, caps.hot),
-    pageCount(owner.recentActivities.length, caps.recent),
-  ));
+  // Kişi slaytları tek sayfa (Çağdaş Bey, 04.09: "o kadar sayfaya gerek yok"):
+  // Hot Pipeline 5 kart, Son Hareketler sığdığı kadar + "+N daha" notu.
+  const owners = payload.owners.map(() => 1);
   return { team, owners };
 }
 

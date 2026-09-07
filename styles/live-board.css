@@ -189,6 +189,7 @@
 .lb-legend-row { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto auto; gap: 10px; align-items: center; font-size: 13px; }
 .lb-legend-row i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
 .lb-legend-row span { color: var(--text-2); font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lb-legend-row span small { margin-left: 6px; font-size: 11px; font-weight: 700; color: var(--text-3); }
 .lb-legend-row strong { color: var(--text); font-weight: 900; font-variant-numeric: tabular-nums; }
 .lb-legend-row em { font-style: normal; color: var(--text-3); font-weight: 700; font-size: 12px; min-width: 40px; text-align: right; font-variant-numeric: tabular-nums; }
 
@@ -251,8 +252,8 @@
 .lb-leader .lb-row.rich { height: var(--lb-leader-h, 118px); align-content: center; }
 .lb-band { height: var(--lb-band-h, 78px); }
 .lb-alert-chips { height: var(--lb-chips-h, 72px); }
-.lb-quotes > .lb-kpis { height: var(--lb-kpi-row-h, 104px); }
-.lb-quotes > .lb-kpis .lb-kpi { min-height: 0; align-content: start; }
+.lb-quotes > .lb-kpis, .lb-jira > .lb-kpis { height: var(--lb-kpi-row-h, 104px); }
+.lb-quotes > .lb-kpis .lb-kpi, .lb-jira > .lb-kpis .lb-kpi { min-height: 0; align-content: start; }
 
 /* --- Business Pulse ---------------------------------------------------- */
 .lb-pulse { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr) minmax(0, 1.2fr); grid-template-rows: auto minmax(0, 1fr); }
@@ -327,10 +328,10 @@
 .lb-portfolio { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); }
 .lb-portfolio .lb-card { align-content: start; }
 .lb-portfolio .lb-hbars { gap: 12px; }
-.lb-portfolio .lb-hbar { grid-template-columns: 190px minmax(0, 1fr) 56px 50px; }
+.lb-portfolio .lb-hbar { grid-template-columns: 225px minmax(0, 1fr) 56px 50px; }
 .lb-portfolio .lb-hbar-label, .lb-portfolio .lb-legend-row { font-size: 15px; }
 .lb-portfolio .lb-hbar strong, .lb-portfolio .lb-legend-row strong { font-size: 16px; }
-.lb-portfolio .lb-legend { gap: 10px; }
+.lb-portfolio .lb-legend { gap: 12px; }
 .lb-portfolio .lb-bar { height: 10px; }
 
 /* --- Tablo benzeri listeler (Hot Pipeline, POC, Teklifler) -------------- */
@@ -369,6 +370,21 @@
 .lb-quotes .lb-stack { grid-column: 2; grid-row: 2 / 4; display: grid; grid-template-rows: auto auto; gap: 14px; align-content: start; }
 .lb-quotes .lb-quote-table .lb-tr { padding: 8px 12px; }
 .lb-quotes .lb-kpi { padding: 10px 14px; }
+
+/* --- Jira · Retail Support ------------------------------------------------ */
+.lb-jira { grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+.lb-jira > .lb-kpis { grid-column: 1 / -1; }
+.lb-jira .lb-kpi { padding: 10px 14px; }
+.lb-jira .lb-stack { grid-column: 2; grid-row: 2; display: grid; grid-template-rows: minmax(0, 1fr) auto; gap: 14px; min-height: 0; }
+.lb-jira-table .lb-tr { grid-template-columns: minmax(0, 1.8fr) repeat(6, minmax(0, 0.7fr)); }
+.lb-jira-table .lb-tr > span.tone-warn { color: var(--lb-warn); }
+.lb-jira-table .lb-tr > span.tone-danger { color: var(--lb-danger); }
+.lb-jira-table .lb-tr > span.tone-ok { color: var(--lb-ok); }
+.lb-jira-week { display: grid; gap: 12px; align-content: start; }
+.lb-jira-week .lb-channel-label { width: 90px; }
+.lb-jira-net { display: grid; gap: 4px; padding: 10px 12px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); font-weight: 800; font-size: 14px; color: var(--text); }
+.lb-jira-net.tone-warn { color: var(--lb-warn); } .lb-jira-net.tone-ok { color: var(--lb-ok); }
+.lb-jira-net small { font-size: 11.5px; font-weight: 700; color: var(--text-3); }
 .lb-months { display: grid; grid-template-columns: repeat(auto-fit, minmax(44px, 1fr)); gap: 8px; align-items: end; }
 .lb-month { display: grid; gap: 4px; justify-items: center; }
 .lb-month-bar { position: relative; width: 100%; height: 70px; display: flex; align-items: flex-end; justify-content: center; }
@@ -418,7 +434,7 @@
 .lb-center .lb-card { gap: 10px; }
 
 /* Ticari bant */
-.lb-band { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; padding: 8px 10px; border-radius: 14px; border: 1px solid var(--border); background: var(--surface-2); }
+.lb-band { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 6px; padding: 8px 10px; border-radius: 14px; border: 1px solid var(--border); background: var(--surface-2); }
 .lb-band-item { display: grid; gap: 1px; min-width: 0; padding: 4px 12px; border-left: 1px solid var(--border); }
 .lb-band-item:first-child { border-left: none; }
 .lb-band-item span { font-size: 10px; font-weight: 900; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -437,11 +453,17 @@
 .lb-hot-title { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
 .lb-hot-title strong { font-size: 15px; font-weight: 900; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lb-hot-title em { font-style: normal; font-size: 12px; color: var(--text-3); font-weight: 700; white-space: nowrap; }
-.lb-hot-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.lb-hot-meta { display: flex; align-items: center; gap: 10px; flex-wrap: nowrap; min-width: 0; }
+.lb-hot-meta > * { flex: 0 1 auto; min-width: 0; }
+/* Faz pili gerekirse kısalır ("Faz 10 · Teklif Haz…"); değer ve model kısaltılmaz. */
+.lb-hot-meta .lb-pill { display: block; flex: 0 1 auto; min-width: 64px; overflow: hidden; text-overflow: ellipsis; line-height: 1.5; }
+.lb-hot-meta .lb-hot-models { flex: 0 0 auto; }
+.lb-hot-meta .lb-hot-money { flex: 0 0 auto; }
 .lb-hot-models { font-size: 12.5px; font-weight: 800; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.lb-hot-money { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12.5px; color: var(--text-3); font-weight: 700; }
+.lb-hot-money { margin-left: auto; font-size: 12.5px; color: var(--text-3); font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lb-hot-money strong { color: var(--text); font-weight: 900; }
-.lb-hot-foot { display: grid; gap: 2px; font-size: 12.5px; }
+.lb-hot-foot { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.4fr); gap: 12px; font-size: 12.5px; }
+.lb-hot-foot > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .lb-ago { font-weight: 800; }
 .lb-ago.tone-neutral, .lb-ago.tone-ok { color: var(--text-3); }
 .lb-next { color: var(--text-2); font-weight: 700; line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -568,12 +590,12 @@
   .lb-body { overflow: visible; }
   .lb-slide, .lb-slide > *, .lb-card { overflow: visible; }
   .lb-item, .lb-tr, .lb-hot, .lb-row.rich, .lb-band, .lb-alert-chips,
-  .lb-quotes > .lb-kpis, .lb-center .lb-list .lb-item, .lb-alerts .lb-list .lb-item,
+  .lb-quotes > .lb-kpis, .lb-jira > .lb-kpis, .lb-center .lb-list .lb-item, .lb-alerts .lb-list .lb-item,
   .lb-quote-table .lb-tr, .lb-owner-quotes .lb-tr, .lb-leader .lb-row.rich { height: auto; }
   .lb-alerts .lb-item-title { white-space: normal; }
-  .lb-pulse, .lb-portfolio, .lb-quotes, .lb-owner, .lb-alert-groups { grid-template-columns: 1fr; grid-template-rows: none; }
+  .lb-pulse, .lb-portfolio, .lb-quotes, .lb-jira, .lb-owner, .lb-alert-groups { grid-template-columns: 1fr; grid-template-rows: none; }
   .lb-pulse .lb-revenue, .lb-pulse .lb-leader, .lb-owner .lb-band, .lb-owner .lb-hot-col,
-  .lb-quotes > .lb-kpis, .lb-quotes .lb-stack { grid-column: 1 / -1; grid-row: auto; }
+  .lb-quotes > .lb-kpis, .lb-quotes .lb-stack, .lb-jira > .lb-kpis, .lb-jira .lb-stack { grid-column: 1 / -1; grid-row: auto; }
   .lb-band { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .lb-band-item small { display: block; }
   .lb-alert-chips { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -587,8 +609,8 @@
   .lb-title { text-align: left; white-space: normal; }
   .lb-meta { justify-content: flex-start; }
   .lb-kpis, .lb-kpis.four, .lb-kpis.five, .lb-kpis.six { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .lb-pulse, .lb-portfolio, .lb-quotes, .lb-owner, .lb-alert-groups { grid-template-columns: 1fr; }
-  .lb-quotes .lb-stack { grid-row: auto; grid-column: auto; }
+  .lb-pulse, .lb-portfolio, .lb-quotes, .lb-jira, .lb-owner, .lb-alert-groups { grid-template-columns: 1fr; }
+  .lb-quotes .lb-stack, .lb-jira .lb-stack { grid-row: auto; grid-column: auto; }
   .lb-revenue-body, .lb-activity-wrap, .lb-donut-wrap { grid-template-columns: 1fr; justify-items: center; }
   .lb-band { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .lb-alert-chips { grid-template-columns: repeat(2, minmax(0, 1fr)); }

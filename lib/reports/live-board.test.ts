@@ -2,6 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
   ALERT_ORDER,
   LIVE_BOARD_TIMING,
+  OWNER_ORDER,
+  SECTOR_ORDER,
+  orderDistribution,
+  ownerOrderCompare,
   agoLabel,
   alertPanels,
   capacities,
@@ -58,6 +62,29 @@ describe('rankOwners', () => {
       { owner: 'Ece', actual: counters(5, 4) },
     ]);
     expect(ranked.map((row) => row.owner)).toEqual(['Mert', 'Ece', 'Zeynep']);
+  });
+});
+
+describe('sabit görüntüleme sırası (Çağdaş Bey, 04.09)', () => {
+  it('kişileri sabit sıraya dizer, liste dışı adlar sona alfabetik', () => {
+    const names = ['Yemek Kartları', 'Furkan Kızılkurt', 'Zeynep Test', 'Cem Koç', 'Havuz Account', 'Ahmet Test', 'Seda Kesikoğlu', 'Ömer Canatar', 'İş Ortakları', 'Erdi Toraman'];
+    expect([...names].sort(ownerOrderCompare)).toEqual([
+      'Cem Koç', 'Ömer Canatar', 'Furkan Kızılkurt', 'Erdi Toraman', 'Seda Kesikoğlu', 'İş Ortakları', 'Havuz Account', 'Yemek Kartları',
+      'Ahmet Test', 'Zeynep Test',
+    ]);
+    expect(OWNER_ORDER[0]).toBe('Cem Koç');
+  });
+  it('büyük/küçük harf ve fazla boşluk sıralamayı bozmaz', () => {
+    expect(['furkan  kızılkurt', 'CEM KOÇ'].sort(ownerOrderCompare)).toEqual(['CEM KOÇ', 'furkan  kızılkurt']);
+  });
+  it('sektörleri önce sabit sıraya, kalanı adede göre dizer', () => {
+    const rows = [
+      { label: 'FMCG Dağıtım Kanalları', value: 116 }, { label: 'Lojistik & Kargo', value: 5 }, { label: 'Ev & Yaşam / Yapı Market', value: 39 },
+      { label: 'Hazır Giyim', value: 89 }, { label: 'Yeme-İçme', value: 6 }, { label: 'Gıda Perakendesi', value: 48 },
+    ];
+    expect(orderDistribution(rows, SECTOR_ORDER).map((r) => r.label)).toEqual([
+      'Hazır Giyim', 'Gıda Perakendesi', 'Ev & Yaşam / Yapı Market', 'FMCG Dağıtım Kanalları', 'Yeme-İçme', 'Lojistik & Kargo',
+    ]);
   });
 });
 
