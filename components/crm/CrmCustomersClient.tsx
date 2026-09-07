@@ -1601,12 +1601,15 @@ export default function CrmCustomersClient() {
                     </label>
                   ) : null}
                   <label className="field">
-                    <span className="label">Pipeline Politikası</span>
+                    <span className="label">Faz Takip Kuralı</span>
                     <select className="select" value={pipelinePolicy} onChange={(e) => setPipelinePolicy(e.target.value)}>
                       {filterOptions.pipelinePolicyOptions.map((item) => (
-                        <option key={item.value} value={item.value}>{item.label}</option>
+                        <option key={item.value} value={item.value}>
+                          {item.value === 'phase_required' ? 'Faz Takibi Zorunlu' : item.value === 'phase_optional' ? 'Yalnız Aktivite / Faz Takibi Yok' : item.label}
+                        </option>
                       ))}
                     </select>
+                    <small className="muted">Faz takibi yok seçilirse aktivite girilebilir; faz, durum ve bekleyen taraf zorunlu olmaz.</small>
                   </label>
                 </>
               ) : null}

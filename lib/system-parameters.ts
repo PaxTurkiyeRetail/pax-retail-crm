@@ -677,8 +677,8 @@ export const DEFAULT_CRM_MASTER_DATA_OPTIONS: Record<string, ParameterOption[]> 
     { label: "İş Ortağı", value: "business_partner", sortOrder: 20 },
   ],
   crm_pipeline_policy: [
-    { label: "Faz Zorunlu", value: "phase_required", sortOrder: 10 },
-    { label: "Yalnız Aktivite / Fazsız", value: "phase_optional", sortOrder: 20 },
+    { label: "Faz Takibi Zorunlu", value: "phase_required", sortOrder: 10 },
+    { label: "Yalnız Aktivite / Faz Takibi Yok", value: "phase_optional", sortOrder: 20 },
   ],
   quote_probability: [10, 30, 60, 90].map((value, index) => ({
     label: `%${value}`,
