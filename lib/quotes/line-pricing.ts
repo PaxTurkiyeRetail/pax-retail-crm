@@ -4,9 +4,12 @@
 //
 // Satış tipi (08.09 satış ekibi isteği):
 //   'sale'   → katalog kademesi (quote_pricing_rules): birim × adet.
-//   'rental' → KİRALAMA. Katalogda kira tarifesi yok; aylık birim kira elle girilir.
-//              Satır tutarı = aylık birim kira × adet × ay (başlangıç–bitiş tarihinden).
-//              Aylık kira "Aylık recurring" toplamına, sözleşme değeri teklif tutarına yazılır.
+//   'rental' → KİRALAMA. Aylık birim kira KATALOGDAN gelir (quote_products.rental_monthly_price,
+//              08.09 tarifesi: A80 15 · A910S 15 · A6650 20 USD/ay, KDV hariç); satırda elle
+//              ezilebilir. TARİH YOK (Sinan, 08.09: "kiralamada tarihe gerek yok"):
+//              satır tutarı = aylık kira × adet ve "/ ay" olarak okunur; aylık recurring toplamına
+//              girer (KasaPOS/TMS gibi aylık kalemlerle aynı muamele). Eski kayıtlarda tarih
+//              varsa sözleşme değeri = aylık × ay hesaplanmaya devam eder.
 
 export type SaleType = 'sale' | 'rental';
 
@@ -16,12 +19,18 @@ export type LineDraft = {
   sale_type?: SaleType | null;
   rental_start_date?: string | null;
   rental_end_date?: string | null;
-  /** Aylık birim kira (USD). Sadece kiralama satırında. */
+  /** Aylık birim kira (USD). Boşsa ürünün katalog tarifesi (rental_monthly_price) kullanılır. */
   rental_monthly_price?: number | null;
 };
 
 export type PricingRuleLike = { product_id: string; min_qty: number; max_qty: number | null; unit_price: number };
-export type ProductLike = { id: string; product_type: string; is_recurring: boolean };
+export type ProductLike = {
+  id: string;
+  product_type: string;
+  is_recurring: boolean;
+  /** Katalog kira tarifesi (USD/ay); null = kiralanamaz / tarife yok. */
+  rental_monthly_price?: number | null;
+};
 
 export type PricedLine = {
   sale_type: SaleType;
@@ -30,11 +39,13 @@ export type PricedLine = {
   rule_label: string;
   unit_price: number;
   total_price: number;
-  /** Kiralama süresi (ay) — satışta 0. */
+  /** Kiralama süresi (ay) — tarih girilmemişse ve satışta 0. */
   rental_months: number;
   /** Kiralama satırının aylık toplamı (birim kira × adet) — satışta 0. */
   monthly_total: number;
-  /** Fiyatlanabildi mi (kademe bulundu / kira bedeli ve tarihler tam). */
+  /** Aylık kira katalog tarifesinden mi (true) yoksa satırda elle mi girildi (false). Satışta false. */
+  rental_from_catalog: boolean;
+  /** Fiyatlanabildi mi (kademe bulundu / kira bedeli var). */
   priced: boolean;
   problem: string | null;
 };
@@ -60,29 +71,40 @@ export function findRule(rules: PricingRuleLike[], quantity: number): PricingRul
     .find((rule) => quantity >= rule.min_qty && (rule.max_qty == null || quantity <= rule.max_qty)) ?? null;
 }
 
-export function priceLine(draft: LineDraft, rules: PricingRuleLike[]): PricedLine {
+/** Satırdaki aylık kira: elle girilmişse o, yoksa katalog tarifesi. */
+export function resolveRentalMonthly(draft: Pick<LineDraft, 'rental_monthly_price'>, product?: ProductLike | null) {
+  const manual = draft.rental_monthly_price == null ? NaN : Number(draft.rental_monthly_price);
+  if (Number.isFinite(manual) && manual > 0) return { monthly: manual, fromCatalog: false };
+  const catalog = product?.rental_monthly_price == null ? NaN : Number(product.rental_monthly_price);
+  if (Number.isFinite(catalog) && catalog > 0) return { monthly: catalog, fromCatalog: true };
+  return { monthly: 0, fromCatalog: false };
+}
+
+export function priceLine(draft: LineDraft, rules: PricingRuleLike[], product?: ProductLike | null): PricedLine {
   const quantity = Math.max(0, Math.floor(Number(draft.quantity ?? 0)));
   const saleType = normalizeSaleType(draft.sale_type);
   if (saleType === 'rental') {
+    const hasDates = Boolean(draft.rental_start_date && draft.rental_end_date);
     const months = rentalMonths(draft.rental_start_date, draft.rental_end_date);
-    const monthly = Number(draft.rental_monthly_price ?? 0);
-    const monthlyOk = Number.isFinite(monthly) && monthly > 0;
-    const problem = !draft.rental_start_date || !draft.rental_end_date
-      ? 'Kiralama için başlangıç ve bitiş tarihi girilmeli.'
-      : months <= 0
+    const { monthly, fromCatalog } = resolveRentalMonthly(draft, product);
+    const monthlyOk = monthly > 0;
+    const problem = !monthlyOk
+      ? 'Bu ürün için katalogda kira tarifesi yok; aylık birim kira girin.'
+      : hasDates && months <= 0
         ? 'Kiralama bitiş tarihi başlangıçtan sonra olmalı.'
-        : !monthlyOk
-          ? 'Kiralama için aylık birim kira bedeli girilmeli.'
-          : null;
+        : null;
     const monthlyTotal = monthlyOk ? monthly * quantity : 0;
+    // Tarih yok → aylık tutar ("/ ay"); tarih var (eski kayıt) → sözleşme değeri = aylık × ay.
+    const total = problem ? 0 : hasDates ? monthlyTotal * months : monthlyTotal;
     return {
       sale_type: 'rental',
       rule: null,
-      rule_label: months > 0 ? `${months} ay kiralama` : 'kiralama',
+      rule_label: hasDates && months > 0 ? `${months} ay kiralama` : fromCatalog ? 'kiralama · katalog tarifesi' : 'kiralama · anlaşma kirası',
       unit_price: monthlyOk ? monthly : 0,
-      total_price: problem ? 0 : round2(monthlyTotal * months),
-      rental_months: months,
+      total_price: round2(total),
+      rental_months: hasDates ? months : 0,
       monthly_total: round2(monthlyTotal),
+      rental_from_catalog: fromCatalog,
       priced: !problem,
       problem,
     };
@@ -96,6 +118,7 @@ export function priceLine(draft: LineDraft, rules: PricingRuleLike[]): PricedLin
     total_price: rule ? round2(Number(rule.unit_price) * quantity) : 0,
     rental_months: 0,
     monthly_total: 0,
+    rental_from_catalog: false,
     priced: Boolean(rule),
     problem: rule ? null : 'Bu adet için fiyat kademesi bulunamadı.',
   };
@@ -106,10 +129,11 @@ export type LineTotals = { totalDevices: number; totalAmount: number; monthlyAmo
 /**
  * Teklif toplamları.
  *  - totalDevices: tekrarlayan hizmet dışındaki satırların adedi (kiralanan cihaz da cihazdır).
- *  - totalAmount: satış satırları + kiralama sözleşme değeri (teklifin toplam değeri).
+ *  - totalAmount: satış satırları + kiralama satırlarının tutarı (tarihsiz kiralamada aylık tutar —
+ *    aylık hizmet kalemleriyle aynı muamele; tarihli eski kayıtta sözleşme değeri).
  *  - monthlyAmount: aylık hizmetler + aylık kira toplamı.
  *  - hardwareAmount: tek seferlik satış satırları (donanım).
- *  - rentalAmount: kiralama sözleşme değeri.
+ *  - rentalAmount: SADECE tarihli kiralamanın sözleşme değeri (tarihsizde 0 — "sözleşme değeri" gösterilmez).
  */
 export function sumLineTotals(lines: Array<{ quantity: number; product: ProductLike | null; priced: PricedLine }>): LineTotals {
   const totals: LineTotals = { totalDevices: 0, totalAmount: 0, monthlyAmount: 0, hardwareAmount: 0, rentalAmount: 0 };
@@ -119,7 +143,7 @@ export function sumLineTotals(lines: Array<{ quantity: number; product: ProductL
     if (line.priced.sale_type === 'rental') {
       totals.totalDevices += qty;
       totals.totalAmount += line.priced.total_price;
-      totals.rentalAmount += line.priced.total_price;
+      if (line.priced.rental_months > 0) totals.rentalAmount += line.priced.total_price;
       totals.monthlyAmount += line.priced.monthly_total;
       continue;
     }

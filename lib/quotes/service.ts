@@ -6,7 +6,7 @@ import { normalizeSaleType, priceLine, sumLineTotals, type SaleType } from '@/li
 export type QuoteLineInput = {
   product_id: string;
   quantity: number;
-  /** 'sale' (varsayılan) | 'rental' — kiralama satırı tarihli ve aylık kira bedelli. */
+  /** 'sale' (varsayılan) | 'rental' — kiralama: aylık kira katalog tarifesinden, satırda ezilebilir; tarih isteğe bağlı. */
   sale_type?: SaleType | null;
   rental_start_date?: string | null;
   rental_end_date?: string | null;
@@ -125,7 +125,8 @@ export function resolveQuoteLines(items: QuoteLineInput[], catalog: { products: 
       const saleType = normalizeSaleType(item.sale_type);
       if (saleType === 'rental' && product.is_recurring) throw new Error(`Aylık hizmet kalemi kiralama olarak girilemez: ${product.name}`);
       const rules = rulesByProduct.get(item.product_id) ?? [];
-      // İstemciyle aynı hesap (lib/quotes/line-pricing.ts): satış = kademe, kiralama = kira × adet × ay.
+      // İstemciyle aynı hesap (lib/quotes/line-pricing.ts): satış = kademe,
+      // kiralama = aylık kira (katalog tarifesi ya da satırda ezilen) × adet; tarih isteğe bağlı.
       const priced = priceLine({
         product_id: item.product_id,
         quantity: item.quantity,
@@ -133,7 +134,7 @@ export function resolveQuoteLines(items: QuoteLineInput[], catalog: { products: 
         rental_start_date: normalizeDateOnly(item.rental_start_date, null),
         rental_end_date: normalizeDateOnly(item.rental_end_date, null),
         rental_monthly_price: item.rental_monthly_price == null ? null : Number(item.rental_monthly_price),
-      }, rules);
+      }, rules, product);
       if (!priced.priced) {
         throw new Error(saleType === 'rental'
           ? `${product.name}: ${priced.problem}`
@@ -165,7 +166,7 @@ export function resolveQuoteLines(items: QuoteLineInput[], catalog: { products: 
     priced: priceLine({
       product_id: row.product_id, quantity: row.quantity, sale_type: row.sale_type,
       rental_start_date: row.rental_start_date, rental_end_date: row.rental_end_date, rental_monthly_price: row.rental_monthly_price,
-    }, rulesByProduct.get(row.product_id) ?? []),
+    }, rulesByProduct.get(row.product_id) ?? [], productMap.get(row.product_id) ?? null),
   })));
 
   return {

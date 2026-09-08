@@ -13,6 +13,8 @@ export type QuoteProduct = {
   description: string;
   specs: string[];
   sort_order: number;
+  /** Kiralama tarifesi (USD/ay, KDV hariç). null = kiralanamaz. 08.09: A80 15 · A910S 15 · A6650 20. */
+  rental_monthly_price?: number | null;
 };
 
 export type QuotePricingRule = {
@@ -55,10 +57,12 @@ export function normalizeQuoteSpecs(input: unknown): string[] {
   return [];
 }
 
-export function normalizeQuoteProduct<T extends Record<string, any>>(product: T): T & { specs: string[] } {
+export function normalizeQuoteProduct<T extends Record<string, any>>(product: T): T & { specs: string[]; rental_monthly_price: number | null } {
+  const rental = product?.rental_monthly_price == null ? NaN : Number(product.rental_monthly_price);
   return {
     ...product,
     specs: normalizeQuoteSpecs(product?.specs),
+    rental_monthly_price: Number.isFinite(rental) && rental > 0 ? rental : null,
   };
 }
 

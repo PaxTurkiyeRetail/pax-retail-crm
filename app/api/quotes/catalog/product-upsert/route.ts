@@ -22,6 +22,8 @@ type Body = {
   specsText?: string;
   sort_order?: number;
   is_active?: boolean;
+  /** Kiralama tarifesi (USD/ay, KDV hariç); null/boş = kiralanamaz. */
+  rental_monthly_price?: number | string | null;
 };
 
 export async function POST(request: Request) {
@@ -33,6 +35,10 @@ export async function POST(request: Request) {
     if (!code || !name) return NextResponse.json({ message: 'Kod ve ürün adı zorunlu.' }, { status: 400 });
 
     const normalizedSpecs = normalizeQuoteSpecs(body.specs ?? body.specsText ?? '');
+    const rentalRaw = body.rental_monthly_price == null || String(body.rental_monthly_price).trim() === '' ? null : Number(body.rental_monthly_price);
+    if (rentalRaw != null && (!Number.isFinite(rentalRaw) || rentalRaw <= 0)) {
+      return NextResponse.json({ message: 'Aylık kira pozitif bir sayı olmalı (boş = kiralanamaz).' }, { status: 400 });
+    }
 
     const payload = {
       code,
@@ -47,6 +53,7 @@ export async function POST(request: Request) {
       specs: JSON.stringify(normalizedSpecs),
       sort_order: Number(body.sort_order ?? 100),
       is_active: body.is_active !== false,
+      rental_monthly_price: rentalRaw,
     };
 
     const admin = createPgAdminClient();

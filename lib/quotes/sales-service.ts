@@ -110,22 +110,24 @@ export async function repriceFromCatalog(quoteId: string, newDeviceCount: number
   // Aylık hizmet / diğer kalemler teklifteki hâliyle kalır (tek seferlik tutara dahil).
   for (const row of otherRows) hardwareAmount += Number(row.unit_price ?? 0) * Number(row.quantity ?? 0);
 
-  // Kiralama: aylık birim kira × adet × ay. Dönem satışta düzenlenmişse o dönem,
-  // yoksa satırın kendi tarihleri.
+  // Kiralama: aylık birim kira × adet. Tarih yoksa (08.09 modeli) satır tutarı aylık tutardır;
+  // eski tarihli kayıtta (ya da satışta dönem verilmişse) sözleşme değeri = aylık × ay.
   let rentalMonthlyAmount = 0;
   let rentalAmount = 0;
   let months = 0;
   for (const row of rentalRows) {
     const qty = scaledQty(row);
     if (!qty) continue;
+    const hasPeriod = Boolean((rentalPeriod?.start && rentalPeriod?.end) || (row.rental_start_date && row.rental_end_date));
     const lineMonths = rentalPeriod?.start && rentalPeriod?.end
       ? rentalMonths(rentalPeriod.start, rentalPeriod.end)
       : rentalMonths(row.rental_start_date, row.rental_end_date);
-    if (lineMonths <= 0) priced = false;
+    if (hasPeriod && lineMonths <= 0) priced = false;
     months = Math.max(months, lineMonths);
     const monthly = Number(row.rental_monthly_price ?? row.unit_price ?? 0) * qty;
+    if (monthly <= 0) priced = false;
     rentalMonthlyAmount += monthly;
-    rentalAmount += monthly * lineMonths;
+    rentalAmount += hasPeriod ? monthly * lineMonths : monthly;
   }
 
   return {

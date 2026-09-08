@@ -253,7 +253,7 @@ export default function QuotePortfolioClient() {
                     {row.rental ? (
                       <div style={{ marginTop: 6 }} title={`${row.rental.lines} kiralama satırı`}>
                         <span style={{ ...pillBase, minHeight: 22, fontSize: 11, background: 'var(--chip-gold-bg)', color: 'var(--chip-gold-color)', borderColor: 'var(--chip-gold-bd)' }}>{row.rental.all ? 'Kiralama' : 'Satış + Kiralama'}</span>
-                        <div style={{ fontSize: 12, color: 'var(--text-2)', marginTop: 4 }}>{rentalPeriodLabel(row.rental.start, row.rental.end)}</div>
+                        {row.rental.start && row.rental.end ? <div style={{ fontSize: 12, color: 'var(--text-2)', marginTop: 4 }}>{rentalPeriodLabel(row.rental.start, row.rental.end)}</div> : null}
                       </div>
                     ) : null}
                     {row.sale && row.sale.status === 'active' && (row.sale.device_count !== row.total_device_count || Math.round(row.sale.amount) !== Math.round(row.total_amount)) ? (

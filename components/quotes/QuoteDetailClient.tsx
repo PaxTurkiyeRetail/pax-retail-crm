@@ -5,7 +5,7 @@ import type { CSSProperties } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
-import { priceLine, rentalPeriodLabel, sumLineTotals, type SaleType } from '@/lib/quotes/line-pricing';
+import { priceLine, rentalMonths, rentalPeriodLabel, sumLineTotals, type SaleType } from '@/lib/quotes/line-pricing';
 import { formatDate } from '@/lib/utils';
 
 type QuoteDetail = {
@@ -59,19 +59,17 @@ type Product = {
   is_recurring: boolean;
   billing_period: 'one_time' | 'monthly';
   description: string;
+  /** Katalog kira tarifesi (USD/ay); null = kiralanamaz. */
+  rental_monthly_price?: number | null;
 };
 
 type Rule = { product_id: string; min_qty: number; max_qty: number | null; unit_price: number };
 type EditItem = {
   uid: string; product_id: string; quantity: number;
-  sale_type: SaleType; rental_start_date: string; rental_end_date: string; rental_monthly_price: string;
+  /** Kiralama: aylık kira katalog tarifesinden; tarih ve kira girişi yok — sadece adet (08.09). */
+  sale_type: SaleType;
 };
-const emptyEditLine = (): EditItem => ({ uid: randomId(), product_id: '', quantity: 1, sale_type: 'sale', rental_start_date: '', rental_end_date: '', rental_monthly_price: '' });
-function isoPlusMonths(months: number) {
-  const d = new Date();
-  d.setMonth(d.getMonth() + months);
-  return d.toISOString().slice(0, 10);
-}
+const emptyEditLine = (): EditItem => ({ uid: randomId(), product_id: '', quantity: 1, sale_type: 'sale' });
 
 function randomId() {
   return Math.random().toString(36).slice(2, 10);
@@ -153,9 +151,6 @@ export default function QuoteDetailClient({ quoteId }: { quoteId: string }) {
         product_id: resolveProductId(item, products),
         quantity: Number(item.quantity ?? 1) || 1,
         sale_type: item.sale_type === 'rental' ? 'rental' as SaleType : 'sale' as SaleType,
-        rental_start_date: String(item.rental_start_date ?? '').slice(0, 10),
-        rental_end_date: String(item.rental_end_date ?? '').slice(0, 10),
-        rental_monthly_price: item.rental_monthly_price == null ? '' : String(item.rental_monthly_price),
       }))
     );
   }, [quote, products]);
@@ -184,9 +179,7 @@ export default function QuoteDetailClient({ quoteId }: { quoteId: string }) {
     const product = productMap.get(item.product_id) ?? null;
     const priced = priceLine({
       product_id: item.product_id, quantity: item.quantity, sale_type: item.sale_type,
-      rental_start_date: item.rental_start_date || null, rental_end_date: item.rental_end_date || null,
-      rental_monthly_price: item.rental_monthly_price === '' ? null : Number(item.rental_monthly_price),
-    }, rulesByProduct.get(item.product_id) ?? []);
+    }, rulesByProduct.get(item.product_id) ?? [], product);
     return { ...item, product, priced, rule: priced.rule, rule_label: priced.rule_label, unit_price: priced.unit_price, total_price: priced.total_price };
   }), [editItems, productMap, rulesByProduct]);
 
@@ -196,11 +189,7 @@ export default function QuoteDetailClient({ quoteId }: { quoteId: string }) {
   }, [resolvedEditItems]);
 
   const patchEditLine = (uid: string, patch: Partial<EditItem>) => setEditItems((current) => current.map((row) => row.uid === uid ? { ...row, ...patch } : row));
-  const toggleEditSaleType = (uid: string, next: SaleType) => setEditItems((current) => current.map((row) => {
-    if (row.uid !== uid) return row;
-    if (next === 'rental') return { ...row, sale_type: 'rental', rental_start_date: row.rental_start_date || new Date().toISOString().slice(0, 10), rental_end_date: row.rental_end_date || isoPlusMonths(12) };
-    return { ...row, sale_type: 'sale' };
-  }));
+  const toggleEditSaleType = (uid: string, next: SaleType) => setEditItems((current) => current.map((row) => (row.uid === uid ? { ...row, sale_type: next } : row)));
 
   const editValid = Boolean(editTitle.trim() && resolvedEditItems.length && resolvedEditItems.every((item) => item.product_id && item.quantity > 0 && item.priced.priced));
 
@@ -252,9 +241,7 @@ export default function QuoteDetailClient({ quoteId }: { quoteId: string }) {
         note: editNote,
         items: editItems.map((item) => ({
           product_id: item.product_id, quantity: Number(item.quantity), sale_type: item.sale_type,
-          rental_start_date: item.sale_type === 'rental' ? item.rental_start_date || null : null,
-          rental_end_date: item.sale_type === 'rental' ? item.rental_end_date || null : null,
-          rental_monthly_price: item.sale_type === 'rental' && item.rental_monthly_price !== '' ? Number(item.rental_monthly_price) : null,
+          rental_monthly_price: null,
         })),
       }),
     });
@@ -441,16 +428,16 @@ export default function QuoteDetailClient({ quoteId }: { quoteId: string }) {
                     <input type="number" min={1} value={item.quantity} onChange={(event) => patchEditLine(item.uid, { quantity: Math.max(1, Number(event.target.value || 1)) })} style={{ ...inputStyle, width: '100%' }} />
                   </div>
                   <div>
-                    <label style={labelStyle}>{item.sale_type === 'rental' ? 'Dönem' : 'Barem'}</label>
-                    <div style={readonlyBox}>{item.rule_label}</div>
+                    <label style={labelStyle}>{item.sale_type === 'rental' ? 'Kira' : 'Barem'}</label>
+                    <div style={readonlyBox}>{item.sale_type === 'rental' ? `${money(item.unit_price)} / ay` : item.rule_label}</div>
                   </div>
                   <div>
-                    <label style={labelStyle}>{item.sale_type === 'rental' ? 'Sözleşme' : 'Toplam'}</label>
-                    <div style={readonlyBox}>{money(item.total_price)}{item.sale_type !== 'rental' && item.product?.is_recurring ? ' / ay' : ''}</div>
+                    <label style={labelStyle}>{item.sale_type === 'rental' ? 'Aylık' : 'Toplam'}</label>
+                    <div style={readonlyBox}>{money(item.total_price)}{item.sale_type === 'rental' || item.product?.is_recurring ? ' / ay' : ''}</div>
                   </div>
                   <button type="button" disabled={editItems.length <= 1} onClick={() => setEditItems((current) => current.filter((row) => row.uid !== item.uid))} style={{ ...ghostButton, color: '#991b1b' }}>Sil</button>
                   <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
-                    <div style={{ color: 'var(--text-3)', fontSize: 12 }}>Satır {index + 1} · {item.sale_type === 'rental' ? `Aylık birim kira: ${money(item.unit_price)} · aylık ${money(item.priced.monthly_total)}` : `Birim fiyat: ${money(item.unit_price)}`}{item.priced.problem ? <span style={{ color: '#b91c1c', fontWeight: 700 }}> · {item.priced.problem}</span> : null}</div>
+                    <div style={{ color: 'var(--text-3)', fontSize: 12 }}>Satır {index + 1} · {item.sale_type === 'rental' ? `Aylık kira: ${money(item.unit_price)} × ${item.quantity} = ${money(item.priced.monthly_total)} / ay` : `Birim fiyat: ${money(item.unit_price)}`}{item.priced.problem ? <span style={{ color: '#b91c1c', fontWeight: 700 }}> · {item.priced.problem}</span> : null}</div>
                     <div role="radiogroup" aria-label="Satış tipi" style={{ display: 'inline-flex', padding: 3, borderRadius: 12, border: '1px solid var(--border)', background: 'var(--surface)' }}>
                       {(['sale', 'rental'] as SaleType[]).map((kind) => (
                         <button key={kind} type="button" role="radio" aria-checked={item.sale_type === kind} onClick={() => toggleEditSaleType(item.uid, kind)} disabled={kind === 'rental' && Boolean(item.product?.is_recurring)}
@@ -460,11 +447,9 @@ export default function QuoteDetailClient({ quoteId }: { quoteId: string }) {
                       ))}
                     </div>
                   </div>
-                  {item.sale_type === 'rental' ? (
-                    <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10, padding: 10, borderRadius: 12, border: '1px solid var(--chip-gold-bd)', background: 'var(--chip-gold-bg)' }}>
-                      <div><label style={labelStyle}>Başlangıç</label><input type="date" value={item.rental_start_date} onChange={(event) => patchEditLine(item.uid, { rental_start_date: event.target.value })} style={{ ...inputStyle, width: '100%' }} /></div>
-                      <div><label style={labelStyle}>Bitiş</label><input type="date" min={item.rental_start_date || undefined} value={item.rental_end_date} onChange={(event) => patchEditLine(item.uid, { rental_end_date: event.target.value })} style={{ ...inputStyle, width: '100%' }} /></div>
-                      <div><label style={labelStyle}>Aylık birim kira (USD)</label><input type="number" min={0} step="0.01" value={item.rental_monthly_price} onChange={(event) => patchEditLine(item.uid, { rental_monthly_price: event.target.value })} placeholder="cihaz başı / ay" style={{ ...inputStyle, width: '100%' }} /></div>
+                  {item.sale_type === 'rental' && item.product && !item.product.rental_monthly_price ? (
+                    <div style={{ gridColumn: '1 / -1', padding: 10, borderRadius: 12, border: '1px solid var(--chip-red-bd)', background: 'var(--chip-red-bg)', color: 'var(--chip-red-color)', fontSize: 12, fontWeight: 800 }}>
+                      Bu ürünün kiralama tarifesi yok (Ürün &amp; Fiyat Yönetimi → Aylık kira).
                     </div>
                   ) : null}
                 </div>
@@ -513,7 +498,12 @@ export default function QuoteDetailClient({ quoteId }: { quoteId: string }) {
                   {item.sale_type === 'rental' ? <span style={rentalPill}>Kiralama</span> : null}
                 </div>
                 {item.sale_type === 'rental' ? (
-                  <div style={{ marginTop: 4, color: 'var(--text-3)', fontSize: 13 }}>{item.quantity} adet · {item.formatted_unit_price} / ay / cihaz · {rentalPeriodLabel(item.rental_start_date, item.rental_end_date)} · sözleşme {item.formatted_total_price}</div>
+                  <div style={{ marginTop: 4, color: 'var(--text-3)', fontSize: 13 }}>
+                    {item.quantity} adet · {item.formatted_unit_price} / ay / cihaz
+                    {rentalMonths(item.rental_start_date, item.rental_end_date) > 0
+                      ? ` · ${rentalPeriodLabel(item.rental_start_date, item.rental_end_date)} · sözleşme ${item.formatted_total_price}`
+                      : ` · aylık ${item.formatted_total_price}`}
+                  </div>
                 ) : (
                   <div style={{ marginTop: 4, color: 'var(--text-3)', fontSize: 13 }}>{item.quantity} adet · {item.formatted_unit_price} / birim · {item.formatted_total_price}{item.is_recurring ? ' / ay' : ''}</div>
                 )}
@@ -534,13 +524,13 @@ export default function QuoteDetailClient({ quoteId }: { quoteId: string }) {
                   <td style={tableCell}><div style={{ fontWeight: 800 }}>{item.product_name_snapshot}</div><div style={{ marginTop: 4, color: 'var(--text-3)', fontSize: 12 }}>{item.product_code_snapshot} · {item.product_type}</div></td>
                   <td style={tableCell}>
                     {item.sale_type === 'rental' ? (
-                      <div><span style={rentalPill}>Kiralama</span><div style={{ marginTop: 4, color: 'var(--text-3)', fontSize: 12 }}>{rentalPeriodLabel(item.rental_start_date, item.rental_end_date)}</div></div>
+                      <div><span style={rentalPill}>Kiralama</span>{rentalMonths(item.rental_start_date, item.rental_end_date) > 0 ? <div style={{ marginTop: 4, color: 'var(--text-3)', fontSize: 12 }}>{rentalPeriodLabel(item.rental_start_date, item.rental_end_date)}</div> : null}</div>
                     ) : (item.is_recurring ? 'Aylık hizmet' : 'Satış')}
                   </td>
                   <td style={tableCell}>{item.category}</td>
                   <td style={tableCell}>{item.quantity}</td>
                   <td style={tableCell}>{item.formatted_unit_price}{item.sale_type === 'rental' ? ' / ay' : ''}</td>
-                  <td style={tableCell}>{item.formatted_total_price}{item.sale_type !== 'rental' && item.is_recurring ? ' / ay' : ''}</td>
+                  <td style={tableCell}>{item.formatted_total_price}{(item.sale_type === 'rental' && rentalMonths(item.rental_start_date, item.rental_end_date) <= 0) || (item.sale_type !== 'rental' && item.is_recurring) ? ' / ay' : ''}</td>
                 </tr>
               ))}
             </tbody>

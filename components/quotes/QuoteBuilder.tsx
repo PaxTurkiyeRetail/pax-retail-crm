@@ -8,24 +8,17 @@ type Product = {
   id: string; code: string; name: string; category: string;
   product_type: 'device' | 'bundle' | 'recurring' | 'peripheral';
   is_recurring: boolean; billing_period: 'one_time' | 'monthly'; description: string;
+  /** Katalog kira tarifesi (USD/ay, KDV hariç); null = kiralanamaz. 08.09: A80 15 · A910S 15 · A6650 20. */
+  rental_monthly_price?: number | null;
 };
 type Rule = { product_id: string; min_qty: number; max_qty: number | null; unit_price: number };
 type Customer = { id: string; musteri: string; sektor: string | null; sorumlu: string | null };
 type QuoteItem = {
   uid: string; product_id: string; quantity: number;
-  /** Satış (katalog kademesi) ya da Kiralama (tarihli, aylık kira bedeli elle) — 08.09 satış ekibi isteği. */
+  /** Satış (katalog kademesi) ya da Kiralama (aylık kira katalog tarifesinden; tarih yok, kira girişi yok — sadece adet). */
   sale_type: SaleType;
-  rental_start_date: string;
-  rental_end_date: string;
-  rental_monthly_price: string;
 };
-const emptyLine = (): QuoteItem => ({ uid: randomId(), product_id: '', quantity: 1, sale_type: 'sale', rental_start_date: '', rental_end_date: '', rental_monthly_price: '' });
-/** Bugün + n ay (kiralama varsayılan dönemi: 12 ay). */
-function isoPlusMonths(months: number) {
-  const d = new Date();
-  d.setMonth(d.getMonth() + months);
-  return d.toISOString().slice(0, 10);
-}
+const emptyLine = (): QuoteItem => ({ uid: randomId(), product_id: '', quantity: 1, sale_type: 'sale' });
 
 function randomId() { return Math.random().toString(36).slice(2, 10); }
 function money(value: number) {
@@ -86,9 +79,7 @@ export default function QuoteBuilder({ showHero = false }: Props) {
     const product = productMap.get(item.product_id) ?? null;
     const priced = priceLine({
       product_id: item.product_id, quantity: item.quantity, sale_type: item.sale_type,
-      rental_start_date: item.rental_start_date || null, rental_end_date: item.rental_end_date || null,
-      rental_monthly_price: item.rental_monthly_price === '' ? null : Number(item.rental_monthly_price),
-    }, rulesByProduct.get(item.product_id) ?? []);
+    }, rulesByProduct.get(item.product_id) ?? [], product);
     return { ...item, product, priced, rule: priced.rule, rule_label: priced.rule_label, unit_price: priced.unit_price, total_price: priced.total_price };
   }), [items, productMap, rulesByProduct]);
 
@@ -98,13 +89,7 @@ export default function QuoteBuilder({ showHero = false }: Props) {
   }, [resolvedItems]);
 
   const setLine = (uid: string, patch: Partial<QuoteItem>) => setItems(prev => prev.map(i => i.uid === uid ? { ...i, ...patch } : i));
-  const toggleSaleType = (uid: string, next: SaleType) => setItems(prev => prev.map(i => {
-    if (i.uid !== uid) return i;
-    if (next === 'rental') {
-      return { ...i, sale_type: 'rental', rental_start_date: i.rental_start_date || new Date().toISOString().slice(0, 10), rental_end_date: i.rental_end_date || isoPlusMonths(12) };
-    }
-    return { ...i, sale_type: 'sale' };
-  }));
+  const toggleSaleType = (uid: string, next: SaleType) => setItems(prev => prev.map(i => (i.uid === uid ? { ...i, sale_type: next } : i)));
 
   const selectedCustomer = useMemo(
     () => customers.find(c => c.id === customerId) || null,
@@ -130,9 +115,8 @@ export default function QuoteBuilder({ showHero = false }: Props) {
           probability, note, save_mode: saveMode,
           items: items.map(i => ({
             product_id: i.product_id, quantity: Number(i.quantity), sale_type: i.sale_type,
-            rental_start_date: i.sale_type === 'rental' ? i.rental_start_date || null : null,
-            rental_end_date: i.sale_type === 'rental' ? i.rental_end_date || null : null,
-            rental_monthly_price: i.sale_type === 'rental' && i.rental_monthly_price !== '' ? Number(i.rental_monthly_price) : null,
+            // Kira katalog tarifesinden (sunucu aynı modülle çözer ve satıra kopyalar); UI'da kira girişi yok (Sinan, 08.09).
+            rental_monthly_price: null,
           })),
         }),
       });
@@ -251,26 +235,9 @@ export default function QuoteBuilder({ showHero = false }: Props) {
               <input type="number" min={1} value={item.quantity} onChange={(e) => setLine(item.uid, { quantity: Math.max(1, Number(e.target.value || 1)) })} className="pax-input" required style={{ width: '100%', minHeight: 48, fontSize: 16 }} />
             </div>
 
-            {item.sale_type === 'rental' && (
-              <div style={{ display: 'grid', gap: 12, padding: 12, borderRadius: 'var(--radius-sm)', border: '1px solid var(--chip-gold-bd)', background: 'var(--chip-gold-bg)' }}>
-                <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--chip-gold-color)' }}>Kiralama dönemi ve aylık kira</div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
-                  <div>
-                    <label className="pax-label" style={{ display: 'block', marginBottom: 6 }}>Başlangıç *</label>
-                    <input type="date" value={item.rental_start_date} onChange={(e) => setLine(item.uid, { rental_start_date: e.target.value })} className="pax-input" style={{ width: '100%', minHeight: 44 }} />
-                  </div>
-                  <div>
-                    <label className="pax-label" style={{ display: 'block', marginBottom: 6 }}>Bitiş *</label>
-                    <input type="date" min={item.rental_start_date || undefined} value={item.rental_end_date} onChange={(e) => setLine(item.uid, { rental_end_date: e.target.value })} className="pax-input" style={{ width: '100%', minHeight: 44 }} />
-                  </div>
-                  <div>
-                    <label className="pax-label" style={{ display: 'block', marginBottom: 6 }}>Aylık birim kira (USD) *</label>
-                    <input type="number" min={0} step="0.01" value={item.rental_monthly_price} onChange={(e) => setLine(item.uid, { rental_monthly_price: e.target.value })} className="pax-input" placeholder="cihaz başı / ay" style={{ width: '100%', minHeight: 44 }} />
-                  </div>
-                </div>
-                <div style={{ fontSize: 12, color: 'var(--text-3)' }}>
-                  Katalogda kira tarifesi yok; aylık birim kira elle girilir. Tutar = kira × adet × ay{item.priced.rental_months ? ` (${item.priced.rental_months} ay)` : ''}.
-                </div>
+            {item.sale_type === 'rental' && item.product && !item.product.rental_monthly_price && (
+              <div style={{ padding: 12, borderRadius: 'var(--radius-sm)', border: '1px solid var(--chip-red-bd)', background: 'var(--chip-red-bg)', color: 'var(--chip-red-color)', fontSize: 13, fontWeight: 800 }}>
+                Bu ürünün kiralama tarifesi yok (Ürün &amp; Fiyat Yönetimi → Aylık kira).
               </div>
             )}
 
@@ -278,8 +245,7 @@ export default function QuoteBuilder({ showHero = false }: Props) {
               <div style={{ padding: 12, background: 'var(--surface)', borderRadius: 'var(--radius-sm)', display: 'grid', gap: 8 }}>
                 {item.sale_type === 'rental' ? (
                   <>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}><span style={{ color: 'var(--text-3)' }}>Dönem:</span><span style={{ fontWeight: 600 }}>{item.rule_label}</span></div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}><span style={{ color: 'var(--text-3)' }}>Aylık kira:</span><span style={{ fontWeight: 600 }}>{money(item.unit_price)} × {item.quantity} = {money(item.priced.monthly_total)} / ay</span></div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}><span style={{ color: 'var(--text-3)' }}>Aylık kira:</span><span style={{ fontWeight: 600 }}>{money(item.unit_price)} / ay × {item.quantity}</span></div>
                   </>
                 ) : (
                   <>
@@ -289,8 +255,8 @@ export default function QuoteBuilder({ showHero = false }: Props) {
                 )}
                 {item.priced.problem && <div style={{ fontSize: 12, color: '#b91c1c', fontWeight: 700 }}>{item.priced.problem}</div>}
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 15, paddingTop: 8, borderTop: '1px solid var(--border)' }}>
-                  <span style={{ fontWeight: 700 }}>{item.sale_type === 'rental' ? 'Sözleşme değeri:' : 'Toplam:'}</span>
-                  <span style={{ fontWeight: 700, color: 'var(--accent)' }}>{money(item.total_price)}{item.sale_type !== 'rental' && item.product.is_recurring && <span style={{ fontSize: 12 }}> / ay</span>}</span>
+                  <span style={{ fontWeight: 700 }}>{item.sale_type === 'rental' ? 'Aylık kira toplamı:' : 'Toplam:'}</span>
+                  <span style={{ fontWeight: 700, color: 'var(--accent)' }}>{money(item.total_price)}{(item.sale_type === 'rental' || item.product.is_recurring) && <span style={{ fontSize: 12 }}> / ay</span>}</span>
                 </div>
               </div>
             )}
@@ -306,7 +272,7 @@ export default function QuoteBuilder({ showHero = false }: Props) {
             { label: 'Toplam cihaz', value: String(totals.total_devices) },
             { label: 'Teklif tutarı', value: money(totals.total_amount) },
             ...(totals.rental_amount > 0 ? [{ label: 'Kiralama sözleşme değeri', value: money(totals.rental_amount) }] : []),
-            { label: 'Aylık recurring', value: money(totals.monthly_amount), accent: true },
+            { label: 'Aylık recurring (hizmet + kira)', value: money(totals.monthly_amount), accent: true },
             { label: 'Teklif geçerliliği', value: '15 gün' },
             { label: 'Sent olursa', value: 'Aktivite + follow‑up (+30 gün)' },
           ].map(({ label, value, accent }) => (

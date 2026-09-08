@@ -18,6 +18,8 @@ type Product = {
   specs: string[];
   sort_order: number;
   is_active: boolean;
+  /** Kiralama tarifesi (USD/ay, KDV hariç); null = kiralanamaz. 08.09: A80 15 · A910S 15 · A6650 20. */
+  rental_monthly_price?: number | null;
 };
 
 type Rule = {
@@ -42,6 +44,8 @@ type FormProduct = {
   specsText: string;
   sort_order: number;
   is_active: boolean;
+  /** Boş = kiralanamaz. */
+  rental_monthly_price: string;
 };
 
 const emptyProduct: FormProduct = {
@@ -57,6 +61,7 @@ const emptyProduct: FormProduct = {
   specsText: '',
   sort_order: 100,
   is_active: true,
+  rental_monthly_price: '',
 };
 
 function money(value: number) {
@@ -131,6 +136,7 @@ export default function QuotesCatalogAdminClient() {
       specsText: normalizeSpecsText(selectedProduct.specs),
       sort_order: selectedProduct.sort_order,
       is_active: selectedProduct.is_active,
+      rental_monthly_price: selectedProduct.rental_monthly_price == null ? '' : String(selectedProduct.rental_monthly_price),
     });
   }, [selectedProduct]);
 
@@ -144,6 +150,7 @@ export default function QuotesCatalogAdminClient() {
         body: JSON.stringify({
           ...productForm,
           specs: productForm.specsText.split('\n').map((item) => item.trim()).filter(Boolean),
+          rental_monthly_price: productForm.rental_monthly_price.trim() === '' ? null : Number(productForm.rental_monthly_price),
         }),
       });
       const json = await res.json().catch(() => ({}));
@@ -251,7 +258,14 @@ export default function QuotesCatalogAdminClient() {
                     <div style={{ fontWeight: 900, color: 'var(--text)' }}>{product.name}</div>
                     <div style={{ marginTop: 4, color: 'var(--text-3)', fontSize: 13 }}>{product.code} · {product.category}</div>
                   </div>
-                  <span style={{ ...pill, ...(product.is_active ? activePill : passivePill) }}>{product.is_active ? 'Aktif' : 'Pasif'}</span>
+                  <div style={{ display: 'grid', gap: 6, justifyItems: 'end' }}>
+                    <span style={{ ...pill, ...(product.is_active ? activePill : passivePill) }}>{product.is_active ? 'Aktif' : 'Pasif'}</span>
+                    {product.rental_monthly_price ? (
+                      <span style={{ ...pill, background: 'var(--chip-gold-bg)', color: 'var(--chip-gold-color)', borderColor: 'var(--chip-gold-bd)' }} title="Kiralama tarifesi (KDV hariç)">
+                        Kira ${Number(product.rental_monthly_price).toLocaleString('tr-TR')} / ay
+                      </span>
+                    ) : null}
+                  </div>
                 </div>
               </button>
             ))}
@@ -269,6 +283,10 @@ export default function QuotesCatalogAdminClient() {
             <label style={field}><span style={label}>Para Birimi</span><input value={productForm.currency} onChange={(e) => setProductForm((prev) => ({ ...prev, currency: e.target.value.toUpperCase() }))} style={input} /></label>
             <label style={field}><span style={label}>Sıralama</span><input type="number" value={productForm.sort_order} onChange={(e) => setProductForm((prev) => ({ ...prev, sort_order: Number(e.target.value || 100) }))} style={input} /></label>
             <label style={field}><span style={label}>Faturalama</span><select value={productForm.billing_period} onChange={(e) => setProductForm((prev) => ({ ...prev, billing_period: e.target.value as Product['billing_period'] }))} style={input}><option value="one_time">one_time</option><option value="monthly">monthly</option></select></label>
+            <label style={field}>
+              <span style={label}>Kiralama · aylık kira (USD, KDV hariç)</span>
+              <input type="number" min={0} step="0.01" value={productForm.rental_monthly_price} onChange={(e) => setProductForm((prev) => ({ ...prev, rental_monthly_price: e.target.value }))} style={input} placeholder="boş = kiralanamaz · örn. 15" />
+            </label>
           </div>
 
           <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap' }}>
