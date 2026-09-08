@@ -334,9 +334,10 @@ export default function CrmCustomersClient() {
   const [ownerUserId, setOwnerUserId] = useState('');
   const [entegrasyonTipi, setEntegrasyonTipi] = useState('');
   const [customerType, setCustomerType] = useState('standard');
-  // Firma Rolü alanı kaldırıldı (Sinan, 08.09: "zaten müşteri tipi var"). Rol artık
-  // Müşteri Tipi'nden türetilir: tip 'business_partner' → iş ortağı, diğer her şey → müşteri.
+  const [hasCustomerRole, setHasCustomerRole] = useState(true);
+  const [hasBusinessPartnerRole, setHasBusinessPartnerRole] = useState(false);
   const [partnerSubtype, setPartnerSubtype] = useState('Entegrasyon Firması');
+  const [integrationEnabled, setIntegrationEnabled] = useState(false);
   const [relationshipsLoading, setRelationshipsLoading] = useState(false);
   const [isKolu, setIsKolu] = useState('Retail');
   // Hunter / Farmer: yeni müşteri her zaman Hunter olarak açılır (Çağdaş Bey, 07.09);
@@ -633,7 +634,10 @@ export default function CrmCustomersClient() {
     setOwnerUserId(me?.id ?? '');
     setEntegrasyonTipi('');
     setCustomerType('standard');
+    setHasCustomerRole(true);
+    setHasBusinessPartnerRole(false);
     setPartnerSubtype('Entegrasyon Firması');
+    setIntegrationEnabled(false);
     setIsKolu('Retail');
     setPipelinePolicy('phase_required');
   };
@@ -655,7 +659,10 @@ export default function CrmCustomersClient() {
     setOwnerUserId(row.owner_user_id ?? '');
     setEntegrasyonTipi(row.entegrasyon_tipi ?? '');
     setCustomerType(row.customer_type ?? 'standard');
+    setHasCustomerRole(row.customer_type !== 'business_partner');
+    setHasBusinessPartnerRole(row.customer_type === 'business_partner');
     setPartnerSubtype('Entegrasyon Firması');
+    setIntegrationEnabled(false);
     setIsKolu(row.is_kolu ?? 'Retail');
     setPipelinePolicy(row.pipeline_policy ?? 'phase_required');
     setMsg(null);
@@ -667,24 +674,25 @@ export default function CrmCustomersClient() {
           const data = await res.json().catch(() => ({}));
           if (!res.ok) throw new Error(data?.message || 'Firma ilişkileri yüklenemedi.');
           const relations = (data.rows ?? []) as OrganizationRelation[];
+          const customerRelation = relations.find((item) => item.role_key === 'customer');
           const partnerRelation = relations.find((item) => item.role_key === 'business_partner');
-          // Rol seçimi formda yok; yalnız iş ortağı türü okunur. "Entegrasyon Süreci" kutusu da
-          // kaldırıldı (Sinan, 08.09: Entegrasyon alanı zaten var) — sunucu mevcut değeri korur,
-          // Entegrasyon Firması türünde kendisi açar (Taha, a17e0d8).
+          setHasCustomerRole(Boolean(customerRelation?.is_active));
+          setHasBusinessPartnerRole(Boolean(partnerRelation?.is_active));
           setPartnerSubtype(partnerRelation?.subtype || 'Entegrasyon Firması');
+          setIntegrationEnabled(Boolean(data.integration_enabled));
         })
         .catch((error) => setMsg(error instanceof Error ? error.message : 'Firma ilişkileri yüklenemedi.'))
         .finally(() => setRelationshipsLoading(false));
     }
   };
 
-  /** Firma rolü = Müşteri Tipi (Sinan, 08.09: ayrı "Firma Rolü" alanı yok). */
-  const isBusinessPartnerType = customerType === 'business_partner';
-
   async function saveCustomer() {
     setMsg(null);
     if (!musteri.trim()) return setMsg('Müşteri adı zorunlu.');
     if (!sorumlu.trim()) return setMsg('Sorumlu seçmek zorunlu.');
+    if (canManageClassification && !hasCustomerRole && !hasBusinessPartnerRole) {
+      return setMsg('Firma en az bir role sahip olmalıdır: Müşteri veya İş Ortağı.');
+    }
     setBusySave(true);
     try {
       const url = mode === 'create' ? '/api/crm/create' : '/api/crm/update';
@@ -696,7 +704,9 @@ export default function CrmCustomersClient() {
         entegrasyon_tipi: entegrasyonTipi.trim() || null,
         // satis_olasiligi bilerek gönderilmiyor (08.09 kararı: "bu oranı veremeyiz");
         // update API'si alan gelmeyince mevcut değeri korur.
-        customer_type: customerType,
+        customer_type: canManageClassification && hasBusinessPartnerRole && !hasCustomerRole
+          ? 'business_partner'
+          : customerType,
         pipeline_policy: pipelinePolicy,
         is_kolu: isKolu,
       };
@@ -724,10 +734,10 @@ export default function CrmCustomersClient() {
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({
             customer_id: customerId,
-            // Rol = Müşteri Tipi (tek seçim); iş ortağı türü yalnız iş ortağında gönderilir.
-            customer: !isBusinessPartnerType,
-            business_partner: isBusinessPartnerType,
-            partner_subtype: isBusinessPartnerType ? partnerSubtype : null,
+            customer: hasCustomerRole,
+            business_partner: hasBusinessPartnerRole,
+            partner_subtype: hasBusinessPartnerRole ? partnerSubtype : null,
+            integration_enabled: integrationEnabled,
           }),
         });
         const relationshipJson = await relationshipRes.json().catch(() => ({}));
@@ -1520,9 +1530,9 @@ export default function CrmCustomersClient() {
                     // olur (aktivite ekrani is ortagi fazlarini tipe gore getirir).
                     // Kullanici isterse asagidaki alandan degistirebilir.
                     setCustomerType((current) => resolveCustomerTypeForSector({ sektor: nextSektor, customerType: current }));
-                    // Eski İŞ ORTAĞI sektörü seçilirse Müşteri Tipi de İş Ortağı'na döner
-                    // (rol ayrı alan değil, tipin kendisi — 08.09 kararı).
-                    if (isBusinessPartnerSector(nextSektor)) setCustomerType('business_partner');
+                    // Eski İŞ ORTAĞI sektör seçimi iş ortağı rolünü önerir;
+                    // müşteri rolünü kaldırmaz, iki rol birlikte kullanılabilir.
+                    if (isBusinessPartnerSector(nextSektor)) setHasBusinessPartnerRole(true);
                   }}
                 >
                   <option value="">Seçiniz</option>
@@ -1573,12 +1583,30 @@ export default function CrmCustomersClient() {
 
               {canManageClassification ? (
                 <>
-                  {isBusinessPartnerType ? (
+                  <fieldset className="field" disabled={relationshipsLoading} style={{ border: '1px solid var(--border)', borderRadius: 14, padding: 14, margin: 0 }}>
+                    <legend className="label" style={{ padding: '0 6px' }}>Firma Rolleri</legend>
+                    <div style={{ display: 'grid', gap: 10 }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 9, fontWeight: 800 }}>
+                        <input type="checkbox" checked={hasCustomerRole} onChange={(e) => setHasCustomerRole(e.target.checked)} /> Müşteri
+                      </label>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 9, fontWeight: 800 }}>
+                        <input type="checkbox" checked={hasBusinessPartnerRole} onChange={(e) => setHasBusinessPartnerRole(e.target.checked)} /> İş Ortağı
+                      </label>
+                      <small className="muted">İkisini birlikte seçebilirsin; firma rolleri birbirinden bağımsızdır.</small>
+                    </div>
+                  </fieldset>
+                  <label className="field" style={{ border: '1px solid var(--border)', borderRadius: 14, padding: 14 }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 9, fontWeight: 800 }}>
+                      <input type="checkbox" checked={integrationEnabled} onChange={(e) => setIntegrationEnabled(e.target.checked)} /> Entegrasyon Süreci
+                    </span>
+                    <small className="muted">Açıldığında firma, müşteri veya iş ortağı rolünden bağımsız olarak 14 entegrasyon fazını kullanabilir.</small>
+                  </label>
+                  {hasBusinessPartnerRole ? (
                     <label className="field">
                       <span className="label">İş Ortağı Türü</span>
                       <select className="select" value={partnerSubtype} disabled={relationshipsLoading} onChange={(e) => {
                         setPartnerSubtype(e.target.value);
-                        // Entegrasyon Firması → entegrasyon süreci sunucuda otomatik açılır (Taha, a17e0d8).
+                        if (e.target.value === 'Entegrasyon Firması') setIntegrationEnabled(true);
                       }}>
                         <option value="Entegrasyon Firması">Entegrasyon Firması</option>
                         <option value="Donanım Firması">Donanım Firması</option>
@@ -1592,9 +1620,9 @@ export default function CrmCustomersClient() {
                         <option key={item.value} value={item.value}>{item.label}</option>
                       ))}
                     </select>
-                    {isBusinessPartnerSector(sektor) && customerType !== 'business_partner' ? (
+                    {isBusinessPartnerSector(sektor) && !hasBusinessPartnerRole ? (
                       <small className="muted">
-                        Sektör İŞ ORTAĞI seçili. Aktivite girişinde iş ortağı fazlarının gelmesi için tip “İş Ortağı” olmalıdır.
+                        Sektör İŞ ORTAĞI seçili. Aktivite girişinde iş ortağı fazlarının gelmesi için İş Ortağı rolü açık olmalıdır.
                       </small>
                     ) : null}
                   </label>
