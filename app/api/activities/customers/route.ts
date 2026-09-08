@@ -17,6 +17,7 @@ type ActivityCustomerRow = {
   is_business_partner?: boolean | null;
   has_customer_role?: boolean | null;
   has_business_partner_role?: boolean | null;
+  has_integration_process?: boolean | null;
   partner_faz_no?: number | null;
   partner_faz_adi?: string | null;
   son_kalinan_faz_no?: number | null;
@@ -89,8 +90,8 @@ export async function GET(req: Request) {
       crmQuery,
       selectedId
         ? (canReadAny
-          ? admin.from('musteriler').select('id,musteri,sorumlu,sektor,customer_type,pipeline_policy').eq('id', selectedId).maybeSingle()
-          : admin.from('musteriler').select('id,musteri,sorumlu,sektor,customer_type,pipeline_policy').eq('id', selectedId).eq('owner_user_id', me.id).maybeSingle())
+          ? admin.from('musteriler').select('id,musteri,sorumlu,sektor,customer_type,pipeline_policy,integration_enabled').eq('id', selectedId).maybeSingle()
+          : admin.from('musteriler').select('id,musteri,sorumlu,sektor,customer_type,pipeline_policy,integration_enabled').eq('id', selectedId).eq('owner_user_id', me.id).maybeSingle())
         : Promise.resolve({ data: null, error: null } as any),
     ]);
 
@@ -102,7 +103,7 @@ export async function GET(req: Request) {
       ...(selectedRow?.id ? [String(selectedRow.id)] : []),
     ]));
     const [policyResult, rolesResult, partnerPipelineResult] = customerIds.length ? await Promise.all([
-      admin.from('musteriler').select('id,customer_type,pipeline_policy').in('id', customerIds),
+      admin.from('musteriler').select('id,customer_type,pipeline_policy,integration_enabled').in('id', customerIds),
       admin.from('organization_roles').select('customer_id,role_key,is_active').in('customer_id', customerIds).eq('is_active', true),
       admin.from('organization_pipeline_states').select('customer_id,active_phase_no,status').in('customer_id', customerIds).eq('context_key', 'business_partner'),
     ]) : [{ data: [] as any[], error: null }, { data: [] as any[], error: null }, { data: [] as any[], error: null }];
@@ -133,6 +134,7 @@ export async function GET(req: Request) {
         is_business_partner: String(policy?.customer_type ?? 'standard') === 'business_partner',
         has_customer_role: roleKeys.has('customer'),
         has_business_partner_role: roleKeys.has('business_partner'),
+        has_integration_process: Boolean(policy?.integration_enabled),
         partner_faz_no: partnerPipeline?.active_phase_no != null ? Number(partnerPipeline.active_phase_no) : null,
         partner_faz_adi: null,
       });
@@ -158,6 +160,7 @@ export async function GET(req: Request) {
             report_only: rowPhaseOptional,
             is_business_partner: Boolean(existing.is_business_partner) || rowBusinessPartner,
             has_customer_role: roleKeys.has('customer'), has_business_partner_role: roleKeys.has('business_partner'),
+            has_integration_process: Boolean(rowPolicy?.integration_enabled ?? row.integration_enabled),
             partner_faz_no: partnerPipeline?.active_phase_no != null ? Number(partnerPipeline.active_phase_no) : null,
           });
           return;
@@ -174,6 +177,7 @@ export async function GET(req: Request) {
           is_business_partner: rowBusinessPartner,
           has_customer_role: roleKeys.has('customer'),
           has_business_partner_role: roleKeys.has('business_partner'),
+          has_integration_process: Boolean(rowPolicy?.integration_enabled ?? row.integration_enabled),
           partner_faz_no: partnerPipeline?.active_phase_no != null ? Number(partnerPipeline.active_phase_no) : null,
           partner_faz_adi: null,
           son_kalinan_faz_no: null,

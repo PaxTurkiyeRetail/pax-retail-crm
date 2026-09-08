@@ -1,16 +1,17 @@
 import 'server-only';
 import { db } from '@/lib/db';
 
-// Entegrasyon Raporu — Entegrasyon Firması olarak işaretli iş ortaklarının
-// hangi fazda olduğunu ve son aktivite notunu tek ekranda gösterir.
-// Kaynak: organization_roles (business_partner / Entegrasyon Firması) + bağlamsal pipeline
-// (aktif_faz_no) + is_ortagi_faz_tanimlari (14 fazlı iş ortağı akışı) +
+// Entegrasyon Raporu — entegrasyon yeteneği açık tüm firmaların (müşteri veya
+// iş ortağı) hangi fazda olduğunu ve son aktivite notunu tek ekranda gösterir.
+// Kaynak: musteriler.integration_enabled + bağlamsal pipeline
+// (aktif_faz_no) + is_ortagi_faz_tanimlari (14 fazlı entegrasyon akışı) +
 // pipeline_eventleri (en son not).
 
 export type EntegrasyonRaporuRow = {
   customerId: string;
   musteri: string;
   isKolu: string | null;
+  entegrasyonModeli: string;
   aktifFazNo: number | null;
   aktifFazAdi: string | null;
   sonNot: string | null;
@@ -38,12 +39,13 @@ export async function buildEntegrasyonRaporu(options?: { isKolu?: string }): Pro
         m.id::text as customer_id,
         m.musteri,
         m.is_kolu,
+        case when r.customer_id is not null then 'İş Ortağı' else 'Müşteri (Kendi Entegrasyonu)' end as entegrasyon_modeli,
         mp.active_phase_no as aktif_faz_no,
         ft.asama_adi as aktif_faz_adi,
         pe.notlar as son_not,
         pe.created_at as son_event_tarihi
       from public.musteriler m
-      join public.organization_roles r on r.customer_id=m.id and r.role_key='business_partner' and r.is_active=true
+      left join public.organization_roles r on r.customer_id=m.id and r.role_key='business_partner' and r.is_active=true
       left join public.organization_pipeline_states mp on mp.customer_id = m.id and mp.context_key='business_partner'
       left join public.is_ortagi_faz_tanimlari ft on ft.faz_no = mp.active_phase_no
       left join lateral (
@@ -53,7 +55,7 @@ export async function buildEntegrasyonRaporu(options?: { isKolu?: string }): Pro
         order by pe_1.created_at desc
         limit 1
       ) pe on true
-      where r.subtype = 'Entegrasyon Firması'
+      where m.integration_enabled = true
       order by m.musteri asc
     `,
   );
@@ -69,6 +71,7 @@ export async function buildEntegrasyonRaporu(options?: { isKolu?: string }): Pro
       customerId: String(row.customer_id),
       musteri: String(row.musteri ?? '').trim(),
       isKolu: cleanText(row.is_kolu),
+      entegrasyonModeli: String(row.entegrasyon_modeli),
       aktifFazNo: row.aktif_faz_no != null ? Number(row.aktif_faz_no) : null,
       aktifFazAdi: cleanText(row.aktif_faz_adi),
       sonNot: cleanText(row.son_not),

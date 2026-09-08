@@ -13,7 +13,7 @@ export default function ActivityTypeAccessPanel() {
     catch (e) { setError(e instanceof Error ? e.message : 'Rol kuralı güncellenemedi.'); } finally { setBusy(''); }
   }
   return <section className="pax-card parameters-main-card" aria-labelledby="partner-activity-access-title">
-    <div className="parameters-main-head"><div><span className="parameters-kicker">Aktivite Türleri / Yetkiler</span><h2 id="partner-activity-access-title">İş Ortaklığı Aktivitesi</h2><p>Bu tür İş Ortağı fazlarını kullanır. Super Admin her zaman tam yetkilidir.</p></div></div>
+    <div className="parameters-main-head"><div><span className="parameters-kicker">Aktivite Türleri / Yetkiler</span><h2 id="partner-activity-access-title">Entegrasyon Süreci</h2><p>Bu tür 14 entegrasyon fazını kullanır. Super Admin her zaman tam yetkilidir.</p></div></div>
     {error && <p role="alert">{error}</p>}
     <div className="parameters-table-wrap"><table className="pax-table parameters-table"><thead><tr><th>Rol</th><th>Görür</th><th>Oluşturur</th><th>Faz Değiştirir</th></tr></thead><tbody>
       {rows.map(row => <tr key={row.role_key}><td><strong>{row.label}</strong></td>{(['can_view','can_create','can_change_phase'] as const).map(key => <td key={key}><input aria-label={`${row.label} ${key}`} type="checkbox" disabled={busy === row.role_key || (key === 'can_create' && !row.can_view) || (key === 'can_change_phase' && !row.can_create)} checked={row[key]} onChange={e => void save(row, { [key]: e.target.checked })} /></td>)}</tr>)}

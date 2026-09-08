@@ -19,13 +19,16 @@ type KunyeDashboardProps = {
   customerPhaseStatus?: string | null;
   partnerPhaseNo?: number | null;
   partnerPhaseStatus?: string | null;
+  integrationEnabled?: boolean;
+  integrationPhaseNo?: number | null;
+  integrationPhaseStatus?: string | null;
   /** İş Kolu rozetten değiştirilince (kayıt sonrası) üst bileşen veriyi yeniler. */
   onIsKoluChanged?: (value: string) => void;
 };
 
 // İş Kolu seçenekleri: parametre servisinden; erişilemezse sabit yedek.
 const IS_KOLU_FALLBACK = ['Retail', 'Vertical', 'Bank'];
-export default function KunyeDashboard({ kunye, musteriAdi, sektorVeSorumlu, aktifFazNo, musteriId, customerType, isOrtagiTipi, hasCustomerRole, hasBusinessPartnerRole, partnerSubtype, customerPhaseNo, customerPhaseStatus, partnerPhaseNo, partnerPhaseStatus, onIsKoluChanged }: KunyeDashboardProps) {
+export default function KunyeDashboard({ kunye, musteriAdi, sektorVeSorumlu, aktifFazNo, musteriId, customerType, isOrtagiTipi, hasCustomerRole, hasBusinessPartnerRole, partnerSubtype, customerPhaseNo, customerPhaseStatus, integrationEnabled, integrationPhaseNo, integrationPhaseStatus, onIsKoluChanged }: KunyeDashboardProps) {
 
   // İş Kolu — künye kartından tek tıkla değiştirilir. Kayıt yeri müşteri kartı
   // (musteriler.is_kolu, /api/crm/is-kolu); rozet kaydın ardından hemen yeni değeri gösterir.
@@ -208,7 +211,10 @@ export default function KunyeDashboard({ kunye, musteriAdi, sektorVeSorumlu, akt
                 👤 Müşteri{customerPhaseNo != null ? ` · Faz ${customerPhaseNo}` : ''}{customerPhaseStatus ? ` · ${customerPhaseStatus}` : ''}
               </span> : null}
               {effectiveHasPartnerRole ? <span className="kd-badge" style={{ background: 'rgba(168,85,247,0.22)', border: '1px solid rgba(216,180,254,0.55)', color: '#f3e8ff' }}>
-                🤝 İş Ortağı · {effectivePartnerSubtype}{partnerPhaseNo != null ? ` · Faz ${partnerPhaseNo}` : ''}{partnerPhaseStatus ? ` · ${partnerPhaseStatus}` : ''}
+                🤝 İş Ortağı · {effectivePartnerSubtype}
+              </span> : null}
+              {integrationEnabled ? <span className="kd-badge" style={{ background: 'rgba(14,165,233,0.22)', border: '1px solid rgba(125,211,252,0.55)', color: '#e0f2fe' }}>
+                🔌 Entegrasyon{integrationPhaseNo != null ? ` · Faz ${integrationPhaseNo}` : ''}{integrationPhaseStatus ? ` · ${integrationPhaseStatus}` : ''}
               </span> : null}
               {kunye?.satici_etiketi ? (
                 <span className="kd-badge" style={{ background: 'rgba(16,185,129,0.2)', border: '1px solid rgba(110,231,183,0.5)', color: '#d1fae5' }}>

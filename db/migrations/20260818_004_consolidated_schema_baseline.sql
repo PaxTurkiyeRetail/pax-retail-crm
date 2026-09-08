@@ -3411,3 +3411,74 @@ begin
   if new_sync then perform public.rebuild_musteri_pipeline(new.musteri_id::text); end if;
   return coalesce(new,old);
 end $fn$;
+-- CRM_APPEND_MIGRATION: 20260908_015_integration_process_capability.sql
+-- Entegrasyon bir firma rolü değildir. Müşteri veya iş ortağı olan bir firma,
+-- bu yetenek açıkken mevcut 14 fazlı bağlamsal akışı bağımsız kullanabilir.
+alter table public.musteriler
+  add column if not exists integration_enabled boolean not null default false;
+
+comment on column public.musteriler.integration_enabled is
+  'Firma Entegrasyon Süreci aktivitelerini ve 14 entegrasyon fazını kullanabilir.';
+
+update public.musteriler m
+set integration_enabled = true
+where m.integration_enabled = false
+  and (
+    m.is_ortagi_tipi = 'Entegrasyon Firması'
+    or exists (
+      select 1
+      from public.organization_roles r
+      where r.customer_id = m.id
+        and r.role_key = 'business_partner'
+        and r.is_active = true
+        and r.subtype = 'Entegrasyon Firması'
+    )
+  );
+
+create index if not exists idx_musteriler_integration_enabled
+  on public.musteriler(integration_enabled)
+  where integration_enabled = true;
+
+create or replace function public.validate_activity_context_phase() returns trigger language plpgsql as $fn$
+declare
+  effective_context text;
+  phase_exists boolean;
+  context_allowed boolean;
+begin
+  if new.faz_no is null then return new; end if;
+  effective_context := new.activity_context;
+  if effective_context is null then
+    select case when customer_type='business_partner' then 'business_partner' else 'customer' end
+      into effective_context from public.musteriler where id=new.musteri_id;
+    new.activity_context := effective_context;
+  end if;
+
+  if effective_context = 'business_partner' then
+    select coalesce(m.integration_enabled, false)
+    into context_allowed
+    from public.musteriler m
+    where m.id=new.musteri_id;
+    -- Entegrasyon yeteneği sonradan kapatılsa bile eski kayıt düzenlenebilir;
+    -- yeni entegrasyon aktivitesi ise yalnız açık yetenekle oluşturulur.
+    if tg_op = 'UPDATE' and old.activity_context = 'business_partner' then
+      context_allowed := true;
+    end if;
+  else
+    select exists (
+      select 1 from public.organization_roles r
+      where r.customer_id=new.musteri_id and r.role_key='customer' and r.is_active
+    ) into context_allowed;
+  end if;
+
+  if not coalesce(context_allowed, false) then
+    raise exception 'Firma % için aktif % süreci bulunamadı',new.musteri_id,effective_context using errcode='23514';
+  end if;
+
+  if effective_context='business_partner' then
+    select exists(select 1 from public.is_ortagi_faz_tanimlari where faz_no=new.faz_no and is_active) into phase_exists;
+  else
+    select exists(select 1 from public.faz_tanimlari where faz_no=new.faz_no) into phase_exists;
+  end if;
+  if not phase_exists then raise exception 'Seçilen faz aktivite kapsamına ait değil' using errcode='23514'; end if;
+  return new;
+end $fn$;

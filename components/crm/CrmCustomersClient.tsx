@@ -338,6 +338,7 @@ export default function CrmCustomersClient() {
   const [hasCustomerRole, setHasCustomerRole] = useState(true);
   const [hasBusinessPartnerRole, setHasBusinessPartnerRole] = useState(false);
   const [partnerSubtype, setPartnerSubtype] = useState('Entegrasyon Firması');
+  const [integrationEnabled, setIntegrationEnabled] = useState(false);
   const [relationshipsLoading, setRelationshipsLoading] = useState(false);
   const [isKolu, setIsKolu] = useState('Retail');
   // Hunter / Farmer: yeni müşteri her zaman Hunter olarak açılır (Çağdaş Bey, 07.09);
@@ -639,6 +640,7 @@ export default function CrmCustomersClient() {
     setHasCustomerRole(true);
     setHasBusinessPartnerRole(false);
     setPartnerSubtype('Entegrasyon Firması');
+    setIntegrationEnabled(false);
     setIsKolu('Retail');
     setSaticiEtiketi('Hunter');
     setPipelinePolicy('phase_required');
@@ -665,6 +667,7 @@ export default function CrmCustomersClient() {
     setHasCustomerRole(row.customer_type !== 'business_partner');
     setHasBusinessPartnerRole(row.customer_type === 'business_partner');
     setPartnerSubtype('Entegrasyon Firması');
+    setIntegrationEnabled(false);
     setIsKolu(row.is_kolu ?? 'Retail');
     setPipelinePolicy(row.pipeline_policy ?? 'phase_required');
     setMsg(null);
@@ -681,6 +684,7 @@ export default function CrmCustomersClient() {
           setHasCustomerRole(Boolean(customerRelation?.is_active));
           setHasBusinessPartnerRole(Boolean(partnerRelation?.is_active));
           setPartnerSubtype(partnerRelation?.subtype || 'Entegrasyon Firması');
+          setIntegrationEnabled(Boolean(data.integration_enabled));
         })
         .catch((error) => setMsg(error instanceof Error ? error.message : 'Firma ilişkileri yüklenemedi.'))
         .finally(() => setRelationshipsLoading(false));
@@ -737,6 +741,7 @@ export default function CrmCustomersClient() {
             customer: hasCustomerRole,
             business_partner: hasBusinessPartnerRole,
             partner_subtype: hasBusinessPartnerRole ? partnerSubtype : null,
+            integration_enabled: integrationEnabled,
           }),
         });
         const relationshipJson = await relationshipRes.json().catch(() => ({}));
@@ -1607,13 +1612,22 @@ export default function CrmCustomersClient() {
                       <label style={{ display: 'flex', alignItems: 'center', gap: 9, fontWeight: 800 }}>
                         <input type="checkbox" checked={hasBusinessPartnerRole} onChange={(e) => setHasBusinessPartnerRole(e.target.checked)} /> İş Ortağı
                       </label>
-                      <small className="muted">İkisini birlikte seçebilirsin; müşteri ve iş ortağı fazları ayrı ilerler.</small>
+                      <small className="muted">İkisini birlikte seçebilirsin; firma rolleri birbirinden bağımsızdır.</small>
                     </div>
                   </fieldset>
+                  <label className="field" style={{ border: '1px solid var(--border)', borderRadius: 14, padding: 14 }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 9, fontWeight: 800 }}>
+                      <input type="checkbox" checked={integrationEnabled} onChange={(e) => setIntegrationEnabled(e.target.checked)} /> Entegrasyon Süreci
+                    </span>
+                    <small className="muted">Açıldığında firma müşteri veya iş ortağı rolünden bağımsız olarak 14 entegrasyon fazını kullanabilir.</small>
+                  </label>
                   {hasBusinessPartnerRole ? (
                     <label className="field">
                       <span className="label">İş Ortağı Türü</span>
-                      <select className="select" value={partnerSubtype} onChange={(e) => setPartnerSubtype(e.target.value)}>
+                      <select className="select" value={partnerSubtype} onChange={(e) => {
+                        setPartnerSubtype(e.target.value);
+                        if (e.target.value === 'Entegrasyon Firması') setIntegrationEnabled(true);
+                      }}>
                         <option value="Entegrasyon Firması">Entegrasyon Firması</option>
                         <option value="Donanım Firması">Donanım Firması</option>
                       </select>

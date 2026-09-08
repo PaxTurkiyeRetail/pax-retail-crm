@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { ACTIVITY_BACKDATE_DAYS, ACTIVITY_DATE_PICKER_ENABLED, activityDateBounds, istanbulDateKey } from '@/lib/activities/activity-date';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
@@ -15,6 +15,7 @@ type Customer = {
   is_business_partner?: boolean | null;
   has_customer_role?: boolean | null;
   has_business_partner_role?: boolean | null;
+  has_integration_process?: boolean | null;
   partner_faz_no?: number | null;
   partner_faz_adi?: string | null;
   aktif_faz_no: number | null;
@@ -45,7 +46,7 @@ const AKTIVITE_TIPLERI = [
   'Teknik Ziyaret',
   'Teknik Online',
   'POM',
-  'İş Ortaklığı Aktivitesi',
+  'Entegrasyon Süreci',
   'Diğer'
 ] as const;
 
@@ -132,19 +133,22 @@ export default function QuickActivityClient() {
   const [editReady, setEditReady] = useState(false);
   const [phaseMetaLoading, setPhaseMetaLoading] = useState(false);
   const [partnerActivityAccess, setPartnerActivityAccess] = useState({ can_view: false, can_create: false, can_change_phase: false });
+  const initialSelectionApplied = useRef(false);
 
   const canCreateTechnical = canCreateTechnicalActivity(me);
-  const visibleActivityTypes = useMemo(() => {
-    return AKTIVITE_TIPLERI.filter((tip) => (!isTechnicalActivityType(tip) || canCreateTechnical) && (tip !== 'İş Ortaklığı Aktivitesi' || partnerActivityAccess.can_view));
-  }, [canCreateTechnical, partnerActivityAccess.can_view]);
-  const visibleNextActivityTypes = useMemo(() => visibleActivityTypes.filter((tip) => !isTechnicalActivityType(tip) && tip !== 'İş Ortaklığı Aktivitesi'), [visibleActivityTypes]);
-  const isTechnicalActivity = isTechnicalActivityType(aktiviteTipi);
-  const isPartnerActivityType = aktiviteTipi === 'İş Ortaklığı Aktivitesi';
-
   const selectedCustomer = useMemo(
     () => customers.find(c => c.musteri_id === musteriId) || null,
     [customers, musteriId]
   );
+  const visibleActivityTypes = useMemo(() => {
+    return AKTIVITE_TIPLERI.filter((tip) =>
+      (!isTechnicalActivityType(tip) || canCreateTechnical) &&
+      (tip !== 'Entegrasyon Süreci' || (partnerActivityAccess.can_view && (Boolean(selectedCustomer?.has_integration_process) || (Boolean(editId) && originalActivityContext === 'business_partner')))),
+    );
+  }, [canCreateTechnical, editId, originalActivityContext, partnerActivityAccess.can_view, selectedCustomer?.has_integration_process]);
+  const visibleNextActivityTypes = useMemo(() => visibleActivityTypes.filter((tip) => !isTechnicalActivityType(tip) && tip !== 'Entegrasyon Süreci'), [visibleActivityTypes]);
+  const isTechnicalActivity = isTechnicalActivityType(aktiviteTipi);
+  const isPartnerActivityType = aktiviteTipi === 'Entegrasyon Süreci';
 
   useEffect(() => {
     const loadData = async () => {
@@ -192,6 +196,17 @@ export default function QuickActivityClient() {
 
     loadData();
   }, []);
+
+  useEffect(() => {
+    if (loading || initialSelectionApplied.current) return;
+    initialSelectionApplied.current = true;
+    const requestedCustomerId = String(searchParams.get('customer_id') ?? '').trim();
+    const requestedType = String(searchParams.get('activity_type') ?? '').trim();
+    if (requestedCustomerId) setMusteriId(requestedCustomerId);
+    if (requestedType === 'Entegrasyon Süreci' || requestedType === 'İş Ortaklığı Aktivitesi') {
+      setAktiviteTipi('Entegrasyon Süreci');
+    }
+  }, [loading, searchParams]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedCustomerSearch(customerSearch.trim()), 250);
@@ -303,7 +318,7 @@ export default function QuickActivityClient() {
         setOriginalActivityContext(row.activity_context === 'business_partner' ? 'business_partner' : 'customer');
         setContactSelection(null);
         setFazNo(row.faz_no != null ? Number(row.faz_no) : null);
-        setAktiviteTipi(((row.activity_label || 'Diğer') as ActivityType));
+        setAktiviteTipi((row.activity_label === 'İş Ortaklığı Aktivitesi' ? 'Entegrasyon Süreci' : (row.activity_label || 'Diğer')) as ActivityType);
         setFazDurum(coercePhaseStatus(row.activity_status || 'Devam Ediyor'));
         setBekleyenTaraf(((row.partner_owner || '') as WaitingSide | ''));
         setNotlar(String(row.notlar ?? ''));
@@ -330,7 +345,7 @@ export default function QuickActivityClient() {
   }, [editId]);
 
   const technicalMissingPhase = isTechnicalActivity && !phaseOptionalTechnicalCustomer && !fazNo;
-  const missingPartnerRelationship = isPartnerActivityType && !selectedCustomer?.has_business_partner_role;
+  const missingPartnerRelationship = isPartnerActivityType && !selectedCustomer?.has_integration_process && !(Boolean(editId) && originalActivityContext === 'business_partner');
 
   useEffect(() => {
     if (phaseOptionalCustomer) {
@@ -361,7 +376,7 @@ export default function QuickActivityClient() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (technicalMissingPhase) {
-      setError(isBusinessPartnerCustomer ? 'Bu iş ortağı için faz bulunamadı. Accountlara haber veriniz.' : TECHNICAL_PHASE_REQUIRED_MESSAGE);
+      setError(isBusinessPartnerCustomer ? 'Bu firmanın entegrasyon süreci için faz bulunamadı. Account ekibine haber veriniz.' : TECHNICAL_PHASE_REQUIRED_MESSAGE);
       return;
     }
     if (!isValid || saving) return;
@@ -522,12 +537,12 @@ export default function QuickActivityClient() {
           ) : null}
 
           {missingPartnerRelationship && <div style={{ padding: 14, background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 'var(--radius-md)', color: '#9a3412' }}>
-            Bu firmada aktif İş Ortağı ilişkisi yok. Önce <Link href={`/crm/${musteriId}#company-relations`}>firma kartından İş Ortağı ilişkisini ekleyin</Link>.
+            Bu firma için Entegrasyon Süreci açık değil. Önce <Link href={`/crm/${musteriId}#company-relations`}>firma kartından entegrasyon yeteneğini açın</Link>.
           </div>}
 
           {technicalMissingPhase && (
             <div style={{ padding: 14, background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 'var(--radius-md)', color: '#9a3412', fontSize: 14 }}>
-              {isBusinessPartnerCustomer ? 'Bu iş ortağı için faz bulunamadı. Accountlara haber veriniz.' : TECHNICAL_PHASE_REQUIRED_MESSAGE}
+              {isBusinessPartnerCustomer ? 'Bu firmanın entegrasyon süreci için faz bulunamadı. Account ekibine haber veriniz.' : TECHNICAL_PHASE_REQUIRED_MESSAGE}
             </div>
           )}
 

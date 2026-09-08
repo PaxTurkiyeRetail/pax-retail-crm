@@ -17,7 +17,7 @@ export async function GET(request: Request) {
     const admin = createPgAdminClient();
     const { data: musteri, error } = await admin
       .from('musteriler')
-      .select('id,musteri,sektor,entegrasyon_tipi,satis_olasiligi,sorumlu,owner_user_id,customer_type,is_ortagi_tipi')
+      .select('id,musteri,sektor,entegrasyon_tipi,satis_olasiligi,sorumlu,owner_user_id,customer_type,is_ortagi_tipi,integration_enabled')
       .eq('id', musteriId)
       .maybeSingle();
 
@@ -56,6 +56,9 @@ export async function GET(request: Request) {
       customer_phase_status: customerPipeline?.status ?? null,
       partner_phase_no: partnerPipeline?.active_phase_no ?? null,
       partner_phase_status: partnerPipeline?.status ?? null,
+      integration_enabled: Boolean(musteri.integration_enabled),
+      integration_phase_no: partnerPipeline?.active_phase_no ?? null,
+      integration_phase_status: partnerPipeline?.status ?? null,
     }]))[0];
 
     const mappedKunye = mapKunyeDbToUi(kunye ?? null);

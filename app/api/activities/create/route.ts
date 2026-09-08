@@ -11,7 +11,7 @@ import { validateActivityDate } from '@/lib/activities/activity-date';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-type ActivityKanal = 'Online Toplantı' | 'Yerinde Ziyaret' | 'Telefon' | 'E-posta' | 'Teknik Ziyaret' | 'Teknik Online' | 'POM' | 'İş Ortaklığı Aktivitesi' | 'Diğer';
+type ActivityKanal = 'Online Toplantı' | 'Yerinde Ziyaret' | 'Telefon' | 'E-posta' | 'Teknik Ziyaret' | 'Teknik Online' | 'POM' | 'Entegrasyon Süreci' | 'Diğer';
 type ActivityDurum = 'Devam Ediyor' | 'Tamamlandı' | 'İhtiyaç Duyulmadı' | 'Başlamadı' | 'Bekleniyor' | null;
 type WaitingSide = string | null;
 
@@ -47,7 +47,7 @@ type Body = {
 
 const EMPTY_WAITING_SIDE_MESSAGE = 'Bekleyen Taraf boş olamaz. Lütfen seçim yapın; eski kayıt varsa backend fallback alacaktır.';
 const TECHNICAL_PHASE_REQUIRED_MESSAGE = 'Bu müşteri için faz bilgisi bulunamadı. Lütfen önce account ekibine bilgi veriniz; teknik aktivite girebilmek için müşterinin faz bilgisi olmalıdır.';
-const BUSINESS_PARTNER_PHASE_REQUIRED_MESSAGE = 'Bu iş ortağı için faz bulunamadı. Accountlara haber veriniz.';
+const BUSINESS_PARTNER_PHASE_REQUIRED_MESSAGE = 'Bu firmanın entegrasyon süreci için faz bulunamadı. Account ekibine haber veriniz.';
 function isMeaningfulPhaseStatus(value: string | null | undefined) {
   const normalized = normalizeDurum(value as ActivityDurum);
   return Boolean(normalized && normalized !== 'Başlamadı');
@@ -123,7 +123,7 @@ export async function POST(req: Request) {
     const { data: typeAccess, error: typeAccessError } = await createPgAdminClient().from('activity_type_role_permissions')
       .select('can_create,can_change_phase').eq('activity_type_key', 'business_partner_activity').eq('role_key', me.role).maybeSingle();
     if (typeAccessError || !typeAccess?.can_create || !typeAccess?.can_change_phase) {
-      return NextResponse.json({ message: 'İş Ortaklığı Aktivitesi oluşturma ve faz değiştirme yetkiniz yok.' }, { status: 403 });
+      return NextResponse.json({ message: 'Entegrasyon Süreci aktivitesi oluşturma ve faz değiştirme yetkiniz yok.' }, { status: 403 });
     }
   }
 
@@ -165,7 +165,7 @@ export async function POST(req: Request) {
 
   const { data: customer } = await admin
     .from('musteriler')
-    .select('id,musteri,sorumlu,sektor,owner_user_id,customer_type,pipeline_policy')
+    .select('id,musteri,sorumlu,sektor,owner_user_id,customer_type,pipeline_policy,integration_enabled')
     .eq('id', musteri_id)
     .maybeSingle();
 
@@ -211,7 +211,13 @@ export async function POST(req: Request) {
   if (relationshipError) return NextResponse.json({ message: 'Firma ilişkileri kontrol edilemedi.' }, { status: 503 });
   const relationshipKeys = new Set((relationships ?? []).map((row: any) => String(row.role_key)));
   const activity_context: 'customer' | 'business_partner' = partnerActivity || existingActivityContext === 'business_partner' || (isBusinessPartnerCustomer && !relationshipKeys.has('customer')) ? 'business_partner' : 'customer';
-  if (!relationshipKeys.has(activity_context)) return NextResponse.json({ message: activity_context === 'business_partner' ? 'Bu firmada aktif İş Ortağı ilişkisi yok.' : 'Bu firmada aktif Müşteri ilişkisi yok.' }, { status: 400 });
+  const canUseIntegrationProcess = Boolean(customer.integration_enabled) || (Boolean(activity_id) && existingActivityContext === 'business_partner');
+  if (activity_context === 'business_partner' && !canUseIntegrationProcess) {
+    return NextResponse.json({ message: 'Bu firma için Entegrasyon Süreci yeteneği açık değil.' }, { status: 400 });
+  }
+  if (activity_context === 'customer' && !relationshipKeys.has('customer')) {
+    return NextResponse.json({ message: 'Bu firmada aktif Müşteri ilişkisi yok.' }, { status: 400 });
+  }
   const syncLegacyPipeline = activity_context === 'customer' || !relationshipKeys.has('customer');
   const contactPatch: { technical_contact_id?: string | null } = {};
   if (body.technical_contact_id !== undefined) {
@@ -450,7 +456,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: 'Sonraki aksiyon olarak Teknik Ziyaret, Teknik Online veya POM planlanamaz. Teknik aktiviteler ITSM tarafından mevcut faz üstünden girilmelidir.' }, { status: 400 });
     }
     if (isBusinessPartnerActivity(hedef_aktivite)) {
-      return NextResponse.json({ message: 'İş Ortaklığı Aktivitesi sonraki aksiyon olarak planlanamaz; ilgili iş ortağı sürecinden ayrı kayıt açın.' }, { status: 400 });
+      return NextResponse.json({ message: 'Entegrasyon Süreci sonraki aksiyon olarak planlanamaz; entegrasyon sürecinden ayrı kayıt açın.' }, { status: 400 });
     }
 
     const hedef_not = String(nextActivity.hedef_not ?? '').trim() || null;

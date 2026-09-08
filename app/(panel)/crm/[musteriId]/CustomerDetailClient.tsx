@@ -24,6 +24,9 @@ type Customer = {
   customer_phase_status?: string | null;
   partner_phase_no?: number | null;
   partner_phase_status?: string | null;
+  integration_enabled?: boolean;
+  integration_phase_no?: number | null;
+  integration_phase_status?: string | null;
 };
 
 export default function CustomerDetailPage() {
@@ -95,7 +98,7 @@ export default function CustomerDetailPage() {
         <Link className="action-link" href="/crm/customers">← Firma Listesine Dön</Link>
         <div className="action-group">
           <Link className="action-link primary" href={`/crm/activities/new?customer_id=${encodeURIComponent(customer.id)}`}>+ Müşteri Aktivitesi</Link>
-          {customer.has_business_partner_role ? <Link className="action-link" href={`/crm/activities/new?customer_id=${encodeURIComponent(customer.id)}&activity_type=${encodeURIComponent('İş Ortaklığı Aktivitesi')}`}>+ İş Ortaklığı Aktivitesi</Link> : null}
+          {customer.integration_enabled ? <Link className="action-link" href={`/crm/activities/new?customer_id=${encodeURIComponent(customer.id)}&activity_type=${encodeURIComponent('Entegrasyon Süreci')}`}>+ Entegrasyon Süreci</Link> : null}
         </div>
       </div>
       {/* TEK HERO — KunyeDashboard içinde, tekrar yok */}
@@ -114,6 +117,9 @@ export default function CustomerDetailPage() {
         customerPhaseStatus={customer.customer_phase_status}
         partnerPhaseNo={customer.partner_phase_no}
         partnerPhaseStatus={customer.partner_phase_status}
+        integrationEnabled={customer.integration_enabled}
+        integrationPhaseNo={customer.integration_phase_no}
+        integrationPhaseStatus={customer.integration_phase_status}
         onIsKoluChanged={() => void loadData()}
       />
 

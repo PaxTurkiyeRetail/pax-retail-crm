@@ -9,6 +9,7 @@ export default function CompanyRelationshipsPanel({ customerId, onChanged }: { c
   const [customer, setCustomer] = useState(false);
   const [partner, setPartner] = useState(false);
   const [subtype, setSubtype] = useState('Entegrasyon Firması');
+  const [integrationEnabled, setIntegrationEnabled] = useState(false);
   const [canEdit, setCanEdit] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -25,6 +26,7 @@ export default function CompanyRelationshipsPanel({ customerId, onChanged }: { c
       const partnerRow = rows.find((row) => row.role_key === 'business_partner');
       setPartner(Boolean(partnerRow?.is_active));
       setSubtype(partnerRow?.subtype || 'Entegrasyon Firması');
+      setIntegrationEnabled(Boolean(data.integration_enabled));
       setCanEdit(Boolean(data.can_edit));
       setMessage('');
     } catch (error) {
@@ -47,11 +49,11 @@ export default function CompanyRelationshipsPanel({ customerId, onChanged }: { c
       const res = await fetch('/api/crm/relationships', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ customer_id: customerId, customer, business_partner: partner, partner_subtype: partner ? subtype : null }),
+        body: JSON.stringify({ customer_id: customerId, customer, business_partner: partner, partner_subtype: partner ? subtype : null, integration_enabled: integrationEnabled }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Firma ilişkileri kaydedilemedi.');
-      setMessage('Firma rolleri kaydedildi.');
+      setMessage('Firma rolleri ve entegrasyon yeteneği kaydedildi.');
       onChanged?.();
       await load();
     } catch (error) {
@@ -86,9 +88,9 @@ export default function CompanyRelationshipsPanel({ customerId, onChanged }: { c
     <div className="relations-head">
       <div>
         <h2 id="company-relations-heading">Firma Rolleri</h2>
-        <p>Aynı firma müşteri ve iş ortağı rollerini birlikte taşıyabilir. Her rolün fazı ayrı ilerler.</p>
+        <p>Firma müşteri ve iş ortağı rollerini birlikte taşıyabilir; entegrasyon süreci ise rollerden bağımsız ilerler.</p>
       </div>
-      {!loading ? <span className="role-count">{Number(customer) + Number(partner)} aktif rol</span> : null}
+      {!loading ? <span className="role-count">{Number(customer) + Number(partner)} aktif rol{integrationEnabled ? ' · Entegrasyon açık' : ''}</span> : null}
     </div>
 
     {loading ? <p role="status" className="message">Firma rolleri yükleniyor...</p> : <fieldset disabled={!canEdit || saving} className="role-form">
@@ -101,9 +103,16 @@ export default function CompanyRelationshipsPanel({ customerId, onChanged }: { c
           <input type="checkbox" checked={partner} onChange={(event) => setPartner(event.target.checked)} />
           <span className="role-copy"><span className="role-title">İş Ortağı</span><span className="role-description">Entegrasyon veya donanım iş ortaklığı fazları kullanılır.</span></span>
         </label>
+        <label className={`role-option ${integrationEnabled ? 'active' : ''}`}>
+          <input type="checkbox" checked={integrationEnabled} onChange={(event) => setIntegrationEnabled(event.target.checked)} />
+          <span className="role-copy"><span className="role-title">Entegrasyon Süreci</span><span className="role-description">14 entegrasyon fazını müşteri veya iş ortağı rolünden bağımsız izler.</span></span>
+        </label>
       </div>
       {partner ? <label className="partner-type pax-label">İş Ortağı Türü
-        <select className="pax-input" value={subtype} onChange={(event) => setSubtype(event.target.value)}>
+        <select className="pax-input" value={subtype} onChange={(event) => {
+          setSubtype(event.target.value);
+          if (event.target.value === 'Entegrasyon Firması') setIntegrationEnabled(true);
+        }}>
           {SUBTYPES.map((value) => <option key={value}>{value}</option>)}
         </select>
       </label> : null}

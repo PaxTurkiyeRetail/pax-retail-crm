@@ -1,4 +1,7 @@
-export const ACTIVITY_CHANNEL_OPTIONS = ['Telefon', 'Yerinde Ziyaret', 'Online Toplantı', 'Teknik Ziyaret', 'Teknik Online', 'POM', 'E-posta', 'İş Ortaklığı Aktivitesi', 'Diğer'] as const;
+export const INTEGRATION_PROCESS_ACTIVITY = 'Entegrasyon Süreci' as const;
+export const LEGACY_BUSINESS_PARTNER_ACTIVITY = 'İş Ortaklığı Aktivitesi' as const;
+
+export const ACTIVITY_CHANNEL_OPTIONS = ['Telefon', 'Yerinde Ziyaret', 'Online Toplantı', 'Teknik Ziyaret', 'Teknik Online', 'POM', 'E-posta', INTEGRATION_PROCESS_ACTIVITY, 'Diğer'] as const;
 export type ActivityChannel = (typeof ACTIVITY_CHANNEL_OPTIONS)[number];
 
 export const TECHNICAL_ACTIVITY_CHANNELS = ['Teknik Ziyaret', 'Teknik Online', 'POM'] as const;
@@ -13,7 +16,8 @@ export function normalizeChannel(value: string | null | undefined): ActivityChan
   if (raw === 'Teknik Online') return 'Teknik Online';
   if (raw === 'POM') return 'POM';
   if (raw === 'E-posta') return 'E-posta';
-  if (raw === 'İş Ortaklığı Aktivitesi') return 'İş Ortaklığı Aktivitesi';
+  // Eski kayıtların etiketi değiştirilmez; uygulama onları yeni adla yorumlar.
+  if (raw === INTEGRATION_PROCESS_ACTIVITY || raw === LEGACY_BUSINESS_PARTNER_ACTIVITY) return INTEGRATION_PROCESS_ACTIVITY;
   return 'Diğer';
 }
 
@@ -28,8 +32,10 @@ export function isTechnicalChannel(channel: string | null | undefined) {
 }
 
 export function isBusinessPartnerActivity(channel: string | null | undefined) {
-  return normalizeChannel(channel) === 'İş Ortaklığı Aktivitesi';
+  return normalizeChannel(channel) === INTEGRATION_PROCESS_ACTIVITY;
 }
+
+export const isIntegrationProcessActivity = isBusinessPartnerActivity;
 
 export function activityScopeForChannel(channel: string | null | undefined): 'technical' | 'account' {
   return isTechnicalChannel(channel) ? 'technical' : 'account';

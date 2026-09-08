@@ -2,8 +2,23 @@ import { NextResponse, type NextRequest } from 'next/server';
 
 const AUTH_COOKIE_NAME = process.env.AUTH_COOKIE_NAME ?? 'crm_session';
 
+function getPublicOrigin(request: NextRequest) {
+  const forwardedProto = request.headers
+    .get('x-forwarded-proto')
+    ?.split(',')[0]
+    ?.trim();
+  const forwardedHost = request.headers
+    .get('x-forwarded-host')
+    ?.split(',')[0]
+    ?.trim();
+  const protocol = forwardedProto || request.nextUrl.protocol.replace(':', '');
+  const host = forwardedHost || request.headers.get('host') || request.nextUrl.host;
+  return `${protocol}://${host}`;
+}
+
 export function middleware(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
+  const publicOrigin = getPublicOrigin(request);
   const isApi = pathname.startsWith('/api/');
   const isPublicApi =
     pathname.startsWith('/api/auth/') ||
@@ -22,7 +37,7 @@ export function middleware(request: NextRequest) {
   if (isApi && !['GET', 'HEAD', 'OPTIONS'].includes(request.method) && hasSessionCookie) {
     const fetchSite = request.headers.get('sec-fetch-site');
     const origin = request.headers.get('origin');
-    if (fetchSite === 'cross-site' || (origin && origin !== request.nextUrl.origin)) {
+    if (fetchSite === 'cross-site' || (origin && origin !== publicOrigin)) {
       return NextResponse.json(
         { error: { code: 'CSRF_REJECTED', message: 'İstek kaynağı doğrulanamadı.' } },
         { status: 403 },
@@ -37,7 +52,7 @@ export function middleware(request: NextRequest) {
         { status: 401 },
       );
     }
-    const loginUrl = new URL('/login', request.url);
+    const loginUrl = new URL('/login', publicOrigin);
     loginUrl.searchParams.set('next', pathname + search);
     return NextResponse.redirect(loginUrl);
   }

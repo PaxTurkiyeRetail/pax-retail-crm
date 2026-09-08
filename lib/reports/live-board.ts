@@ -309,15 +309,15 @@ const Q_TARGETS = `
     and td.code in ('sales_revenue', 'device_count', 'integration_count')
 `;
 
-// KasaPOS entegrasyonu: Entegrasyon Firması tipindeki iş ortakları; faz ≥ 9 =
+// KasaPOS entegrasyonu: entegrasyon süreci açık tüm firmalar; faz ≥ 9 =
 // entegrasyon tamamlandı (Entegrasyon Raporu'nun yeşil eşiği). Sorumlu bazında.
 const Q_INTEGRATIONS = `
   select coalesce(nullif(trim(m.sorumlu), ''), 'Havuz Account') as owner,
          count(*)::int as total,
-         count(*) filter (where mp.aktif_faz_no >= $1::int)::int as done
+         count(*) filter (where mp.active_phase_no >= $1::int)::int as done
   from public.musteriler m
-  left join public.musteri_pipeline mp on mp.musteri_id = m.id
-  where m.is_ortagi_tipi = 'Entegrasyon Firması'
+  left join public.organization_pipeline_states mp on mp.customer_id = m.id and mp.context_key='business_partner'
+  where m.integration_enabled = true
   group by 1
 `;
 

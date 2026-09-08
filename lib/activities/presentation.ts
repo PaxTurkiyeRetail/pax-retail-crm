@@ -32,7 +32,10 @@ export function presentDurum(value: string | null | undefined): string | null {
 
 export function activityLabelFromRow(row: any): string {
   const raw = String(row?.aksiyon ?? '').trim();
-  if (raw.startsWith('AKTIVITE:')) return raw.replace(/^AKTIVITE:/, '');
+  if (raw.startsWith('AKTIVITE:')) {
+    const label = raw.replace(/^AKTIVITE:/, '');
+    return label === 'İş Ortaklığı Aktivitesi' ? 'Entegrasyon Süreci' : label;
+  }
   if (raw === 'AKTIVITE_TAMAMLANDI') return 'Aktivite Tamamlandı';
   if (row?.durum === 'Tamamlandı' && (!raw || raw === '-')) return 'Faz Durumu Güncellendi';
   return raw || '-';
