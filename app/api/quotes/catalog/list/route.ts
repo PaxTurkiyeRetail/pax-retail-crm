@@ -6,6 +6,7 @@ import { requireQuoteCatalogAccessOrThrow } from '@/lib/authz';
 import { createPgAdminClient } from '@/lib/pg/admin';
 import { isMissingRelationError } from '@/lib/quotes/service';
 import { normalizeQuoteProduct } from '@/lib/quotes/catalog';
+import { getSystemParameterValue } from '@/lib/system-parameters';
 
 export async function GET() {
   try {
@@ -19,7 +20,12 @@ export async function GET() {
       if (isMissingRelationError(productErr ?? ruleErr)) return NextResponse.json({ message: 'quote_module_not_setup' }, { status: 400 });
       return NextResponse.json({ message: (productErr ?? ruleErr)?.message || 'Katalog alınamadı.' }, { status: 400 });
     }
-    return NextResponse.json({ products: (products ?? []).map((product: any) => normalizeQuoteProduct(product)), rules: rules ?? [] }, { headers: { 'Cache-Control': 'no-store, max-age=0' } });
+    // Yürürlükteki fiyat listesi damgası (Liste Yönetimleri → Teklif → Yürürlükteki Fiyat Listesi).
+    const priceListVersion = (await getSystemParameterValue('quote_price_list_version', '')).trim();
+    return NextResponse.json(
+      { products: (products ?? []).map((product: any) => normalizeQuoteProduct(product)), rules: rules ?? [], priceListVersion },
+      { headers: { 'Cache-Control': 'no-store, max-age=0' } },
+    );
   } catch (e: any) {
     return NextResponse.json({ message: e?.message || 'Yetkisiz' }, { status: e?.status || 401 });
   }

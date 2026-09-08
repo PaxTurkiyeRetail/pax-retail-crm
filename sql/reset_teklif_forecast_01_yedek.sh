@@ -8,12 +8,15 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."   # proje kökü (yedek + node scripts oradan çalışır)
 DB="${DATABASE_URL:-$(grep -m1 '^DATABASE_URL=' .env.local | cut -d= -f2-)}"
+# predeploy-backup.mjs ortam değişkeni okur (npm script'i --env-file ile yüklüyor);
+# doğrudan çağırdığımız için DATABASE_URL'i açıkça geçiyoruz.
+export DATABASE_URL="$DB"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 OUT="backups/reset-${STAMP}"
 mkdir -p "$OUT"
 
 echo "[1/2] pg_dump → backups/prereset-${STAMP}.dump"
-DB_BACKUP_PREFIX=prereset node scripts/predeploy-backup.mjs --prefix prereset --keep 10
+node --env-file-if-exists=.env.local scripts/predeploy-backup.mjs --prefix prereset --keep 10
 
 echo "[2/2] CSV dışa aktarım → ${OUT}/"
 psql "$DB" -v ON_ERROR_STOP=1 \

@@ -73,6 +73,8 @@ function normalizeSpecsText(input: unknown) {
 export default function QuotesCatalogAdminClient() {
   const [products, setProducts] = useState<Product[]>([]);
   const [rules, setRules] = useState<Rule[]>([]);
+  /** Yürürlükteki fiyat listesi tarihi (Liste Yönetimleri → Teklif). */
+  const [priceListVersion, setPriceListVersion] = useState('');
   const [selectedProductId, setSelectedProductId] = useState('');
   const [productForm, setProductForm] = useState<FormProduct>(emptyProduct);
   const [ruleForm, setRuleForm] = useState({ min_qty: 1, max_qty: '', unit_price: '' });
@@ -94,6 +96,7 @@ export default function QuotesCatalogAdminClient() {
     const nextRules = (json.rules ?? []) as Rule[];
     setProducts(nextProducts);
     setRules(nextRules);
+    setPriceListVersion(String(json.priceListVersion ?? '').trim());
     setSelectedProductId((current) => {
       const preferred = preferredProductId || current;
       if (preferred && nextProducts.some((item) => item.id === preferred)) return preferred;
@@ -223,6 +226,7 @@ export default function QuotesCatalogAdminClient() {
           <div className="pax-hero-stat"><div className="pax-hero-stat-label">Fiyat Kuralı</div><div className="pax-hero-stat-value">{rules.length}</div></div>
           <div className="pax-hero-stat"><div className="pax-hero-stat-label">Kategori</div><div className="pax-hero-stat-value">{new Set(products.map((p: any) => p.category).filter(Boolean)).size}</div></div>
           <div className="pax-hero-stat"><div className="pax-hero-stat-label">Kural / Ürün</div><div className="pax-hero-stat-value">{products.length ? (rules.length / products.length).toFixed(1) : 0}</div></div>
+          <div className="pax-hero-stat"><div className="pax-hero-stat-label">Fiyat Listesi</div><div className="pax-hero-stat-value">{priceListVersion || '—'}</div></div>
         </div>
         <div style={{ position: 'relative', zIndex: 1, display: 'flex', gap: 10, marginTop: 14, flexWrap: 'wrap' }}>
           <Link href="/crm/quotes" style={{ ...ghostButton, background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.2)', color: 'white' }}>Teklif Portföyü</Link>

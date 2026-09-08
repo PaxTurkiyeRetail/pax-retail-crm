@@ -427,6 +427,15 @@ export const CRM_MASTER_DATA_PARAMETER_GROUPS = [
     type: "text",
   },
   {
+    key: "quote_price_list_version",
+    module: "Teklif",
+    category: "Ticari Politika",
+    title: "Yürürlükteki Fiyat Listesi",
+    description:
+      "Teklif kataloğundaki fiyatların alındığı liste tarihi (ör. 28.08.2026). Yeni liste geldiğinde katalog fiyatları ve bu değer BİRLİKTE güncellenir; Teklif Kataloğu ekranının başlığında görünür.",
+    type: "text",
+  },
+  {
     key: "activity_waiting_party",
     module: "CRM",
     category: "Aktivite Politikası",
@@ -677,8 +686,8 @@ export const DEFAULT_CRM_MASTER_DATA_OPTIONS: Record<string, ParameterOption[]> 
     { label: "İş Ortağı", value: "business_partner", sortOrder: 20 },
   ],
   crm_pipeline_policy: [
-    { label: "Faz Takibi Zorunlu", value: "phase_required", sortOrder: 10 },
-    { label: "Yalnız Aktivite / Faz Takibi Yok", value: "phase_optional", sortOrder: 20 },
+    { label: "Faz Zorunlu", value: "phase_required", sortOrder: 10 },
+    { label: "Yalnız Aktivite / Fazsız", value: "phase_optional", sortOrder: 20 },
   ],
   quote_probability: [10, 30, 60, 90].map((value, index) => ({
     label: `%${value}`,
@@ -784,6 +793,7 @@ export const SENSITIVE_PARAMETER_GROUPS = new Set(["system_jira_api_token"]);
 // Tekil config-değeri grupları: param_key başka tabloda foreign-key gibi
 // kullanılmaz, bu yüzden değeri yerinde güncellenebilir (kanonik kod kilidi yok).
 export const EDITABLE_VALUE_PARAMETER_GROUPS = new Set([
+  "quote_price_list_version",
   "system_jira_base_url",
   "system_jira_email",
   "system_jira_api_token",
