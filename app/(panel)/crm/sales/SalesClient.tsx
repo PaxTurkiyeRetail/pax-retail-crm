@@ -8,7 +8,6 @@
 
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import Link from 'next/link';
-import { rentalMonths, rentalPeriodLabel } from '@/lib/quotes/line-pricing';
 
 type SaleRow = {
   id: string;
@@ -62,8 +61,7 @@ export default function SalesClient() {
   const [formManual, setFormManual] = useState('');
   const [formDate, setFormDate] = useState('');
   const [formNote, setFormNote] = useState('');
-  const [formRentalStart, setFormRentalStart] = useState('');
-  const [formRentalEnd, setFormRentalEnd] = useState('');
+
   const [cancelling, setCancelling] = useState<SaleRow | null>(null);
   const [cancelReason, setCancelReason] = useState('');
 
@@ -96,8 +94,6 @@ export default function SalesClient() {
     setFormManual(row.price_source === 'manual' ? String(row.amount ?? '') : '');
     setFormDate(String(row.sale_date ?? '').slice(0, 10));
     setFormNote(row.note ?? '');
-    setFormRentalStart(String(row.rental_start_date ?? '').slice(0, 10));
-    setFormRentalEnd(String(row.rental_end_date ?? '').slice(0, 10));
     setMsg(null);
   };
 
@@ -114,7 +110,6 @@ export default function SalesClient() {
         manual_amount: formManual.trim() === '' ? null : Number(formManual),
         sale_date: formDate || null,
         note: formNote,
-        ...(editing.sale_type !== 'sale' ? { rental_start_date: formRentalStart || null, rental_end_date: formRentalEnd || null } : {}),
       }),
     });
     const json = await res.json().catch(() => ({}));
@@ -241,9 +236,7 @@ export default function SalesClient() {
                         {row.sale_type !== 'sale' ? <span style={{ ...pillBase, ...pillRental }}>{row.sale_type === 'mixed' ? 'Satış + Kiralama' : 'Kiralama'}</span> : null}
                       </div>
                       {row.sale_type !== 'sale' ? (
-                        <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 4 }}>
-                          {rentalPeriodLabel(row.rental_start_date, row.rental_end_date)} · {usd(row.rental_monthly_amount)} / ay
-                        </div>
+                        <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 4 }}>aylık kira {usd(row.rental_monthly_amount)}</div>
                       ) : null}
                     </td>
                     <td style={{ ...tableCell, whiteSpace: 'nowrap' }}>
@@ -285,22 +278,8 @@ export default function SalesClient() {
               <input type="date" value={formDate} onChange={(e) => setFormDate(e.target.value)} style={inputStyle} />
             </label>
             {editing.sale_type !== 'sale' ? (
-              <div style={{ display: 'grid', gap: 10, padding: 12, borderRadius: 14, border: '1px solid var(--chip-gold-bd)', background: 'var(--chip-gold-bg)', marginBottom: 12 }}>
-                <div style={{ fontWeight: 900, fontSize: 13, color: 'var(--chip-gold-color)' }}>
-                  Kiralama dönemi · aylık kira {usd(editing.rental_monthly_amount)}
-                  {rentalMonths(formRentalStart, formRentalEnd) ? ` · ${rentalMonths(formRentalStart, formRentalEnd)} ay → ${usd(editing.rental_monthly_amount * rentalMonths(formRentalStart, formRentalEnd))}` : ''}
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                  <label style={{ ...fieldStyle, marginBottom: 0 }}>
-                    <span style={labelStyle}>Başlangıç</span>
-                    <input type="date" value={formRentalStart} onChange={(e) => setFormRentalStart(e.target.value)} style={inputStyle} />
-                  </label>
-                  <label style={{ ...fieldStyle, marginBottom: 0 }}>
-                    <span style={labelStyle}>Bitiş</span>
-                    <input type="date" min={formRentalStart || undefined} value={formRentalEnd} onChange={(e) => setFormRentalEnd(e.target.value)} style={inputStyle} />
-                  </label>
-                </div>
-                <small style={hintStyle}>Dönem değişince tutar = donanım ({usd(editing.hardware_amount)}) + aylık kira × ay olarak yeniden hesaplanır; anlaşma fiyatı girilmişse o korunur.</small>
+              <div style={{ padding: 12, borderRadius: 14, border: '1px solid var(--chip-gold-bd)', background: 'var(--chip-gold-bg)', marginBottom: 12, fontWeight: 800, fontSize: 13, color: 'var(--chip-gold-color)' }}>
+                {editing.sale_type === 'mixed' ? 'Satış + Kiralama' : 'Kiralama'} · aylık kira {usd(editing.rental_monthly_amount)}
               </div>
             ) : null}
             <label style={fieldStyle}>

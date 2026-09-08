@@ -57,10 +57,12 @@ export async function POST(request: Request) {
     const hasRental = String((sale as any).sale_type ?? 'sale') !== 'sale';
     const rentalStart = Object.prototype.hasOwnProperty.call(body, 'rental_start_date') ? isoDate(body.rental_start_date) : ((sale as any).rental_start_date ?? null);
     const rentalEnd = Object.prototype.hasOwnProperty.call(body, 'rental_end_date') ? isoDate(body.rental_end_date) : ((sale as any).rental_end_date ?? null);
-    if (hasRental) {
-      if (!rentalStart || !rentalEnd) return NextResponse.json({ message: 'Kiralama için başlangıç ve bitiş tarihi gerekli.' }, { status: 400 });
-      if (rentalEnd <= rentalStart) return NextResponse.json({ message: 'Kiralama bitiş tarihi başlangıçtan sonra olmalı.' }, { status: 400 });
+    // Dönem satış ekranında düzenlenmiyor (Sinan, 08.09: "satıştaki kiralamada tarihe gerek yok");
+    // gönderilirse doğrulanır, gönderilmezse teklif satırlarındaki tarihlerle hesaplanır.
+    if (hasRental && rentalStart && rentalEnd && rentalEnd <= rentalStart) {
+      return NextResponse.json({ message: 'Kiralama bitiş tarihi başlangıçtan sonra olmalı.' }, { status: 400 });
     }
+    const rentalPeriod = hasRental && rentalStart && rentalEnd ? { start: rentalStart, end: rentalEnd } : null;
 
     // Tutar: anlaşma fiyatı varsa o, yoksa katalog kademesinden (+ kira × ay) yeniden hesap.
     let amount = manualAmountRaw;
@@ -69,7 +71,7 @@ export async function POST(request: Request) {
     let noLines = false;
     let hardwareAmount = Number((sale as any).hardware_amount ?? 0);
     let rentalMonthlyAmount = Number((sale as any).rental_monthly_amount ?? 0);
-    const repriced = await repriceFromCatalog(String((sale as any).quote_id), deviceCount, hasRental ? { start: rentalStart, end: rentalEnd } : null);
+    const repriced = await repriceFromCatalog(String((sale as any).quote_id), deviceCount, rentalPeriod);
     if (repriced.hasLines) {
       hardwareAmount = repriced.hardwareAmount;
       rentalMonthlyAmount = repriced.rentalMonthlyAmount;
