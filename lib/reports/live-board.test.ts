@@ -22,6 +22,8 @@ import {
   istanbulDayKey,
   paceTone,
   pctOf,
+  conversionPct,
+  conversionTone,
   phaseGroupOf,
   rankOwners,
   slideDurationMs,
@@ -226,6 +228,18 @@ describe('numbers', () => {
     expect(pctOf(50, 200)).toBe(25);
     expect(pctOf(50, 0)).toBeNull();
     expect(pctOf(50, null)).toBeNull();
+  });
+  it('computes quote → sale conversion only when quotes actually closed', () => {
+    // 6 satış · 1 iptal · 3 kayıp = 10 kapanan → %60.
+    expect(conversionPct(6, 1, 3)).toBe(60);
+    // İptal edilen satış dönüşümü düşürür (ciro da düşmüştü).
+    expect(conversionPct(0, 2, 0)).toBe(0);
+    // Hiç kapanan teklif yoksa "%0" değil "—".
+    expect(conversionPct(0, 0, 0)).toBeNull();
+    expect(conversionTone(null)).toBe('neutral');
+    expect(conversionTone(60)).toBe('ok');
+    expect(conversionTone(30)).toBe('warn');
+    expect(conversionTone(10)).toBe('danger');
   });
   it('maps phases to display groups', () => {
     expect(phaseGroupOf(null)).toBe('none');

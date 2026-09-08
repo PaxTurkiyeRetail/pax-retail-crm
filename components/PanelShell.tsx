@@ -253,6 +253,7 @@ function routeMeta(pathname: string) {
     ["/crm/quotes/catalog", "Operasyon", "Ürün Kataloğu"],
     ["/crm/quotes/new", "Operasyon", "Yeni Teklif"],
     ["/crm/quotes", "Operasyon", "Teklifler"],
+    ["/crm/sales", "Operasyon", "Satışlar"],
     ["/crm/activities/new", "Operasyon", "Yeni Aktivite"],
     ["/crm/activities", "Operasyon", "Aktiviteler"],
     ["/crm/forecast", "Operasyon", "Forecast"],
@@ -443,6 +444,13 @@ export default function PanelShell({
       operations.push({
         href: "/crm/quotes",
         label: "Teklifler",
+        iconKey: "quotes",
+      });
+    // Satışlar: kazanılan tekliflerden türeyen düzenlenebilir satış kayıtları (07.09).
+    if (allowed('quote.read') && allowed('screen.crm.quotes.view'))
+      operations.push({
+        href: "/crm/sales",
+        label: "Satışlar",
         iconKey: "quotes",
       });
     if (allowed('forecast.read') && allowed('screen.crm.forecast.view'))

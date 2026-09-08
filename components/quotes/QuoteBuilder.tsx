@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { priceLine, sumLineTotals, type SaleType } from '@/lib/quotes/line-pricing';
 
 type Product = {
   id: string; code: string; name: string; category: string;
@@ -10,7 +11,21 @@ type Product = {
 };
 type Rule = { product_id: string; min_qty: number; max_qty: number | null; unit_price: number };
 type Customer = { id: string; musteri: string; sektor: string | null; sorumlu: string | null };
-type QuoteItem = { uid: string; product_id: string; quantity: number };
+type QuoteItem = {
+  uid: string; product_id: string; quantity: number;
+  /** Satış (katalog kademesi) ya da Kiralama (tarihli, aylık kira bedeli elle) — 08.09 satış ekibi isteği. */
+  sale_type: SaleType;
+  rental_start_date: string;
+  rental_end_date: string;
+  rental_monthly_price: string;
+};
+const emptyLine = (): QuoteItem => ({ uid: randomId(), product_id: '', quantity: 1, sale_type: 'sale', rental_start_date: '', rental_end_date: '', rental_monthly_price: '' });
+/** Bugün + n ay (kiralama varsayılan dönemi: 12 ay). */
+function isoPlusMonths(months: number) {
+  const d = new Date();
+  d.setMonth(d.getMonth() + months);
+  return d.toISOString().slice(0, 10);
+}
 
 function randomId() { return Math.random().toString(36).slice(2, 10); }
 function money(value: number) {
@@ -33,7 +48,7 @@ export default function QuoteBuilder({ showHero = false }: Props) {
   const [opportunityTitle, setOpportunityTitle] = useState('');
   const [probability, setProbability] = useState(60);
   const [note, setNote] = useState('');
-  const [items, setItems] = useState<QuoteItem[]>([{ uid: randomId(), product_id: '', quantity: 1 }]);
+  const [items, setItems] = useState<QuoteItem[]>([emptyLine()]);
   const [saving, setSaving] = useState<'draft' | 'sent' | null>(null);
   const [error, setError] = useState('');
   const [loaded, setLoaded] = useState(false);
@@ -65,27 +80,31 @@ export default function QuoteBuilder({ showHero = false }: Props) {
     return map;
   }, [rules]);
 
+  // Fiyatlama sunucuyla aynı modülden (lib/quotes/line-pricing.ts): satış = kademe,
+  // kiralama = aylık kira × adet × ay.
   const resolvedItems = useMemo(() => items.map(item => {
     const product = productMap.get(item.product_id) ?? null;
-    const productRules = rulesByProduct.get(item.product_id) ?? [];
-    const rule = productRules.find(r => item.quantity >= r.min_qty && (r.max_qty == null || item.quantity <= r.max_qty)) ?? null;
-    return {
-      ...item, product, rule,
-      rule_label: rule ? `${rule.min_qty}${rule.max_qty ? `-${rule.max_qty}` : '+'}` : '-',
-      unit_price: rule?.unit_price ?? 0,
-      total_price: (rule?.unit_price ?? 0) * item.quantity,
-    };
+    const priced = priceLine({
+      product_id: item.product_id, quantity: item.quantity, sale_type: item.sale_type,
+      rental_start_date: item.rental_start_date || null, rental_end_date: item.rental_end_date || null,
+      rental_monthly_price: item.rental_monthly_price === '' ? null : Number(item.rental_monthly_price),
+    }, rulesByProduct.get(item.product_id) ?? []);
+    return { ...item, product, priced, rule: priced.rule, rule_label: priced.rule_label, unit_price: priced.unit_price, total_price: priced.total_price };
   }), [items, productMap, rulesByProduct]);
 
   const totals = useMemo(() => {
-    let total_devices = 0, total_amount = 0, monthly_amount = 0;
-    resolvedItems.forEach(item => {
-      if (item.product?.product_type === 'device') total_devices += item.quantity;
-      if (item.product?.is_recurring) monthly_amount += item.total_price;
-      else total_amount += item.total_price;
-    });
-    return { total_devices, total_amount, monthly_amount };
+    const t = sumLineTotals(resolvedItems.map(item => ({ quantity: item.quantity, product: item.product, priced: item.priced })));
+    return { total_devices: t.totalDevices, total_amount: t.totalAmount, monthly_amount: t.monthlyAmount, hardware_amount: t.hardwareAmount, rental_amount: t.rentalAmount };
   }, [resolvedItems]);
+
+  const setLine = (uid: string, patch: Partial<QuoteItem>) => setItems(prev => prev.map(i => i.uid === uid ? { ...i, ...patch } : i));
+  const toggleSaleType = (uid: string, next: SaleType) => setItems(prev => prev.map(i => {
+    if (i.uid !== uid) return i;
+    if (next === 'rental') {
+      return { ...i, sale_type: 'rental', rental_start_date: i.rental_start_date || new Date().toISOString().slice(0, 10), rental_end_date: i.rental_end_date || isoPlusMonths(12) };
+    }
+    return { ...i, sale_type: 'sale' };
+  }));
 
   const selectedCustomer = useMemo(
     () => customers.find(c => c.id === customerId) || null,
@@ -93,8 +112,8 @@ export default function QuoteBuilder({ showHero = false }: Props) {
   );
 
   const isValid = useMemo(() =>
-    Boolean(customerId && opportunityTitle.trim() && items.every(i => i.product_id && i.quantity > 0)),
-    [customerId, opportunityTitle, items]
+    Boolean(customerId && opportunityTitle.trim() && resolvedItems.length && resolvedItems.every(i => i.product_id && i.quantity > 0 && i.priced.priced)),
+    [customerId, opportunityTitle, resolvedItems]
   );
 
   const submit = async (saveMode: 'draft' | 'sent') => {
@@ -109,7 +128,12 @@ export default function QuoteBuilder({ showHero = false }: Props) {
           customer_id: customerId,
           opportunity_title: opportunityTitle,
           probability, note, save_mode: saveMode,
-          items: items.map(i => ({ product_id: i.product_id, quantity: Number(i.quantity) })),
+          items: items.map(i => ({
+            product_id: i.product_id, quantity: Number(i.quantity), sale_type: i.sale_type,
+            rental_start_date: i.sale_type === 'rental' ? i.rental_start_date || null : null,
+            rental_end_date: i.sale_type === 'rental' ? i.rental_end_date || null : null,
+            rental_monthly_price: i.sale_type === 'rental' && i.rental_monthly_price !== '' ? Number(i.rental_monthly_price) : null,
+          })),
         }),
       });
       const json = await res.json();
@@ -177,16 +201,40 @@ export default function QuoteBuilder({ showHero = false }: Props) {
       <div className="pax-card" style={{ display: 'grid', gap: 16 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h3 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>📦 Teklif Satırları</h3>
-          <button type="button" onClick={() => setItems(prev => [...prev, { uid: randomId(), product_id: '', quantity: 1 }])} className="pax-btn pax-btn-secondary" style={{ fontSize: 14, padding: '8px 16px', minHeight: 36 }}>+ Ekle</button>
+          <button type="button" onClick={() => setItems(prev => [...prev, emptyLine()])} className="pax-btn pax-btn-secondary" style={{ fontSize: 14, padding: '8px 16px', minHeight: 36 }}>+ Ekle</button>
         </div>
 
         {resolvedItems.map((item, idx) => (
           <div key={item.uid} style={{ padding: 16, background: 'var(--surface-2)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', display: 'grid', gap: 12 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
               <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-3)' }}>Satır {idx + 1}</span>
-              {items.length > 1 && (
-                <button type="button" onClick={() => setItems(prev => prev.filter(i => i.uid !== item.uid))} style={{ padding: '4px 12px', fontSize: 13, background: '#fee2e2', border: '1px solid #fecaca', borderRadius: 'var(--radius-sm)', color: '#991b1b', cursor: 'pointer' }}>Sil</button>
-              )}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                {/* Satış / Kiralama seçimi (08.09): kiralama seçilince tarih ve aylık kira alanları açılır. */}
+                <div role="radiogroup" aria-label="Satış tipi" style={{ display: 'inline-flex', padding: 3, borderRadius: 12, border: '1px solid var(--border)', background: 'var(--surface)' }}>
+                  {(['sale', 'rental'] as SaleType[]).map(kind => (
+                    <button
+                      key={kind}
+                      type="button"
+                      role="radio"
+                      aria-checked={item.sale_type === kind}
+                      onClick={() => toggleSaleType(item.uid, kind)}
+                      disabled={kind === 'rental' && Boolean(item.product?.is_recurring)}
+                      title={kind === 'rental' && item.product?.is_recurring ? 'Aylık hizmet kalemi kiralama olarak girilemez' : undefined}
+                      style={{
+                        minHeight: 30, padding: '0 12px', borderRadius: 9, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 800, fontFamily: 'inherit',
+                        background: item.sale_type === kind ? (kind === 'rental' ? '#b45309' : '#4338ca') : 'transparent',
+                        color: item.sale_type === kind ? '#fff' : 'var(--text-2)',
+                        opacity: kind === 'rental' && item.product?.is_recurring ? 0.5 : 1,
+                      }}
+                    >
+                      {kind === 'sale' ? 'Satış' : 'Kiralama'}
+                    </button>
+                  ))}
+                </div>
+                {items.length > 1 && (
+                  <button type="button" onClick={() => setItems(prev => prev.filter(i => i.uid !== item.uid))} style={{ padding: '4px 12px', fontSize: 13, background: '#fee2e2', border: '1px solid #fecaca', borderRadius: 'var(--radius-sm)', color: '#991b1b', cursor: 'pointer' }}>Sil</button>
+                )}
+              </div>
             </div>
 
             <div>
@@ -200,16 +248,49 @@ export default function QuoteBuilder({ showHero = false }: Props) {
 
             <div>
               <label className="pax-label" style={{ display: 'block', marginBottom: 8 }}>Adet *</label>
-              <input type="number" min={1} value={item.quantity} onChange={(e) => setItems(prev => prev.map(i => i.uid === item.uid ? { ...i, quantity: Math.max(1, Number(e.target.value || 1)) } : i))} className="pax-input" required style={{ width: '100%', minHeight: 48, fontSize: 16 }} />
+              <input type="number" min={1} value={item.quantity} onChange={(e) => setLine(item.uid, { quantity: Math.max(1, Number(e.target.value || 1)) })} className="pax-input" required style={{ width: '100%', minHeight: 48, fontSize: 16 }} />
             </div>
+
+            {item.sale_type === 'rental' && (
+              <div style={{ display: 'grid', gap: 12, padding: 12, borderRadius: 'var(--radius-sm)', border: '1px solid var(--chip-gold-bd)', background: 'var(--chip-gold-bg)' }}>
+                <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--chip-gold-color)' }}>Kiralama dönemi ve aylık kira</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
+                  <div>
+                    <label className="pax-label" style={{ display: 'block', marginBottom: 6 }}>Başlangıç *</label>
+                    <input type="date" value={item.rental_start_date} onChange={(e) => setLine(item.uid, { rental_start_date: e.target.value })} className="pax-input" style={{ width: '100%', minHeight: 44 }} />
+                  </div>
+                  <div>
+                    <label className="pax-label" style={{ display: 'block', marginBottom: 6 }}>Bitiş *</label>
+                    <input type="date" min={item.rental_start_date || undefined} value={item.rental_end_date} onChange={(e) => setLine(item.uid, { rental_end_date: e.target.value })} className="pax-input" style={{ width: '100%', minHeight: 44 }} />
+                  </div>
+                  <div>
+                    <label className="pax-label" style={{ display: 'block', marginBottom: 6 }}>Aylık birim kira (USD) *</label>
+                    <input type="number" min={0} step="0.01" value={item.rental_monthly_price} onChange={(e) => setLine(item.uid, { rental_monthly_price: e.target.value })} className="pax-input" placeholder="cihaz başı / ay" style={{ width: '100%', minHeight: 44 }} />
+                  </div>
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--text-3)' }}>
+                  Katalogda kira tarifesi yok; aylık birim kira elle girilir. Tutar = kira × adet × ay{item.priced.rental_months ? ` (${item.priced.rental_months} ay)` : ''}.
+                </div>
+              </div>
+            )}
 
             {item.product && (
               <div style={{ padding: 12, background: 'var(--surface)', borderRadius: 'var(--radius-sm)', display: 'grid', gap: 8 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}><span style={{ color: 'var(--text-3)' }}>Barem:</span><span style={{ fontWeight: 600 }}>{item.rule_label}</span></div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}><span style={{ color: 'var(--text-3)' }}>Birim Fiyat:</span><span style={{ fontWeight: 600 }}>{money(item.unit_price)}</span></div>
+                {item.sale_type === 'rental' ? (
+                  <>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}><span style={{ color: 'var(--text-3)' }}>Dönem:</span><span style={{ fontWeight: 600 }}>{item.rule_label}</span></div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}><span style={{ color: 'var(--text-3)' }}>Aylık kira:</span><span style={{ fontWeight: 600 }}>{money(item.unit_price)} × {item.quantity} = {money(item.priced.monthly_total)} / ay</span></div>
+                  </>
+                ) : (
+                  <>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}><span style={{ color: 'var(--text-3)' }}>Barem:</span><span style={{ fontWeight: 600 }}>{item.rule_label}</span></div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}><span style={{ color: 'var(--text-3)' }}>Birim Fiyat:</span><span style={{ fontWeight: 600 }}>{money(item.unit_price)}</span></div>
+                  </>
+                )}
+                {item.priced.problem && <div style={{ fontSize: 12, color: '#b91c1c', fontWeight: 700 }}>{item.priced.problem}</div>}
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 15, paddingTop: 8, borderTop: '1px solid var(--border)' }}>
-                  <span style={{ fontWeight: 700 }}>Toplam:</span>
-                  <span style={{ fontWeight: 700, color: 'var(--accent)' }}>{money(item.total_price)}{item.product.is_recurring && <span style={{ fontSize: 12 }}> / ay</span>}</span>
+                  <span style={{ fontWeight: 700 }}>{item.sale_type === 'rental' ? 'Sözleşme değeri:' : 'Toplam:'}</span>
+                  <span style={{ fontWeight: 700, color: 'var(--accent)' }}>{money(item.total_price)}{item.sale_type !== 'rental' && item.product.is_recurring && <span style={{ fontSize: 12 }}> / ay</span>}</span>
                 </div>
               </div>
             )}
@@ -224,6 +305,7 @@ export default function QuoteBuilder({ showHero = false }: Props) {
           {[
             { label: 'Toplam cihaz', value: String(totals.total_devices) },
             { label: 'Teklif tutarı', value: money(totals.total_amount) },
+            ...(totals.rental_amount > 0 ? [{ label: 'Kiralama sözleşme değeri', value: money(totals.rental_amount) }] : []),
             { label: 'Aylık recurring', value: money(totals.monthly_amount), accent: true },
             { label: 'Teklif geçerliliği', value: '15 gün' },
             { label: 'Sent olursa', value: 'Aktivite + follow‑up (+30 gün)' },

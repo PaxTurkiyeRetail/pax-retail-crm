@@ -39,7 +39,7 @@ export async function GET(request: Request) {
 
     let quoteQuery = admin
       .from('quotes')
-      .select('id,quote_no,opportunity_title,proposal_date,valid_until,follow_up_date,probability,status,closed_reason,owner_name,total_device_count,total_amount,customer_id,created_at', { count: q ? undefined : 'exact' })
+      .select('id,quote_no,opportunity_title,proposal_date,valid_until,follow_up_date,probability,status,closed_reason,loss_reason_key,owner_name,total_device_count,total_amount,customer_id,created_at', { count: q ? undefined : 'exact' })
       .order('created_at', { ascending: false });
     let ownersQuery = admin.from('quotes').select('owner_name').limit(5000);
 
@@ -79,7 +79,7 @@ export async function GET(request: Request) {
 
     const [{ data: customers }, { data: items }] = await Promise.all([
       customerIds.length ? admin.from('musteriler').select('id,musteri,sektor,sorumlu').in('id', customerIds) : Promise.resolve({ data: [] }),
-      quoteIds.length ? admin.from('quote_items').select('quote_id,product_name_snapshot,product_code_snapshot,quantity,total_price,is_recurring').in('quote_id', quoteIds).order('line_no', { ascending: true }) : Promise.resolve({ data: [] }),
+      quoteIds.length ? admin.from('quote_items').select('quote_id,product_name_snapshot,product_code_snapshot,quantity,total_price,is_recurring,sale_type,rental_start_date,rental_end_date').in('quote_id', quoteIds).order('line_no', { ascending: true }) : Promise.resolve({ data: [] }),
     ]);
 
     const customerMap = new Map((customers ?? []).filter((row: any) => !isReportOnlyCustomer(row)).map((row: any) => [row.id, row]));
@@ -89,6 +89,17 @@ export async function GET(request: Request) {
       list.push(item);
       itemsByQuote.set(item.quote_id, list);
     });
+
+    // Satışa dönüşen teklifler: teklif listesinde yeşil durumla görünür ve
+    // satış kaydının güncel adedi/tutarı yanında gösterilir (teklif değişmez).
+    const saleByQuote = new Map<string, any>();
+    if (quoteIds.length) {
+      const { data: sales } = await admin
+        .from('crm_sales')
+        .select('id,quote_id,device_count,amount,status,sale_date')
+        .in('quote_id', quoteIds);
+      (sales ?? []).forEach((sale: any) => saleByQuote.set(String(sale.quote_id), sale));
+    }
 
     let rows = quoteRows.map((quote: any) => {
       const itemRows = itemsByQuote.get(quote.id) ?? [];
@@ -102,6 +113,15 @@ export async function GET(request: Request) {
         summary,
         weighted_amount: weightedAmount,
         health_state: formatState(quote.valid_until, quote.follow_up_date),
+        sale: saleByQuote.get(String(quote.id)) ?? null,
+        // Kiralama satırı var mı (08.09) — listede rozet olarak gösterilir.
+        rental: (() => {
+          const rentalLines = itemRows.filter((item) => String(item.sale_type ?? 'sale') === 'rental');
+          if (!rentalLines.length) return null;
+          const starts = rentalLines.map((item) => String(item.rental_start_date ?? '').slice(0, 10)).filter(Boolean).sort();
+          const ends = rentalLines.map((item) => String(item.rental_end_date ?? '').slice(0, 10)).filter(Boolean).sort();
+          return { lines: rentalLines.length, all: rentalLines.length === itemRows.length, start: starts[0] ?? null, end: ends[ends.length - 1] ?? null };
+        })(),
       };
     });
 

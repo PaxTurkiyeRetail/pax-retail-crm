@@ -42,7 +42,10 @@ export async function POST(req: Request) {
 
   const sektor = body.sektor ? String(body.sektor).trim() : null;
   const entegrasyon_tipi = body.entegrasyon_tipi ? String(body.entegrasyon_tipi).trim() : null;
-  const satis_olasiligi = body.satis_olasiligi ? String(body.satis_olasiligi).trim() : null;
+  // Satış olasılığı formdan kaldırıldı (08.09): alan gönderilmezse mevcut değer korunur,
+  // gönderilirse (eski istemci / API) eski davranış.
+  const satisOlasiligiProvided = Object.prototype.hasOwnProperty.call(body, 'satis_olasiligi');
+  const satisOlasiligiInput = body.satis_olasiligi ? String(body.satis_olasiligi).trim() : null;
   const sorumlu = body.sorumlu ? String(body.sorumlu).trim() : null;
 
   const admin = createPgAdminClient();
@@ -59,6 +62,7 @@ export async function POST(req: Request) {
   } catch {
     return NextResponse.json({ message: 'Müşteri bulunamadı veya erişim yetkiniz yok.' }, { status: 404 });
   }
+  const satis_olasiligi: string | null = satisOlasiligiProvided ? satisOlasiligiInput : (currentRow.satis_olasiligi ?? null);
 
   if (musteri !== String(currentRow.musteri ?? '').trim().toLocaleUpperCase('tr-TR')) {
     const { data: dupCustomer, error: dupError } = await admin

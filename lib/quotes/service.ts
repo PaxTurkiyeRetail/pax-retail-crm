@@ -1,10 +1,16 @@
 import 'server-only';
 import type { PgClient } from '@/lib/pg/client';
 import { STATIC_QUOTE_PRICING_RULES, STATIC_QUOTE_PRODUCTS, normalizeQuoteProduct, type QuotePricingRule, type QuoteProduct } from '@/lib/quotes/catalog';
+import { normalizeSaleType, priceLine, sumLineTotals, type SaleType } from '@/lib/quotes/line-pricing';
 
 export type QuoteLineInput = {
   product_id: string;
   quantity: number;
+  /** 'sale' (varsayılan) | 'rental' — kiralama satırı tarihli ve aylık kira bedelli. */
+  sale_type?: SaleType | null;
+  rental_start_date?: string | null;
+  rental_end_date?: string | null;
+  rental_monthly_price?: number | null;
 };
 
 export type ResolvedQuoteLine = {
@@ -16,9 +22,16 @@ export type ResolvedQuoteLine = {
   is_recurring: boolean;
   billing_period: QuoteProduct['billing_period'];
   quantity: number;
+  /** Satışta kademe birim fiyatı, kiralamada aylık birim kira. */
   unit_price: number;
   total_price: number;
-  pricing_rule: { min_qty: number; max_qty: number | null };
+  /** Kiralama satırında null (kademe yok). */
+  pricing_rule: { min_qty: number; max_qty: number | null } | null;
+  sale_type: SaleType;
+  rental_start_date: string | null;
+  rental_end_date: string | null;
+  rental_monthly_price: number | null;
+  rental_months: number;
 };
 
 export function isMissingRelationError(error: unknown) {
@@ -109,9 +122,23 @@ export function resolveQuoteLines(items: QuoteLineInput[], catalog: { products: 
     .map((item) => {
       const product = productMap.get(item.product_id);
       if (!product) throw new Error(`Ürün bulunamadı: ${item.product_id}`);
-      const rules = (rulesByProduct.get(item.product_id) ?? []).sort((a, b) => a.min_qty - b.min_qty);
-      const match = rules.find((rule) => item.quantity >= rule.min_qty && (rule.max_qty == null || item.quantity <= rule.max_qty));
-      if (!match) throw new Error(`Fiyat kuralı bulunamadı: ${product.name} (${item.quantity})`);
+      const saleType = normalizeSaleType(item.sale_type);
+      if (saleType === 'rental' && product.is_recurring) throw new Error(`Aylık hizmet kalemi kiralama olarak girilemez: ${product.name}`);
+      const rules = rulesByProduct.get(item.product_id) ?? [];
+      // İstemciyle aynı hesap (lib/quotes/line-pricing.ts): satış = kademe, kiralama = kira × adet × ay.
+      const priced = priceLine({
+        product_id: item.product_id,
+        quantity: item.quantity,
+        sale_type: saleType,
+        rental_start_date: normalizeDateOnly(item.rental_start_date, null),
+        rental_end_date: normalizeDateOnly(item.rental_end_date, null),
+        rental_monthly_price: item.rental_monthly_price == null ? null : Number(item.rental_monthly_price),
+      }, rules);
+      if (!priced.priced) {
+        throw new Error(saleType === 'rental'
+          ? `${product.name}: ${priced.problem}`
+          : `Fiyat kuralı bulunamadı: ${product.name} (${item.quantity})`);
+      }
       return {
         product_id: item.product_id,
         product_code: product.code,
@@ -121,18 +148,34 @@ export function resolveQuoteLines(items: QuoteLineInput[], catalog: { products: 
         is_recurring: product.is_recurring,
         billing_period: product.billing_period,
         quantity: item.quantity,
-        unit_price: Number(match.unit_price),
-        total_price: Number(match.unit_price) * item.quantity,
-        pricing_rule: { min_qty: match.min_qty, max_qty: match.max_qty },
+        unit_price: priced.unit_price,
+        total_price: priced.total_price,
+        pricing_rule: priced.rule ? { min_qty: priced.rule.min_qty, max_qty: priced.rule.max_qty } : null,
+        sale_type: saleType,
+        rental_start_date: saleType === 'rental' ? normalizeDateOnly(item.rental_start_date, null) : null,
+        rental_end_date: saleType === 'rental' ? normalizeDateOnly(item.rental_end_date, null) : null,
+        rental_monthly_price: saleType === 'rental' ? priced.unit_price : null,
+        rental_months: priced.rental_months,
       } satisfies ResolvedQuoteLine;
     });
 
-  const totalAmount = resolved.reduce((sum, row) => sum + row.total_price, 0);
-  const totalDeviceCount = resolved.filter((row) => !row.is_recurring).reduce((sum, row) => sum + row.quantity, 0);
-  const monthlyAmount = resolved.filter((row) => row.is_recurring).reduce((sum, row) => sum + row.total_price, 0);
-  const hardwareAmount = resolved.filter((row) => !row.is_recurring).reduce((sum, row) => sum + row.total_price, 0);
+  const totals = sumLineTotals(resolved.map((row) => ({
+    quantity: row.quantity,
+    product: { id: row.product_id, product_type: row.product_type, is_recurring: row.is_recurring },
+    priced: priceLine({
+      product_id: row.product_id, quantity: row.quantity, sale_type: row.sale_type,
+      rental_start_date: row.rental_start_date, rental_end_date: row.rental_end_date, rental_monthly_price: row.rental_monthly_price,
+    }, rulesByProduct.get(row.product_id) ?? []),
+  })));
 
-  return { items: resolved, totalAmount, totalDeviceCount, monthlyAmount, hardwareAmount };
+  return {
+    items: resolved,
+    totalAmount: totals.totalAmount,
+    totalDeviceCount: totals.totalDevices,
+    monthlyAmount: totals.monthlyAmount,
+    hardwareAmount: totals.hardwareAmount,
+    rentalAmount: totals.rentalAmount,
+  };
 }
 
 export function buildQuoteSummaryText(items: Array<{ product_name: string; quantity: number }>) {

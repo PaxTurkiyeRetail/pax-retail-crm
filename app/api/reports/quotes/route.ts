@@ -32,6 +32,15 @@ type CustomerRow = {
   sektor: string | null;
 };
 
+/** Satış kaydı (crm_sales) — kazanılan teklifin cirosu artık buradan gelir. */
+type SaleRow = {
+  quote_id: string;
+  status: string | null;
+  amount: number | null;
+  device_count: number | null;
+  sale_date: string | null;
+};
+
 function toNumber(value: unknown) {
   const n = Number(value ?? 0);
   return Number.isFinite(n) ? n : 0;
@@ -107,6 +116,27 @@ export async function GET(request: Request) {
       : [];
     const customerMap = new Map(customers.map((row) => [String(row.id), row]));
 
+    // Satış kayıtları: ciro/cihaz "kazanılan teklif tutarı" yerine satış kaydından okunur
+    // (cihaz adedi ve anlaşma fiyatı satışta güncellenebiliyor — 07.09 satış ekibi toplantısı).
+    const quoteIds = Array.from(new Set(quotes.map((row) => String(row.id)).filter(Boolean)));
+    const sales = quoteIds.length
+      ? await fetchAllRows<SaleRow>(async (from, to) => {
+          return await admin
+            .from('crm_sales')
+            .select('quote_id,status,amount,device_count,sale_date')
+            .in('quote_id', quoteIds)
+            .range(from, to);
+        })
+      : [];
+    const saleByQuote = new Map(sales.map((row) => [String(row.quote_id), row]));
+    /** Teklifin satış tarafı: iptal edilmiş satış cirodan düşer, satış kaydı yoksa teklife düşülür. */
+    const saleOf = (row: { id: string; total_amount: number | null; total_device_count: number | null }) => {
+      const sale = saleByQuote.get(String(row.id));
+      if (sale && String(sale.status) === 'cancelled') return { active: false, amount: 0, devices: 0, date: sale.sale_date ?? null };
+      if (!sale) return { active: true, amount: toNumber(row.total_amount), devices: toNumber(row.total_device_count), date: null };
+      return { active: true, amount: toNumber(sale.amount), devices: toNumber(sale.device_count), date: sale.sale_date ?? null };
+    };
+
     let filtered = quotes.map((row) => ({
       ...row,
       customer: customerMap.get(String(row.customer_id ?? '').trim()) ?? null,
@@ -149,6 +179,15 @@ export async function GET(request: Request) {
     const avgWonAmount = wonQuotes.length ? wonRevenue / wonQuotes.length : 0;
     const winRate = closedQuotes.length ? (wonQuotes.length / closedQuotes.length) * 100 : 0;
 
+    const activeSales = wonQuotes.filter((row) => saleOf(row).active);
+    const cancelledSales = wonQuotes.length - activeSales.length;
+    const saleRevenue = activeSales.reduce((sum, row) => sum + saleOf(row).amount, 0);
+    const saleDevices = activeSales.reduce((sum, row) => sum + saleOf(row).devices, 0);
+    const avgSaleAmount = activeSales.length ? saleRevenue / activeSales.length : 0;
+    // Dönüşüm = satışa dönen / kapanan (satış + iptal + kayıp).
+    const conversionBase = activeSales.length + cancelledSales + lostQuotes.length;
+    const conversionRate = conversionBase ? (activeSales.length / conversionBase) * 100 : 0;
+
     const cycleDays = wonQuotes.map((row) => dayDiff(row.proposal_date ?? row.created_at, row.closed_at)).filter((v): v is number => typeof v === 'number');
     const avgSalesCycleDays = cycleDays.length ? cycleDays.reduce((a, b) => a + b, 0) / cycleDays.length : 0;
 
@@ -173,16 +212,21 @@ export async function GET(request: Request) {
       closeReasonMap.set(label, (closeReasonMap.get(label) ?? 0) + 1);
     }
 
-    const ownerPerf = new Map<string, { total: number; active: number; won: number; lost: number; draft: number; totalAmount: number; weightedAmount: number }>();
+    const ownerPerf = new Map<string, { total: number; active: number; won: number; lost: number; draft: number; totalAmount: number; weightedAmount: number; sale: number; saleCancelled: number; saleRevenue: number; saleDevices: number }>();
     for (const row of filtered) {
       const key = String(row.owner_name ?? '-').trim() || '-';
-      const item = ownerPerf.get(key) ?? { total: 0, active: 0, won: 0, lost: 0, draft: 0, totalAmount: 0, weightedAmount: 0 };
+      const item = ownerPerf.get(key) ?? { total: 0, active: 0, won: 0, lost: 0, draft: 0, totalAmount: 0, weightedAmount: 0, sale: 0, saleCancelled: 0, saleRevenue: 0, saleDevices: 0 };
       item.total += 1;
       item.totalAmount += toNumber(row.total_amount);
       item.weightedAmount += toNumber(row.total_amount) * toNumber(row.probability) / 100;
       if (row.status === 'draft') item.draft += 1;
       if (row.status === 'sent') item.active += 1;
-      if (row.status === 'closed' && row.closed_reason === 'won') item.won += 1;
+      if (row.status === 'closed' && row.closed_reason === 'won') {
+        item.won += 1;
+        const sale = saleOf(row);
+        if (sale.active) { item.sale += 1; item.saleRevenue += sale.amount; item.saleDevices += sale.devices; }
+        else item.saleCancelled += 1;
+      }
       if (row.status === 'closed' && ['lost', 'expired', 'no_interest'].includes(String(row.closed_reason ?? ''))) item.lost += 1;
       ownerPerf.set(key, item);
     }
@@ -192,6 +236,9 @@ export async function GET(request: Request) {
         owner: ownerName,
         ...value,
         winRate: value.won + value.lost ? (value.won / (value.won + value.lost)) * 100 : 0,
+        conversionRate: value.sale + value.saleCancelled + value.lost
+          ? (value.sale / (value.sale + value.saleCancelled + value.lost)) * 100
+          : 0,
       }))
       .sort((a, b) => b.weightedAmount - a.weightedAmount || b.total - a.total || a.owner.localeCompare(b.owner, 'tr'));
 
@@ -203,8 +250,8 @@ export async function GET(request: Request) {
       item.total += 1;
       item.devices += toNumber(row.total_device_count);
       if (row.status === 'closed' && row.closed_reason === 'won') {
-        item.won += 1;
-        item.revenue += toNumber(row.total_amount);
+        const sale = saleOf(row);
+        if (sale.active) { item.won += 1; item.revenue += sale.amount; }
       }
       customerPerf.set(key, item);
     }
@@ -222,8 +269,8 @@ export async function GET(request: Request) {
       item.weighted += toNumber(row.total_amount) * toNumber(row.probability) / 100;
       if (row.status === 'sent') item.active += 1;
       if (row.status === 'closed' && row.closed_reason === 'won') {
-        item.won += 1;
-        item.revenue += toNumber(row.total_amount);
+        const sale = saleOf(row);
+        if (sale.active) { item.won += 1; item.revenue += sale.amount; }
       }
       if (row.status === 'closed' && ['lost', 'expired', 'no_interest'].includes(String(row.closed_reason ?? ''))) item.lost += 1;
       monthlyMap.set(month, item);
@@ -266,6 +313,12 @@ export async function GET(request: Request) {
         avgWonAmount,
         avgSalesCycleDays,
         winRate,
+        saleCount: activeSales.length,
+        cancelledSales,
+        saleRevenue,
+        saleDevices,
+        avgSaleAmount,
+        conversionRate,
       },
       statusSummary,
       closeReasonSummary: summarizeMap(closeReasonMap),

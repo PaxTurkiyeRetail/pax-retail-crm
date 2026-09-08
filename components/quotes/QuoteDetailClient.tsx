@@ -5,6 +5,7 @@ import type { CSSProperties } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
+import { priceLine, rentalPeriodLabel, sumLineTotals, type SaleType } from '@/lib/quotes/line-pricing';
 import { formatDate } from '@/lib/utils';
 
 type QuoteDetail = {
@@ -41,6 +42,11 @@ type QuoteDetail = {
     formatted_unit_price: string;
     billing_period: string;
     is_recurring: boolean;
+    /** Kiralama satırı (08.09): tarihli, aylık kira bedeli elle. */
+    sale_type?: 'sale' | 'rental' | null;
+    rental_start_date?: string | null;
+    rental_end_date?: string | null;
+    rental_monthly_price?: number | null;
   }>;
 };
 
@@ -56,7 +62,16 @@ type Product = {
 };
 
 type Rule = { product_id: string; min_qty: number; max_qty: number | null; unit_price: number };
-type EditItem = { uid: string; product_id: string; quantity: number };
+type EditItem = {
+  uid: string; product_id: string; quantity: number;
+  sale_type: SaleType; rental_start_date: string; rental_end_date: string; rental_monthly_price: string;
+};
+const emptyEditLine = (): EditItem => ({ uid: randomId(), product_id: '', quantity: 1, sale_type: 'sale', rental_start_date: '', rental_end_date: '', rental_monthly_price: '' });
+function isoPlusMonths(months: number) {
+  const d = new Date();
+  d.setMonth(d.getMonth() + months);
+  return d.toISOString().slice(0, 10);
+}
 
 function randomId() {
   return Math.random().toString(36).slice(2, 10);
@@ -81,7 +96,14 @@ export default function QuoteDetailClient({ quoteId }: { quoteId: string }) {
   const [quote, setQuote] = useState<QuoteDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState<string | null>(null);
-  const [closingReason, setClosingReason] = useState('won');
+  // Kapatma penceresi (07.09): Türkçe, iki net yol — Satışa Dönüştür / Kaybedildi.
+  const [closeMode, setCloseMode] = useState<null | 'won' | 'lost'>(null);
+  const [closedReasonKind, setClosedReasonKind] = useState<'lost' | 'expired' | 'no_interest'>('lost');
+  const [lossReasonKey, setLossReasonKey] = useState('');
+  const [lossReasons, setLossReasons] = useState<Array<{ key: string; label: string }>>([]);
+  const [closeNote, setCloseNote] = useState('');
+  const [movePhase, setMovePhase] = useState(true);
+  const [saleInfo, setSaleInfo] = useState<{ saleId: string | null; phaseMoved: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [products, setProducts] = useState<Product[]>([]);
@@ -113,6 +135,7 @@ export default function QuoteDetailClient({ quoteId }: { quoteId: string }) {
       setProducts(json.products ?? []);
       setRules(json.rules ?? []);
       setProbabilities(json.probabilities ?? [10, 30, 60, 90]);
+      setLossReasons((json.lossReasons ?? []) as Array<{ key: string; label: string }>);
     }
   };
 
@@ -129,6 +152,10 @@ export default function QuoteDetailClient({ quoteId }: { quoteId: string }) {
         uid: item.id || randomId(),
         product_id: resolveProductId(item, products),
         quantity: Number(item.quantity ?? 1) || 1,
+        sale_type: item.sale_type === 'rental' ? 'rental' as SaleType : 'sale' as SaleType,
+        rental_start_date: String(item.rental_start_date ?? '').slice(0, 10),
+        rental_end_date: String(item.rental_end_date ?? '').slice(0, 10),
+        rental_monthly_price: item.rental_monthly_price == null ? '' : String(item.rental_monthly_price),
       }))
     );
   }, [quote, products]);
@@ -152,41 +179,45 @@ export default function QuoteDetailClient({ quoteId }: { quoteId: string }) {
     return map;
   }, [rules]);
 
+  // Fiyatlama sunucuyla aynı modülden (lib/quotes/line-pricing.ts).
   const resolvedEditItems = useMemo(() => editItems.map((item) => {
     const product = productMap.get(item.product_id) ?? null;
-    const productRules = rulesByProduct.get(item.product_id) ?? [];
-    const rule = productRules.find((r) => item.quantity >= r.min_qty && (r.max_qty == null || item.quantity <= r.max_qty)) ?? null;
-    return {
-      ...item,
-      product,
-      rule,
-      rule_label: rule ? `${rule.min_qty}${rule.max_qty ? `-${rule.max_qty}` : '+'}` : '-',
-      unit_price: rule?.unit_price ?? 0,
-      total_price: (rule?.unit_price ?? 0) * item.quantity,
-    };
+    const priced = priceLine({
+      product_id: item.product_id, quantity: item.quantity, sale_type: item.sale_type,
+      rental_start_date: item.rental_start_date || null, rental_end_date: item.rental_end_date || null,
+      rental_monthly_price: item.rental_monthly_price === '' ? null : Number(item.rental_monthly_price),
+    }, rulesByProduct.get(item.product_id) ?? []);
+    return { ...item, product, priced, rule: priced.rule, rule_label: priced.rule_label, unit_price: priced.unit_price, total_price: priced.total_price };
   }), [editItems, productMap, rulesByProduct]);
 
   const editTotals = useMemo(() => {
-    let totalDevices = 0;
-    let totalAmount = 0;
-    let monthlyAmount = 0;
-    resolvedEditItems.forEach((item) => {
-      if (item.product?.product_type === 'device' || !item.product?.is_recurring) totalDevices += item.quantity;
-      if (item.product?.is_recurring) monthlyAmount += item.total_price;
-      else totalAmount += item.total_price;
-    });
-    return { totalDevices, totalAmount, monthlyAmount };
+    const t = sumLineTotals(resolvedEditItems.map((item) => ({ quantity: item.quantity, product: item.product, priced: item.priced })));
+    return { totalDevices: t.totalDevices, totalAmount: t.totalAmount, monthlyAmount: t.monthlyAmount, rentalAmount: t.rentalAmount };
   }, [resolvedEditItems]);
 
-  const editValid = Boolean(editTitle.trim() && editItems.length && editItems.every((item) => item.product_id && item.quantity > 0));
+  const patchEditLine = (uid: string, patch: Partial<EditItem>) => setEditItems((current) => current.map((row) => row.uid === uid ? { ...row, ...patch } : row));
+  const toggleEditSaleType = (uid: string, next: SaleType) => setEditItems((current) => current.map((row) => {
+    if (row.uid !== uid) return row;
+    if (next === 'rental') return { ...row, sale_type: 'rental', rental_start_date: row.rental_start_date || new Date().toISOString().slice(0, 10), rental_end_date: row.rental_end_date || isoPlusMonths(12) };
+    return { ...row, sale_type: 'sale' };
+  }));
 
-  async function updateStatus(status: 'sent' | 'closed') {
+  const editValid = Boolean(editTitle.trim() && resolvedEditItems.length && resolvedEditItems.every((item) => item.product_id && item.quantity > 0 && item.priced.priced));
+
+  async function updateStatus(status: 'sent' | 'closed', options?: { closedReason?: string; lossReasonKey?: string; note?: string; movePhase?: boolean }) {
     setBusy(true);
     setMsg(null);
     const res = await fetch('/api/quotes/status', {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },
-      body: JSON.stringify({ quote_id: quoteId, status, closed_reason: status === 'closed' ? closingReason : null }),
+      body: JSON.stringify({
+        quote_id: quoteId,
+        status,
+        closed_reason: status === 'closed' ? (options?.closedReason ?? 'won') : null,
+        loss_reason_key: options?.lossReasonKey ?? null,
+        close_note: options?.note ?? null,
+        move_to_order_phase: options?.movePhase ?? false,
+      }),
     });
     const json = await res.json().catch(() => ({}));
 
@@ -196,6 +227,11 @@ export default function QuoteDetailClient({ quoteId }: { quoteId: string }) {
       return;
     }
 
+    if (status === 'closed' && (options?.closedReason ?? 'won') === 'won') {
+      setSaleInfo({ saleId: json?.sale_id ?? null, phaseMoved: Boolean(json?.phase_moved) });
+    }
+    setCloseMode(null);
+    setCloseNote('');
     await load();
     router.refresh();
     setBusy(false);
@@ -214,7 +250,12 @@ export default function QuoteDetailClient({ quoteId }: { quoteId: string }) {
         opportunity_title: editTitle,
         probability: editProbability,
         note: editNote,
-        items: editItems.map((item) => ({ product_id: item.product_id, quantity: Number(item.quantity) })),
+        items: editItems.map((item) => ({
+          product_id: item.product_id, quantity: Number(item.quantity), sale_type: item.sale_type,
+          rental_start_date: item.sale_type === 'rental' ? item.rental_start_date || null : null,
+          rental_end_date: item.sale_type === 'rental' ? item.rental_end_date || null : null,
+          rental_monthly_price: item.sale_type === 'rental' && item.rental_monthly_price !== '' ? Number(item.rental_monthly_price) : null,
+        })),
       }),
     });
     const json = await res.json().catch(() => ({}));
@@ -251,20 +292,104 @@ export default function QuoteDetailClient({ quoteId }: { quoteId: string }) {
           <button disabled={busy || quote.status === 'closed'} onClick={() => setEditMode((value) => !value)} style={{ ...ghostButton, background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.2)', color: 'white' }}>{editMode ? 'Düzenlemeyi Kapat' : 'Düzenle'}</button>
           {quote.status === 'draft' ? <button disabled={busy} onClick={() => void updateStatus('sent')} style={{ ...primaryButton, background: 'white', color: '#1e3a8a', border: 'none' }}>{busy ? 'İşleniyor...' : 'Sent yap + aktivite aç'}</button> : null}
           {quote.status !== 'closed' ? (
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <select value={closingReason} onChange={(e) => setClosingReason(e.target.value)} style={{ ...inputStyle, background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: 'white', borderRadius: 10 }}>
-                <option value="won">won</option>
-                <option value="lost">lost</option>
-                <option value="expired">expired</option>
-                <option value="no_interest">no_interest</option>
-              </select>
-              <button disabled={busy} onClick={() => void updateStatus('closed')} style={{ ...ghostButton, background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.2)', color: 'white' }}>Close</button>
-            </div>
+            <>
+              <button
+                disabled={busy}
+                onClick={() => { setCloseMode('won'); setCloseNote(''); setMovePhase(true); }}
+                style={{ ...primaryButton, background: '#059669', color: 'white', border: 'none' }}
+              >✓ Satışa Dönüştür</button>
+              <button
+                disabled={busy}
+                onClick={() => { setCloseMode('lost'); setCloseNote(''); setClosedReasonKind('lost'); setLossReasonKey(''); }}
+                style={{ ...ghostButton, background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.2)', color: 'white' }}
+              >Kaybedildi / Kapat</button>
+            </>
           ) : null}
         </div>
       </div>
 
       {msg ? <div style={{ ...surface, color: 'var(--chip-red-color)' }}>{msg}</div> : null}
+
+      {saleInfo ? (
+        <div style={{ ...surface, borderColor: 'var(--chip-green-bd)', background: 'var(--chip-green-bg)', color: 'var(--chip-green-color)', fontWeight: 700 }}>
+          Teklif satışa dönüştürüldü.{saleInfo.phaseMoved ? ' Müşteri Sipariş fazına taşındı.' : ''}{' '}
+          <Link href="/crm/sales" style={{ color: 'inherit', textDecoration: 'underline' }}>Satışlar ekranından</Link> cihaz adedini ve tutarı güncelleyebilirsin; teklif belgesi değişmez.
+        </div>
+      ) : null}
+
+      {closeMode === 'won' ? (
+        <div style={modalBackdrop} onClick={() => setCloseMode(null)}>
+          <div style={modalCard} onClick={(e) => e.stopPropagation()}>
+            <h2 style={{ margin: 0, fontSize: 20, fontWeight: 900 }}>Satışa Dönüştür</h2>
+            <p style={{ color: 'var(--text-3)', margin: '6px 0 12px', fontSize: 13 }}>
+              {quote.quote_no} · {quote.customer?.musteri || '-'} · {quote.total_device_count ?? 0} cihaz ·{' '}
+              ${Number(quote.total_amount ?? 0).toLocaleString('tr-TR', { maximumFractionDigits: 0 })}
+              <br />
+              Teklif kazanıldı olarak kapanır ve <b>Satışlar</b> ekranında düzenlenebilir bir satış kaydı açılır.
+              Ciro raporları bu satıştan beslenir; teklif belgesi olduğu gibi kalır.
+            </p>
+            <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginBottom: 12 }}>
+              <input type="checkbox" checked={movePhase} onChange={(e) => setMovePhase(e.target.checked)} style={{ marginTop: 3 }} />
+              <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-2)' }}>
+                Müşteriyi <b>Sipariş</b> fazına taşı (faz 15)
+                <small style={{ display: 'block', color: 'var(--text-3)', fontWeight: 600 }}>
+                  Aktivite kaydı olarak yazılır; müşteri daha ileri bir fazdaysa dokunulmaz.
+                </small>
+              </span>
+            </label>
+            <label style={{ display: 'grid', gap: 6, marginBottom: 12 }}>
+              <span style={{ fontWeight: 800, fontSize: 13, color: 'var(--text-2)' }}>Not (opsiyonel)</span>
+              <textarea value={closeNote} onChange={(e) => setCloseNote(e.target.value)} rows={3} style={{ ...inputStyle, minHeight: 76, padding: 10 }} placeholder="Sipariş / sözleşme bilgisi, teslim planı…" />
+            </label>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button onClick={() => setCloseMode(null)} style={ghostButton} disabled={busy}>Vazgeç</button>
+              <button
+                onClick={() => void updateStatus('closed', { closedReason: 'won', note: closeNote, movePhase })}
+                style={{ ...primaryButton, background: '#059669', color: 'white', border: 'none' }}
+                disabled={busy}
+              >{busy ? 'İşleniyor…' : 'Satışa Dönüştür'}</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {closeMode === 'lost' ? (
+        <div style={modalBackdrop} onClick={() => setCloseMode(null)}>
+          <div style={modalCard} onClick={(e) => e.stopPropagation()}>
+            <h2 style={{ margin: 0, fontSize: 20, fontWeight: 900 }}>Teklifi Kapat</h2>
+            <p style={{ color: 'var(--text-3)', margin: '6px 0 12px', fontSize: 13 }}>
+              {quote.quote_no} · {quote.customer?.musteri || '-'} — kayıp nedeni ve kısa açıklama zorunlu; kayıp analizi bu kırılımdan çıkıyor.
+            </p>
+            <label style={{ display: 'grid', gap: 6, marginBottom: 12 }}>
+              <span style={{ fontWeight: 800, fontSize: 13, color: 'var(--text-2)' }}>Kapanış Türü *</span>
+              <select value={closedReasonKind} onChange={(e) => setClosedReasonKind(e.target.value as 'lost' | 'expired' | 'no_interest')} style={inputStyle}>
+                <option value="lost">Kaybedildi</option>
+                <option value="expired">Süresi doldu</option>
+                <option value="no_interest">İlgilenmiyor</option>
+              </select>
+            </label>
+            <label style={{ display: 'grid', gap: 6, marginBottom: 12 }}>
+              <span style={{ fontWeight: 800, fontSize: 13, color: 'var(--text-2)' }}>Kayıp Nedeni *</span>
+              <select value={lossReasonKey} onChange={(e) => setLossReasonKey(e.target.value)} style={inputStyle}>
+                <option value="">Seçiniz…</option>
+                {lossReasons.map((item) => <option key={item.key} value={item.key}>{item.label}</option>)}
+              </select>
+            </label>
+            <label style={{ display: 'grid', gap: 6, marginBottom: 12 }}>
+              <span style={{ fontWeight: 800, fontSize: 13, color: 'var(--text-2)' }}>Açıklama *</span>
+              <textarea value={closeNote} onChange={(e) => setCloseNote(e.target.value)} rows={3} style={{ ...inputStyle, minHeight: 76, padding: 10 }} placeholder="Ne oldu? (rakip fiyatı, bütçe kalmadı, karar ertelendi…)" />
+            </label>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button onClick={() => setCloseMode(null)} style={ghostButton} disabled={busy}>Vazgeç</button>
+              <button
+                onClick={() => void updateStatus('closed', { closedReason: closedReasonKind, lossReasonKey, note: closeNote })}
+                style={primaryButton}
+                disabled={busy || !lossReasonKey || !closeNote.trim()}
+              >{busy ? 'İşleniyor…' : 'Teklifi Kapat'}</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {editMode ? (
         <section style={surface}>
@@ -298,7 +423,7 @@ export default function QuoteDetailClient({ quoteId }: { quoteId: string }) {
             <div style={{ display: 'grid', gap: 12 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <strong>Teklif Satırları</strong>
-                <button type="button" onClick={() => setEditItems((current) => [...current, { uid: randomId(), product_id: '', quantity: 1 }])} style={ghostButton}>+ Satır Ekle</button>
+                <button type="button" onClick={() => setEditItems((current) => [...current, emptyEditLine()])} style={ghostButton}>+ Satır Ekle</button>
               </div>
 
               {resolvedEditItems.map((item, index) => (
@@ -313,18 +438,35 @@ export default function QuoteDetailClient({ quoteId }: { quoteId: string }) {
                   </div>
                   <div>
                     <label style={labelStyle}>Adet</label>
-                    <input type="number" min={1} value={item.quantity} onChange={(event) => setEditItems((current) => current.map((row) => row.uid === item.uid ? { ...row, quantity: Math.max(1, Number(event.target.value || 1)) } : row))} style={{ ...inputStyle, width: '100%' }} />
+                    <input type="number" min={1} value={item.quantity} onChange={(event) => patchEditLine(item.uid, { quantity: Math.max(1, Number(event.target.value || 1)) })} style={{ ...inputStyle, width: '100%' }} />
                   </div>
                   <div>
-                    <label style={labelStyle}>Barem</label>
+                    <label style={labelStyle}>{item.sale_type === 'rental' ? 'Dönem' : 'Barem'}</label>
                     <div style={readonlyBox}>{item.rule_label}</div>
                   </div>
                   <div>
-                    <label style={labelStyle}>Toplam</label>
-                    <div style={readonlyBox}>{money(item.total_price)}{item.product?.is_recurring ? ' / ay' : ''}</div>
+                    <label style={labelStyle}>{item.sale_type === 'rental' ? 'Sözleşme' : 'Toplam'}</label>
+                    <div style={readonlyBox}>{money(item.total_price)}{item.sale_type !== 'rental' && item.product?.is_recurring ? ' / ay' : ''}</div>
                   </div>
                   <button type="button" disabled={editItems.length <= 1} onClick={() => setEditItems((current) => current.filter((row) => row.uid !== item.uid))} style={{ ...ghostButton, color: '#991b1b' }}>Sil</button>
-                  <div style={{ gridColumn: '1 / -1', color: 'var(--text-3)', fontSize: 12 }}>Satır {index + 1} · Birim fiyat: {money(item.unit_price)}</div>
+                  <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+                    <div style={{ color: 'var(--text-3)', fontSize: 12 }}>Satır {index + 1} · {item.sale_type === 'rental' ? `Aylık birim kira: ${money(item.unit_price)} · aylık ${money(item.priced.monthly_total)}` : `Birim fiyat: ${money(item.unit_price)}`}{item.priced.problem ? <span style={{ color: '#b91c1c', fontWeight: 700 }}> · {item.priced.problem}</span> : null}</div>
+                    <div role="radiogroup" aria-label="Satış tipi" style={{ display: 'inline-flex', padding: 3, borderRadius: 12, border: '1px solid var(--border)', background: 'var(--surface)' }}>
+                      {(['sale', 'rental'] as SaleType[]).map((kind) => (
+                        <button key={kind} type="button" role="radio" aria-checked={item.sale_type === kind} onClick={() => toggleEditSaleType(item.uid, kind)} disabled={kind === 'rental' && Boolean(item.product?.is_recurring)}
+                          style={{ minHeight: 28, padding: '0 12px', borderRadius: 9, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 800, fontFamily: 'inherit', background: item.sale_type === kind ? (kind === 'rental' ? '#b45309' : '#4338ca') : 'transparent', color: item.sale_type === kind ? '#fff' : 'var(--text-2)', opacity: kind === 'rental' && item.product?.is_recurring ? 0.5 : 1 }}>
+                          {kind === 'sale' ? 'Satış' : 'Kiralama'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {item.sale_type === 'rental' ? (
+                    <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10, padding: 10, borderRadius: 12, border: '1px solid var(--chip-gold-bd)', background: 'var(--chip-gold-bg)' }}>
+                      <div><label style={labelStyle}>Başlangıç</label><input type="date" value={item.rental_start_date} onChange={(event) => patchEditLine(item.uid, { rental_start_date: event.target.value })} style={{ ...inputStyle, width: '100%' }} /></div>
+                      <div><label style={labelStyle}>Bitiş</label><input type="date" min={item.rental_start_date || undefined} value={item.rental_end_date} onChange={(event) => patchEditLine(item.uid, { rental_end_date: event.target.value })} style={{ ...inputStyle, width: '100%' }} /></div>
+                      <div><label style={labelStyle}>Aylık birim kira (USD)</label><input type="number" min={0} step="0.01" value={item.rental_monthly_price} onChange={(event) => patchEditLine(item.uid, { rental_monthly_price: event.target.value })} placeholder="cihaz başı / ay" style={{ ...inputStyle, width: '100%' }} /></div>
+                    </div>
+                  ) : null}
                 </div>
               ))}
             </div>
@@ -332,7 +474,8 @@ export default function QuoteDetailClient({ quoteId }: { quoteId: string }) {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 12 }}>
               <KpiCard label="Toplam cihaz" value={String(editTotals.totalDevices)} />
               <KpiCard label="Teklif tutarı" value={money(editTotals.totalAmount)} />
-              <KpiCard label="Aylık hizmet" value={`${money(editTotals.monthlyAmount)} / ay`} />
+              {editTotals.rentalAmount > 0 ? <KpiCard label="Kiralama sözleşme değeri" value={money(editTotals.rentalAmount)} /> : null}
+              <KpiCard label="Aylık hizmet + kira" value={`${money(editTotals.monthlyAmount)} / ay`} />
             </div>
           </div>
         </section>
@@ -365,8 +508,15 @@ export default function QuoteDetailClient({ quoteId }: { quoteId: string }) {
           <div style={{ display: 'grid', gap: 10, marginTop: 14 }}>
             {quote.items.map((item) => (
               <div key={item.id} style={{ border: '1px solid var(--border)', borderRadius: 16, padding: 12 }}>
-                <div style={{ fontWeight: 800 }}>{item.product_name_snapshot}</div>
-                <div style={{ marginTop: 4, color: 'var(--text-3)', fontSize: 13 }}>{item.quantity} adet · {item.formatted_unit_price} / birim · {item.formatted_total_price}{item.is_recurring ? ' / ay' : ''}</div>
+                <div style={{ fontWeight: 800, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  {item.product_name_snapshot}
+                  {item.sale_type === 'rental' ? <span style={rentalPill}>Kiralama</span> : null}
+                </div>
+                {item.sale_type === 'rental' ? (
+                  <div style={{ marginTop: 4, color: 'var(--text-3)', fontSize: 13 }}>{item.quantity} adet · {item.formatted_unit_price} / ay / cihaz · {rentalPeriodLabel(item.rental_start_date, item.rental_end_date)} · sözleşme {item.formatted_total_price}</div>
+                ) : (
+                  <div style={{ marginTop: 4, color: 'var(--text-3)', fontSize: 13 }}>{item.quantity} adet · {item.formatted_unit_price} / birim · {item.formatted_total_price}{item.is_recurring ? ' / ay' : ''}</div>
+                )}
               </div>
             ))}
           </div>
@@ -377,16 +527,20 @@ export default function QuoteDetailClient({ quoteId }: { quoteId: string }) {
         <div style={{ fontWeight: 900, fontSize: 18, marginBottom: 12 }}>Satır detayları</div>
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 900 }}>
-            <thead><tr>{['Ürün', 'Tip', 'Kategori', 'Adet', 'Birim', 'Toplam'].map((head) => <th key={head} style={tableHead}>{head}</th>)}</tr></thead>
+            <thead><tr>{['Ürün', 'Satış Tipi', 'Kategori', 'Adet', 'Birim', 'Toplam'].map((head) => <th key={head} style={tableHead}>{head}</th>)}</tr></thead>
             <tbody>
               {quote.items.map((item) => (
                 <tr key={item.id} style={{ borderTop: '1px solid var(--border)' }}>
-                  <td style={tableCell}><div style={{ fontWeight: 800 }}>{item.product_name_snapshot}</div><div style={{ marginTop: 4, color: 'var(--text-3)', fontSize: 12 }}>{item.product_code_snapshot}</div></td>
-                  <td style={tableCell}>{item.product_type}</td>
+                  <td style={tableCell}><div style={{ fontWeight: 800 }}>{item.product_name_snapshot}</div><div style={{ marginTop: 4, color: 'var(--text-3)', fontSize: 12 }}>{item.product_code_snapshot} · {item.product_type}</div></td>
+                  <td style={tableCell}>
+                    {item.sale_type === 'rental' ? (
+                      <div><span style={rentalPill}>Kiralama</span><div style={{ marginTop: 4, color: 'var(--text-3)', fontSize: 12 }}>{rentalPeriodLabel(item.rental_start_date, item.rental_end_date)}</div></div>
+                    ) : (item.is_recurring ? 'Aylık hizmet' : 'Satış')}
+                  </td>
                   <td style={tableCell}>{item.category}</td>
                   <td style={tableCell}>{item.quantity}</td>
-                  <td style={tableCell}>{item.formatted_unit_price}</td>
-                  <td style={tableCell}>{item.formatted_total_price}{item.is_recurring ? ' / ay' : ''}</td>
+                  <td style={tableCell}>{item.formatted_unit_price}{item.sale_type === 'rental' ? ' / ay' : ''}</td>
+                  <td style={tableCell}>{item.formatted_total_price}{item.sale_type !== 'rental' && item.is_recurring ? ' / ay' : ''}</td>
                 </tr>
               ))}
             </tbody>
@@ -397,6 +551,8 @@ export default function QuoteDetailClient({ quoteId }: { quoteId: string }) {
   );
 }
 
+const rentalPill: CSSProperties = { display: 'inline-flex', alignItems: 'center', minHeight: 22, padding: '0 8px', borderRadius: 999, fontSize: 11, fontWeight: 800, background: 'var(--chip-gold-bg)', color: 'var(--chip-gold-color)', border: '1px solid var(--chip-gold-bd)' };
+
 function MetaRow({ label, value }: { label: string; value: string }) {
   return <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, paddingBottom: 10, borderBottom: '1px solid var(--border)' }}><span style={{ color: 'var(--text-3)' }}>{label}</span><strong style={{ color: 'var(--text)', textAlign: 'right' }}>{value}</strong></div>;
 }
@@ -406,6 +562,8 @@ function KpiCard({ label, value }: { label: string; value: string }) {
 }
 
 const surface: CSSProperties = { background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 22, padding: 16, boxShadow: 'var(--shadow)' };
+const modalBackdrop: CSSProperties = { position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', display: 'grid', placeItems: 'center', padding: 16, zIndex: 50 };
+const modalCard: CSSProperties = { background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 22, padding: 18, boxShadow: 'var(--shadow)', width: 'min(560px, 100%)', maxHeight: '90vh', overflowY: 'auto' };
 const surfaceCard: CSSProperties = { ...surface, padding: 18 };
 const miniTitle: CSSProperties = { fontSize: 12, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--text-3)' };
 const bigValue: CSSProperties = { marginTop: 10, fontSize: 28, fontWeight: 900, color: '#312e81' };

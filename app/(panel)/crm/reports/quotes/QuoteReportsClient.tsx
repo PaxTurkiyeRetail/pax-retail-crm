@@ -20,6 +20,13 @@ type Summary = {
   avgWonAmount: number;
   avgSalesCycleDays: number;
   winRate: number;
+  /** Satış kaydı (crm_sales) tarafı — ciro artık buradan gelir. */
+  saleCount: number;
+  cancelledSales: number;
+  saleRevenue: number;
+  saleDevices: number;
+  avgSaleAmount: number;
+  conversionRate: number;
 };
 
 type SimpleRow = { label: string; value: number };
@@ -34,6 +41,11 @@ type OwnerRow = {
   totalAmount: number;
   weightedAmount: number;
   winRate: number;
+  sale: number;
+  saleCancelled: number;
+  saleRevenue: number;
+  saleDevices: number;
+  conversionRate: number;
 };
 
 type CustomerRow = {
@@ -87,6 +99,12 @@ const EMPTY: Payload = {
     avgWonAmount: 0,
     avgSalesCycleDays: 0,
     winRate: 0,
+    saleCount: 0,
+    cancelledSales: 0,
+    saleRevenue: 0,
+    saleDevices: 0,
+    avgSaleAmount: 0,
+    conversionRate: 0,
   },
   statusSummary: [],
   closeReasonSummary: [],
@@ -141,16 +159,17 @@ export default function QuoteReportsPage() {
   const summaryCards = useMemo(() => ([
     { label: 'Toplam Teklif', value: payload.summary.totalQuotes, hint: 'Seçili filtrelerdeki tüm teklif' },
     { label: 'Aktif Pipeline', value: payload.summary.activeQuotes, hint: 'Gönderilmiş ve açık kayıt' },
-    { label: 'Kazanılan', value: payload.summary.wonQuotes, hint: `Win rate ${pct(payload.summary.winRate)}` },
-    { label: 'Kaybedilen', value: payload.summary.lostQuotes, hint: 'Lost / expired / ilgi yok' },
+    { label: 'Satışa Dönen', value: payload.summary.saleCount, hint: payload.summary.cancelledSales ? `${payload.summary.cancelledSales} satış iptal edildi` : 'Satış kaydı açılan teklif' },
+    { label: 'Teklif → Satış', value: pct(payload.summary.conversionRate), hint: 'Kapanan tekliflerin satışa dönme oranı' },
+    { label: 'Kaybedilen', value: payload.summary.lostQuotes, hint: 'Kayıp / süresi doldu / ilgi yok' },
     { label: 'Taslak', value: payload.summary.draftQuotes, hint: 'Hazırlık aşamasında' },
-    { label: 'Toplam Cihaz', value: payload.summary.totalDevices, hint: 'Tekliflenen toplam adet' },
+    { label: 'Satış Cirosu', value: money(payload.summary.saleRevenue), hint: 'Aktif satış kayıtlarının tutarı' },
+    { label: 'Satılan Cihaz', value: payload.summary.saleDevices, hint: `Tekliflenen ${payload.summary.totalDevices} adetten` },
     { label: 'Toplam Tutar', value: money(payload.summary.totalAmount), hint: 'Brüt portföy büyüklüğü' },
     { label: 'Ağırlıklı Pipeline', value: money(payload.summary.weightedAmount), hint: 'Olasılıkla ağırlıklandırılmış' },
-    { label: 'Won Revenue', value: money(payload.summary.wonRevenue), hint: 'Kazanılan teklif cirosu' },
     { label: 'Ort. Teklif', value: money(payload.summary.avgQuoteAmount), hint: 'Kayıt başı ortalama' },
-    { label: 'Ort. Won Tutarı', value: money(payload.summary.avgWonAmount), hint: 'Kazanılan kayıt başı' },
-    { label: 'Ort. Satış Süresi', value: `${Math.round(payload.summary.avgSalesCycleDays)} gün`, hint: 'Proposal → close' },
+    { label: 'Ort. Satış Tutarı', value: money(payload.summary.avgSaleAmount), hint: 'Satış kaydı başına' },
+    { label: 'Ort. Satış Süresi', value: `${Math.round(payload.summary.avgSalesCycleDays)} gün`, hint: 'Teklif → kapanış' },
   ]), [payload.summary]);
 
   return (
@@ -202,12 +221,12 @@ export default function QuoteReportsPage() {
       </section>
 
       <section style={surface}>
-        <SectionTitle title="Satışçı Performansı" subtitle="Hacim, aktif pipeline, kazanım, kayıp ve ağırlıklı potansiyel görünümü" />
+        <SectionTitle title="Satışçı Performansı" subtitle="Hacim, aktif pipeline, satışa dönen teklif, kayıp ve dönüşüm oranı" />
         <div style={{ overflowX: 'auto' }}>
           <table style={tableStyle}>
             <thead>
               <tr>
-                {['Satışçı', 'Toplam', 'Aktif', 'Won', 'Lost', 'Taslak', 'Win Rate', 'Toplam Tutar', 'Ağırlıklı Pipeline'].map((h) => <th key={h} style={tableHead}>{h}</th>)}
+                {['Satışçı', 'Toplam', 'Aktif', 'Satış', 'Kayıp', 'Taslak', 'Dönüşüm', 'Satış Cirosu', 'Ağırlıklı Pipeline'].map((h) => <th key={h} style={tableHead}>{h}</th>)}
               </tr>
             </thead>
             <tbody>
@@ -216,11 +235,11 @@ export default function QuoteReportsPage() {
                   <td style={tableCellStrong}>{row.owner}</td>
                   <td style={tableCell}>{row.total}</td>
                   <td style={tableCell}>{row.active}</td>
-                  <td style={tableCell}>{row.won}</td>
+                  <td style={tableCell}>{row.sale}{row.saleCancelled ? ` (+${row.saleCancelled} iptal)` : ''}</td>
                   <td style={tableCell}>{row.lost}</td>
                   <td style={tableCell}>{row.draft}</td>
-                  <td style={tableCell}>{pct(row.winRate)}</td>
-                  <td style={tableCell}>{money(row.totalAmount)}</td>
+                  <td style={{ ...tableCell, fontWeight: 800, color: row.conversionRate >= 50 ? '#15803d' : row.conversionRate >= 25 ? '#b45309' : '#b91c1c' }}>{pct(row.conversionRate)}</td>
+                  <td style={tableCell}>{money(row.saleRevenue)}</td>
                   <td style={tableCell}>{money(row.weightedAmount)}</td>
                 </tr>
               ))}
@@ -232,7 +251,7 @@ export default function QuoteReportsPage() {
 
       <section className="quote-report-chart-grid" style={{ display: 'grid', gap: 12, gridTemplateColumns: '1.2fr 1fr' }}>
         <div style={surface}>
-          <SectionTitle title="Aylık Trend" subtitle="Son 12 ayda teklif akışı ve kazanılan ciro" />
+          <SectionTitle title="Aylık Trend" subtitle="Son 12 ayda teklif akışı ve satış cirosu" />
           <div style={{ overflowX: 'auto' }}>
             <table style={tableStyle}>
               <thead>

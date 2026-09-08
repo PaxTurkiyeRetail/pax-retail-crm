@@ -23,6 +23,8 @@ import {
   OWNER_ORDER,
   SECTOR_ORDER,
   orderDistribution,
+  conversionPct,
+  conversionTone,
   ownerOrderCompare,
   rankOwners,
   staleTone,
@@ -127,6 +129,12 @@ type DbQuoteRow = {
   created_at: Date | string;
   closed_at: Date | string | null;
   updated_at: Date | string | null;
+  /** crm_sales (satış kaydı) — teklif kazanıldıysa 1:1 eşlenir. */
+  sale_id: string | null;
+  sale_status: string | null;
+  sale_amount: number | null;
+  sale_device_count: number | null;
+  sale_date: string | null;
 };
 
 type TargetRow = { scope_type: 'company' | 'user'; user_id: string | null; code: string; value: number };
@@ -294,9 +302,12 @@ const Q_QUOTES = `
   select q.id::text as id, q.quote_no, q.customer_id::text as customer_id, m.musteri, q.owner_name, q.status, q.closed_reason,
          q.probability, q.total_amount::float8 as total_amount, q.total_device_count,
          q.proposal_date::text as proposal_date, q.valid_until::text as valid_until,
-         q.created_at, q.updated_at, coalesce(q.closed_at, case when q.status = 'closed' then q.updated_at end) as closed_at
+         q.created_at, q.updated_at, coalesce(q.closed_at, case when q.status = 'closed' then q.updated_at end) as closed_at,
+         s.id::text as sale_id, s.status as sale_status, s.amount::float8 as sale_amount,
+         s.device_count as sale_device_count, s.sale_date::text as sale_date
   from public.quotes q
   left join public.musteriler m on m.id = q.customer_id
+  left join public.crm_sales s on s.quote_id = q.id
 `;
 
 const Q_TARGETS = `
@@ -441,11 +452,15 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
     passiveOpen: number;
     wonYtd: number; wonYtdAmount: number; wonYtdDevices: number; wonMonth: number; wonMonthAmount: number;
     lostYtd: number; lostYtdAmount: number; weekCount: number; weekAmount: number; monthCount: number; monthAmount: number;
+    /** Satış kaydı (crm_sales) tarafı: ciro ve cihaz artık buradan hesaplanır. */
+    saleYtd: number; saleYtdAmount: number; saleYtdDevices: number; saleMonth: number; saleMonthAmount: number;
+    saleCancelled: number;
   };
   const emptyQuoteAgg = (): QuoteAgg => ({
     open: 0, openAmount: 0, weighted: 0, weightedValid: 0, expiredOpen: 0, passiveOpen: 0,
     wonYtd: 0, wonYtdAmount: 0, wonYtdDevices: 0, wonMonth: 0, wonMonthAmount: 0,
     lostYtd: 0, lostYtdAmount: 0, weekCount: 0, weekAmount: 0, monthCount: 0, monthAmount: 0,
+    saleYtd: 0, saleYtdAmount: 0, saleYtdDevices: 0, saleMonth: 0, saleMonthAmount: 0, saleCancelled: 0,
   });
   const quoteAggByOwner = new Map<string, QuoteAgg>();
   /** Bu hafta teklifi kazanılan müşteriler (sahip → müşteri id); huninin "Sipariş" adımı. */
@@ -491,6 +506,19 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
     if (isWon && closedKey && closedKey.slice(0, 4) === String(year)) {
       agg.wonYtd += 1; agg.wonYtdAmount += amount; agg.wonYtdDevices += num(q.total_device_count);
       if (closedKey.slice(0, 7) === monthKey) { agg.wonMonth += 1; agg.wonMonthAmount += amount; }
+      // Ciro/cihaz artık satış kaydından (crm_sales) gelir; iptal edilen satış cirodan düşer.
+      // Satış kaydı yoksa (eski veri) teklifin kendi tutarına düşülür.
+      if (q.sale_id && q.sale_status === 'cancelled') {
+        agg.saleCancelled += 1;
+      } else {
+        const saleKey = (q.sale_id ? dateKey(q.sale_date) : null) ?? closedKey;
+        const saleAmount = q.sale_id ? num(q.sale_amount) : amount;
+        const saleDevices = q.sale_id ? num(q.sale_device_count) : num(q.total_device_count);
+        if (saleKey.slice(0, 4) === String(year)) {
+          agg.saleYtd += 1; agg.saleYtdAmount += saleAmount; agg.saleYtdDevices += saleDevices;
+          if (saleKey.slice(0, 7) === monthKey) { agg.saleMonth += 1; agg.saleMonthAmount += saleAmount; }
+        }
+      }
       if (closedKey >= from && closedKey <= to) {
         const set = wonWeekCustomersByOwner.get(owner) ?? new Set<string>();
         set.add(q.customer_id ?? q.id);
@@ -503,9 +531,13 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
       lostReasons.set(label, (lostReasons.get(label) ?? 0) + 1);
     }
     if ((isWon || isLost) && closedKey) {
+      // Kazanılan satırda satış kaydının güncel tutarı/cihazı gösterilir (teklif dondu, satış düzenlenebilir).
+      const showAmount = isWon && q.sale_id && q.sale_status !== 'cancelled' ? num(q.sale_amount) : amount;
+      const showDevices = isWon && q.sale_id && q.sale_status !== 'cancelled' ? num(q.sale_device_count) : num(q.total_device_count);
       closedQuoteRows.push({
-        quoteNo: text(q.quote_no) ?? '—', musteri: text(q.musteri) ?? '—', owner: text(q.owner_name), amount, devices: num(q.total_device_count),
+        quoteNo: text(q.quote_no) ?? '—', musteri: text(q.musteri) ?? '—', owner: text(q.owner_name), amount: showAmount, devices: showDevices,
         probability: prob, status: isWon ? 'won' : 'lost', reason: isWon ? null : (REASON_LABEL[String(q.closed_reason)] ?? 'Diğer'), date: closedKey, expired: false,
+        saleCancelled: isWon && q.sale_status === 'cancelled',
       });
     }
     quoteAggByOwner.set(owner, agg);
@@ -544,14 +576,14 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
     deviceTarget: number | null,
     integration: { target: number | null; done: number; total: number },
   ): RevenueBlock => {
-    const forecast = agg.wonYtdAmount + agg.weightedValid;
-    const attainmentPct = pctOf(agg.wonYtdAmount, revenueTarget);
+    const forecast = agg.saleYtdAmount + agg.weightedValid;
+    const attainmentPct = pctOf(agg.saleYtdAmount, revenueTarget);
     return {
       year,
       target: revenueTarget,
-      actualYtd: agg.wonYtdAmount,
+      actualYtd: agg.saleYtdAmount,
       attainmentPct,
-      remaining: revenueTarget == null ? null : Math.max(0, revenueTarget - agg.wonYtdAmount),
+      remaining: revenueTarget == null ? null : Math.max(0, revenueTarget - agg.saleYtdAmount),
       forecast,
       forecastGap: revenueTarget == null ? null : forecast - revenueTarget,
       forecastPct: pctOf(forecast, revenueTarget),
@@ -560,13 +592,17 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
       openQuotes: agg.open,
       expiredOpenQuotes: agg.expiredOpen,
       deviceTarget,
-      deviceActualYtd: agg.wonYtdDevices,
+      deviceActualYtd: agg.saleYtdDevices,
       integrationTarget: integration.target,
       integrationDone: integration.done,
       integrationTotal: integration.total,
       wonYtd: { count: agg.wonYtd, amount: agg.wonYtdAmount },
       wonMonth: { count: agg.wonMonth, amount: agg.wonMonthAmount },
       lostYtd: { count: agg.lostYtd, amount: agg.lostYtdAmount },
+      saleYtd: { count: agg.saleYtd, amount: agg.saleYtdAmount, devices: agg.saleYtdDevices },
+      saleMonth: { count: agg.saleMonth, amount: agg.saleMonthAmount },
+      saleCancelled: agg.saleCancelled,
+      conversionPct: conversionPct(agg.saleYtd, agg.saleCancelled, agg.lostYtd),
       yearElapsedPct: elapsedPct,
       pace: paceTone(attainmentPct, elapsedPct),
     };
@@ -1047,8 +1083,23 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
       owner, open: agg.open, openAmount: agg.openAmount, weighted: agg.weighted, passive: agg.passiveOpen,
       monthCreated: agg.monthCount, monthAmount: agg.monthAmount,
       won: agg.wonYtd, wonAmount: agg.wonYtdAmount, lost: agg.lostYtd,
+      sale: agg.saleYtd, saleAmount: agg.saleYtdAmount, saleDevices: agg.saleYtdDevices,
+      saleCancelled: agg.saleCancelled,
+      // Dönüşüm = satışa dönen / kapanan (satış + iptal + kayıp).
+      conversionPct: conversionPct(agg.saleYtd, agg.saleCancelled, agg.lostYtd),
     };
   }).filter((row) => row.open || row.won || row.lost || row.monthCreated).sort((a, b) => ownerOrderCompare(a.owner, b.owner));
+
+  // Dönüşüm oranı dağılımı: sadece kapanan teklifi olanlar (aksi halde "%0" yanıltır).
+  const conversionByOwner: Distribution = byOwnerQuotes
+    .filter((row) => row.conversionPct != null)
+    .map((row) => ({
+      label: row.owner,
+      value: row.conversionPct ?? 0,
+      hint: `${row.sale} satış · ${row.lost} kayıp${row.saleCancelled > 0 ? ` · ${row.saleCancelled} iptal` : ''}`,
+      tone: conversionTone(row.conversionPct),
+    }))
+    .sort((a, b) => ownerOrderCompare(a.label, b.label));
 
   return {
     generatedAt: new Date().toISOString(),
@@ -1096,6 +1147,11 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
       recentClosed: closedQuotesShown.slice(0, R.closedQuotesLimit),
       byOwner: byOwnerQuotes,
       lostReasons: toDistribution(lostReasons),
+      conversionByOwner,
+      conversion: {
+        pct: conversionPct(teamAgg.saleYtd, teamAgg.saleCancelled, teamAgg.lostYtd),
+        sale: teamAgg.saleYtd, lost: teamAgg.lostYtd, cancelled: teamAgg.saleCancelled,
+      },
     },
     forecast: {
       year,

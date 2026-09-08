@@ -72,6 +72,23 @@ export async function GET(request: Request) {
     const today = getTurkeyTodayIso();
     const inThreeDays = addDaysToIsoDate(today, 3);
 
+    // Satış kayıtları (crm_sales): teklifin kaçı satışa döndü + satış cirosu.
+    const wonIds = rows.filter((row: any) => row.status === 'closed' && row.closed_reason === 'won').map((row: any) => String(row.id));
+    let saleRows: any[] = [];
+    if (wonIds.length) {
+      const { data: sales, error: salesError } = await admin
+        .from('crm_sales')
+        .select('quote_id,status,amount,device_count')
+        .in('quote_id', wonIds);
+      if (!salesError) saleRows = sales ?? [];
+    }
+    const activeSales = saleRows.filter((row: any) => String(row.status) === 'active');
+    const cancelledSales = saleRows.length - activeSales.length;
+    const lostCount = rows.filter((row: any) => row.status === 'closed' && ['lost', 'expired', 'no_interest'].includes(String(row.closed_reason ?? ''))).length;
+    // Satış kaydı açılmamış eski kazanılan teklifler de dönüşüm sayılır (019 migrasyonu geriye dönük doldurur).
+    const saleCount = activeSales.length + wonIds.filter((id: string) => !saleRows.some((row: any) => String(row.quote_id) === id)).length;
+    const conversionBase = saleCount + cancelledSales + lostCount;
+
     const kpis = {
       total_quotes: rows.length,
       sent_quotes: rows.filter((row: any) => row.status === 'sent').length,
@@ -84,6 +101,11 @@ export async function GET(request: Request) {
       total_devices: rows.reduce((sum: number, row: any) => sum + Number(row.total_device_count ?? 0), 0),
       total_amount: rows.reduce((sum: number, row: any) => sum + Number(row.total_amount ?? 0), 0),
       weighted_amount: rows.reduce((sum: number, row: any) => sum + (Number(row.total_amount ?? 0) * Number(row.probability ?? 0) / 100), 0),
+      sale_quotes: saleCount,
+      cancelled_sales: cancelledSales,
+      sale_amount: activeSales.reduce((sum: number, row: any) => sum + Number(row.amount ?? 0), 0),
+      sale_devices: activeSales.reduce((sum: number, row: any) => sum + Number(row.device_count ?? 0), 0),
+      conversion_pct: conversionBase ? Math.round((saleCount / conversionBase) * 100) : null,
     };
 
     return NextResponse.json({ onboardingNeeded: false, kpis });

@@ -53,6 +53,24 @@ type Filters = {
   risk: string;
 };
 
+/** Faz grubu adları — Müşteriler ekranındaki faz kartlarıyla aynı dil (anahtarlar filtre/CSS için sabit). */
+const PHASE_LABELS: Record<RadarRow['phaseKey'], { label: string; short: string; range: string }> = {
+  Lead: { label: 'Fırsat / İlk Temas', short: 'Fırsat', range: 'Faz 1–4' },
+  Contact: { label: 'Analiz + Sunumlar', short: 'Analiz', range: 'Faz 5–9' },
+  Opportunity: { label: 'Business', short: 'Business', range: 'Faz 10–14' },
+  Pilot: { label: 'Operasyon', short: 'Operasyon', range: 'Faz 15–23' },
+  Rollout: { label: 'Yayılım', short: 'Yayılım', range: 'Faz 24–25' },
+};
+
+/** Tablo hücresi için kısa tarih: "12 Eyl" (yıl, satır yüksekliği yerine title'da). */
+function shortDate(value?: string | null) {
+  if (!value) return '-';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '-';
+  return d.toLocaleDateString('tr-TR', { day: '2-digit', month: 'short' });
+}
+const PHASE_KEYS: RadarRow['phaseKey'][] = ['Lead', 'Contact', 'Opportunity', 'Pilot', 'Rollout'];
+
 const EMPTY_FILTERS: Filters = {
   search: '',
   phase: 'all',
@@ -142,7 +160,7 @@ export default function SalesRadarPageClient() {
         <div className="surface card"><div className="kicker">İzlenen Müşteri</div><div className="value">{kpis.trackedCustomers}</div><div className="hint">Radar kapsamındaki portföy</div></div>
         <div className="surface card"><div className="kicker">Aksiyon Bekleyen</div><div className="value">{kpis.waitingActions}</div><div className="hint">Sıradaki adımı tanımlı kayıt</div></div>
         <div className="surface card"><div className="kicker">7+ Gün Temassız</div><div className="value">{kpis.stale7Days}</div><div className="hint">Takip riski taşıyan müşteri</div></div>
-        <div className="surface card"><div className="kicker">Kritik Fazlar</div><div className="value">{kpis.criticalPhases}</div><div className="hint">Opportunity ve Pilot yoğunluğu</div></div>
+        <div className="surface card"><div className="kicker">Kritik Fazlar</div><div className="value">{kpis.criticalPhases}</div><div className="hint">Business ve Operasyon fazları</div></div>
         <div className="surface card"><div className="kicker">Bu Hafta Kapanma</div><div className="value">{kpis.closingThisWeek}</div><div className="hint">Kısa vadeli sonuç potansiyeli</div></div>
       </section>
 
@@ -155,11 +173,7 @@ export default function SalesRadarPageClient() {
           <input value={filters.search} onChange={(e) => setFilters((prev) => ({ ...prev, search: e.target.value }))} placeholder="Müşteri, şehir, sektör veya sorumlu ara" />
           <select value={filters.phase} onChange={(e) => setFilters((prev) => ({ ...prev, phase: e.target.value }))}>
             <option value="all">Tüm Fazlar</option>
-            <option value="Lead">Lead</option>
-            <option value="Contact">Contact</option>
-            <option value="Opportunity">Opportunity</option>
-            <option value="Pilot">Pilot</option>
-            <option value="Rollout">Rollout</option>
+            {PHASE_KEYS.map((key) => <option key={key} value={key}>{PHASE_LABELS[key].label} · {PHASE_LABELS[key].range}</option>)}
           </select>
           <select value={filters.owner} onChange={(e) => setFilters((prev) => ({ ...prev, owner: e.target.value }))}>
             <option value="all">Tüm Sorumlular</option>
@@ -182,21 +196,26 @@ export default function SalesRadarPageClient() {
         <section className="layout">
           <section className="surface table-card">
             <div className="table-head">
-              <div className="kicker">Radar Tablosu</div>
-              <div className="hint">Faz, sahiplik, son temas ve sıradaki aksiyona göre operasyonel görünüm.</div>
+              <div>
+                <div className="kicker">Radar Tablosu</div>
+                <div className="hint">Faz, sahiplik, son temas ve sıradaki aksiyona göre operasyonel görünüm · skora göre sıralı.</div>
+              </div>
+              <div className="table-count">{filteredRows.length} / {rows.length} müşteri</div>
             </div>
             <div className="table-wrap">
-              <table>
+              <table className="radar-table">
+                <colgroup>
+                  <col className="c-customer" /><col className="c-phase" /><col className="c-owner" /><col className="c-last" />
+                  <col className="c-next" /><col className="c-target" /><col className="c-risk" /><col className="c-score" />
+                </colgroup>
                 <thead>
                   <tr>
                     <th>Müşteri</th>
                     <th>Faz</th>
                     <th>Sorumlu</th>
-                    <th>Sektör</th>
                     <th>Son Aktivite</th>
-                    <th>Aktivite Tipi</th>
                     <th>Sıradaki Aksiyon</th>
-                    <th>Hedef Tarih</th>
+                    <th>Hedef</th>
                     <th>Risk</th>
                     <th>Skor</th>
                   </tr>
@@ -206,17 +225,25 @@ export default function SalesRadarPageClient() {
                     <tr key={row.id}>
                       <td>
                         <div className="customer">
-                          <strong>{row.customerName}</strong>
+                          <strong title={row.customerName}>{row.customerName}</strong>
                           <span className="subtle">{[row.sector, row.city].filter(Boolean).join(' · ') || 'Müşteri kaydı'}</span>
                         </div>
                       </td>
-                      <td><span className={`badge ${row.phaseKey.toLowerCase()}`}>{row.phaseKey}</span></td>
-                      <td>{row.ownerName}</td>
-                      <td>{row.sector || '-'}</td>
-                      <td><div className="customer"><strong>{formatDate(row.lastActivityDate)}</strong><span className="subtle">{fromNowLabel(row.lastActivityDate)}</span></div></td>
-                      <td>{row.lastActivityType || '-'}</td>
-                      <td>{row.nextAction || '-'}</td>
-                      <td>{row.targetDate ? formatDate(row.targetDate) : '-'}</td>
+                      <td>
+                        <div className="customer">
+                          <span className={`badge ${row.phaseKey.toLowerCase()}`} title={`${PHASE_LABELS[row.phaseKey].label} · ${PHASE_LABELS[row.phaseKey].range}`}>{PHASE_LABELS[row.phaseKey].short}</span>
+                          <span className="subtle" title={row.phaseLabel}>{row.phaseLabel !== PHASE_LABELS[row.phaseKey].label ? row.phaseLabel : PHASE_LABELS[row.phaseKey].range}</span>
+                        </div>
+                      </td>
+                      <td><div className="cell-text" title={row.ownerName}>{row.ownerName}</div></td>
+                      <td>
+                        <div className="customer">
+                          <strong>{row.lastActivityDate ? formatDate(row.lastActivityDate) : '—'}</strong>
+                          <span className="subtle">{fromNowLabel(row.lastActivityDate)}{row.lastActivityType && row.lastActivityType !== '-' ? ` · ${row.lastActivityType}` : ''}</span>
+                        </div>
+                      </td>
+                      <td><div className="clamp-2" title={row.nextAction}>{row.nextAction || '-'}</div></td>
+                      <td><div className="cell-text" title={row.targetDate ? formatDate(row.targetDate) : ''}>{shortDate(row.targetDate)}</div></td>
                       <td><span className={`badge ${row.risk === 'Yüksek' ? 'risk-high' : row.risk === 'Orta' ? 'risk-mid' : 'risk-low'}`}>{row.risk}</span></td>
                       <td>
                         <div className="score">
@@ -226,7 +253,7 @@ export default function SalesRadarPageClient() {
                       </td>
                     </tr>
                   ))}
-                  {!filteredRows.length ? <tr><td colSpan={10} className="subtle">Filtrelere uygun kayıt bulunamadı.</td></tr> : null}
+                  {!filteredRows.length ? <tr><td colSpan={8} className="subtle" style={{ whiteSpace: 'normal' }}>Filtrelere uygun kayıt bulunamadı.</td></tr> : null}
                 </tbody>
               </table>
             </div>
@@ -236,7 +263,12 @@ export default function SalesRadarPageClient() {
             <section className="surface mini">
               <div className="kicker">Faz Bazlı Yoğunluk</div>
               <div className="mini-list">
-                {phaseCounts(rows).map((item) => <div key={item.label} className="mini-item"><span>{item.label}</span><strong>{item.value}</strong></div>)}
+                {phaseCounts(rows).map((item) => (
+                  <div key={item.key} className="mini-item" title={`${item.label} · ${PHASE_LABELS[item.key].range}`}>
+                    <span>{item.label}</span><strong>{item.value}</strong>
+                    <div className="mini-bar"><span style={{ width: `${rows.length ? Math.round((item.value / rows.length) * 100) : 0}%` }} /></div>
+                  </div>
+                ))}
               </div>
             </section>
             <section className="surface mini">
@@ -369,9 +401,10 @@ function fromNowLabel(value?: string | null) {
 }
 
 function phaseCounts(rows: RadarRow[]) {
-  return ['Lead', 'Contact', 'Opportunity', 'Pilot', 'Rollout'].map((label) => ({
-    label,
-    value: rows.filter((row) => row.phaseKey === label).length,
+  return PHASE_KEYS.map((key) => ({
+    key,
+    label: PHASE_LABELS[key].label,
+    value: rows.filter((row) => row.phaseKey === key).length,
   }));
 }
 

@@ -359,6 +359,7 @@
 .lb-tr.tone-warn { border-left-color: var(--lb-warn); }
 .lb-tr.tone-ok { border-left-color: var(--lb-ok); }
 .lb-tr.tone-info { border-left-color: var(--lb-info); }
+.lb-tr.tone-neutral { border-left-color: var(--lb-neutral); }
 .lb-tr > span { min-width: 0; font-size: 13px; color: var(--text-2); font-weight: 700; }
 .lb-tr > span > .lb-pill { max-width: 100%; display: inline-block; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
 .lb-tr > span small { display: block; font-size: 11px; color: var(--text-3); font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -376,6 +377,7 @@
 .lb-quote-table .lb-tr { grid-template-columns: minmax(0, 1.5fr) minmax(90px, 0.7fr) auto minmax(110px, 0.9fr); }
 .lb-owner-quotes .lb-tr { grid-template-columns: minmax(0, 1.3fr) repeat(4, minmax(0, 0.85fr)); }
 .lb-owner-quotes-6 .lb-tr { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.1fr) repeat(4, minmax(0, 0.7fr)); }
+.lb-owner-quotes-7 .lb-tr { grid-template-columns: minmax(0, 1.3fr) minmax(0, 0.95fr) minmax(0, 0.45fr) minmax(0, 0.75fr) minmax(0, 1.05fr) minmax(0, 0.45fr) minmax(0, 0.7fr); }
 .lb-owner-quotes .lb-tr > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lb-owner-quotes .lb-tr > span { font-weight: 900; color: var(--text); font-variant-numeric: tabular-nums; }
 .lb-owner-quotes .lb-tr > span small { font-weight: 700; }

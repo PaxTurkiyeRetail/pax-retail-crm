@@ -15,6 +15,7 @@ import {
   buildPagePlan,
   capacities,
   dueLabel,
+  conversionTone,
   dueTone,
   fmtMoney,
   layoutMetrics,
@@ -267,10 +268,11 @@ function MoneyBand({ r, pipeline, weekQuotes }: { r: RevenueBlock; pipeline: { p
     { k: 'Forecast · yıl sonu', v: fmtMoney(r.forecast), n: r.forecastPct != null ? `hedefin %${r.forecastPct}'i` : 'gerçekleşen + ağırlıklı pipeline' },
     { k: 'Gap', v: r.forecastGap == null ? '—' : fmtMoney(r.forecastGap, { sign: true }), n: r.forecastGap == null ? 'hedef yok' : r.forecastGap >= 0 ? 'hedefin üstünde' : 'hedefin altında', tone: r.forecastGap == null ? 'neutral' : r.forecastGap >= 0 ? 'ok' : 'danger' },
     { k: 'Pipeline', v: fmtMoney(r.pipeline), n: `${fmt(r.openQuotes)} açık teklif · ağırlıklı ${fmtMoney(r.weightedPipeline)}` },
-    { k: 'Cihaz · YTD', v: fmt(r.deviceActualYtd), n: r.deviceTarget ? `hedef ${fmt(r.deviceTarget)} · %${pctOf(r.deviceActualYtd, r.deviceTarget) ?? 0}` : 'kazanılan tekliflerdeki adet', tone: r.deviceTarget ? (pctOf(r.deviceActualYtd, r.deviceTarget) ?? 0) >= r.yearElapsedPct ? 'ok' : 'warn' : 'neutral' },
+    { k: 'Cihaz · YTD', v: fmt(r.deviceActualYtd), n: r.deviceTarget ? `hedef ${fmt(r.deviceTarget)} · %${pctOf(r.deviceActualYtd, r.deviceTarget) ?? 0}` : 'satışa dönen cihaz adedi', tone: r.deviceTarget ? (pctOf(r.deviceActualYtd, r.deviceTarget) ?? 0) >= r.yearElapsedPct ? 'ok' : 'warn' : 'neutral' },
     { k: 'Aktif POC', v: fmt(pipeline.poc), n: 'konsinye · pilot · test' },
     { k: 'Teklif', v: fmt(weekQuotes), n: 'bu hafta oluşturulan' },
-    { k: 'Sipariş · YTD', v: fmt(r.wonYtd.count), n: `${fmtMoney(r.wonYtd.amount)} kazanılan`, tone: r.wonYtd.count ? 'ok' : 'neutral' },
+    { k: 'Satış · YTD', v: fmt(r.saleYtd.count), n: `${fmtMoney(r.saleYtd.amount)}${r.saleCancelled ? ` · ${fmt(r.saleCancelled)} iptal` : ''}`, tone: r.saleYtd.count ? 'ok' : 'neutral' },
+    { k: 'Dönüşüm', v: r.conversionPct == null ? '—' : `%${r.conversionPct}`, n: r.conversionPct == null ? 'kapanan teklif yok' : `${fmt(r.saleYtd.count)} satış · ${fmt(r.lostYtd.count)} kayıp`, tone: conversionTone(r.conversionPct) },
   ];
   // KasaPOS entegrasyon (Çağdaş Bey, 07.09): hedefi ya da entegrasyon firması olan kişide 9. hücre.
   if (r.integrationTarget != null || r.integrationTotal > 0) {
@@ -420,7 +422,7 @@ function PulseSlide({ data, caps, page, compact }: { data: LiveBoardPayload; cap
     <div className={`lb-slide lb-pulse ${caps.pulseSplit ? (showActivity ? 'part-activity' : 'part-revenue') : ''}`} key="pulse">
       {showRevenue ? (
       <div className="lb-card lb-revenue">
-        <div className="lb-card-head"><h3>Ciro · {r.year}</h3><span>gerçekleşen = kazanılan teklifler · forecast = gerçekleşen + geçerli açık tekliflerin ağırlıklı değeri</span></div>
+        <div className="lb-card-head"><h3>Ciro · {r.year}</h3><span>gerçekleşen = satışa dönen teklifler (satış kayıtları) · forecast = gerçekleşen + geçerli açık tekliflerin ağırlıklı değeri</span></div>
         <div className="lb-revenue-body">
           <Ring pct={r.attainmentPct} tone={r.pace ?? 'neutral'} big={attainmentBig} sub={r.target != null ? `${fmtMoney(r.actualYtd)} / ${fmtMoney(r.target)}` : 'hedef yok'} size={compact ? 150 : 178} stroke={compact ? 10 : 11} />
           <div className="lb-kpis three">
@@ -429,10 +431,10 @@ function PulseSlide({ data, caps, page, compact }: { data: LiveBoardPayload; cap
             <Kpi label="Yıl Sonu Forecast" value={fmtMoney(r.forecast)} sub={r.forecastPct != null ? `hedefin %${r.forecastPct}'i` : 'weighted model'} tone={r.forecastPct == null ? 'neutral' : r.forecastPct >= 100 ? 'ok' : 'warn'} small />
             <Kpi label="Forecast Gap" value={r.forecastGap == null ? '—' : fmtMoney(r.forecastGap, { sign: true })} sub={r.forecastGap == null ? 'hedef yok' : r.forecastGap >= 0 ? 'hedefin üstünde' : 'hedefin altında'} tone={r.forecastGap == null ? 'neutral' : r.forecastGap >= 0 ? 'ok' : 'danger'} small />
             <Kpi label="Açık Pipeline" value={fmtMoney(r.pipeline)} sub={`${fmt(r.openQuotes)} teklif · ağırlıklı ${fmtMoney(r.weightedPipeline)}`} small />
-            <Kpi label="Bu Ay Kazanılan" value={fmtMoney(r.wonMonth.amount)} sub={`${fmt(r.wonMonth.count)} sipariş · YTD ${fmt(r.wonYtd.count)}`} tone={r.wonMonth.count ? 'ok' : 'neutral'} small />
-            <Kpi label="Cihaz · YTD" value={fmt(r.deviceActualYtd)} sub={r.deviceTarget ? `hedef ${fmt(r.deviceTarget)} · %${pctOf(r.deviceActualYtd, r.deviceTarget) ?? 0}` : 'kazanılan tekliflerdeki adet'} tone={r.deviceTarget ? ((pctOf(r.deviceActualYtd, r.deviceTarget) ?? 0) >= r.yearElapsedPct ? 'ok' : 'warn') : 'neutral'} small />
+            <Kpi label="Bu Ay Satış" value={fmtMoney(r.saleMonth.amount)} sub={`${fmt(r.saleMonth.count)} satış · YTD ${fmt(r.saleYtd.count)}`} tone={r.saleMonth.count ? 'ok' : 'neutral'} small />
+            <Kpi label="Cihaz · YTD" value={fmt(r.deviceActualYtd)} sub={r.deviceTarget ? `hedef ${fmt(r.deviceTarget)} · %${pctOf(r.deviceActualYtd, r.deviceTarget) ?? 0}` : 'satışa dönen cihaz adedi'} tone={r.deviceTarget ? ((pctOf(r.deviceActualYtd, r.deviceTarget) ?? 0) >= r.yearElapsedPct ? 'ok' : 'warn') : 'neutral'} small />
             <Kpi label="Entegrasyon · YTD" value={fmt(r.integrationDone)} sub={r.integrationTarget ? `hedef ${fmt(r.integrationTarget)} · %${pctOf(r.integrationDone, r.integrationTarget) ?? 0}` : `${fmt(r.integrationTotal)} entegrasyon firması · faz 9+`} tone={r.integrationTarget ? ((pctOf(r.integrationDone, r.integrationTarget) ?? 0) >= r.yearElapsedPct ? 'ok' : 'warn') : 'neutral'} small />
-            <Kpi label="Süresi Dolan Teklif" value={fmt(r.expiredOpenQuotes)} sub="açık ama geçerliliği bitmiş" tone={r.expiredOpenQuotes ? 'warn' : 'neutral'} small />
+            <Kpi label="Teklif → Satış" value={r.conversionPct == null ? '—' : `%${r.conversionPct}`} sub={r.conversionPct == null ? 'kapanan teklif yok' : `${fmt(r.saleYtd.count)} satış · ${fmt(r.lostYtd.count)} kayıp · ${fmt(r.expiredOpenQuotes)} süresi dolmuş`} tone={conversionTone(r.conversionPct)} small />
           </div>
           <PaceCompare r={r} />
         </div>
@@ -463,6 +465,7 @@ function PulseSlide({ data, caps, page, compact }: { data: LiveBoardPayload; cap
                       <span>Aktivite <b>{fmt(row.actual.totalActivities)}{row.target.totalActivities ? ` / ${fmt(row.target.totalActivities)}` : ''}</b></span>
                       <span>Forecast <b className={rev.forecastPct != null && rev.forecastPct < 100 ? 'tone-warn' : ''}>{rev.forecastPct != null ? `%${rev.forecastPct}` : fmtMoney(rev.forecast)}</b></span>
                       <span>Pipeline <b>{fmtMoney(rev.weightedPipeline)}</b></span>
+                      <span title="Kapanan tekliflerin kaçı satışa döndü">Dönüşüm <b className={`tone-${conversionTone(rev.conversionPct)}`}>{rev.conversionPct == null ? '—' : `%${rev.conversionPct}`}</b></span>
                       <span title="Hareketsiz fırsat · Geciken aksiyon">
                         Hareketsiz <b className={row.pipeline.staleCritical ? 'tone-danger' : ''}>{fmt(row.pipeline.stale)}</b>
                         {' · '}Geciken <b className={row.pipeline.overdueActions ? 'tone-danger' : ''}>{fmt(row.pipeline.overdueActions)}</b>
@@ -667,15 +670,16 @@ function QuotesSlide({ data, caps, page }: { data: LiveBoardPayload; caps: Capac
   const closedRows = pageSlice(quotes.recentClosed, closedPage, caps.closedQuotes);
   const closedBounds = pageBounds(quotes.recentClosed.length, closedPage, caps.closedQuotes);
   const r = team.revenue;
+  const conv = quotes.conversion;
   const maxMonth = Math.max(1, ...forecast.byMonth.map((m) => m.quantity));
   return (
     <div className="lb-slide lb-quotes" key="quotes">
       <div className="lb-kpis six">
-        <Kpi label="Açık Teklif" value={fmt(r.openQuotes)} sub={`${fmtMoney(r.pipeline)} · ağırlıklı ${fmtMoney(r.weightedPipeline)}`} tone="info" />
-        <Kpi label="Kazanılan · YTD" value={fmt(r.wonYtd.count)} sub={fmtMoney(r.wonYtd.amount)} tone="ok" />
+        <Kpi label="Açık Teklif" value={fmt(r.openQuotes)} sub={`${fmtMoney(r.pipeline)} · ${fmt(r.expiredOpenQuotes)} süresi dolmuş`} tone={r.expiredOpenQuotes ? 'warn' : 'info'} />
+        <Kpi label="Satışa Dönen · YTD" value={fmt(r.saleYtd.count)} sub={`${fmtMoney(r.saleYtd.amount)} · ${fmt(r.saleYtd.devices)} cihaz`} tone="ok" />
+        <Kpi label="Teklif → Satış" value={conv.pct == null ? '—' : `%${conv.pct}`} sub={conv.pct == null ? 'kapanan teklif yok' : `${fmt(conv.sale)} satış / ${fmt(conv.sale + conv.lost + conv.cancelled)} kapanan`} tone={conversionTone(conv.pct)} />
         <Kpi label="Kaybedilen · YTD" value={fmt(r.lostYtd.count)} sub={fmtMoney(r.lostYtd.amount)} tone={r.lostYtd.count ? 'danger' : 'neutral'} />
         <Kpi label="Bu Hafta Teklif" value={fmt(team.quotes.weekCount)} sub={`${fmtMoney(team.quotes.weekAmount)} · ay ${fmt(team.quotes.monthCount)} / ${fmtMoney(team.quotes.monthAmount)}`} />
-        <Kpi label="Süresi Dolan" value={fmt(r.expiredOpenQuotes)} sub="açık ama geçerliliği bitmiş" tone={r.expiredOpenQuotes ? 'warn' : 'neutral'} />
         <Kpi label={`Forecast ${forecast.year} · adet`} value={fmt(forecast.totalQuantity)} sub={`ağırlıklı ${fmt(forecast.weightedQuantity)} · CRM forecast modülü`} />
       </div>
       <div className="lb-card">
@@ -704,10 +708,10 @@ function QuotesSlide({ data, caps, page }: { data: LiveBoardPayload; caps: Capac
       {closedRows.length ? (
         <div className="lb-table lb-quote-table">
           {closedRows.map((q) => (
-            <div className={`lb-tr ${q.status === 'won' ? 'tone-ok' : 'tone-danger'}`} key={q.quoteNo}>
+            <div className={`lb-tr ${q.status === 'won' ? (q.saleCancelled ? 'tone-neutral' : 'tone-ok') : 'tone-danger'}`} key={q.quoteNo}>
               <span className="lb-td-title"><strong>{q.musteri}</strong><em>{q.owner ?? '—'} · {q.quoteNo}</em></span>
               <span className="lb-td-money"><b>{fmtMoney(q.amount)}</b><small>{fmt(q.devices)} cihaz</small></span>
-              <span><Pill tone={q.status === 'won' ? 'ok' : 'danger'}>{q.status === 'won' ? 'Kazanıldı' : q.reason ?? 'Kaybedildi'}</Pill></span>
+              <span><Pill tone={q.status === 'won' ? (q.saleCancelled ? 'neutral' : 'ok') : 'danger'}>{q.status === 'won' ? (q.saleCancelled ? 'Satış iptal' : 'Satışa döndü') : q.reason ?? 'Kaybedildi'}</Pill></span>
               <span className="lb-td-due"><small>{fmtDate(q.date)}</small></span>
             </div>
           ))}
@@ -716,18 +720,19 @@ function QuotesSlide({ data, caps, page }: { data: LiveBoardPayload; caps: Capac
       </div>
       <div className="lb-stack">
         <div className="lb-card">
-          <div className="lb-card-head"><h3>Kişi Bazında</h3><span>açık · pasif ({LIVE_BOARD_RULES.quotePassiveDays}+ gün) · bu ay girilen · kazanılan · kayıp</span></div>
+          <div className="lb-card-head"><h3>Kişi Bazında Teklif → Satış</h3><span>pasif = {LIVE_BOARD_RULES.quotePassiveDays}+ gün dokunulmamış · dönüşüm = satış / kapanan teklif</span></div>
           {quotes.byOwner.length ? (
-            <div className="lb-table lb-owner-quotes lb-owner-quotes-6">
-              <div className="lb-tr lb-th"><span>Satıcı</span><span>Açık</span><span>Pasif</span><span>Bu Ay</span><span>Kazanılan</span><span>Kayıp</span></div>
+            <div className="lb-table lb-owner-quotes lb-owner-quotes-7">
+              <div className="lb-tr lb-th"><span>Satıcı</span><span>Açık</span><span>Pasif</span><span>Bu Ay</span><span>Satış</span><span>Kayıp</span><span>Dönüşüm</span></div>
               {quotes.byOwner.slice(0, 6).map((row) => (
                 <div className="lb-tr" key={row.owner}>
                   <span className="lb-td-title"><strong>{row.owner}</strong></span>
-                  <span>{fmt(row.open)}<small>{fmtMoney(row.openAmount)} · ağ. {fmtMoney(row.weighted)}</small></span>
+                  <span title={`${fmtMoney(row.openAmount)} açık · ağırlıklı ${fmtMoney(row.weighted)}`}>{fmt(row.open)}<small>{fmtMoney(row.openAmount)}</small></span>
                   <span className={row.passive ? 'tone-warn' : ''} title="geçerliliği bitmiş ya da 30+ gün dokunulmamış açık teklif">{fmt(row.passive)}</span>
                   <span>{fmt(row.monthCreated)}<small>{fmtMoney(row.monthAmount)}</small></span>
-                  <span className="tone-ok">{fmt(row.won)}<small>{fmtMoney(row.wonAmount)}</small></span>
-                  <span className={row.lost ? 'tone-danger' : ''}>{fmt(row.lost)}</span>
+                  <span className="tone-ok" title={`${fmtMoney(row.saleAmount)} satış cirosu · ${fmt(row.saleDevices)} cihaz`}>{fmt(row.sale)}<small>{fmtMoney(row.saleAmount)} · {fmt(row.saleDevices)} ad</small></span>
+                  <span className={row.lost ? 'tone-danger' : ''}>{fmt(row.lost)}{row.saleCancelled ? <small>{fmt(row.saleCancelled)} iptal</small> : null}</span>
+                  <span className={`tone-${conversionTone(row.conversionPct)}`}>{row.conversionPct == null ? '—' : `%${row.conversionPct}`}<small>{row.conversionPct == null ? 'kapanan yok' : `${fmt(row.sale)}/${fmt(row.sale + row.lost + row.saleCancelled)}`}</small></span>
                 </div>
               ))}
             </div>
@@ -932,7 +937,7 @@ function OwnerSlide({ owner, todayKey, caps, compact }: { owner: LiveOwner; toda
           <div><strong>{fmt(owner.actual.uniqueCustomers)}</strong><span>Tekil Firma</span></div>
           <div className="tone-info"><strong>{fmt(owner.pipeline.poc)}</strong><span>Aktif POC</span></div>
           <div><strong>{fmt(owner.quotes.weekCount)}</strong><span>Teklif · hafta</span></div>
-          <div className={owner.revenue.wonYtd.count ? 'tone-ok' : ''}><strong>{fmt(owner.revenue.wonYtd.count)}</strong><span>Sipariş · YTD</span></div>
+          <div className={owner.revenue.saleYtd.count ? 'tone-ok' : ''}><strong>{fmt(owner.revenue.saleYtd.count)}</strong><span>Satış · YTD</span></div>
         </div>
         <div className="lb-mini-title">Pipeline & Uyarı</div>
         <div className="lb-mini">

@@ -24,8 +24,9 @@ async function insertQuoteItems(client: PoolClient, quoteId: string, items: Reso
         insert into quote_items (
           quote_id, line_no, product_id, product_code_snapshot, product_name_snapshot,
           product_type, category, is_recurring, billing_period, quantity, unit_price,
-          total_price, rule_min_qty, rule_max_qty
-        ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+          total_price, rule_min_qty, rule_max_qty,
+          sale_type, rental_start_date, rental_end_date, rental_monthly_price
+        ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
       `,
       [
         quoteId,
@@ -40,8 +41,12 @@ async function insertQuoteItems(client: PoolClient, quoteId: string, items: Reso
         item.quantity,
         item.unit_price,
         item.total_price,
-        item.pricing_rule.min_qty,
-        item.pricing_rule.max_qty,
+        item.pricing_rule?.min_qty ?? null,
+        item.pricing_rule?.max_qty ?? null,
+        item.sale_type,
+        item.rental_start_date,
+        item.rental_end_date,
+        item.rental_monthly_price,
       ],
     );
   }

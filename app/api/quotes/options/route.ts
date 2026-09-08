@@ -17,7 +17,7 @@ export async function GET() {
     const [{ products, rules, source }, customerRes, parameterOptions] = await Promise.all([
       getQuoteCatalog(admin),
       customerQuery,
-      getParameterOptionsByGroups(['quote_probability']),
+      getParameterOptionsByGroups(['quote_probability', 'quote_loss_reason']),
     ]);
 
     if (customerRes.error) return NextResponse.json({ message: customerRes.error.message }, { status: 500 });
@@ -26,6 +26,8 @@ export async function GET() {
       products,
       rules,
       probabilities: (parameterOptions.quote_probability ?? []).map((item) => Number(item.value)).filter(Number.isFinite),
+      // Kayıp nedenleri (Liste Yönetimleri → Teklif); kapatma penceresinde zorunlu seçim.
+      lossReasons: (parameterOptions.quote_loss_reason ?? []).map((item) => ({ key: String(item.value), label: String(item.label) })),
       customers: (customerRes.data ?? []).filter((row: any) => !isReportOnlyCustomer(row)),
       catalogSource: source,
     });

@@ -333,7 +333,6 @@ export default function CrmCustomersClient() {
   const [sorumlu, setSorumlu] = useState('');
   const [ownerUserId, setOwnerUserId] = useState('');
   const [entegrasyonTipi, setEntegrasyonTipi] = useState('');
-  const [satisOlasiligi, setSatisOlasiligi] = useState('');
   const [customerType, setCustomerType] = useState('standard');
   const [hasCustomerRole, setHasCustomerRole] = useState(true);
   const [hasBusinessPartnerRole, setHasBusinessPartnerRole] = useState(false);
@@ -343,7 +342,6 @@ export default function CrmCustomersClient() {
   const [isKolu, setIsKolu] = useState('Retail');
   // Hunter / Farmer: yeni müşteri her zaman Hunter olarak açılır (Çağdaş Bey, 07.09);
   // Farmer'a geçiş künyeden yapılır.
-  const [saticiEtiketi, setSaticiEtiketi] = useState<'Hunter' | 'Farmer'>('Hunter');
   const [pipelinePolicy, setPipelinePolicy] = useState('phase_required');
 
   const [ownerFilter, setOwnerFilter] = useState('');
@@ -635,14 +633,12 @@ export default function CrmCustomersClient() {
     setSorumlu(displayMeName || HAVUZ_ACCOUNT_NAME);
     setOwnerUserId(me?.id ?? '');
     setEntegrasyonTipi('');
-    setSatisOlasiligi('');
     setCustomerType('standard');
     setHasCustomerRole(true);
     setHasBusinessPartnerRole(false);
     setPartnerSubtype('Entegrasyon Firması');
     setIntegrationEnabled(false);
     setIsKolu('Retail');
-    setSaticiEtiketi('Hunter');
     setPipelinePolicy('phase_required');
   };
 
@@ -662,7 +658,6 @@ export default function CrmCustomersClient() {
     setSorumlu(row.sorumlu ?? displayMeName ?? HAVUZ_ACCOUNT_NAME);
     setOwnerUserId(row.owner_user_id ?? '');
     setEntegrasyonTipi(row.entegrasyon_tipi ?? '');
-    setSatisOlasiligi(row.satis_olasiligi ?? '');
     setCustomerType(row.customer_type ?? 'standard');
     setHasCustomerRole(row.customer_type !== 'business_partner');
     setHasBusinessPartnerRole(row.customer_type === 'business_partner');
@@ -696,7 +691,7 @@ export default function CrmCustomersClient() {
     if (!musteri.trim()) return setMsg('Müşteri adı zorunlu.');
     if (!sorumlu.trim()) return setMsg('Sorumlu seçmek zorunlu.');
     if (canManageClassification && !hasCustomerRole && !hasBusinessPartnerRole) {
-      return setMsg('Firma en az bir role sahip olmalıdır: Müşteri veya İş Ortağı.');
+      return setMsg('Firma rolü seçilmeli: Müşteri ya da İş Ortağı.');
     }
 
     setBusySave(true);
@@ -708,14 +703,16 @@ export default function CrmCustomersClient() {
         sorumlu: sorumlu.trim(),
         owner_user_id: ownerUserId || null,
         entegrasyon_tipi: entegrasyonTipi.trim() || null,
-        satis_olasiligi: satisOlasiligi.trim() || null,
+        // satis_olasiligi bilerek gönderilmiyor (08.09 kararı: "bu oranı veremeyiz");
+        // update API'si alan gelmeyince mevcut değeri korur.
         customer_type: canManageClassification && hasBusinessPartnerRole && !hasCustomerRole
           ? 'business_partner'
           : customerType,
         pipeline_policy: pipelinePolicy,
         is_kolu: isKolu,
       };
-      if (mode === 'create') body.satici_etiketi = saticiEtiketi;
+      // Yeni müşteri her zaman Hunter açılır; etiket sadece künyeden değişir (08.09 kararı).
+      if (mode === 'create') body.satici_etiketi = 'Hunter';
       if (mode === 'edit') body.musteriId = editingId;
 
       const res = await fetch(url, {
@@ -1042,7 +1039,9 @@ export default function CrmCustomersClient() {
           font-size: 15px;
           font-weight: 900;
           line-height: 20px;
-          color: var(--text);
+          /* Kart zemini her temada açık pastel (inline gradient) → yazı sabit koyu;
+             var(--text) koyu temada beyaza dönüp kartı okunmaz yapıyordu (08.09). */
+          color: #0f172a;
           text-align: left;
           white-space: nowrap;
           overflow: hidden;
@@ -1054,15 +1053,16 @@ export default function CrmCustomersClient() {
           padding: 0;
           font-size: 12px;
           line-height: 16px;
-          color: var(--text-3);
+          color: #475569;
           text-align: left;
         }
-        .phase-segment-value { font-size: 28px; font-weight: 900; letter-spacing: -0.03em; color: var(--text); line-height: 1; }
-        .phase-progress { margin-top: auto; width: 100%; height: 8px; border-radius: 999px; background: color-mix(in srgb, var(--text) 12%, transparent); overflow: hidden; }
+        .phase-segment-value { font-size: 28px; font-weight: 900; letter-spacing: -0.03em; color: #0f172a; line-height: 1; }
+        .phase-progress { margin-top: auto; width: 100%; height: 8px; border-radius: 999px; background: rgba(15, 23, 42, 0.14); overflow: hidden; }
         .phase-progress span {
           display: block; height: 100%; border-radius: inherit;
-          background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 55%, var(--surface)));
+          background: linear-gradient(90deg, #4338ca, #6366f1);
         }
+        .phase-segment.active { outline: 2px solid #4338ca; border-color: #4338ca; }
 
         .advanced-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
         .result-bar {
@@ -1530,9 +1530,9 @@ export default function CrmCustomersClient() {
                     // olur (aktivite ekrani is ortagi fazlarini tipe gore getirir).
                     // Kullanici isterse asagidaki alandan degistirebilir.
                     setCustomerType((current) => resolveCustomerTypeForSector({ sektor: nextSektor, customerType: current }));
-                    // Eski İŞ ORTAĞI sektör seçimi, firma rolünü önerir. Müşteri
-                    // rolünü kaldırmaz; aynı firma iki rolü birlikte taşıyabilir.
-                    if (isBusinessPartnerSector(nextSektor)) setHasBusinessPartnerRole(true);
+                    // Eski İŞ ORTAĞI sektör seçimi firma rolünü İş Ortağı'na çevirir.
+                    // Roller tekli seçimdir (08.09 kararı): bir firma ya müşteri ya iş ortağıdır.
+                    if (isBusinessPartnerSector(nextSektor)) { setHasBusinessPartnerRole(true); setHasCustomerRole(false); }
                   }}
                 >
                   <option value="">Seçiniz</option>
@@ -1550,16 +1550,6 @@ export default function CrmCustomersClient() {
                   ))}
                 </select>
               </label>
-
-              {mode === 'create' ? (
-                <label className="field">
-                  <span className="label">Satıcı Etiketi</span>
-                  <select className="select" value={saticiEtiketi} onChange={(e) => setSaticiEtiketi(e.target.value === 'Farmer' ? 'Farmer' : 'Hunter')}>
-                    <option value="Hunter">Hunter · yeni müşteri kazanımı</option>
-                    <option value="Farmer">Farmer · mevcut portföyü büyütme</option>
-                  </select>
-                </label>
-              ) : null}
 
               <label className="field">
                 <span className="label">Sorumlusu</span>
@@ -1591,28 +1581,22 @@ export default function CrmCustomersClient() {
                 </select>
               </label>
 
-              <label className="field">
-                <span className="label">Satış Olasılığı</span>
-                <select className="select" value={satisOlasiligi} onChange={(e) => setSatisOlasiligi(e.target.value)}>
-                  <option value="">Seçiniz</option>
-                  {filterOptions.salesProbabilityOptions.map((item) => (
-                    <option key={item.value} value={item.value}>{item.label}</option>
-                  ))}
-                </select>
-              </label>
-
               {canManageClassification ? (
                 <>
                   <fieldset className="field" disabled={relationshipsLoading} style={{ border: '1px solid var(--border)', borderRadius: 14, padding: 14, margin: 0 }}>
-                    <legend className="label" style={{ padding: '0 6px' }}>Firma Rolleri</legend>
+                    <legend className="label" style={{ padding: '0 6px' }}>Firma Rolü</legend>
                     <div style={{ display: 'grid', gap: 10 }}>
                       <label style={{ display: 'flex', alignItems: 'center', gap: 9, fontWeight: 800 }}>
-                        <input type="checkbox" checked={hasCustomerRole} onChange={(e) => setHasCustomerRole(e.target.checked)} /> Müşteri
+                        <input type="radio" name="firma-rolu" checked={hasCustomerRole && !hasBusinessPartnerRole} onChange={() => { setHasCustomerRole(true); setHasBusinessPartnerRole(false); }} /> Müşteri
                       </label>
                       <label style={{ display: 'flex', alignItems: 'center', gap: 9, fontWeight: 800 }}>
-                        <input type="checkbox" checked={hasBusinessPartnerRole} onChange={(e) => setHasBusinessPartnerRole(e.target.checked)} /> İş Ortağı
+                        <input type="radio" name="firma-rolu" checked={hasBusinessPartnerRole && !hasCustomerRole} onChange={() => { setHasBusinessPartnerRole(true); setHasCustomerRole(false); }} /> İş Ortağı
                       </label>
-                      <small className="muted">İkisini birlikte seçebilirsin; firma rolleri birbirinden bağımsızdır.</small>
+                      {hasCustomerRole && hasBusinessPartnerRole ? (
+                        <small className="muted">Bu firmada iki rol de aktif görünüyor; birini seç, kaydedince yalnızca seçtiğin rol kalır.</small>
+                      ) : (
+                        <small className="muted">Bir firma ya müşteri ya iş ortağıdır; iki rol birlikte seçilmez.</small>
+                      )}
                     </div>
                   </fieldset>
                   <label className="field" style={{ border: '1px solid var(--border)', borderRadius: 14, padding: 14 }}>

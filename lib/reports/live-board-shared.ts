@@ -107,7 +107,7 @@ export type RevenueBlock = {
   year: number;
   /** Yıllık ciro hedefi (crm_target_values · sales_revenue). Yoksa null. */
   target: number | null;
-  /** Yılbaşından bugüne kazanılan tekliflerin tutarı (Teklif Raporları ile aynı tanım). */
+  /** Yılbaşından bugüne aktif satış kayıtlarının tutarı (crm_sales; Teklif Raporları ile aynı tanım). */
   actualYtd: number;
   attainmentPct: number | null;
   remaining: number | null;
@@ -121,7 +121,7 @@ export type RevenueBlock = {
   openQuotes: number;
   /** Geçerlilik tarihi geçmiş ama kapatılmamış açık teklif sayısı. */
   expiredOpenQuotes: number;
-  /** Yıllık cihaz hedefi (device_count) ve kazanılan cihaz adedi. */
+  /** Yıllık cihaz hedefi (device_count) ve satışa dönen cihaz adedi. */
   deviceTarget: number | null;
   deviceActualYtd: number;
   /** KasaPOS entegrasyon hedefi (integration_count) ve tamamlanan (faz ≥ 9) / toplam entegrasyon firması. */
@@ -131,6 +131,13 @@ export type RevenueBlock = {
   wonYtd: { count: number; amount: number };
   wonMonth: { count: number; amount: number };
   lostYtd: { count: number; amount: number };
+  /** Satış kaydına dönen teklifler (crm_sales · status='active'); ciro artık buradan gelir. */
+  saleYtd: { count: number; amount: number; devices: number };
+  saleMonth: { count: number; amount: number };
+  /** İptal edilmiş satış kaydı sayısı (YTD) — kazanılan ama cirodan düşen teklifler. */
+  saleCancelled: number;
+  /** Kapanan tekliflerin kaçı satışa döndü: satış / (satış + kayıp). Kapanan yoksa null. */
+  conversionPct: number | null;
   /** Yılın geçen süre oranı ve hıza göre durum (spec §6.2). */
   yearElapsedPct: number;
   pace: Tone | null;
@@ -294,6 +301,8 @@ export type QuoteRow = {
   reason: string | null;
   date: string | null;
   expired: boolean;
+  /** Kazanılan teklifin satış kaydı iptal edildiyse true (ciroya sayılmaz). */
+  saleCancelled?: boolean;
 };
 
 export type LiveBoardPayload = {
@@ -336,8 +345,15 @@ export type LiveBoardPayload = {
       passive: number;
       monthCreated: number; monthAmount: number;
       won: number; wonAmount: number; lost: number;
+      /** Satışa dönen teklif adedi/tutarı (crm_sales · aktif) ve dönüşüm oranı. */
+      sale: number; saleAmount: number; saleDevices: number; saleCancelled: number;
+      conversionPct: number | null;
     }>;
     lostReasons: Distribution;
+    /** Kişi bazında teklif → satış dönüşüm oranı (%); sunumda ayrı blok. */
+    conversionByOwner: Distribution;
+    /** Takım geneli dönüşüm oranı (%) ve kapanan teklif adedi. */
+    conversion: { pct: number | null; sale: number; lost: number; cancelled: number };
   };
   forecast: {
     year: number;
@@ -360,7 +376,7 @@ export const TEAM_SLIDE_TITLES: Record<TeamSlideKey, { title: string; sub: strin
   portfolio: { title: 'Portföy', sub: 'account yapısı · faz · sektör · künye' },
   hot: { title: 'Hot Pipeline', sub: 'sonuçlanmaya yakın fırsatlar' },
   poc: { title: 'POC · Pilot · Rollout', sub: 'canlıya ve satışa yakın projeler' },
-  quotes: { title: 'Teklifler & Forecast', sub: 'açık · kazanılan · kaybedilen · yıl forecast' },
+  quotes: { title: 'Teklifler & Forecast', sub: 'açık · satışa dönen · kaybedilen · dönüşüm' },
   alerts: { title: 'Yönetim Uyarıları', sub: 'aksiyon gerektiren başlıklar' },
   jira: { title: 'Jira · Retail Support', sub: 'teknik operasyon sağlığı' },
 };
@@ -764,4 +780,21 @@ export function fmtMoney(value: number | null | undefined, opts?: { sign?: boole
 export function pctOf(actual: number, target: number | null | undefined): number | null {
   if (!target || target <= 0) return null;
   return Math.round((actual / target) * 100);
+}
+
+/**
+ * Teklif → satış dönüşüm oranı: kapanan tekliflerin (satış + iptal edilmiş satış + kayıp)
+ * kaçı satışa döndü. Kapanan teklif yoksa null — "%0" yanıltıcı olurdu.
+ * (Çağdaş Bey / satış ekibi, 07.09: "% kaçı satışa çevirdi genel ve kişi bazlı".)
+ */
+export function conversionPct(sale: number, cancelled: number, lost: number): number | null {
+  const closed = sale + cancelled + lost;
+  if (closed <= 0) return null;
+  return Math.round((sale / closed) * 100);
+}
+
+/** Dönüşüm oranının rengi: %50+ iyi · %25–49 uyarı · %25 altı kritik. */
+export function conversionTone(pct: number | null): Tone {
+  if (pct == null) return 'neutral';
+  return pct >= 50 ? 'ok' : pct >= 25 ? 'warn' : 'danger';
 }
