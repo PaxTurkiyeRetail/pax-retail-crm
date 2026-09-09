@@ -1,0 +1,272 @@
+/* Müşteri Listesi (H/F/L/K) — Raporlar › Müşteri Listesi (Sinan, 09.09.2026).
+   Kolon = kişi, tablo = kategori; firma çipleri sürüklenip başka kişi/kategoriye bırakılır.
+
+   TEMA KURALI (tek sinyal): renkler yalnız app/globals.css token'larından; bu dosya
+   `prefers-color-scheme` KULLANMAZ (PanelShell <html data-theme> yazar). Kategori
+   renkleri globals.css'teki chip token'larıdır (iki temada da tanımlı): H indigo,
+   F green, L gold, K violet. Sabit hex yalnız koyu hero üstündeki beyaz yazıda.
+
+   KAPSAM KURALI (kılavuz §4 madde 21): her seçici .cl-shell ile başlar; çıplak
+   `table`/`input`/`.card` yok. Tablo <table> değil CSS grid — premium-enterprise'ın
+   `.pax-main-inner table th` !important kuralları devreye girmez. */
+
+.cl-shell {
+  display: grid;
+  gap: 18px;
+  padding-bottom: 40px;
+  color: var(--text);
+  --cl-accent: #1d4ed8;
+}
+[data-theme="dark"] .cl-shell { --cl-accent: #93b4fd; }
+
+/* --- Hero (koyu lacivert gradient; yazılar bilinçli sabit beyaz) ---------- */
+.cl-shell .cl-hero {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 30px 34px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 26px;
+  color: #fff;
+  background:
+    radial-gradient(circle at 88% 12%, rgba(255, 255, 255, 0.14), transparent 30%),
+    linear-gradient(122deg, #0f172a 0%, #1e3a8a 55%, #1d4ed8 100%);
+  box-shadow: 0 22px 50px rgba(30, 58, 138, 0.24);
+}
+.cl-shell .cl-hero-copy { position: relative; z-index: 1; max-width: 760px; }
+.cl-shell .cl-eyebrow {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 7px 11px; border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  font-size: 12px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase;
+}
+.cl-shell .cl-hero h1 { margin: 16px 0 8px; font-size: clamp(26px, 2.6vw, 38px); line-height: 1.1; letter-spacing: -0.03em; color: #fff; }
+.cl-shell .cl-hero p { margin: 0; color: rgba(255, 255, 255, 0.86); font-size: 14px; line-height: 1.65; }
+.cl-shell .cl-hero p b { color: #fff; }
+.cl-shell .cl-hero-actions { position: relative; z-index: 1; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.cl-shell .cl-hero .cl-search,
+.cl-shell .cl-hero .cl-select {
+  min-height: 42px; padding: 0 12px; border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.26) !important;
+  background: rgba(255, 255, 255, 0.14) !important;
+  color: #fff !important; font-weight: 700; font-size: 14px;
+}
+.cl-shell .cl-hero .cl-search { min-width: 220px; }
+.cl-shell .cl-hero .cl-search::placeholder { color: rgba(255, 255, 255, 0.7); }
+.cl-shell .cl-hero .cl-select option { background: #0f172a; color: #fff; }
+
+/* --- Düğmeler --------------------------------------------------------------- */
+.cl-shell .cl-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 42px; padding: 0 16px; border-radius: 12px;
+  border: 1px solid var(--border); background: var(--surface); color: var(--text-2);
+  font-weight: 800; font-size: 14px; cursor: pointer;
+}
+.cl-shell .cl-btn:hover { border-color: var(--accent-border); color: var(--text); }
+.cl-shell .cl-btn.primary { background: var(--cl-accent); border-color: var(--cl-accent); color: #fff; }
+[data-theme="dark"] .cl-shell .cl-btn.primary { color: #0b1020; }
+.cl-shell .cl-btn.light { color: #fff; border-color: rgba(255, 255, 255, 0.26); background: rgba(255, 255, 255, 0.14); }
+.cl-shell .cl-btn.light:hover { background: rgba(255, 255, 255, 0.22); color: #fff; }
+.cl-shell .cl-btn.sm { min-height: 32px; padding: 0 12px; font-size: 13px; border-radius: 10px; }
+.cl-shell .cl-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+/* --- KPI kartları ------------------------------------------------------------ */
+.cl-shell .cl-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; }
+.cl-shell .cl-kpi {
+  display: block; width: 100%; text-align: left;
+  padding: 18px 20px; border: 1px solid var(--border); border-radius: 20px;
+  background: var(--surface); color: var(--text); box-shadow: var(--shadow-sm);
+  font: inherit; cursor: default;
+}
+.cl-shell button.cl-kpi { cursor: pointer; transition: border-color .15s ease, transform .15s ease; }
+.cl-shell button.cl-kpi:hover { border-color: var(--accent-border); transform: translateY(-1px); }
+.cl-shell .cl-kpi.active { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.cl-shell .cl-kpi-value {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 32px; font-weight: 900; line-height: 1.05; letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums; color: var(--text);
+}
+.cl-shell .cl-kpi.total .cl-kpi-value { color: var(--cl-accent); }
+.cl-shell .cl-kpi-label { margin-top: 6px; font-size: 14px; font-weight: 800; color: var(--text-2); }
+.cl-shell .cl-kpi-hint { margin-top: 4px; font-size: 12px; line-height: 1.5; color: var(--text-3); }
+
+/* Kategori rozeti — chip token'ları (globals.css, iki temada tanımlı). */
+.cl-shell .cl-cat-badge {
+  display: inline-grid; place-items: center;
+  width: 28px; height: 28px; border-radius: 9px;
+  border: 1px solid var(--chip-gray-bd); background: var(--chip-gray-bg); color: var(--chip-gray-color);
+  font-size: 13px; font-weight: 900; letter-spacing: 0; flex: none;
+}
+.cl-shell .cl-cat-badge.big { width: 44px; height: 44px; font-size: 20px; border-radius: 14px; }
+.cl-shell .cl-cat-badge.indigo { background: var(--chip-indigo-bg); border-color: var(--chip-indigo-bd); color: var(--chip-indigo-color); }
+.cl-shell .cl-cat-badge.green  { background: var(--chip-green-bg);  border-color: var(--chip-green-bd);  color: var(--chip-green-color); }
+.cl-shell .cl-cat-badge.gold   { background: var(--chip-gold-bg);   border-color: var(--chip-gold-bd);   color: var(--chip-gold-color); }
+.cl-shell .cl-cat-badge.violet { background: var(--chip-violet-bg); border-color: var(--chip-violet-bd); color: var(--chip-violet-color); }
+
+/* --- Sekmeler ----------------------------------------------------------------- */
+.cl-shell .cl-tabs { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.cl-shell .cl-tab {
+  display: inline-flex; align-items: center; gap: 8px;
+  min-height: 40px; padding: 0 14px 0 8px; border-radius: 999px;
+  border: 1px solid var(--border); background: var(--surface); color: var(--text-2);
+  font-weight: 800; font-size: 14px; cursor: pointer;
+}
+.cl-shell .cl-tab:first-child { padding-left: 16px; }
+.cl-shell .cl-tab:hover { border-color: var(--accent-border); color: var(--text); }
+.cl-shell .cl-tab.active { color: #fff; border-color: #1d4ed8; background: #1d4ed8; }
+.cl-shell .cl-tab.active .cl-cat-badge { background: rgba(255, 255, 255, 0.16); border-color: rgba(255, 255, 255, 0.3); color: #fff; }
+.cl-shell .cl-filter-note { margin-left: 6px; font-size: 13px; color: var(--text-3); font-weight: 700; }
+
+/* --- Durumlar ------------------------------------------------------------------ */
+.cl-shell .cl-state {
+  padding: 26px; border: 1px dashed var(--border); border-radius: 18px;
+  background: var(--surface); color: var(--text-3); font-weight: 700; text-align: center;
+}
+.cl-shell .cl-state.error { color: var(--chip-red-color); border-color: var(--chip-red-bd); background: var(--chip-red-bg); }
+
+/* --- Kategori tablosu ---------------------------------------------------------- */
+.cl-shell .cl-table {
+  border: 1px solid var(--border); border-radius: 22px; background: var(--surface);
+  /* clip (hidden değil): köşeler kırpılır ama kolon başlıklarının sticky davranışı bozulmaz */
+  color: var(--text); overflow: clip; box-shadow: var(--shadow-sm);
+}
+.cl-shell .cl-table-head {
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  padding: 16px 20px; border-bottom: 1px solid var(--border); background: var(--surface-2);
+}
+.cl-shell .cl-table-title { display: grid; gap: 2px; min-width: 0; flex: 1 1 auto; }
+.cl-shell .cl-table-title h2 { margin: 0; font-size: 18px; font-weight: 900; letter-spacing: -0.01em; color: var(--text); }
+.cl-shell .cl-table-title span { font-size: 12.5px; color: var(--text-3); }
+.cl-shell .cl-table-count { font-size: 13px; font-weight: 900; color: var(--text-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* Kişi kolonları: Excel görünümü. */
+.cl-shell .cl-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--cl-cols, 5), minmax(180px, 1fr));
+  gap: 0;
+}
+.cl-shell .cl-col {
+  display: grid; grid-template-rows: auto 1fr auto; gap: 8px; align-content: start;
+  min-width: 0; padding: 12px 12px 14px; border-right: 1px solid var(--border);
+  transition: background .12s ease;
+}
+.cl-shell .cl-col:last-child { border-right: 0; }
+.cl-shell .cl-col.dragging { background: color-mix(in srgb, var(--accent) 3%, transparent); }
+.cl-shell .cl-col.drop { background: var(--accent-soft); box-shadow: inset 0 0 0 2px var(--accent-border); }
+.cl-shell .cl-col-head {
+  position: sticky; top: 6px; z-index: 3;
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 8px; min-height: 40px;
+  padding: 6px 8px 8px; border-bottom: 2px solid var(--border); background: var(--surface);
+}
+/* Sürükleme hedefleri (kolon başlığında) */
+.cl-shell .cl-col-targets { display: flex; gap: 4px; flex: none; }
+.cl-shell .cl-cat-badge.target { cursor: copy; border-style: dashed; transition: transform .1s ease, box-shadow .1s ease; }
+.cl-shell .cl-cat-badge.target.drop { border-style: solid; transform: scale(1.15); box-shadow: 0 0 0 3px var(--accent-soft), 0 0 0 1px var(--accent); }
+.cl-shell .cl-col-head b { flex: 1 1 auto; min-width: 0; font-size: 14px; font-weight: 900; color: var(--text); letter-spacing: -0.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cl-shell .cl-col-head span {
+  display: inline-grid; place-items: center; min-width: 26px; height: 22px; padding: 0 7px; border-radius: 999px;
+  background: var(--chip-gray-bg); border: 1px solid var(--chip-gray-bd); color: var(--chip-gray-color);
+  font-size: 12px; font-weight: 900; font-variant-numeric: tabular-nums;
+}
+.cl-shell .tone-indigo .cl-col-head span { background: var(--chip-indigo-bg); border-color: var(--chip-indigo-bd); color: var(--chip-indigo-color); }
+.cl-shell .tone-green  .cl-col-head span { background: var(--chip-green-bg);  border-color: var(--chip-green-bd);  color: var(--chip-green-color); }
+.cl-shell .tone-gold   .cl-col-head span { background: var(--chip-gold-bg);   border-color: var(--chip-gold-bd);   color: var(--chip-gold-color); }
+.cl-shell .tone-violet .cl-col-head span { background: var(--chip-violet-bg); border-color: var(--chip-violet-bd); color: var(--chip-violet-color); }
+
+.cl-shell .cl-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; align-content: start; min-height: 44px; }
+.cl-shell .cl-empty { padding: 10px 8px; color: var(--text-3); font-size: 13px; font-weight: 700; text-align: center; border: 1px dashed var(--border); border-radius: 12px; }
+
+/* Firma çipi */
+.cl-shell .cl-chip {
+  position: relative;
+  display: flex; align-items: center; gap: 6px; min-height: 38px;
+  padding: 7px 8px 7px 10px; border-radius: 12px;
+  border: 1px solid var(--border); background: var(--surface);
+  color: var(--text); font-size: 13.5px; font-weight: 700; line-height: 1.3;
+  transition: box-shadow .12s ease, transform .12s ease, opacity .12s ease;
+}
+.cl-shell .cl-chip.grab { cursor: grab; }
+.cl-shell .cl-chip.grab:hover { border-color: var(--accent-border); box-shadow: var(--shadow-sm); }
+.cl-shell .cl-chip.grab:active { cursor: grabbing; }
+.cl-shell .cl-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.cl-shell .cl-chip.lifted { opacity: 0.45; transform: scale(0.98); }
+.cl-shell .cl-chip.busy { opacity: 0.6; }
+/* Bırakma çizgisi: hedef çipin üstünde vurgu şeridi */
+.cl-shell .cl-chip.before::before {
+  content: ''; position: absolute; left: 4px; right: 4px; top: -5px; height: 3px; border-radius: 3px;
+  background: var(--accent);
+}
+.cl-shell .cl-handle { color: var(--text-3); font-size: 11px; letter-spacing: -2px; flex: none; user-select: none; }
+.cl-shell .cl-chip-name { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.cl-shell .cl-chip-note { flex: none; color: var(--text-3); font-size: 12px; }
+.cl-shell .cl-chip-menu {
+  flex: none; width: 26px; height: 26px; border-radius: 8px;
+  border: 1px solid transparent; background: transparent; color: var(--text-3);
+  font-size: 15px; font-weight: 900; line-height: 1; cursor: pointer;
+}
+.cl-shell .cl-chip-menu:hover, .cl-shell .cl-chip-menu:focus-visible { border-color: var(--border); background: var(--surface-2); color: var(--text); outline: none; }
+
+/* Satır içi düzenleme */
+.cl-shell .cl-edit { display: grid; gap: 6px; width: 100%; }
+.cl-shell .cl-edit input, .cl-shell .cl-add input {
+  min-height: 34px; padding: 0 10px; border-radius: 10px; width: 100%;
+  border: 1px solid var(--border); background: var(--surface-2); color: var(--text); font: inherit; font-size: 13px;
+}
+.cl-shell .cl-edit-actions { display: flex; gap: 6px; }
+
+/* Yeni firma */
+.cl-shell .cl-add { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 6px; align-items: center; }
+.cl-shell .cl-add-btn {
+  min-height: 34px; border-radius: 10px; border: 1px dashed var(--border);
+  background: transparent; color: var(--text-3); font-weight: 800; font-size: 13px; cursor: pointer;
+}
+.cl-shell .cl-add-btn:hover { border-color: var(--accent-border); color: var(--text); background: var(--accent-soft); }
+
+/* --- Çip menüsü (sabit konum) ---------------------------------------------------- */
+.cl-shell .cl-menu {
+  position: fixed; z-index: 60; min-width: 220px; padding: 6px;
+  border: 1px solid var(--border); border-radius: 14px; background: var(--surface);
+  box-shadow: var(--shadow-md); display: grid; gap: 2px;
+}
+.cl-shell .cl-menu-title { padding: 8px 10px 6px; font-size: 13px; font-weight: 900; color: var(--text); display: grid; gap: 2px; border-bottom: 1px solid var(--border); margin-bottom: 4px; }
+.cl-shell .cl-menu-title small { font-size: 11.5px; font-weight: 700; color: var(--text-3); }
+.cl-shell .cl-menu button {
+  text-align: left; min-height: 36px; padding: 0 10px; border-radius: 10px; border: 0;
+  background: transparent; color: var(--text-2); font: inherit; font-weight: 700; font-size: 13.5px; cursor: pointer;
+}
+.cl-shell .cl-menu button:hover, .cl-shell .cl-menu button:focus-visible { background: var(--surface-2); color: var(--text); outline: none; }
+.cl-shell .cl-menu button.danger { color: var(--chip-red-color); }
+.cl-shell .cl-menu button.danger:hover { background: var(--chip-red-bg); }
+
+/* --- Taşı diyaloğu --------------------------------------------------------------- */
+.cl-shell .cl-modal-backdrop {
+  position: fixed; inset: 0; z-index: 70; display: grid; place-items: center; padding: 20px;
+  background: rgba(15, 23, 42, 0.55);
+}
+.cl-shell .cl-modal {
+  width: min(440px, 100%); padding: 22px 22px 18px; border-radius: 20px;
+  border: 1px solid var(--border); background: var(--surface); color: var(--text); box-shadow: var(--shadow-md);
+  display: grid; gap: 12px;
+}
+.cl-shell .cl-modal h3 { margin: 0; font-size: 18px; font-weight: 900; letter-spacing: -0.01em; overflow-wrap: anywhere; }
+.cl-shell .cl-modal p { margin: 0; font-size: 13.5px; color: var(--text-3); line-height: 1.55; }
+.cl-shell .cl-modal p b { color: var(--text); }
+.cl-shell .cl-field { display: grid; gap: 6px; font-size: 12.5px; font-weight: 800; color: var(--text-2); }
+.cl-shell .cl-field select {
+  min-height: 40px; padding: 0 10px; border-radius: 10px;
+  border: 1px solid var(--border); background: var(--surface-2); color: var(--text); font: inherit; font-weight: 700;
+}
+.cl-shell .cl-modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+
+/* --- Küçük ekran: kolonlar alt alta, sürükleme yerine "Taşı…" ------------------ */
+@media (max-width: 900px) {
+  .cl-shell .cl-hero { padding: 22px 20px; }
+  .cl-shell .cl-grid { grid-template-columns: 1fr; }
+  .cl-shell .cl-col { border-right: 0; border-bottom: 1px solid var(--border); }
+  .cl-shell .cl-col:last-child { border-bottom: 0; }
+  .cl-shell .cl-handle { display: none; }
+}

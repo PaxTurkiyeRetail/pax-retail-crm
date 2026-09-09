@@ -256,7 +256,16 @@ export type LiveOwner = {
   hotTotal: number;
   recentActivities: LiveActivity[];
   jira: { open: number; customerWaiting: number } | null;
+  /**
+   * Müşteri Listesi (H/F/L/K) — Çağdaş Bey'in kişi bazlı firma dağılımı (`crm_musteri_listesi`,
+   * Raporlar › Müşteri Listesi). Kişi slaytındaki Hunter/Farmer donut'u BURADAN okur (Sinan, 09.09) —
+   * künye `satici_etiketi` değil. Liste hiç doldurulmamışsa null (donut yerine not).
+   */
+  list: CustomerListSplit | null;
 };
+
+/** Kişinin Müşteri Listesi sayıları: H Hunter · F Farmer · L Lead · K Kasa Firması. */
+export type CustomerListSplit = { hunter: number; farmer: number; lead: number; kasa: number; total: number };
 
 /** Jira · Retail Support özeti (haftalık pivot + firma kırılımı). */
 export type JiraCompanyRow = {
@@ -410,7 +419,8 @@ export const OWNER_ORDER: readonly string[] = [
 /** Sektör dağılımında öne alınan sektörler; kalanlar adede göre. */
 export const SECTOR_ORDER: readonly string[] = ['Hazır Giyim', 'Gıda Perakendesi', 'Ev & Yaşam / Yapı Market'];
 
-function normalizeName(value: string) {
+/** Türkçe duyarlı ad anahtarı (NFC + tr küçük harf + tek boşluk). Müşteri Listesi (H/F/L/K) eşlemesi de bunu kullanır. */
+export function normalizeName(value: string) {
   return value.normalize('NFC').trim().toLocaleLowerCase('tr').replace(/\s+/g, ' ');
 }
 function orderIndex(order: readonly string[], name: string) {
@@ -492,6 +502,24 @@ export const COMPACT_METRICS: LayoutMetrics = {
 
 /** Kompakt eşik: gövde (slayt alanı) yüksekliği bundan küçükse küçük ölçüler. */
 export const COMPACT_BODY_HEIGHT = 780;
+
+/**
+ * Kişi slaytı profil kolonu yoğunluğu (Sinan, 09.09: Açık Teklif + H/F donut'u eklenince kolon
+ * uzadı). Kolon sabit yükseklikli listelere girmez; bunun yerine ölçülen gövdeye göre üç kademe:
+ *   roomy ≥ 900 px → halka 156, avatar 84, "Pipeline & Uyarı" 2×2
+ *   tight ≥ 740 px → halka 128/112, avatar 72, sıkı boşluklar
+ *   dense  < 740 px → halka 100, avatar 64, sayaçlar tek satır metin
+ * Harness (6 çözünürlük × 2 tema) ile doğrulandı: profil kolonu gövdeyi hiç aşmaz.
+ */
+export type OwnerDensity = 'roomy' | 'tight' | 'dense';
+export const OWNER_DENSITY_TIGHT_BELOW = 900;
+export const OWNER_DENSITY_DENSE_BELOW = 740;
+export function ownerDensity(bodyHeight: number): OwnerDensity {
+  if (bodyHeight <= 0) return 'roomy';
+  if (bodyHeight < OWNER_DENSITY_DENSE_BELOW) return 'dense';
+  if (bodyHeight < OWNER_DENSITY_TIGHT_BELOW) return 'tight';
+  return 'roomy';
+}
 
 export function layoutMetrics(bodyHeight: number): LayoutMetrics {
   return bodyHeight > 0 && bodyHeight < COMPACT_BODY_HEIGHT ? COMPACT_METRICS : BASE_METRICS;

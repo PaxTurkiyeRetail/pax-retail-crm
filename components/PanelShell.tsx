@@ -490,6 +490,13 @@ export default function PanelShell({
         iconKey: "weekly",
         exact: true,
       });
+      // Müşteri Listesi (H/F/L/K): Çağdaş Bey'in kişi bazlı firma dağılımı; herkes görür,
+      // admin/super_admin düzenler (Sinan, 09.09).
+      reports.push({
+        href: "/crm/reports/customer-list",
+        label: "Müşteri Listesi (H/F/L/K)",
+        iconKey: "customers",
+      });
       reports.push({
         href: "/crm/reports/entegrasyon-raporu",
         label: "Entegrasyon Raporu",

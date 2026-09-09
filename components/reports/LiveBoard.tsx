@@ -34,6 +34,9 @@ import {
   type LiveBoardPayload,
   type LiveBoardSpeed,
   type LiveOwner,
+  type CustomerListSplit,
+  type OwnerDensity,
+  ownerDensity,
   type LiveSlide,
   type PocItem,
   type RevenueBlock,
@@ -859,28 +862,61 @@ function JiraSlide({ data, caps, page }: { data: LiveBoardPayload; caps: Capacit
   );
 }
 
+/* --- Müşteri Listesi (H/F/L/K) donut'u — kişi slaytı ------------------------ */
+/** Hunter/Farmer oranı: Raporlar › Müşteri Listesi'ndeki (crm_musteri_listesi) kayıtlardan (Sinan, 09.09). */
+function HfDonut({ list, size, compact }: { list: CustomerListSplit; size: number; compact: boolean }) {
+  const total = list.hunter + list.farmer;
+  const radius = 40;
+  const circumference = 2 * Math.PI * radius;
+  const hunterShare = total ? list.hunter / total : 0;
+  const gap = list.hunter && list.farmer ? 2.2 : 0;
+  const hunterLen = Math.max(0, hunterShare * circumference - gap);
+  const farmerLen = Math.max(0, (1 - hunterShare) * circumference - gap);
+  const pct = (value: number) => (total ? `%${Math.round((value / total) * 100)}` : '');
+  return (
+    <div className={`lb-hf ${compact ? 'compact' : ''}`}>
+      <div className="lb-donut lb-hf-donut" style={{ width: size, height: size }} role="img" aria-label={`Hunter ${list.hunter} · Farmer ${list.farmer}`}>
+        <svg viewBox="0 0 100 100">
+          <circle className="track" cx="50" cy="50" r={radius} />
+          {hunterLen > 0 ? <circle cx="50" cy="50" r={radius} stroke="var(--lb-info)" strokeDasharray={`${hunterLen} ${circumference - hunterLen}`} /> : null}
+          {farmerLen > 0 ? <circle cx="50" cy="50" r={radius} stroke="var(--lb-ok)" strokeDasharray={`${farmerLen} ${circumference - farmerLen}`} strokeDashoffset={-(hunterShare * circumference)} /> : null}
+        </svg>
+        <div className="lb-ring-center"><strong>{fmt(total)}</strong><span>H + F</span></div>
+      </div>
+      <div className="lb-hf-legend">
+        <div><i style={{ background: 'var(--lb-info)' }} /><span>Hunter</span><strong>{fmt(list.hunter)}</strong><em>{pct(list.hunter)}</em></div>
+        <div><i style={{ background: 'var(--lb-ok)' }} /><span>Farmer</span><strong>{fmt(list.farmer)}</strong><em>{pct(list.farmer)}</em></div>
+        <small>Lead {fmt(list.lead)} · Kasa {fmt(list.kasa)}</small>
+      </div>
+    </div>
+  );
+}
+
 /* --- Kişi slaytı (Sales Performance) --------------------------------------- */
 
-function OwnerSlide({ owner, todayKey, caps, compact }: { owner: LiveOwner; todayKey: string; caps: Capacities; compact: boolean }) {
+function OwnerSlide({ owner, todayKey, caps, compact, density }: { owner: LiveOwner; todayKey: string; caps: Capacities; compact: boolean; density: OwnerDensity }) {
   const r = owner.revenue;
   // Tek sayfa. Sinan, 09.09: Hot Pipeline kolonu kişi slaytından kaldırıldı ve
   // üst bantla (MoneyBand) / Kanal Kırılımı ile TEKRAR EDEN mini kutular çıkarıldı;
   // profil kartında yalnız kimlik + gerçekleşme halkası + başka yerde olmayan
   // "Pipeline & Uyarı" sayaçları kalıyor.
+  // Sinan, 09.09 (2): kişinin ÜZERİNDEKİ AÇIK TEKLİF sayısı öne çıktı ve Hunter/Farmer
+  // oranı donut oldu — kaynak Müşteri Listesi (H/F/L/K); künye satici_etiketi sayımı
+  // bu slayttan kaldırıldı ki aynı ekranda iki farklı H/F sayısı görünmesin.
   const recentRows = owner.recentActivities.slice(0, caps.recent);
   const recentMore = owner.recentActivities.length - recentRows.length;
   const hasRevenueTarget = r.target != null;
   const ringPct = hasRevenueTarget ? r.attainmentPct : owner.achievementPct;
   const ringTone: Tone = hasRevenueTarget ? (r.pace ?? 'neutral') : pctTone(owner.achievementPct);
   return (
-    <div className="lb-slide lb-owner" key={owner.owner}>
+    <div className={`lb-slide lb-owner density-${density}`} key={owner.owner}>
       <MoneyBand r={r} pipeline={owner.pipeline} weekQuotes={owner.quotes.weekCount} />
       <div className="lb-profile">
         <div className="lb-avatar">
           {owner.initials}
           <span className={`lb-rank-badge r${owner.rank}`} aria-label={`Sıra ${owner.rank}`}>#{owner.rank}</span>
         </div>
-        <div className="lb-name">{owner.owner}<small title="firma · 90 günde aktif · künye etiketi (boş = Hunter)">{fmt(owner.portfolio.total)} firma · {fmt(owner.portfolio.active)} aktif · {fmt(owner.portfolio.hunter)} hunter · {fmt(owner.portfolio.farmer)} farmer</small></div>
+        <div className="lb-name">{owner.owner}<small title="CRM portföyü · son 90 günde hareketi olan">{fmt(owner.portfolio.total)} firma · {fmt(owner.portfolio.active)} aktif</small></div>
         <div className="lb-ring-block">
           <span className="lb-ring-title">{hasRevenueTarget ? `Ciro · ${r.year}` : 'Aktivite · hafta'}</span>
           <Ring
@@ -888,11 +924,27 @@ function OwnerSlide({ owner, todayKey, caps, compact }: { owner: LiveOwner; toda
             tone={ringTone}
             big={ringPct == null ? (hasRevenueTarget ? fmtMoney(r.actualYtd) : fmt(owner.actual.totalActivities)) : `%${ringPct}`}
             sub={hasRevenueTarget ? `${fmtMoney(r.actualYtd)} / ${fmtMoney(r.target)}` : owner.target.totalActivities ? `${fmt(owner.actual.totalActivities)} / ${fmt(owner.target.totalActivities)}` : 'hedef yok'}
-            size={compact ? 126 : 156}
+            size={density === 'dense' ? 96 : density === 'tight' ? (compact ? 112 : 128) : compact ? 126 : 156}
           />
           {!hasRevenueTarget
             ? <span className="lb-ring-note">Yıllık ciro hedefi girilmedi</span>
             : <span className={`lb-ring-note tone-${r.pace ?? 'neutral'}`}>{r.pace === 'ok' ? `zamanın ${(r.attainmentPct ?? 0) - r.yearElapsedPct} puan önünde` : `zamanın ${r.yearElapsedPct - (r.attainmentPct ?? 0)} puan gerisinde · ${TONE_WORD[r.pace ?? 'neutral']}`}</span>}
+        </div>
+        <div className="lb-facts">
+          <div className={`lb-fact lb-fact-quotes ${r.expiredOpenQuotes ? 'tone-warn' : ''}`}>
+            <span className="lb-fact-k">Açık Teklif</span>
+            <strong>{fmt(r.openQuotes)}</strong>
+            <small title={r.openQuotes ? `${fmtMoney(r.pipeline)} · ağırlıklı ${fmtMoney(r.weightedPipeline)}` : undefined}>
+              {r.openQuotes ? `${fmtMoney(r.pipeline)} · ağırlıklı ${fmtMoney(r.weightedPipeline)}` : 'kişide açık teklif yok'}
+              {r.expiredOpenQuotes ? ` · ${fmt(r.expiredOpenQuotes)} süresi dolmuş` : ''}
+            </small>
+          </div>
+          <div className="lb-fact lb-fact-list">
+            <span className="lb-fact-k" title="Raporlar › Müşteri Listesi (H/F/L/K) — Hunter / Farmer oranı">Müşteri Listesi · H / F</span>
+            {owner.list
+              ? <HfDonut list={owner.list} size={density === 'dense' ? 62 : density === 'tight' ? 70 : 80} compact={compact || density !== 'roomy'} />
+              : <small className="lb-fact-empty">Liste henüz doldurulmadı (Raporlar › Müşteri Listesi)</small>}
+          </div>
         </div>
         <div className="lb-mini-title">Pipeline &amp; Uyarı</div>
         {/* 4 sayaç 2×2: profil kolonu daraldığı için 3 kolonda "Hareketsiz" etiketi taşıyordu. */}
@@ -965,6 +1017,7 @@ export default function LiveBoard({ active }: { active: boolean }) {
   }, []);
 
   const metrics = useMemo(() => layoutMetrics(box.h), [box.h]);
+  const density = useMemo(() => ownerDensity(box.h), [box.h]);
   const caps = useMemo(() => capacities(box.h, box.w || 1920), [box.h, box.w]);
   const pagePlan = useMemo(() => (data ? buildPagePlan(data, caps) : undefined), [data, caps]);
 
@@ -1125,7 +1178,7 @@ export default function LiveBoard({ active }: { active: boolean }) {
     if (current.type === 'owner') {
       const owner = data.owners[current.index];
       return owner
-        ? <OwnerSlide owner={owner} todayKey={data.range.today} caps={caps} compact={metrics.compact} />
+        ? <OwnerSlide owner={owner} todayKey={data.range.today} caps={caps} compact={metrics.compact} density={density} />
         : <PulseSlide data={data} caps={caps} page={0} compact={metrics.compact} />;
     }
     switch (current.key) {

@@ -34,6 +34,14 @@ describe('enterprise role permissions', () => {
     expect(hasPermission('account_manager', 'report.read.all')).toBe(true);
   });
 
+  it('keeps Müşteri Listesi (H/F/L/K) editing with admin and super_admin only', () => {
+    expect(hasPermission('super_admin', 'customer.assignment_list.manage')).toBe(true);
+    expect(hasPermission('admin', 'customer.assignment_list.manage')).toBe(true);
+    expect(hasPermission('account_manager', 'customer.assignment_list.manage')).toBe(false);
+    expect(hasPermission('itsm', 'customer.assignment_list.manage')).toBe(false);
+    expect(hasPermission('user', 'customer.assignment_list.manage')).toBe(false);
+  });
+
   it('preserves ITSM read access while keeping user administration separated', () => {
     expect(canManageRequests('itsm')).toBe(true);
     expect(canManageParameters('itsm')).toBe(true);

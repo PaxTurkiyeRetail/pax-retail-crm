@@ -19,6 +19,8 @@ export type Permission =
   | 'customer.update.any'
   | 'customer.assign'
   | 'customer.classification.manage'
+  // Müşteri Listesi (H/F/L/K) düzenleme — Raporlar › Müşteri Listesi; admin + super_admin (Sinan, 09.09)
+  | 'customer.assignment_list.manage'
   | 'activity.read'
   | 'activity.read.any'
   | 'activity.create'
@@ -82,6 +84,7 @@ export const ALL_PERMISSIONS: readonly Permission[] = [
   'customer.update.any',
   'customer.assign',
   'customer.classification.manage',
+  'customer.assignment_list.manage',
   'activity.read',
   'activity.read.any',
   'activity.create',

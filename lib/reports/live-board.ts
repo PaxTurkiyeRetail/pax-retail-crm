@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { activityLabelFromRow, isDisplayableActivityRow } from '@/lib/activities/presentation';
 import { buildSellerFollowupReport, type SellerFollowupRow } from '@/lib/reports/seller-followup';
 import { buildWeeklyTargets } from '@/lib/reports/weekly-targets';
+import { loadCustomerListCounts } from '@/lib/reports/customer-list';
 import {
   achievementPct,
   activityTargetKind,
@@ -31,6 +32,7 @@ import {
   staleTone,
   weekRangeLabel,
   yearElapsedPct,
+  normalizeName,
   type AlertItem,
   type Distribution,
   type Funnel,
@@ -404,7 +406,7 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
   ]);
   const { from, to } = targets.range;
 
-  const [ownerResult, customerResult, eventResult, quoteResult, targetResult, forecastMonthResult, forecastOwnerResult, integrationResult] = await Promise.all([
+  const [ownerResult, customerResult, eventResult, quoteResult, targetResult, forecastMonthResult, forecastOwnerResult, integrationResult, customerListCounts] = await Promise.all([
     db.query(Q_OWNERS),
     db.query(Q_CUSTOMERS),
     db.query(Q_WEEK_EVENTS, [from, to]),
@@ -413,7 +415,16 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
     db.query(Q_FORECAST_MONTHS, [year]),
     db.query(Q_FORECAST_OWNERS, [year]),
     db.query(Q_INTEGRATIONS, [R.integrationDonePhase]),
+    // Müşteri Listesi (H/F/L/K) — tablo yoksa boş harita (pano çökmez).
+    loadCustomerListCounts(),
   ]);
+  // Liste hiç doldurulmamışsa kişi slaytında donut yerine not gösterilir (null); doluysa
+  // listede adı geçmeyen kişi 0 ile görünür.
+  const customerListSplitOf = (owner: string): LiveOwner['list'] => {
+    if (!customerListCounts.size) return null;
+    const counts = customerListCounts.get(normalizeName(owner));
+    return { hunter: counts?.H ?? 0, farmer: counts?.F ?? 0, lead: counts?.L ?? 0, kasa: counts?.K ?? 0, total: counts?.total ?? 0 };
+  };
   const integrationByOwner = new Map<string, { total: number; done: number }>(
     (integrationResult.rows as any[]).map((row) => [String(row.owner), { total: num(row.total), done: num(row.done) }]),
   );
@@ -939,6 +950,7 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
       hotTotal: hotAll.length,
       recentActivities: weekActivitiesByOwner.get(owner) ?? [],
       jira,
+      list: customerListSplitOf(owner),
     };
   });
   // Portföyü, hedefi, teklifi ve bu hafta aktivitesi olmayan hesaplar boş slayt
