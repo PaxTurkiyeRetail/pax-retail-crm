@@ -26,6 +26,7 @@ describe('enterprise role permissions', () => {
     expect(canViewCRM('account_manager')).toBe(true);
     expect(hasPermission('account_manager', 'customer.update.own')).toBe(true);
     expect(hasPermission('account_manager', 'customer.update.any')).toBe(false);
+    expect(hasPermission('account_manager', 'customer.classification.manage')).toBe(true);
     expect(hasPermission('account_manager', 'quote.status.any')).toBe(false);
     expect(hasPermission('account_manager', 'report.read')).toBe(false);
     expect(hasPermission('account_manager', 'customer.read.any')).toBe(true);
