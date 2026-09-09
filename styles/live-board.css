@@ -424,7 +424,9 @@
 .lb-alerts .lb-item { padding: 7px 10px; }
 
 /* --- Kişi slaytı ------------------------------------------------------- */
-.lb-owner { grid-template-columns: 290px minmax(0, 1.25fr) minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); align-items: start; gap: 14px; }
+/* 09.09: Hot Pipeline kolonu kişi slaytından kalktı → iki kolon (profil + merkez).
+   Profil kartı da sadeleşti (tekrar eden mini kutular çıktı), o yüzden biraz daha dar. */
+.lb-owner { grid-template-columns: 264px minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); align-items: start; gap: 14px; }
 .lb-owner .lb-band { grid-column: 1 / -1; }
 .lb-profile { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; align-content: start; padding: 16px; border-radius: 18px; border: 1px solid var(--border); background: var(--surface-2); text-align: center; justify-items: center; }
 .lb-avatar { position: relative; width: 84px; height: 84px; border-radius: 50%; display: grid; place-items: center; font-size: 30px; font-weight: 900; letter-spacing: -0.02em; background: var(--lb-accent-soft); color: var(--lb-accent); border: 2px solid var(--lb-accent); }
@@ -448,7 +450,10 @@
 .lb-mini div.tone-danger strong { color: var(--lb-danger); } .lb-mini div.tone-info strong { color: var(--lb-info); }
 .lb-mini.two strong { font-size: 20px; }
 
-.lb-center { display: grid; gap: 12px; align-content: start; min-width: 0; }
+/* 09.09: Hot Pipeline kolonu kalkınca kişi slaytında boşluk oluşuyordu → merkez kolon
+   tam yüksekliğe yayılır ve "Son Hareketler" kartı kalan alanı doldurur (kapasite hesabı
+   zaten tam kolon yüksekliğine göre satır sayısı veriyor, taşma olmaz). */
+.lb-center { display: grid; gap: 12px; grid-template-rows: auto minmax(0, 1fr); align-content: stretch; align-self: stretch; min-width: 0; height: 100%; }
 .lb-center .lb-card { gap: 10px; }
 
 /* Ticari bant */

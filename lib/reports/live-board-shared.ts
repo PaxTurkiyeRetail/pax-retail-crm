@@ -648,31 +648,32 @@ export function buildPagePlan(payload: LiveBoardPayload, caps: Capacities): Page
  */
 export function slidePlan(
   ownerCount: number,
-  options?: { jira?: boolean; teamBurst?: number; ownerBurst?: number; pages?: PagePlan },
+  options?: { jira?: boolean; pages?: PagePlan },
 ): LiveSlide[] {
-  const teamKeys: TeamSlideKey[] = ['pulse', 'portfolio', 'hot', 'poc', 'quotes', 'alerts'];
-  if (options?.jira) teamKeys.push('jira');
-  const teamBurst = Math.max(1, options?.teamBurst ?? LIVE_BOARD_TIMING.teamBurst);
-  const ownerBurst = Math.max(1, options?.ownerBurst ?? LIVE_BOARD_TIMING.ownerBurst);
+  // SABİT SIRA (Sinan, 09.09): Pulse → Portföy → kişiler (sabit satıcı sırası) →
+  // Teklifler → Uyarılar → Jira. Kişi slaytları artık takım ekranlarının arasına
+  // serpilmiyor, blok hâlinde akıyor. 'hot' ve 'poc' rotasyondan çıkarıldı
+  // (Hot Pipeline kişi slaytından da kalktı); bileşenleri duruyor, listeye
+  // eklenince yeniden yayına girerler.
+  const before: TeamSlideKey[] = ['pulse', 'portfolio'];
+  const after: TeamSlideKey[] = ['quotes', 'alerts'];
+  if (options?.jira) after.push('jira');
   const teamPages = (key: TeamSlideKey) => Math.max(1, options?.pages?.team[key] ?? 1);
   const ownerPages = (index: number) => Math.max(1, options?.pages?.owners[index] ?? 1);
 
   const plan: LiveSlide[] = [];
-  let teamIndex = 0;
-  let ownerIndex = 0;
-  while (teamIndex < teamKeys.length || ownerIndex < ownerCount) {
-    for (let i = 0; i < teamBurst && teamIndex < teamKeys.length; i += 1) {
-      const key = teamKeys[teamIndex];
+  const pushTeam = (keys: TeamSlideKey[]) => {
+    for (const key of keys) {
       const pages = teamPages(key);
       for (let page = 0; page < pages; page += 1) plan.push({ type: 'team', key, page, pages });
-      teamIndex += 1;
     }
-    for (let i = 0; i < ownerBurst && ownerIndex < ownerCount; i += 1) {
-      const pages = ownerPages(ownerIndex);
-      for (let page = 0; page < pages; page += 1) plan.push({ type: 'owner', index: ownerIndex, page, pages });
-      ownerIndex += 1;
-    }
+  };
+  pushTeam(before);
+  for (let index = 0; index < ownerCount; index += 1) {
+    const pages = ownerPages(index);
+    for (let page = 0; page < pages; page += 1) plan.push({ type: 'owner', index, page, pages });
   }
+  pushTeam(after);
   return plan;
 }
 
@@ -775,6 +776,17 @@ export function fmtMoney(value: number | null | undefined, opts?: { sign?: boole
   else if (abs >= 1_000) text = `${Math.round(abs / 1_000).toLocaleString('tr-TR')}K`;
   else text = Math.round(abs).toLocaleString('tr-TR');
   return `${sign}$${text}`;
+}
+
+/**
+ * Jira firma tablosunda sıralama önceliği (Sinan, 09.09): adı bilinen firmalar 0,
+ * "Bilinmeyen Firma" / "—" / boş olanlar 1 → tablo hangi ölçütle sıralanırsa sıralansın
+ * bu satırlar her zaman EN SONDA kalır. (Jira özetinden firma adı çıkarılamayan
+ * ticket'lar `lib/jira-weekly-tickets.ts` içinde "Bilinmeyen Firma" olarak etiketlenir.)
+ */
+export function unknownCompanyRank(company: string | null | undefined) {
+  const name = String(company ?? '').trim().toLocaleLowerCase('tr');
+  return !name || name === '—' || name === '-' || name.startsWith('bilinmeyen') ? 1 : 0;
 }
 
 export function pctOf(actual: number, target: number | null | undefined): number | null {

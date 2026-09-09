@@ -24,6 +24,7 @@ import {
   pctOf,
   conversionPct,
   conversionTone,
+  unknownCompanyRank,
   phaseGroupOf,
   rankOwners,
   slideDurationMs,
@@ -94,19 +95,26 @@ describe('slidePlan', () => {
   const show = (plan: ReturnType<typeof slidePlan>) => plan
     .map((s) => (s.type === 'team' ? s.key : `#${s.index}`) + (s.pages > 1 ? `(${s.page + 1}/${s.pages})` : ''))
     .join(' ');
-  it('alternates two team screens with two people until both run out', () => {
-    expect(show(slidePlan(5))).toBe('pulse portfolio #0 #1 hot poc #2 #3 quotes alerts #4');
+  it('keeps the fixed order: pulse, portfolio, everybody, quotes, alerts', () => {
+    // Sinan, 09.09: kişiler blok hâlinde ve Portföy'den sonra; Hot Pipeline / POC yayında değil.
+    expect(show(slidePlan(5))).toBe('pulse portfolio #0 #1 #2 #3 #4 quotes alerts');
   });
   it('shows only the team screens when there is nobody to show', () => {
-    expect(show(slidePlan(0))).toBe('pulse portfolio hot poc quotes alerts');
+    expect(show(slidePlan(0))).toBe('pulse portfolio quotes alerts');
+  });
+  it('never puts Hot Pipeline or POC into the rotation', () => {
+    const keys = show(slidePlan(3, { jira: true }));
+    expect(keys).not.toContain('hot');
+    expect(keys).not.toContain('poc');
+    expect(keys).toBe('pulse portfolio #0 #1 #2 quotes alerts jira');
   });
   it('adds the Jira screen only when the integration is on', () => {
     expect(show(slidePlan(0, { jira: true }))).toContain('jira');
     expect(show(slidePlan(0))).not.toContain('jira');
   });
   it('expands a screen that needs more than one page into consecutive slides', () => {
-    const plan = slidePlan(2, { pages: { team: { hot: 3 }, owners: [2, 1] } });
-    expect(show(plan)).toBe('pulse portfolio #0(1/2) #0(2/2) #1 hot(1/3) hot(2/3) hot(3/3) poc quotes alerts');
+    const plan = slidePlan(2, { pages: { team: { portfolio: 2, quotes: 3 }, owners: [2, 1] } });
+    expect(show(plan)).toBe('pulse portfolio(1/2) portfolio(2/2) #0(1/2) #0(2/2) #1 quotes(1/3) quotes(2/3) quotes(3/3) alerts');
   });
   it('gives team screens more time than a person slide and scales with speed', () => {
     expect(slideDurationMs({ type: 'team', key: 'pulse', page: 0, pages: 1 })).toBe(LIVE_BOARD_TIMING.teamMs);
@@ -240,6 +248,18 @@ describe('numbers', () => {
     expect(conversionTone(60)).toBe('ok');
     expect(conversionTone(30)).toBe('warn');
     expect(conversionTone(10)).toBe('danger');
+  });
+  it('pushes unknown Jira companies to the end of the list', () => {
+    // Sinan, 09.09: "Jira kısmında bilinmeyen firma en sona".
+    expect(unknownCompanyRank('BOYNER')).toBe(0);
+    expect(unknownCompanyRank('Bilinmeyen Firma')).toBe(1);
+    expect(unknownCompanyRank('bilinmeyen')).toBe(1);
+    expect(unknownCompanyRank('—')).toBe(1);
+    expect(unknownCompanyRank('')).toBe(1);
+    expect(unknownCompanyRank(null)).toBe(1);
+    const rows = ['Bilinmeyen Firma', 'A101', '—', 'BOYNER'];
+    expect([...rows].sort((a, b) => unknownCompanyRank(a) - unknownCompanyRank(b) || a.localeCompare(b, 'tr')))
+      .toEqual(['A101', 'BOYNER', '—', 'Bilinmeyen Firma']);   // tr sıralaması: '—' önce
   });
   it('maps phases to display groups', () => {
     expect(phaseGroupOf(null)).toBe('none');

@@ -23,6 +23,7 @@ import {
   OWNER_ORDER,
   SECTOR_ORDER,
   orderDistribution,
+  unknownCompanyRank,
   conversionPct,
   conversionTone,
   ownerOrderCompare,
@@ -859,8 +860,11 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
             created: row.created, closed: row.closed,
           }))
           .filter((row) => row.ongoing + row.developmentWaiting + row.customerWaiting + row.created + row.closed > 0)
+          // "Bilinmeyen Firma" (Jira özetinden firma adı çıkarılamayan kayıtlar) ve "—"
+          // her zaman listenin SONUNDA (Sinan, 09.09) — gerçek firmalar öne çıksın.
           .sort((a, b) =>
-            (b.ongoing + b.developmentWaiting + b.customerWaiting) - (a.ongoing + a.developmentWaiting + a.customerWaiting)
+            unknownCompanyRank(a.company) - unknownCompanyRank(b.company)
+            || (b.ongoing + b.developmentWaiting + b.customerWaiting) - (a.ongoing + a.developmentWaiting + a.customerWaiting)
             || b.created - a.created
             || a.company.localeCompare(b.company, 'tr'));
         jiraTeam = {

@@ -30,7 +30,6 @@ import {
   type Capacities,
   type Distribution,
   type Funnel,
-  type HotItem,
   type LiveActivity,
   type LiveBoardPayload,
   type LiveBoardSpeed,
@@ -339,38 +338,6 @@ function PaceCompare({ r }: { r: RevenueBlock }) {
           : r.pace === 'ok'
             ? `Zamanın ${(r.attainmentPct ?? 0) - r.yearElapsedPct} puan önünde — hedef temposu tutuyor.`
             : `Zamanın ${r.yearElapsedPct - (r.attainmentPct ?? 0)} puan gerisinde${r.pace === 'danger' ? ' — aksiyon gerekli' : ' — dikkat'}.`}
-      </div>
-    </div>
-  );
-}
-
-function HotCard({ item, showOwner }: { item: HotItem; showOwner?: boolean }) {
-  // 3 satır (≈100 px): başlık + hedef · faz + değer · son hareket + next action.
-  // Kişi slaydında 5 kart tek sayfaya sığar (Çağdaş Bey, 04.09).
-  const money = item.quoteAmount
-    ? `Teklif ${fmtMoney(item.quoteAmount)}${item.weightedValue ? ` · ağ. ${fmtMoney(item.weightedValue)}` : ''}`
-    : item.potentialValue
-      ? `≈${fmtMoney(item.potentialValue)} liste${item.weightedValue ? ` · ağ. ${fmtMoney(item.weightedValue)}` : ''}`
-      : '';
-  return (
-    <div className={`lb-hot tone-${item.tone}`}>
-      <div className="lb-hot-head">
-        <div className="lb-hot-title">
-          <strong>{item.musteri}</strong>
-          {showOwner && item.owner ? <em>{item.owner}</em> : null}
-        </div>
-        <DuePill days={item.daysToTarget} date={item.targetDate} />
-      </div>
-      <div className="lb-hot-meta">
-        <PhaseChip no={item.phaseNo} name={item.phaseName} />
-        {item.models ? <span className="lb-hot-models">{item.models}</span> : item.quantity ? <span className="lb-hot-models">{fmt(item.quantity)} adet</span> : null}
-        <span className="lb-hot-money">{money ? <strong>{money}</strong> : <span className="lb-muted">değer girilmedi</span>}</span>
-      </div>
-      <div className="lb-hot-foot">
-        <span className={`lb-ago tone-${staleTone(item.daysSinceActivity)}`} title={item.lastActivityLabel ?? undefined}>Son: {agoLabel(item.daysSinceActivity)}{item.lastActivityLabel ? ` · ${item.lastActivityLabel}` : ''}</span>
-        {item.nextAction
-          ? <span className="lb-next" title={`${item.nextAction}${item.actionOwner ? ` · ${item.actionOwner}` : ''}${item.targetDate ? ` · ${fmtDate(item.targetDate)}` : ''}`}><b>Next:</b> {item.nextAction}{item.actionOwner && item.actionOwner !== item.owner ? ` · ${item.actionOwner}` : ''}{item.targetDate ? ` · ${fmtDate(item.targetDate)}` : ''}</span>
-          : <span className="lb-next lb-muted">Next action girilmedi</span>}
       </div>
     </div>
   );
@@ -896,10 +863,10 @@ function JiraSlide({ data, caps, page }: { data: LiveBoardPayload; caps: Capacit
 
 function OwnerSlide({ owner, todayKey, caps, compact }: { owner: LiveOwner; todayKey: string; caps: Capacities; compact: boolean }) {
   const r = owner.revenue;
-  // Tek sayfa (Çağdaş Bey, 04.09): en yakın tarihli 5 fırsat, Son Hareketler
-  // sığdığı kadar; kalan "+N daha" notuyla belirtilir (ayrıntı Kişi Bazlı Aktivite'de).
-  const hotRows = owner.hot.slice(0, Math.min(LIVE_BOARD_RULES.hotOwnerLimit, caps.hot));
-  const hotMore = Math.max(0, (owner.hotTotal ?? owner.hot.length) - hotRows.length);
+  // Tek sayfa. Sinan, 09.09: Hot Pipeline kolonu kişi slaytından kaldırıldı ve
+  // üst bantla (MoneyBand) / Kanal Kırılımı ile TEKRAR EDEN mini kutular çıkarıldı;
+  // profil kartında yalnız kimlik + gerçekleşme halkası + başka yerde olmayan
+  // "Pipeline & Uyarı" sayaçları kalıyor.
   const recentRows = owner.recentActivities.slice(0, caps.recent);
   const recentMore = owner.recentActivities.length - recentRows.length;
   const hasRevenueTarget = r.target != null;
@@ -927,20 +894,9 @@ function OwnerSlide({ owner, todayKey, caps, compact }: { owner: LiveOwner; toda
             ? <span className="lb-ring-note">Yıllık ciro hedefi girilmedi</span>
             : <span className={`lb-ring-note tone-${r.pace ?? 'neutral'}`}>{r.pace === 'ok' ? `zamanın ${(r.attainmentPct ?? 0) - r.yearElapsedPct} puan önünde` : `zamanın ${r.yearElapsedPct - (r.attainmentPct ?? 0)} puan gerisinde · ${TONE_WORD[r.pace ?? 'neutral']}`}</span>}
         </div>
+        <div className="lb-mini-title">Pipeline &amp; Uyarı</div>
+        {/* 4 sayaç 2×2: profil kolonu daraldığı için 3 kolonda "Hareketsiz" etiketi taşıyordu. */}
         <div className="lb-mini two">
-          <div className={`tone-${r.forecastPct == null ? 'neutral' : r.forecastPct >= 100 ? 'ok' : 'warn'}`}><strong>{fmtMoney(r.forecast)}</strong><span>Forecast{r.forecastPct != null ? ` · %${r.forecastPct}` : ''}</span></div>
-          <div className={`tone-${r.forecastGap == null ? 'neutral' : r.forecastGap >= 0 ? 'ok' : 'danger'}`}><strong>{r.forecastGap == null ? '—' : fmtMoney(r.forecastGap, { sign: true })}</strong><span>Gap</span></div>
-        </div>
-        <div className="lb-mini">
-          <div><strong>{fmt(owner.actual.totalActivities)}<small> / {owner.target.totalActivities ? fmt(owner.target.totalActivities) : '—'}</small></strong><span>Aktivite</span></div>
-          <div><strong>{fmt(owner.actual.salesPhysical)}<small> / {owner.target.salesPhysical ? fmt(owner.target.salesPhysical) : '—'}</small></strong><span>Fiziki</span></div>
-          <div><strong>{fmt(owner.actual.uniqueCustomers)}</strong><span>Tekil Firma</span></div>
-          <div className="tone-info"><strong>{fmt(owner.pipeline.poc)}</strong><span>Aktif POC</span></div>
-          <div><strong>{fmt(owner.quotes.weekCount)}</strong><span>Teklif · hafta</span></div>
-          <div className={owner.revenue.saleYtd.count ? 'tone-ok' : ''}><strong>{fmt(owner.revenue.saleYtd.count)}</strong><span>Satış · YTD</span></div>
-        </div>
-        <div className="lb-mini-title">Pipeline & Uyarı</div>
-        <div className="lb-mini">
           <div><strong>{fmt(owner.pipeline.activeCustomers)}</strong><span>Aktif Fırsat</span></div>
           <div className={owner.pipeline.staleCritical ? 'tone-danger' : owner.pipeline.stale ? 'tone-warn' : ''}><strong>{fmt(owner.pipeline.stale)}</strong><span>Hareketsiz</span></div>
           <div className={owner.pipeline.overdueActions ? 'tone-danger' : ''}><strong>{fmt(owner.pipeline.overdueActions)}</strong><span>Gecikmiş</span></div>
@@ -963,16 +919,6 @@ function OwnerSlide({ owner, todayKey, caps, compact }: { owner: LiveOwner; toda
           </div>
           <ActivityList rows={recentRows} todayKey={todayKey} />
         </div>
-      </div>
-
-      <div className="lb-card lb-hot-col">
-        <div className="lb-card-head">
-          <h3>Hot Pipeline</h3>
-          <span>{hotRows.length ? (hotMore > 0 ? `en yakın ${hotRows.length} · +${hotMore} fırsat daha` : `${hotRows.length} fırsat · en yakın tarihli`) : ''}</span>
-        </div>
-        {hotRows.length
-          ? hotRows.map((item) => <HotCard item={item} key={item.customerId} />)
-          : <div className="lb-muted">Sonuçlanmaya yakın fırsat yok — teklif / forecast / engel kaydı girilince burada görünür.</div>}
       </div>
     </div>
   );
