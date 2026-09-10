@@ -326,6 +326,20 @@ const Q_TARGETS = `
     and tv.period_start <= $1::date and tv.period_end >= $1::date
 `;
 
+// Teklifsiz (doğrudan) satışlar — migration 027/028. Ciro tanımı "aktif satış kayıtlarının tutarı"
+// olduğu için bunlar da sayılır; teklif tarafı (dönüşüm oranı, kazanılan teklif adedi) ETKİLENMEZ:
+// karşılığında teklif yok, dönüşüm paydasına girmemeleri gerekir.
+const Q_DIRECT_SALES = `
+  select coalesce(nullif(trim(s.owner_name), ''), 'Havuz Account') as owner,
+         s.owner_user_id::text as owner_user_id,
+         s.sale_date::text as sale_date,
+         s.amount::float8 as amount,
+         s.device_count
+  from public.crm_sales s
+  where s.status = 'active' and s.source = 'direct'
+    and s.sale_date >= make_date($1::int, 1, 1) and s.sale_date <= $2::date
+`;
+
 // Ziyaret (v2.7): yıl içindeki satış görüşmeleri (fiziki + online) — aktiviteyi GİREN kişiye göre,
 // haftalık hedef kartıyla aynı sınıflandırma (activityTargetKind). Planlanan aksiyon kayıtları sayılmaz.
 const Q_YEAR_ACTIVITIES = `
@@ -420,7 +434,7 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
   const { from, to } = targets.range;
 
   const quarter = quarterOf(todayKey);
-  const [ownerResult, customerResult, eventResult, quoteResult, targetResult, forecastMonthResult, forecastOwnerResult, integrationResult, customerListCounts, conversionCounts, yearActivityResult] = await Promise.all([
+  const [ownerResult, customerResult, eventResult, quoteResult, targetResult, forecastMonthResult, forecastOwnerResult, integrationResult, customerListCounts, conversionCounts, yearActivityResult, directSaleResult] = await Promise.all([
     db.query(Q_OWNERS),
     db.query(Q_CUSTOMERS),
     db.query(Q_WEEK_EVENTS, [from, to]),
@@ -434,6 +448,7 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
     // H→F / L→H çevirme sayıları (hareket günlüğü, migration 026) — tablo yoksa boş.
     loadConversionCounts(year),
     db.query(Q_YEAR_ACTIVITIES, [year, todayKey]),
+    db.query(Q_DIRECT_SALES, [year, todayKey]),
   ]);
   // Liste hiç doldurulmamışsa kişi slaytında donut yerine not gösterilir (null); doluysa
   // listede adı geçmeyen kişi 0 ile görünür.
@@ -464,6 +479,29 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
     if (!name) return '—';
     return ownerNameByKey.get(normalizeName(name)) ?? name;
   };
+
+  /* --- Teklifsiz satışlar (027/028) ---------------------------------------- */
+  type DirectAgg = { ytdCount: number; ytdAmount: number; ytdDevices: number; monthCount: number; monthAmount: number; quarterAmount: number };
+  const emptyDirect = (): DirectAgg => ({ ytdCount: 0, ytdAmount: 0, ytdDevices: 0, monthCount: 0, monthAmount: 0, quarterAmount: 0 });
+  const directByOwner = new Map<string, DirectAgg>();
+  const directTeam = emptyDirect();
+  for (const row of directSaleResult.rows as Array<{ owner: string; owner_user_id: string | null; sale_date: string; amount: number; device_count: number }>) {
+    const day = String(row.sale_date ?? '').slice(0, 10);
+    const amount = num(row.amount);
+    const devices = num(row.device_count);
+    const apply = (agg: DirectAgg) => {
+      agg.ytdCount += 1; agg.ytdAmount += amount; agg.ytdDevices += devices;
+      if (day.slice(0, 7) === monthKey) { agg.monthCount += 1; agg.monthAmount += amount; }
+      if (day >= quarter.start && day <= quarter.end) agg.quarterAmount += amount;
+    };
+    // Takım cirosu: sahibi kim olursa olsun (Havuz Account dahil) şirket cirosudur.
+    apply(directTeam);
+    const owner = resolveQuoteOwner({ owner_user_id: row.owner_user_id, owner_name: row.owner });
+    if (owner === '—' || !ownerSet.has(owner)) continue;
+    const agg = directByOwner.get(owner) ?? emptyDirect();
+    apply(agg);
+    directByOwner.set(owner, agg);
+  }
 
   /* --- Ziyaretler (yıl / çeyrek) — v2.7 ------------------------------------ */
   const visitsByOwner = new Map<string, { quarter: number; year: number }>();
@@ -650,15 +688,18 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
     revenueTarget: number | null,
     deviceTarget: number | null,
     integration: { target: number | null; done: number; total: number },
+    /** Teklifsiz satışlar (027/028): ciroya ve cihaz adedine eklenir, DÖNÜŞÜM oranına girmez. */
+    direct: DirectAgg = emptyDirect(),
   ): RevenueBlock => {
-    const forecast = agg.saleYtdAmount + agg.weightedValid;
-    const attainmentPct = pctOf(agg.saleYtdAmount, revenueTarget);
+    const actualYtd = agg.saleYtdAmount + direct.ytdAmount;
+    const forecast = actualYtd + agg.weightedValid;
+    const attainmentPct = pctOf(actualYtd, revenueTarget);
     return {
       year,
       target: revenueTarget,
-      actualYtd: agg.saleYtdAmount,
+      actualYtd,
       attainmentPct,
-      remaining: revenueTarget == null ? null : Math.max(0, revenueTarget - agg.saleYtdAmount),
+      remaining: revenueTarget == null ? null : Math.max(0, revenueTarget - actualYtd),
       forecast,
       forecastGap: revenueTarget == null ? null : forecast - revenueTarget,
       forecastPct: pctOf(forecast, revenueTarget),
@@ -667,15 +708,15 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
       openQuotes: agg.open,
       expiredOpenQuotes: agg.expiredOpen,
       deviceTarget,
-      deviceActualYtd: agg.saleYtdDevices,
+      deviceActualYtd: agg.saleYtdDevices + direct.ytdDevices,
       integrationTarget: integration.target,
       integrationDone: integration.done,
       integrationTotal: integration.total,
       wonYtd: { count: agg.wonYtd, amount: agg.wonYtdAmount },
       wonMonth: { count: agg.wonMonth, amount: agg.wonMonthAmount },
       lostYtd: { count: agg.lostYtd, amount: agg.lostYtdAmount },
-      saleYtd: { count: agg.saleYtd, amount: agg.saleYtdAmount, devices: agg.saleYtdDevices },
-      saleMonth: { count: agg.saleMonth, amount: agg.saleMonthAmount },
+      saleYtd: { count: agg.saleYtd + direct.ytdCount, amount: actualYtd, devices: agg.saleYtdDevices + direct.ytdDevices },
+      saleMonth: { count: agg.saleMonth + direct.monthCount, amount: agg.saleMonthAmount + direct.monthAmount },
       saleCancelled: agg.saleCancelled,
       conversionPct: conversionPct(agg.saleYtd, agg.saleCancelled, agg.lostYtd),
       yearElapsedPct: elapsedPct,
@@ -1001,7 +1042,7 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
       owner,
       initials: initialsOf(owner),
       portfolio: { total: rows.length, active: rows.filter(activeSince).length, farmer: rows.filter(isFarmer).length, hunter: rows.filter((row) => !isFarmer(row)).length },
-      revenue: revenueBlock(agg, userTargets.revenue, userTargets.devices, { target: userTargets.integrations, ...ownerIntegration }),
+      revenue: revenueBlock(agg, userTargets.revenue, userTargets.devices, { target: userTargets.integrations, ...ownerIntegration }, directByOwner.get(owner) ?? emptyDirect()),
       funnel,
       pipeline: pipelineStats(rows),
       actual,
@@ -1024,7 +1065,7 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
           visitsQuarter: goalPair(visits.quarter, visitQ.target),
           visitsQuarterAssumed: visitQ.assumed,
           visitsYear: goalPair(visits.year, userTargets.year.visit_count ?? null),
-          budgetQuarter: goalPair(agg.saleQuarterAmount, budgetQ.target),
+          budgetQuarter: goalPair(agg.saleQuarterAmount + (directByOwner.get(owner)?.quarterAmount ?? 0), budgetQ.target),
           budgetQuarterAssumed: budgetQ.assumed,
           integration: goalPair(ownerIntegration.done, userTargets.integrations),
           hunterToFarmer: goalPair(conv.hunterToFarmer, userTargets.year.hunter_to_farmer ?? null),
@@ -1048,6 +1089,7 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
     || row.revenue.target != null
     || row.revenue.openQuotes > 0
     || row.goals.openAll > 0
+    || row.revenue.saleYtd.count > 0
     || row.revenue.wonYtd.count > 0)).sort((a, b) => ownerOrderCompare(a.owner, b.owner));
 
   /* --- Takım -------------------------------------------------------------- */
@@ -1209,7 +1251,7 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
     team: {
       ownerCount: owners.length,
       // Entegrasyon takım toplamı: tüm entegrasyon firmaları (sorumlusu rotasyon dışı olsa da — çoğu Taha'da).
-      revenue: revenueBlock(teamAgg, teamRevenueTarget, teamDeviceTarget, { target: teamIntegrationTarget, ...integrationTeam }),
+      revenue: revenueBlock(teamAgg, teamRevenueTarget, teamDeviceTarget, { target: teamIntegrationTarget, ...integrationTeam }, directTeam),
       funnel: teamFunnel,
       pipeline: pipelineStats(teamCustomers),
       actual: teamActual,
