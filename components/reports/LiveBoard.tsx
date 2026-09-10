@@ -35,8 +35,6 @@ import {
   type LiveBoardSpeed,
   type LiveOwner,
   type CustomerListSplit,
-  type OwnerDensity,
-  ownerDensity,
   type LiveSlide,
   type PocItem,
   type RevenueBlock,
@@ -112,7 +110,6 @@ function readSpeed(): LiveBoardSpeed {
   return 'normal';
 }
 const SHORT_LABELS: Record<string, string> = { pulse: 'PULSE', portfolio: 'PORTFÖY', hot: 'HOT', poc: 'POC', quotes: 'TEKLİF', alerts: 'UYARI', jira: 'JIRA' };
-const TONE_WORD: Record<Tone, string> = { ok: 'yolunda', warn: 'dikkat', danger: 'aksiyon', info: 'devam ediyor', neutral: '' };
 
 /* --- Küçük parçalar ----------------------------------------------------- */
 
@@ -265,32 +262,32 @@ function Kpi({ label, value, sub, tone = 'neutral', small }: { label: string; va
 
 /** Ticari bant: tek satırda kişinin/takımın para durumu. */
 function MoneyBand({ r, pipeline, weekQuotes }: { r: RevenueBlock; pipeline: { poc: number }; weekQuotes: number }) {
-  const items: Array<{ k: string; v: string; n: string; tone?: Tone }> = [
-    { k: 'YTD Ciro', v: fmtMoney(r.actualYtd), n: r.target != null ? `hedef ${fmtMoney(r.target)} · %${r.attainmentPct ?? 0}` : 'yıllık hedef girilmedi', tone: r.pace ?? 'neutral' },
-    { k: 'Forecast · yıl sonu', v: fmtMoney(r.forecast), n: r.forecastPct != null ? `hedefin %${r.forecastPct}'i` : 'gerçekleşen + ağırlıklı pipeline' },
-    { k: 'Gap', v: r.forecastGap == null ? '—' : fmtMoney(r.forecastGap, { sign: true }), n: r.forecastGap == null ? 'hedef yok' : r.forecastGap >= 0 ? 'hedefin üstünde' : 'hedefin altında', tone: r.forecastGap == null ? 'neutral' : r.forecastGap >= 0 ? 'ok' : 'danger' },
-    { k: 'Pipeline', v: fmtMoney(r.pipeline), n: `${fmt(r.openQuotes)} açık teklif · ağırlıklı ${fmtMoney(r.weightedPipeline)}` },
-    { k: 'Cihaz · YTD', v: fmt(r.deviceActualYtd), n: r.deviceTarget ? `hedef ${fmt(r.deviceTarget)} · %${pctOf(r.deviceActualYtd, r.deviceTarget) ?? 0}` : 'satışa dönen cihaz adedi', tone: r.deviceTarget ? (pctOf(r.deviceActualYtd, r.deviceTarget) ?? 0) >= r.yearElapsedPct ? 'ok' : 'warn' : 'neutral' },
-    { k: 'Aktif POC', v: fmt(pipeline.poc), n: 'konsinye · pilot · test' },
-    { k: 'Teklif', v: fmt(weekQuotes), n: 'bu hafta oluşturulan' },
-    { k: 'Satış · YTD', v: fmt(r.saleYtd.count), n: `${fmtMoney(r.saleYtd.amount)}${r.saleCancelled ? ` · ${fmt(r.saleCancelled)} iptal` : ''}`, tone: r.saleYtd.count ? 'ok' : 'neutral' },
-    { k: 'Dönüşüm', v: r.conversionPct == null ? '—' : `%${r.conversionPct}`, n: r.conversionPct == null ? 'kapanan teklif yok' : `${fmt(r.saleYtd.count)} satış · ${fmt(r.lostYtd.count)} kayıp`, tone: conversionTone(r.conversionPct) },
+  // Çağdaş Bey, 10.09: hücre altındaki açıklama satırları ("hint") kalktı — yalnız etiket + değer.
+  // Etiketler bağlamı kendisi taşır ("Teklif · hafta"), renk durumu değerde.
+  const items: Array<{ k: string; v: string; tone?: Tone }> = [
+    { k: 'YTD Ciro', v: fmtMoney(r.actualYtd), tone: r.pace ?? 'neutral' },
+    { k: 'Forecast · yıl sonu', v: fmtMoney(r.forecast) },
+    { k: 'Gap', v: r.forecastGap == null ? '—' : fmtMoney(r.forecastGap, { sign: true }), tone: r.forecastGap == null ? 'neutral' : r.forecastGap >= 0 ? 'ok' : 'danger' },
+    { k: 'Pipeline', v: fmtMoney(r.pipeline) },
+    { k: 'Cihaz · YTD', v: fmt(r.deviceActualYtd), tone: r.deviceTarget ? (pctOf(r.deviceActualYtd, r.deviceTarget) ?? 0) >= r.yearElapsedPct ? 'ok' : 'warn' : 'neutral' },
+    { k: 'Aktif POC', v: fmt(pipeline.poc) },
+    { k: 'Teklif · hafta', v: fmt(weekQuotes) },
+    { k: 'Satış · YTD', v: fmt(r.saleYtd.count), tone: r.saleYtd.count ? 'ok' : 'neutral' },
+    { k: 'Dönüşüm', v: r.conversionPct == null ? '—' : `%${r.conversionPct}`, tone: conversionTone(r.conversionPct) },
   ];
-  // KasaPOS entegrasyon (Çağdaş Bey, 07.09): hedefi ya da entegrasyon firması olan kişide 9. hücre.
+  // KasaPOS entegrasyon (Çağdaş Bey, 07.09): hedefi ya da entegrasyon firması olan kişide ek hücre.
   if (r.integrationTarget != null || r.integrationTotal > 0) {
     items.push({
       k: 'Entegrasyon', v: fmt(r.integrationDone),
-      n: r.integrationTarget ? `hedef ${fmt(r.integrationTarget)} · %${pctOf(r.integrationDone, r.integrationTarget) ?? 0}` : `${fmt(r.integrationTotal)} entegrasyon firması`,
       tone: r.integrationTarget ? ((pctOf(r.integrationDone, r.integrationTarget) ?? 0) >= r.yearElapsedPct ? 'ok' : 'warn') : 'neutral',
     });
   }
   return (
-    <div className="lb-band" aria-label="Ticari özet" style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}>
+    <div className="lb-band no-hints" aria-label="Ticari özet" style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}>
       {items.map((item) => (
         <div className={`lb-band-item tone-${item.tone ?? 'neutral'}`} key={item.k}>
           <span>{item.k}</span>
           <strong>{item.v}</strong>
-          <small>{item.n}</small>
         </div>
       ))}
     </div>
@@ -396,15 +393,15 @@ function PulseSlide({ data, caps, page, compact }: { data: LiveBoardPayload; cap
         <div className="lb-revenue-body">
           <Ring pct={r.attainmentPct} tone={r.pace ?? 'neutral'} big={attainmentBig} sub={r.target != null ? `${fmtMoney(r.actualYtd)} / ${fmtMoney(r.target)}` : 'hedef yok'} size={compact ? 150 : 178} stroke={compact ? 10 : 11} />
           <div className="lb-kpis three">
-            <Kpi label="Yıllık Hedef" value={fmtMoney(r.target)} sub={r.deviceTarget ? `${fmt(r.deviceTarget)} cihaz` : 'Kullanıcı Yönetimi → Hedefler'} small />
-            <Kpi label="Kalan Hedef" value={fmtMoney(r.remaining)} sub={r.target != null ? `yılın %${r.yearElapsedPct}'i geçti` : 'hedef girilmedi'} small />
-            <Kpi label="Yıl Sonu Forecast" value={fmtMoney(r.forecast)} sub={r.forecastPct != null ? `hedefin %${r.forecastPct}'i` : 'weighted model'} tone={r.forecastPct == null ? 'neutral' : r.forecastPct >= 100 ? 'ok' : 'warn'} small />
-            <Kpi label="Forecast Gap" value={r.forecastGap == null ? '—' : fmtMoney(r.forecastGap, { sign: true })} sub={r.forecastGap == null ? 'hedef yok' : r.forecastGap >= 0 ? 'hedefin üstünde' : 'hedefin altında'} tone={r.forecastGap == null ? 'neutral' : r.forecastGap >= 0 ? 'ok' : 'danger'} small />
-            <Kpi label="Açık Pipeline" value={fmtMoney(r.pipeline)} sub={`${fmt(r.openQuotes)} teklif · ağırlıklı ${fmtMoney(r.weightedPipeline)}`} small />
-            <Kpi label="Bu Ay Satış" value={fmtMoney(r.saleMonth.amount)} sub={`${fmt(r.saleMonth.count)} satış · YTD ${fmt(r.saleYtd.count)}`} tone={r.saleMonth.count ? 'ok' : 'neutral'} small />
-            <Kpi label="Cihaz · YTD" value={fmt(r.deviceActualYtd)} sub={r.deviceTarget ? `hedef ${fmt(r.deviceTarget)} · %${pctOf(r.deviceActualYtd, r.deviceTarget) ?? 0}` : 'satışa dönen cihaz adedi'} tone={r.deviceTarget ? ((pctOf(r.deviceActualYtd, r.deviceTarget) ?? 0) >= r.yearElapsedPct ? 'ok' : 'warn') : 'neutral'} small />
-            <Kpi label="Entegrasyon · YTD" value={fmt(r.integrationDone)} sub={r.integrationTarget ? `hedef ${fmt(r.integrationTarget)} · %${pctOf(r.integrationDone, r.integrationTarget) ?? 0}` : `${fmt(r.integrationTotal)} entegrasyon firması · faz 9+`} tone={r.integrationTarget ? ((pctOf(r.integrationDone, r.integrationTarget) ?? 0) >= r.yearElapsedPct ? 'ok' : 'warn') : 'neutral'} small />
-            <Kpi label="Teklif → Satış" value={r.conversionPct == null ? '—' : `%${r.conversionPct}`} sub={r.conversionPct == null ? 'kapanan teklif yok' : `${fmt(r.saleYtd.count)} satış · ${fmt(r.lostYtd.count)} kayıp · ${fmt(r.expiredOpenQuotes)} süresi dolmuş`} tone={conversionTone(r.conversionPct)} small />
+            <Kpi label="Yıllık Hedef" value={fmtMoney(r.target)} small />
+            <Kpi label="Kalan Hedef" value={fmtMoney(r.remaining)} small />
+            <Kpi label="Yıl Sonu Forecast" value={fmtMoney(r.forecast)} tone={r.forecastPct == null ? 'neutral' : r.forecastPct >= 100 ? 'ok' : 'warn'} small />
+            <Kpi label="Forecast Gap" value={r.forecastGap == null ? '—' : fmtMoney(r.forecastGap, { sign: true })} tone={r.forecastGap == null ? 'neutral' : r.forecastGap >= 0 ? 'ok' : 'danger'} small />
+            <Kpi label="Açık Pipeline" value={fmtMoney(r.pipeline)} small />
+            <Kpi label="Bu Ay Satış" value={fmtMoney(r.saleMonth.amount)} tone={r.saleMonth.count ? 'ok' : 'neutral'} small />
+            <Kpi label="Cihaz · YTD" value={fmt(r.deviceActualYtd)} tone={r.deviceTarget ? ((pctOf(r.deviceActualYtd, r.deviceTarget) ?? 0) >= r.yearElapsedPct ? 'ok' : 'warn') : 'neutral'} small />
+            <Kpi label="Entegrasyon · YTD" value={fmt(r.integrationDone)} tone={r.integrationTarget ? ((pctOf(r.integrationDone, r.integrationTarget) ?? 0) >= r.yearElapsedPct ? 'ok' : 'warn') : 'neutral'} small />
+            <Kpi label="Teklif → Satış" value={r.conversionPct == null ? '—' : `%${r.conversionPct}`} tone={conversionTone(r.conversionPct)} small />
           </div>
           <PaceCompare r={r} />
         </div>
@@ -479,10 +476,10 @@ function PulseSlide({ data, caps, page, compact }: { data: LiveBoardPayload; cap
         </div>
         <FunnelRow f={team.funnel} />
         <div className="lb-kpis four tight">
-          <Kpi label="Aktif Fırsat" value={fmt(team.pipeline.activeCustomers)} sub="firma · Faz 4–14" small />
-          <Kpi label="Potansiyel" value={fmt(team.pipeline.potentialDevices)} sub={team.pipeline.potentialValue ? `adet · ≈${fmtMoney(team.pipeline.potentialValue)} liste` : 'adet · forecast girilmedi'} small />
-          <Kpi label="POC · Rollout" value={`${fmt(team.pipeline.poc)} · ${fmt(team.pipeline.rollout)}`} sub="aktif süreç" tone="info" small />
-          <Kpi label="Hareketsiz · Geciken" value={`${fmt(team.pipeline.stale)} · ${fmt(team.pipeline.overdueActions)}`} sub={`${LIVE_BOARD_RULES.staleWarnDays}+ gün hareketsiz · tarihi geçen`} tone={team.pipeline.overdueActions || team.pipeline.staleCritical ? 'danger' : team.pipeline.stale ? 'warn' : 'ok'} small />
+          <Kpi label="Aktif Fırsat" value={fmt(team.pipeline.activeCustomers)} small />
+          <Kpi label="Potansiyel" value={fmt(team.pipeline.potentialDevices)} small />
+          <Kpi label="POC · Rollout" value={`${fmt(team.pipeline.poc)} · ${fmt(team.pipeline.rollout)}`} tone="info" small />
+          <Kpi label="Hareketsiz · Geciken" value={`${fmt(team.pipeline.stale)} · ${fmt(team.pipeline.overdueActions)}`} tone={team.pipeline.overdueActions || team.pipeline.staleCritical ? 'danger' : team.pipeline.stale ? 'warn' : 'ok'} small />
         </div>
       </div>
       ) : null}
@@ -647,7 +644,7 @@ function QuotesSlide({ data, caps, page }: { data: LiveBoardPayload; caps: Capac
       <div className="lb-kpis six">
         <Kpi label="Açık Teklif" value={fmt(r.openQuotes)} sub={`${fmtMoney(r.pipeline)} · ${fmt(r.expiredOpenQuotes)} süresi dolmuş`} tone={r.expiredOpenQuotes ? 'warn' : 'info'} />
         <Kpi label="Satışa Dönen · YTD" value={fmt(r.saleYtd.count)} sub={`${fmtMoney(r.saleYtd.amount)} · ${fmt(r.saleYtd.devices)} cihaz`} tone="ok" />
-        <Kpi label="Teklif → Satış" value={conv.pct == null ? '—' : `%${conv.pct}`} sub={conv.pct == null ? 'kapanan teklif yok' : `${fmt(conv.sale)} satış / ${fmt(conv.sale + conv.lost + conv.cancelled)} kapanan`} tone={conversionTone(conv.pct)} />
+        <Kpi label="Teklif → Satış" value={conv.pct == null ? '—' : `%${conv.pct}`} tone={conversionTone(conv.pct)} />
         <Kpi label="Kaybedilen · YTD" value={fmt(r.lostYtd.count)} sub={fmtMoney(r.lostYtd.amount)} tone={r.lostYtd.count ? 'danger' : 'neutral'} />
         <Kpi label="Bu Hafta Teklif" value={fmt(team.quotes.weekCount)} sub={`${fmtMoney(team.quotes.weekAmount)} · ay ${fmt(team.quotes.monthCount)} / ${fmtMoney(team.quotes.monthAmount)}`} />
         <Kpi label={`Forecast ${forecast.year} · adet`} value={fmt(forecast.totalQuantity)} sub={`ağırlıklı ${fmt(forecast.weightedQuantity)} · CRM forecast modülü`} />
@@ -864,7 +861,7 @@ function JiraSlide({ data, caps, page }: { data: LiveBoardPayload; caps: Capacit
 
 /* --- Müşteri Listesi (H/F/L/K) donut'u — kişi slaytı ------------------------ */
 /** Hunter/Farmer oranı: Raporlar › Müşteri Listesi'ndeki (crm_musteri_listesi) kayıtlardan (Sinan, 09.09). */
-function HfDonut({ list, size, compact }: { list: CustomerListSplit; size: number; compact: boolean }) {
+function HfDonut({ list, size }: { list: CustomerListSplit; size: number }) {
   const total = list.hunter + list.farmer;
   const radius = 40;
   const circumference = 2 * Math.PI * radius;
@@ -872,9 +869,9 @@ function HfDonut({ list, size, compact }: { list: CustomerListSplit; size: numbe
   const gap = list.hunter && list.farmer ? 2.2 : 0;
   const hunterLen = Math.max(0, hunterShare * circumference - gap);
   const farmerLen = Math.max(0, (1 - hunterShare) * circumference - gap);
-  const pct = (value: number) => (total ? `%${Math.round((value / total) * 100)}` : '');
+  const pct = (value: number) => (total ? `%${Math.round((value / total) * 100)}` : '—');
   return (
-    <div className={`lb-hf ${compact ? 'compact' : ''}`}>
+    <div className="lb-hf">
       <div className="lb-donut lb-hf-donut" style={{ width: size, height: size }} role="img" aria-label={`Hunter ${list.hunter} · Farmer ${list.farmer}`}>
         <svg viewBox="0 0 100 100">
           <circle className="track" cx="50" cy="50" r={radius} />
@@ -886,7 +883,6 @@ function HfDonut({ list, size, compact }: { list: CustomerListSplit; size: numbe
       <div className="lb-hf-legend">
         <div><i style={{ background: 'var(--lb-info)' }} /><span>Hunter</span><strong>{fmt(list.hunter)}</strong><em>{pct(list.hunter)}</em></div>
         <div><i style={{ background: 'var(--lb-ok)' }} /><span>Farmer</span><strong>{fmt(list.farmer)}</strong><em>{pct(list.farmer)}</em></div>
-        <small>Lead {fmt(list.lead)} · Kasa {fmt(list.kasa)}</small>
       </div>
     </div>
   );
@@ -894,83 +890,80 @@ function HfDonut({ list, size, compact }: { list: CustomerListSplit; size: numbe
 
 /* --- Kişi slaytı (Sales Performance) --------------------------------------- */
 
-function OwnerSlide({ owner, todayKey, caps, compact, density }: { owner: LiveOwner; todayKey: string; caps: Capacities; compact: boolean; density: OwnerDensity }) {
+/** Büyük donut kartı: başlık + halka + tek satır değer (Çağdaş Bey 10.09: "büyük, net, yan yana"). */
+function DonutCard({ title, children, note, tone }: { title: string; children: ReactNode; note: ReactNode; tone?: Tone }) {
+  return (
+    <div className="lb-card lb-donut-card">
+      <div className="lb-card-head"><h3>{title}</h3></div>
+      <div className="lb-donut-card-body">{children}</div>
+      <div className={`lb-donut-card-note tone-${tone ?? 'neutral'}`}>{note}</div>
+    </div>
+  );
+}
+
+function OwnerSlide({ owner, todayKey, caps, donutRowH }: { owner: LiveOwner; todayKey: string; caps: Capacities; donutRowH: number }) {
   const r = owner.revenue;
-  // Tek sayfa. Sinan, 09.09: Hot Pipeline kolonu kişi slaytından kaldırıldı ve
-  // üst bantla (MoneyBand) / Kanal Kırılımı ile TEKRAR EDEN mini kutular çıkarıldı;
-  // profil kartında yalnız kimlik + gerçekleşme halkası + başka yerde olmayan
-  // "Pipeline & Uyarı" sayaçları kalıyor.
-  // Sinan, 09.09 (2): kişinin ÜZERİNDEKİ AÇIK TEKLİF sayısı öne çıktı ve Hunter/Farmer
-  // oranı donut oldu — kaynak Müşteri Listesi (H/F/L/K); künye satici_etiketi sayımı
-  // bu slayttan kaldırıldı ki aynı ekranda iki farklı H/F sayısı görünmesin.
+  // v2.6 (Çağdaş Bey, 10.09 toplantısı — "Furkan'ın sayfası Portföy gibi büyük donutlarla olsun, bu kadar
+  // detaya gerek yok; kanal kırılımı kalksın; hint'ler kalksın"):
+  //   bant (hint'siz) → 3 büyük donut yan yana: Haftalık Hedef · Yıllık Ciro Hedefi · Hunter/Farmer (Müşteri Listesi)
+  //   → alt satır: Teklif & Pipeline sayaçları | Son Hareketler. Profil kolonu (avatar, kanal kırılımı, huni) kalktı;
+  //   ad zaten üst başlıkta. Donut çapı satır yüksekliğinden türer (ölçü tek kaynak: donutRowH).
+  const ring = Math.max(120, donutRowH - 122);
   const recentRows = owner.recentActivities.slice(0, caps.recent);
   const recentMore = owner.recentActivities.length - recentRows.length;
   const hasRevenueTarget = r.target != null;
-  const ringPct = hasRevenueTarget ? r.attainmentPct : owner.achievementPct;
-  const ringTone: Tone = hasRevenueTarget ? (r.pace ?? 'neutral') : pctTone(owner.achievementPct);
+  const weeklyTarget = owner.target.totalActivities || 0;
+  const weeklyPct = owner.achievementPct;
+  const weeklyTone: Tone = weeklyTarget ? pctTone(weeklyPct) : 'neutral';
   return (
-    <div className={`lb-slide lb-owner density-${density}`} key={owner.owner}>
+    <div className="lb-slide lb-owner" key={owner.owner}>
       <MoneyBand r={r} pipeline={owner.pipeline} weekQuotes={owner.quotes.weekCount} />
-      <div className="lb-profile">
-        <div className="lb-avatar">
-          {owner.initials}
-          <span className={`lb-rank-badge r${owner.rank}`} aria-label={`Sıra ${owner.rank}`}>#{owner.rank}</span>
-        </div>
-        <div className="lb-name">{owner.owner}<small title="CRM portföyü · son 90 günde hareketi olan">{fmt(owner.portfolio.total)} firma · {fmt(owner.portfolio.active)} aktif</small></div>
-        <div className="lb-ring-block">
-          <span className="lb-ring-title">{hasRevenueTarget ? `Ciro · ${r.year}` : 'Aktivite · hafta'}</span>
-          <Ring
-            pct={ringPct}
-            tone={ringTone}
-            big={ringPct == null ? (hasRevenueTarget ? fmtMoney(r.actualYtd) : fmt(owner.actual.totalActivities)) : `%${ringPct}`}
-            sub={hasRevenueTarget ? `${fmtMoney(r.actualYtd)} / ${fmtMoney(r.target)}` : owner.target.totalActivities ? `${fmt(owner.actual.totalActivities)} / ${fmt(owner.target.totalActivities)}` : 'hedef yok'}
-            size={density === 'dense' ? 96 : density === 'tight' ? (compact ? 112 : 128) : compact ? 126 : 156}
-          />
-          {!hasRevenueTarget
-            ? <span className="lb-ring-note">Yıllık ciro hedefi girilmedi</span>
-            : <span className={`lb-ring-note tone-${r.pace ?? 'neutral'}`}>{r.pace === 'ok' ? `zamanın ${(r.attainmentPct ?? 0) - r.yearElapsedPct} puan önünde` : `zamanın ${r.yearElapsedPct - (r.attainmentPct ?? 0)} puan gerisinde · ${TONE_WORD[r.pace ?? 'neutral']}`}</span>}
-        </div>
-        <div className="lb-facts">
-          <div className={`lb-fact lb-fact-quotes ${r.expiredOpenQuotes ? 'tone-warn' : ''}`}>
-            <span className="lb-fact-k">Açık Teklif</span>
-            <strong>{fmt(r.openQuotes)}</strong>
-            <small title={r.openQuotes ? `${fmtMoney(r.pipeline)} · ağırlıklı ${fmtMoney(r.weightedPipeline)}` : undefined}>
-              {r.openQuotes ? `${fmtMoney(r.pipeline)} · ağırlıklı ${fmtMoney(r.weightedPipeline)}` : 'kişide açık teklif yok'}
-              {r.expiredOpenQuotes ? ` · ${fmt(r.expiredOpenQuotes)} süresi dolmuş` : ''}
-            </small>
-          </div>
-          <div className="lb-fact lb-fact-list">
-            <span className="lb-fact-k" title="Raporlar › Müşteri Listesi (H/F/L/K) — Hunter / Farmer oranı">Müşteri Listesi · H / F</span>
-            {owner.list
-              ? <HfDonut list={owner.list} size={density === 'dense' ? 62 : density === 'tight' ? 70 : 80} compact={compact || density !== 'roomy'} />
-              : <small className="lb-fact-empty">Liste henüz doldurulmadı (Raporlar › Müşteri Listesi)</small>}
-          </div>
-        </div>
-        <div className="lb-mini-title">Pipeline &amp; Uyarı</div>
-        {/* 4 sayaç 2×2: profil kolonu daraldığı için 3 kolonda "Hareketsiz" etiketi taşıyordu. */}
-        <div className="lb-mini two">
+
+      <DonutCard
+        title="Haftalık Hedef"
+        tone={weeklyTone}
+        note={weeklyTarget ? `${fmt(owner.actual.totalActivities)} / ${fmt(weeklyTarget)} aktivite · bugün ${fmt(owner.todayActivities)}` : `${fmt(owner.actual.totalActivities)} aktivite · haftalık hedef girilmedi`}
+      >
+        <Ring pct={weeklyTarget ? weeklyPct : null} tone={weeklyTone} big={weeklyTarget ? `%${weeklyPct ?? 0}` : fmt(owner.actual.totalActivities)} sub={weeklyTarget ? 'aktivite' : 'bu hafta'} size={ring} stroke={11} />
+      </DonutCard>
+
+      <DonutCard
+        title={`Yıllık Ciro Hedefi · ${r.year}`}
+        tone={hasRevenueTarget ? (r.pace ?? 'neutral') : 'neutral'}
+        note={hasRevenueTarget
+          ? `${fmtMoney(r.actualYtd)} / ${fmtMoney(r.target)} · ${r.pace === 'ok' ? `zamanın ${(r.attainmentPct ?? 0) - r.yearElapsedPct} puan önünde` : `zamanın ${r.yearElapsedPct - (r.attainmentPct ?? 0)} puan gerisinde`}`
+          : `${fmtMoney(r.actualYtd)} · yıllık ciro hedefi girilmedi`}
+      >
+        <Ring pct={hasRevenueTarget ? r.attainmentPct : null} tone={hasRevenueTarget ? (r.pace ?? 'neutral') : 'neutral'} big={hasRevenueTarget ? `%${r.attainmentPct ?? 0}` : fmtMoney(r.actualYtd)} sub={hasRevenueTarget ? 'gerçekleşme' : 'YTD ciro'} size={ring} stroke={11} />
+      </DonutCard>
+
+      <DonutCard
+        title="Hunter / Farmer"
+        note={owner.list ? `Hunter ${fmt(owner.list.hunter)} · Farmer ${fmt(owner.list.farmer)} · Lead ${fmt(owner.list.lead)} · Kasa ${fmt(owner.list.kasa)}` : 'Müşteri Listesi henüz doldurulmadı'}
+      >
+        {owner.list ? <HfDonut list={owner.list} size={ring} /> : <Ring pct={null} tone="neutral" big="—" sub="liste yok" size={ring} stroke={11} />}
+      </DonutCard>
+
+      <div className="lb-card lb-owner-stats">
+        <div className="lb-card-head"><h3>Teklif &amp; Pipeline</h3></div>
+        <div className="lb-stat-grid">
+          <div className={r.expiredOpenQuotes ? 'tone-warn' : ''}><strong>{fmt(r.openQuotes)}</strong><span>Açık Teklif</span></div>
+          <div><strong>{fmtMoney(r.pipeline)}</strong><span>Pipeline</span></div>
           <div><strong>{fmt(owner.pipeline.activeCustomers)}</strong><span>Aktif Fırsat</span></div>
           <div className={owner.pipeline.staleCritical ? 'tone-danger' : owner.pipeline.stale ? 'tone-warn' : ''}><strong>{fmt(owner.pipeline.stale)}</strong><span>Hareketsiz</span></div>
           <div className={owner.pipeline.overdueActions ? 'tone-danger' : ''}><strong>{fmt(owner.pipeline.overdueActions)}</strong><span>Gecikmiş</span></div>
-          {owner.jira ? <div className={owner.jira.open ? 'tone-warn' : ''}><strong>{fmt(owner.jira.open)}</strong><span>Jira Ticket</span></div> : null}
+          {owner.jira
+            ? <div className={owner.jira.open ? 'tone-warn' : ''}><strong>{fmt(owner.jira.open)}</strong><span>Jira Ticket</span></div>
+            : <div className={r.expiredOpenQuotes ? 'tone-warn' : ''}><strong>{fmt(r.expiredOpenQuotes)}</strong><span>Süresi Dolmuş</span></div>}
         </div>
       </div>
 
-      <div className="lb-center">
-        <div className="lb-card">
-          <div className="lb-card-head"><h3>Kanal Kırılımı</h3><span>gerçekleşen / hedef · {owner.todayActivities ? `bugün ${owner.todayActivities}` : 'bugün 0'}</span></div>
-          <div className="lb-channels">
-            <ChannelGroups actual={owner.actual} target={owner.target} />
-          </div>
-          <FunnelRow f={owner.funnel} />
+      <div className="lb-card lb-grow lb-owner-recent">
+        <div className="lb-card-head">
+          <h3>Son Hareketler</h3>
+          <span>bu hafta{recentMore > 0 ? ` · +${recentMore} hareket daha` : ''}</span>
         </div>
-        <div className="lb-card lb-grow">
-          <div className="lb-card-head">
-            <h3>Son Hareketler</h3>
-            <span>bu hafta · faz etkisiyle{recentMore > 0 ? ` · +${recentMore} hareket daha` : ''}</span>
-          </div>
-          <ActivityList rows={recentRows} todayKey={todayKey} />
-        </div>
+        <ActivityList rows={recentRows} todayKey={todayKey} />
       </div>
     </div>
   );
@@ -1017,7 +1010,6 @@ export default function LiveBoard({ active }: { active: boolean }) {
   }, []);
 
   const metrics = useMemo(() => layoutMetrics(box.h), [box.h]);
-  const density = useMemo(() => ownerDensity(box.h), [box.h]);
   const caps = useMemo(() => capacities(box.h, box.w || 1920), [box.h, box.w]);
   const pagePlan = useMemo(() => (data ? buildPagePlan(data, caps) : undefined), [data, caps]);
 
@@ -1178,7 +1170,7 @@ export default function LiveBoard({ active }: { active: boolean }) {
     if (current.type === 'owner') {
       const owner = data.owners[current.index];
       return owner
-        ? <OwnerSlide owner={owner} todayKey={data.range.today} caps={caps} compact={metrics.compact} density={density} />
+        ? <OwnerSlide owner={owner} todayKey={data.range.today} caps={caps} donutRowH={metrics.donutRowH} />
         : <PulseSlide data={data} caps={caps} page={0} compact={metrics.compact} />;
     }
     switch (current.key) {
@@ -1208,6 +1200,7 @@ export default function LiveBoard({ active }: { active: boolean }) {
         '--lb-owner-quote-row-h': `${metrics.ownerQuoteRowH}px`,
         '--lb-alert-h': `${metrics.alertH}px`,
         '--lb-band-h': `${metrics.bandH}px`,
+        '--lb-donut-row-h': `${metrics.donutRowH}px`,
         '--lb-channels-h': `${metrics.channelsH}px`,
         '--lb-chips-h': `${metrics.chipsH}px`,
         '--lb-kpi-row-h': `${metrics.kpiRowH}px`,

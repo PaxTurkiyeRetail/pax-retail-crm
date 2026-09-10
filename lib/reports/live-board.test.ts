@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  COMPACT_BODY_HEIGHT,
-  OWNER_DENSITY_DENSE_BELOW,
-  OWNER_DENSITY_TIGHT_BELOW,
-  ownerDensity,
   normalizeName,
   ALERT_ORDER,
   LIVE_BOARD_TIMING,
@@ -273,27 +269,6 @@ describe('numbers', () => {
     expect(phaseGroupOf(12)).toBe('poc');
     expect(phaseGroupOf(15)).toBe('order');
     expect(phaseGroupOf(24)).toBe('rollout');
-  });
-});
-
-describe('kişi slaytı yoğunluğu (ownerDensity) — Açık Teklif + H/F donut eklenince kolon gövdeye sığmalı', () => {
-  it('ölçüm yokken (0) varsayılan geniş düzen', () => {
-    expect(ownerDensity(0)).toBe('roomy');
-  });
-  it('1080p TV geniş, 1600×1000 sıkı, 1536×864 / 1366×768 / 1280×800 yoğun', () => {
-    expect(ownerDensity(945)).toBe('roomy');   // 1920×1080 gövde
-    expect(ownerDensity(865)).toBe('tight');   // 1600×1000
-    expect(ownerDensity(765)).toBe('tight');   // 1440×900
-    expect(ownerDensity(729)).toBe('dense');   // 1536×864
-    expect(ownerDensity(633)).toBe('dense');   // 1366×768
-    expect(ownerDensity(665)).toBe('dense');   // 1280×800
-  });
-  it('eşikler tutarlı: yoğun < sıkı, kompakt ölçü eşiği aralarında', () => {
-    expect(OWNER_DENSITY_DENSE_BELOW).toBeLessThan(OWNER_DENSITY_TIGHT_BELOW);
-    expect(COMPACT_BODY_HEIGHT).toBeGreaterThan(OWNER_DENSITY_DENSE_BELOW);
-    expect(ownerDensity(OWNER_DENSITY_TIGHT_BELOW)).toBe('roomy');
-    expect(ownerDensity(OWNER_DENSITY_TIGHT_BELOW - 1)).toBe('tight');
-    expect(ownerDensity(OWNER_DENSITY_DENSE_BELOW - 1)).toBe('dense');
   });
 });
 

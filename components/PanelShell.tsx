@@ -434,6 +434,14 @@ export default function PanelShell({
         label: "Müşteriler",
         iconKey: "customers",
       });
+    // Müşteri Listesi (H/F/L/K): Çağdaş Bey'in kişi bazlı firma dağılımı; herkes görür,
+    // admin/super_admin düzenler (Sinan, 09.09). 10.09: Raporlar'dan Operasyon'a taşındı.
+    if (allowed('customer.read') && allowed('screen.crm.customers.view'))
+      operations.push({
+        href: "/crm/customer-list",
+        label: "Müşteri Listesi (H/F/L/K)",
+        iconKey: "customers",
+      });
     if (allowed('activity.read') && allowed('screen.crm.activities.view'))
       operations.push({
         href: "/crm/activities",
@@ -489,13 +497,6 @@ export default function PanelShell({
         label: "Satışçı Takip Raporu",
         iconKey: "weekly",
         exact: true,
-      });
-      // Müşteri Listesi (H/F/L/K): Çağdaş Bey'in kişi bazlı firma dağılımı; herkes görür,
-      // admin/super_admin düzenler (Sinan, 09.09).
-      reports.push({
-        href: "/crm/reports/customer-list",
-        label: "Müşteri Listesi (H/F/L/K)",
-        iconKey: "customers",
       });
       reports.push({
         href: "/crm/reports/entegrasyon-raporu",

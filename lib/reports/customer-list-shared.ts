@@ -56,6 +56,7 @@ export type CustomerListOwner = { id: string | null; name: string };
 export type CustomerListPayload = {
   generatedAt: string;
   items: CustomerListItem[];
+  /** Görünen kolonlar (satış ekibi ∪ listede geçenler ∪ Havuz Account). */
   owners: CustomerListOwner[];
   /** İstek sahibinin düzenleme yetkisi (customer.assignment_list.manage). API yine kontrol eder. */
   canManage: boolean;
@@ -80,23 +81,39 @@ export function firmKey(value: string) {
 export const FIRM_NAME_MAX = 160;
 
 /**
- * Kolon sırası: OWNER_ORDER'daki adlar önce (o sırayla), kalanlar alfabetik.
- * Listede geçen ama kullanıcı olmayan adlar (ör. eski çalışan) kolon olarak kalır —
- * firmaları "kaybolmasın".
+ * Her zaman görünen sabit kolonlar — kullanıcı değil, CRM'deki "sorumlu" değerleri (OWNER_ORDER ile aynı yazım).
+ * Sinan, 10.09: "Havuz Account" (sahipsiz/havuz firmaları) ve "Yemek Kartları" kolonları.
+ */
+export const CUSTOMER_LIST_FIXED_OWNERS: readonly string[] = ['Havuz Account', 'Yemek Kartları'];
+
+function isSalesTeamName(name: string) {
+  return OWNER_ORDER.some((known) => normalizeName(known) === normalizeName(name));
+}
+
+/**
+ * Görünen kolonlar (Sinan, 10.09): her account_manager kullanıcı değil —
+ *   (a) satış ekibi = OWNER_ORDER'da adı geçen aktif account manager'lar (Cem, Ömer, Furkan, Erdi, Seda),
+ *   (b) listede firması olan herkes (eski çalışan dahil — firmaları kaybolmasın),
+ *   (c) sabit "Havuz Account" ve "Yemek Kartları" kolonları.
+ * Böylece ikincil rolü account_manager olan yönetici hesapları (ör. genel müdür) boş kolon açmaz.
+ * Kolon dışında kalan hesaplar hiç görünmez (Sinan, 10.09: "Görkem İlbay olmasın direkt").
+ * Sıra: OWNER_ORDER (Havuz Account orada zaten sonlarda), kalanlar alfabetik.
  */
 export function orderOwners(owners: CustomerListOwner[], items: CustomerListItem[]): CustomerListOwner[] {
   const byKey = new Map<string, CustomerListOwner>();
-  for (const owner of owners) {
+  const put = (owner: CustomerListOwner) => {
     const key = normalizeName(owner.name);
-    if (!key) continue;
+    if (!key) return;
     const existing = byKey.get(key);
     if (!existing) byKey.set(key, { id: owner.id ?? null, name: owner.name });
     else if (!existing.id && owner.id) byKey.set(key, { id: owner.id, name: existing.name });
-  }
-  for (const item of items) {
-    const key = normalizeName(item.owner);
-    if (!key || byKey.has(key)) continue;
-    byKey.set(key, { id: item.ownerUserId, name: item.owner });
+  };
+  for (const owner of owners) if (isSalesTeamName(owner.name)) put(owner);
+  for (const item of items) put({ id: item.ownerUserId, name: item.owner });
+  for (const fixed of CUSTOMER_LIST_FIXED_OWNERS) {
+    // Kullanıcı listesinde aynı adla hesap varsa id'sini al; yoksa id'siz sabit kolon.
+    const user = owners.find((owner) => normalizeName(owner.name) === normalizeName(fixed));
+    put(user ?? { id: null, name: fixed });
   }
   return Array.from(byKey.values()).sort((a, b) => ownerOrderCompare(a.name, b.name));
 }

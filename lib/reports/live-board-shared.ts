@@ -469,7 +469,8 @@ export function rankOwners<T extends { owner: string; actual: WeeklyTargetCounte
 export type LayoutMetrics = {
   compact: boolean;
   bandH: number;        // kişi slaydı ticari bant
-  channelsH: number;    // kanal kırılımı + huni kartı
+  channelsH: number;    // (eski) kanal kırılımı + huni kartı — Pulse'ta kullanılmıyor, kişi slaytından 10.09'da kalktı
+  donutRowH: number;    // kişi slaydı: 3 büyük donut kartının satır yüksekliği (10.09)
   hotH: number;         // Hot Pipeline kartı (kişi)
   actH: number;         // Son Hareketler satırı
   leaderH: number;      // Kim hedefinde satırı
@@ -489,13 +490,13 @@ export type LayoutMetrics = {
 // yüksekliklere sığar. Değiştirirsen harness'ı koştur — kırpılan 0 olmalı.
 export const BASE_METRICS: LayoutMetrics = {
   compact: false,
-  bandH: 84, channelsH: 330, hotH: 106, actH: 92, leaderH: 124, revenueH: 372,
+  bandH: 84, channelsH: 330, donutRowH: 344, hotH: 106, actH: 92, leaderH: 124, revenueH: 372,
   rowH: 82, quoteRowH: 72, ownerQuoteRowH: 60, alertH: 82, kpiRowH: 124, chipsH: 76,
   cardChrome: 68, gap: 14, listGap: 8,
 };
 export const COMPACT_METRICS: LayoutMetrics = {
   compact: true,
-  bandH: 76, channelsH: 306, hotH: 100, actH: 90, leaderH: 112, revenueH: 330,
+  bandH: 76, channelsH: 306, donutRowH: 288, hotH: 100, actH: 90, leaderH: 112, revenueH: 330,
   rowH: 74, quoteRowH: 66, ownerQuoteRowH: 60, alertH: 74, kpiRowH: 110, chipsH: 68,
   cardChrome: 62, gap: 12, listGap: 6,
 };
@@ -503,23 +504,6 @@ export const COMPACT_METRICS: LayoutMetrics = {
 /** Kompakt eşik: gövde (slayt alanı) yüksekliği bundan küçükse küçük ölçüler. */
 export const COMPACT_BODY_HEIGHT = 780;
 
-/**
- * Kişi slaytı profil kolonu yoğunluğu (Sinan, 09.09: Açık Teklif + H/F donut'u eklenince kolon
- * uzadı). Kolon sabit yükseklikli listelere girmez; bunun yerine ölçülen gövdeye göre üç kademe:
- *   roomy ≥ 900 px → halka 156, avatar 84, "Pipeline & Uyarı" 2×2
- *   tight ≥ 740 px → halka 128/112, avatar 72, sıkı boşluklar
- *   dense  < 740 px → halka 100, avatar 64, sayaçlar tek satır metin
- * Harness (6 çözünürlük × 2 tema) ile doğrulandı: profil kolonu gövdeyi hiç aşmaz.
- */
-export type OwnerDensity = 'roomy' | 'tight' | 'dense';
-export const OWNER_DENSITY_TIGHT_BELOW = 900;
-export const OWNER_DENSITY_DENSE_BELOW = 740;
-export function ownerDensity(bodyHeight: number): OwnerDensity {
-  if (bodyHeight <= 0) return 'roomy';
-  if (bodyHeight < OWNER_DENSITY_DENSE_BELOW) return 'dense';
-  if (bodyHeight < OWNER_DENSITY_TIGHT_BELOW) return 'tight';
-  return 'roomy';
-}
 
 export function layoutMetrics(bodyHeight: number): LayoutMetrics {
   return bodyHeight > 0 && bodyHeight < COMPACT_BODY_HEIGHT ? COMPACT_METRICS : BASE_METRICS;
@@ -551,7 +535,8 @@ export function capacities(bodyHeight: number, bodyWidth = 1920): Capacities {
   const H = Math.max(360, bodyHeight || 900);
   const colH = H - m.bandH - m.gap;                               // kişi slaydı kolonları
   const hot = rowsThatFit(colH - m.cardChrome, m.hotH, m.listGap);
-  const recent = rowsThatFit(colH - m.channelsH - m.gap - m.cardChrome, m.actH, m.listGap);
+  // Kişi slaydı (10.09): bant + 3 donut satırı + alt satır (Teklif & Pipeline | Son Hareketler).
+  const recent = rowsThatFit(colH - m.donutRowH - m.gap - m.cardChrome, m.actH, m.listGap);
   const leader = rowsThatFit(H - m.cardChrome, m.leaderH, 10);
   const tableRows = rowsThatFit(H - m.cardChrome - 28, m.rowH, 6);   // 28: tablo başlık satırı
   // Teklifler: KPI şeridinin altında iki kolon; sol kolonda açık teklifler ve

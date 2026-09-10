@@ -51,19 +51,27 @@ describe('customer-list-shared · isimler ve anahtarlar', () => {
 });
 
 describe('customer-list-shared · kolonlar', () => {
-  it('kolonları OWNER_ORDER sırasına dizer, kullanıcı olmayan adları sona ekler', () => {
-    const owners = orderOwners(
-      [
-        { id: 'u-seda', name: 'Seda Kesikoğlu' },
-        { id: 'u-cem', name: 'Cem Koç' },
-        { id: 'u-furkan', name: 'Furkan Kızılkurt' },
-      ],
-      ITEMS,
-    );
-    expect(owners.map((o) => o.name)).toEqual(['Cem Koç', 'Ömer Canatar', 'Furkan Kızılkurt', 'Erdi Toraman', 'Seda Kesikoğlu', 'Eski Çalışan']);
-    // Listeden gelen adlar id'siz; kullanıcıdan gelenler id'li.
+  it('kolonlar: satış ekibi + listede geçenler + Havuz Account + Yemek Kartları; yönetici hesabı kolon açmaz (Sinan, 10.09)', () => {
+    const users = [
+      { id: 'u-seda', name: 'Seda Kesikoğlu' },
+      { id: 'u-cem', name: 'Cem Koç' },
+      { id: 'u-furkan', name: 'Furkan Kızılkurt' },
+      { id: 'u-gm', name: 'Görkem İlbay' }, // ikincil rolü account_manager olan genel müdür
+    ];
+    const owners = orderOwners(users, ITEMS);
+    expect(owners.map((o) => o.name)).toEqual(['Cem Koç', 'Ömer Canatar', 'Furkan Kızılkurt', 'Erdi Toraman', 'Seda Kesikoğlu', 'Havuz Account', 'Yemek Kartları', 'Eski Çalışan']);
     expect(findOwner(owners, 'cem koç')?.id).toBe('u-cem');
-    expect(findOwner(owners, 'Erdi Toraman')?.id).toBeNull();
+    expect(findOwner(owners, 'Erdi Toraman')?.id).toBeNull(); // yalnız listeden geliyor
+    expect(findOwner(owners, 'Havuz Account')?.id).toBeNull(); // sabit kolon, kullanıcı değil
+    expect(findOwner(owners, 'Yemek Kartları')?.id).toBeNull();
+    expect(findOwner(owners, 'Görkem İlbay')).toBeNull(); // yönetici hesabı hiç görünmez
+  });
+
+  it('kolon dışı kişi listeye firma alınca kolon olur', () => {
+    const users = [{ id: 'u-gm', name: 'Görkem İlbay' }];
+    const withFirm = [...ITEMS, item({ id: 'g1', owner: 'Görkem İlbay', ownerUserId: 'u-gm', category: 'H', firma: 'GM FİRMA' })];
+    const owners = orderOwners(users, withFirm);
+    expect(findOwner(owners, 'Görkem İlbay')?.id).toBe('u-gm');
   });
 
   it('aynı kişinin farklı yazımlarını tek kolonda toplar', () => {

@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { requirePermissionOrThrow, requireReportsAccessOrThrow } from '@/lib/authz';
+import { requireCrmAccessOrThrow, requirePermissionOrThrow } from '@/lib/authz';
 import { userHasPermission } from '@/lib/permissions';
 import { apiErrorResponse, parseJsonBody } from '@/lib/http/api-error';
 import { createItem, loadCustomerList } from '@/lib/reports/customer-list';
 import { CUSTOMER_LIST_CATEGORY_KEYS, FIRM_NAME_MAX, type CustomerListPayload } from '@/lib/reports/customer-list-shared';
 
-// Müşteri Listesi (H/F/L/K) — Raporlar › Müşteri Listesi.
-//   GET  : herkes (report.read.all — Raporlar menüsündeki diğer ekranlarla aynı kapı)
+// Müşteri Listesi (H/F/L/K) — Operasyon › Müşteri Listesi (10.09'da Raporlar'dan taşındı).
+//   GET  : herkes (customer.read — Müşteriler ekranıyla aynı kapı)
 //   POST : yeni firma; yalnız customer.assignment_list.manage (admin, super_admin)
 // Ekran görünmese de API yetkiyi kendisi doğrular (kılavuz: "görünmeyen menü güvenlik sayılmaz").
 
@@ -26,7 +26,7 @@ const createSchema = z.object({
 
 export async function GET() {
   try {
-    const me = await requireReportsAccessOrThrow();
+    const me = await requireCrmAccessOrThrow();
     const { items, owners } = await loadCustomerList();
     const payload: CustomerListPayload = {
       generatedAt: new Date().toISOString(),

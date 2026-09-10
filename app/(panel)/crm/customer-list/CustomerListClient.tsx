@@ -28,7 +28,7 @@ import '@/styles/customer-list.css';
 //     arası taşıma için sürükleme sırasında her kolon başlığında (yapışkan) 4 kategori rozeti hedef
 //     olur — tek hamlede kişi + kategori; uzun tablolarda 2500 px sürüklemek gerekmez.
 //     Arama yalnız görünümü filtreler, sayaçlar filtresiz kalır.
-//   * API: GET/POST /api/reports/customer-list · PATCH/DELETE /api/reports/customer-list/:id.
+//   * API: GET/POST /api/crm/customer-list · PATCH/DELETE /api/crm/customer-list/:id.
 
 type CategoryFilter = 'all' | CustomerListCategory;
 type DropTarget = { owner: string; category: CustomerListCategory; beforeId: string | null };
@@ -69,7 +69,7 @@ export default function CustomerListClient() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/reports/customer-list', { cache: 'no-store' });
+      const res = await fetch('/api/crm/customer-list', { cache: 'no-store' });
       if (res.status === 401) { window.location.href = '/login'; return; }
       if (!res.ok) throw new Error(await readError(res, 'Müşteri listesi yüklenemedi.'));
       setPayload((await res.json()) as CustomerListPayload);
@@ -96,6 +96,8 @@ export default function CustomerListClient() {
   }, [menu]);
 
   const items = useMemo(() => payload?.items ?? [], [payload]);
+  // Kolonlar sunucuda belirlenir: satış ekibi (OWNER_ORDER) ∪ listede firması olanlar ∪ Havuz Account ∪ Yemek Kartları.
+  // Rolü account_manager olan başka hesaplar (ör. yönetim) kolon almaz (Sinan, 10.09).
   const owners = useMemo(() => payload?.owners ?? [], [payload]);
   const canManage = Boolean(payload?.canManage);
   const totals = useMemo(() => countsByCategory(items), [items]);
@@ -133,7 +135,7 @@ export default function CustomerListClient() {
   const patchItem = useCallback(async (id: string, body: Record<string, unknown>) => {
     mark(id, true);
     try {
-      const res = await fetch(`/api/reports/customer-list/${id}`, {
+      const res = await fetch(`/api/crm/customer-list/${id}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
       });
       if (!res.ok) throw new Error(await readError(res, 'Kayıt güncellenemedi.'));
@@ -182,7 +184,7 @@ export default function CustomerListClient() {
     const key = `new:${owner}:${cat}`;
     mark(key, true);
     try {
-      const res = await fetch('/api/reports/customer-list', {
+      const res = await fetch('/api/crm/customer-list', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ category: cat, firma, ...(target?.id ? { ownerUserId: target.id } : { owner }) }),
       });
@@ -201,7 +203,7 @@ export default function CustomerListClient() {
     if (!window.confirm(`"${item.firma}" ${item.owner} · ${categoryLabel(item.category)} listesinden kaldırılsın mı?\n(Kayıt silinmez, pasife alınır; işlem denetim kaydına yazılır.)`)) return;
     mark(item.id, true);
     try {
-      const res = await fetch(`/api/reports/customer-list/${item.id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/crm/customer-list/${item.id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error(await readError(res, 'Kayıt kaldırılamadı.'));
       removeItem(item.id);
     } catch {
@@ -288,7 +290,7 @@ export default function CustomerListClient() {
     >
       <section className="cl-hero">
         <div className="cl-hero-copy">
-          <span className="cl-eyebrow">Raporlar · Müşteri Listesi</span>
+          <span className="cl-eyebrow">Operasyon · Müşteri Listesi</span>
           <h1>Müşteri Listesi (H/F/L/K)</h1>
           <p>
             Satış yönetiminin kişi bazlı firma dağılımı — kolon kişi, tablo kategori.
@@ -452,7 +454,6 @@ export default function CustomerListClient() {
                               </form>
                             ) : (
                               <>
-                                {canManage ? <span className="cl-handle" aria-hidden="true">⋮⋮</span> : null}
                                 <span className="cl-chip-name">{item.firma}</span>
                                 {item.note ? <span className="cl-chip-note" title={item.note}>✎</span> : null}
                                 {canManage ? (
