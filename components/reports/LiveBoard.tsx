@@ -862,34 +862,63 @@ function JiraSlide({ data, caps, page }: { data: LiveBoardPayload; caps: Capacit
   );
 }
 
-/* --- Müşteri Listesi (H/F/L/K) donut'u — kişi slaytı ------------------------ */
-/** Hunter/Farmer oranı: Raporlar › Müşteri Listesi'ndeki (crm_musteri_listesi) kayıtlardan (Sinan, 09.09). */
-function HfDonut({ list, size, legend = true }: { list: CustomerListSplit; size: number; legend?: boolean }) {
-  const total = list.hunter + list.farmer;
+/* --- Müşteri Takip Statüsü donut'u (H/F/L/K) — kişi slaytı --------------------- */
+/**
+ * Kişinin Müşteri Listesi (Operasyon › Müşteri Listesi, `crm_musteri_listesi`) dağılımı.
+ * v2.8 (Sinan, 10.09): kart adı **Müşteri Takip Statüsü**; donut yalnız Hunter/Farmer değil
+ * **dört dilim** — Hunter · Farmer · Lead · Kasa Firması, oranlarıyla. Merkez = toplam firma.
+ * Renkler kart altındaki not satırıyla birebir aynı (lejant yerine renkli not; sağdaki iki
+ * küçük halkaya yer kalsın diye).
+ */
+const STATUS_SEGMENTS = [
+  { key: 'hunter', label: 'Hunter', color: 'var(--lb-info)' },
+  { key: 'farmer', label: 'Farmer', color: 'var(--lb-ok)' },
+  { key: 'lead', label: 'Lead', color: 'var(--lb-warn)' },
+  { key: 'kasa', label: 'Kasa', color: 'var(--lb-violet)' },
+] as const;
+
+function StatusDonut({ list, size }: { list: CustomerListSplit; size: number }) {
+  const total = list.hunter + list.farmer + list.lead + list.kasa;
   const radius = 40;
   const circumference = 2 * Math.PI * radius;
-  const hunterShare = total ? list.hunter / total : 0;
-  const gap = list.hunter && list.farmer ? 2.2 : 0;
-  const hunterLen = Math.max(0, hunterShare * circumference - gap);
-  const farmerLen = Math.max(0, (1 - hunterShare) * circumference - gap);
-  const pct = (value: number) => (total ? `%${Math.round((value / total) * 100)}` : '—');
+  const shown = STATUS_SEGMENTS.map((segment) => ({ ...segment, value: list[segment.key] })).filter((segment) => segment.value > 0);
+  const gap = shown.length > 1 ? 2.2 : 0;
+  let offset = 0;
+  const arcs = shown.map((segment) => {
+    const share = total ? segment.value / total : 0;
+    const length = Math.max(0, share * circumference - gap);
+    const arc = { ...segment, length, dashOffset: -offset };
+    offset += share * circumference;
+    return arc;
+  });
   return (
-    <div className={`lb-hf ${legend ? '' : 'solo'}`}>
-      <div className="lb-donut lb-hf-donut" style={{ width: size, height: size }} role="img" aria-label={`Hunter ${list.hunter} · Farmer ${list.farmer}`}>
-        <svg viewBox="0 0 100 100">
-          <circle className="track" cx="50" cy="50" r={radius} />
-          {hunterLen > 0 ? <circle cx="50" cy="50" r={radius} stroke="var(--lb-info)" strokeDasharray={`${hunterLen} ${circumference - hunterLen}`} /> : null}
-          {farmerLen > 0 ? <circle cx="50" cy="50" r={radius} stroke="var(--lb-ok)" strokeDasharray={`${farmerLen} ${circumference - farmerLen}`} strokeDashoffset={-(hunterShare * circumference)} /> : null}
-        </svg>
-        <div className="lb-ring-center"><strong>{fmt(total)}</strong><span>H + F</span></div>
-      </div>
-      {legend ? (
-        <div className="lb-hf-legend">
-          <div><i style={{ background: 'var(--lb-info)' }} /><span>Hunter</span><strong>{fmt(list.hunter)}</strong><em>{pct(list.hunter)}</em></div>
-          <div><i style={{ background: 'var(--lb-ok)' }} /><span>Farmer</span><strong>{fmt(list.farmer)}</strong><em>{pct(list.farmer)}</em></div>
-        </div>
-      ) : null}
+    <div className="lb-donut lb-status-donut" style={{ width: size, height: size }} role="img"
+      aria-label={STATUS_SEGMENTS.map((segment) => `${segment.label} ${list[segment.key]}`).join(' · ')}>
+      <svg viewBox="0 0 100 100">
+        <circle className="track" cx="50" cy="50" r={radius} />
+        {arcs.map((arc) => (
+          <circle key={arc.key} cx="50" cy="50" r={radius} stroke={arc.color}
+            strokeDasharray={`${arc.length} ${circumference - arc.length}`} strokeDashoffset={arc.dashOffset} />
+        ))}
+      </svg>
+      <div className="lb-ring-center"><strong>{fmt(total)}</strong><span>firma</span></div>
     </div>
+  );
+}
+
+/** Donut altındaki renkli not: "Hunter 9 %38 · Farmer 4 %17 · Lead 8 %33 · Kasa 3 %12". */
+function StatusNote({ list }: { list: CustomerListSplit }) {
+  const total = list.hunter + list.farmer + list.lead + list.kasa;
+  return (
+    <>
+      {STATUS_SEGMENTS.map((segment, index) => (
+        <span key={segment.key}>
+          {index ? ' · ' : ''}
+          <b style={{ color: segment.color }}>{segment.label} {fmt(list[segment.key])}</b>
+          {total ? <em className="lb-status-pct"> %{Math.round((list[segment.key] / total) * 100)}</em> : null}
+        </span>
+      ))}
+    </>
   );
 }
 
@@ -953,7 +982,6 @@ function OwnerSlide({ owner, todayKey, caps, donutRowH }: { owner: LiveOwner; to
   const weeklyTone: Tone = weeklyTarget ? pctTone(weeklyPct) : 'neutral';
   const q = g.quarter.label;
   const wonTone: Tone = g.wonQuotes.target != null ? pctTone(g.wonQuotes.pct) : 'neutral';
-  const colored = (tone: Tone, text: string) => <b className={`tone-${tone}`}>{text}</b>;
   return (
     <div className="lb-slide lb-owner" key={owner.owner}>
       <MoneyBand r={r} pipeline={owner.pipeline} weekQuotes={owner.quotes.weekCount} />
@@ -987,16 +1015,14 @@ function OwnerSlide({ owner, todayKey, caps, donutRowH }: { owner: LiveOwner; to
       </DonutCard>
 
       <DonutCard
-        title="Hunter / Farmer"
-        note={owner.list
-          ? <>{colored('info', `Hunter ${fmt(owner.list.hunter)}`)} · {colored('ok', `Farmer ${fmt(owner.list.farmer)}`)} · Lead {fmt(owner.list.lead)} · Kasa {fmt(owner.list.kasa)}</>
-          : 'Müşteri Listesi henüz doldurulmadı'}
+        title="Müşteri Takip Statüsü"
+        note={owner.list ? <StatusNote list={owner.list} /> : 'Müşteri Listesi henüz doldurulmadı'}
         aside={<>
           <MiniRing pair={g.hunterToFarmer} label="H → F çevirme" tone={goalTone(g.hunterToFarmer)} size={mini} />
           <MiniRing pair={g.leadToHunter} label="L → H çevirme" tone={goalTone(g.leadToHunter)} size={mini} />
         </>}
       >
-        {owner.list ? <HfDonut list={owner.list} size={ring} legend={false} /> : <Ring pct={null} tone="neutral" big="—" sub="liste yok" size={ring} stroke={11} />}
+        {owner.list ? <StatusDonut list={owner.list} size={ring} /> : <Ring pct={null} tone="neutral" big="—" sub="liste yok" size={ring} stroke={11} />}
       </DonutCard>
 
       <div className="lb-card lb-owner-stats">

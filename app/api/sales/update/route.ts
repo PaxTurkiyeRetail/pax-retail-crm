@@ -18,6 +18,8 @@ type Body = {
   /** Kiralama dönemi (08.09): satış kaydında düzenlenebilir; tutar = donanım + aylık kira × ay. */
   rental_start_date?: string | null;
   rental_end_date?: string | null;
+  /** Satış kanalı (027): Banka · Direkt Satış · Kanal — Forecast'in listesiyle aynı kaynak. */
+  sales_channel?: string | null;
 };
 
 const isoDate = (value: unknown) => {
@@ -37,7 +39,7 @@ export async function POST(request: Request) {
     const admin = createPgAdminClient();
     const { data: sale, error: readError } = await admin
       .from('crm_sales')
-      .select('id,quote_id,owner_user_id,owner_name,device_count,amount,price_source,status,sale_date,note,sale_type,rental_start_date,rental_end_date,rental_monthly_amount,hardware_amount')
+      .select('id,quote_id,owner_user_id,owner_name,device_count,amount,price_source,status,sale_date,note,sale_type,rental_start_date,rental_end_date,rental_monthly_amount,hardware_amount,sales_channel,source')
       .eq('id', saleId)
       .maybeSingle();
     if (readError) return NextResponse.json({ message: readError.message }, { status: 400 });
@@ -71,7 +73,12 @@ export async function POST(request: Request) {
     let noLines = false;
     let hardwareAmount = Number((sale as any).hardware_amount ?? 0);
     let rentalMonthlyAmount = Number((sale as any).rental_monthly_amount ?? 0);
-    const repriced = await repriceFromCatalog(String((sale as any).quote_id), deviceCount, rentalPeriod);
+    // Doğrudan (teklifsiz) satışta yeniden fiyatlanacak teklif satırı yok (027): tutar korunur,
+    // değiştirmek isteyen "anlaşma fiyatı" girer.
+    const quoteId = String((sale as any).quote_id ?? '').trim();
+    const repriced = quoteId
+      ? await repriceFromCatalog(quoteId, deviceCount, rentalPeriod)
+      : { amount: 0, hardwareAmount: Number((sale as any).hardware_amount ?? 0), rentalMonthlyAmount: Number((sale as any).rental_monthly_amount ?? 0), rentalMonths: 0, priced: true, hasLines: false };
     if (repriced.hasLines) {
       hardwareAmount = repriced.hardwareAmount;
       rentalMonthlyAmount = repriced.rentalMonthlyAmount;
@@ -99,6 +106,7 @@ export async function POST(request: Request) {
       rental_end_date: hasRental ? rentalEnd : ((sale as any).rental_end_date ?? null),
       sale_date: String(body.sale_date ?? '').trim() || (sale as any).sale_date,
       note: body.note == null ? (sale as any).note : (String(body.note).trim() || null),
+      sales_channel: body.sales_channel === undefined ? (sale as any).sales_channel : (String(body.sales_channel ?? '').trim() || null),
       updated_by: String(me.full_name ?? me.email ?? '').trim() || null,
       updated_at: new Date().toISOString(),
     };
@@ -119,7 +127,9 @@ export async function POST(request: Request) {
       price_source: priceSource,
       rental_months: repriced.rentalMonths,
       warning: noLines
-        ? 'Teklifte ürün kalemi yok; cihaz adedi güncellendi ama tutar değişmedi. Doğru tutar için "anlaşma fiyatı" girin.'
+        ? (quoteId
+          ? 'Teklifte ürün kalemi yok; cihaz adedi güncellendi ama tutar değişmedi. Doğru tutar için "anlaşma fiyatı" girin.'
+          : 'Doğrudan satışta yeniden fiyatlanacak teklif satırı yok; tutarı değiştirmek için "anlaşma fiyatı" girin.')
         : pricedFully ? null : 'Bazı satırlar için katalog kademesi bulunamadı; o satırlar teklifteki birim fiyatla hesaplandı.',
     });
   } catch (e: any) {

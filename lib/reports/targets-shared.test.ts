@@ -8,6 +8,7 @@ import {
   quarterElapsedPct,
   quarterOf,
   quarterRange,
+  splitYearlyToQuarters,
   targetYearOf,
 } from './targets-shared';
 import { msUntilIstanbulTime } from './live-board-shared';
@@ -71,6 +72,26 @@ describe('hedefler v2 — goalPair ve kod listeleri', () => {
     expect(TARGET_CODES).toContain('hunter_to_farmer');
     expect(TARGET_CODES).toContain('lead_to_hunter');
     expect(TARGET_CODES).toContain('quotes_won_count');
+  });
+});
+
+describe('hedefler v2 — yıllık hedefin çeyreklere bölünmesi', () => {
+  it('eşit bölünür; kalan son çeyreklere eklenir', () => {
+    expect(splitYearlyToQuarters(100)).toEqual([25, 25, 25, 25]);
+    expect(splitYearlyToQuarters(101)).toEqual([25, 25, 25, 26]);
+    expect(splitYearlyToQuarters(102)).toEqual([25, 25, 26, 26]);
+    expect(splitYearlyToQuarters(103)).toEqual([25, 26, 26, 26]);
+    expect(splitYearlyToQuarters(400000)).toEqual([100000, 100000, 100000, 100000]);
+  });
+  it('bölünen çeyreklerin toplamı her zaman yıllığa eşittir', () => {
+    for (const total of [1, 3, 7, 99, 101, 250, 1_234_567]) {
+      const parts = splitYearlyToQuarters(total).map((v) => v ?? 0);
+      expect(parts.reduce((a, b) => a + b, 0)).toBe(total);
+    }
+  });
+  it('boş / 0 hedef → dört boş çeyrek', () => {
+    expect(splitYearlyToQuarters(null)).toEqual([null, null, null, null]);
+    expect(splitYearlyToQuarters(0)).toEqual([null, null, null, null]);
   });
 });
 

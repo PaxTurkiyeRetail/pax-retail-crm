@@ -7,6 +7,7 @@ import {
   TARGET_DEFINITIONS,
   normalizeTargetValue,
   quarterOf,
+  splitYearlyToQuarters,
   type Quarter,
   type TargetCode,
   type TargetsAdminPayload,
@@ -17,6 +18,10 @@ import '@/styles/targets.css';
 // Hedefler — Yönetim › Hedefler (Çağdaş Bey, 10.09.2026).
 //   * Kişi kartı: haftalık aktivite · yıl hedefleri · çeyrek hedefleri (bütçe, ziyaret).
 //   * Boş bırakılan alan = hedef yok (kayıt silinir); çeyrek boşsa Canlı Ekran yıllık/4'ü varsayar.
+//   * YIL ↔ ÇEYREK canlı bağlıdır (Sinan, 10.09): yıllık yazılınca 4 çeyreğe bölünür (kalan son
+//     çeyreklere eklenir: 101 → 25·25·25·26); bir çeyrek elle değişince yıllık = çeyrek toplamı
+//     (Q3'ü 25 → 26 yapmak yıllığı 100 → 101 yapar). Böylece iki kutu asla çelişmez.
+//   * Para alanları yazarken binlik ayracıyla gösterilir (1.500.000); kaydederken sayıya iner.
 //   * Kaydet kişi başına; gönderilmeyen alan yok — kartın tüm alanları birlikte yazılır.
 //   * Toast'lar AppToaster'dan (PUT otomatik); burada ayrıca toast basılmaz.
 //   * API: GET/PUT /api/admin/targets.
@@ -44,6 +49,34 @@ function sameDraft(a: Draft, b: Draft) {
 
 function fmtNum(value: number | null | undefined) {
   return value == null ? '—' : Number(value).toLocaleString('tr-TR');
+}
+
+/**
+ * Tüm hedef alanları yalnız RAKAM kabul eder (Sinan, 10.09: "number dışında karakter koymasına izin verme").
+ * `type="number"` yetmiyor — tarayıcı `e`, `+`, `-`, `,` kabul ediyor; bu yüzden metin alanı + `digitsOnly`.
+ * Para alanları ayrıca ekranda 3 basamakta bir noktayla gösterilir (`withThousands`); adet alanları sade tam sayı.
+ */
+function digitsOnly(value: string) {
+  return value.replace(/\D/g, '').replace(/^0+(?=\d)/, '');
+}
+function withThousands(value: string) {
+  const digits = digitsOnly(value);
+  return digits ? Number(digits).toLocaleString('tr-TR') : '';
+}
+
+/**
+ * Yıllık hedefi 4 çeyreğe böler; bölünmeyen kalanı SON çeyreklere ekler
+ * (100 → 25·25·25·25, 101 → 25·25·25·26, 102 → 25·25·26·26). Boş yıllık → boş çeyrekler.
+ */
+function splitToQuarters(yearly: string): [string, string, string, string] {
+  return splitYearlyToQuarters(normalizeTargetValue(yearly))
+    .map((value) => (value == null ? '' : String(value))) as [string, string, string, string];
+}
+
+/** Çeyrek toplamı (boşlar 0). Hepsi boşsa null → yıllık alana dokunulmaz. */
+function sumQuarters(values: readonly string[]): number | null {
+  if (values.every((value) => !String(value).trim())) return null;
+  return values.reduce((acc, value) => acc + (normalizeTargetValue(value) ?? 0), 0);
 }
 
 async function readError(res: Response, fallback: string) {
@@ -134,7 +167,8 @@ export default function TargetsClient() {
             Satış ekibinin kişi bazlı hedefleri. Canlı Ekran kişi slaytındaki donut&apos;lar buradan beslenir:
             <b> haftalık aktivite</b>, <b>çeyrek ve yıl ziyaret</b>, <b>yıl ve çeyrek bütçe</b>, <b>entegrasyon</b>,
             <b> Hunter → Farmer</b> ve <b>Lead → Hunter</b> çevirme, <b>kazanılan teklif</b>.
-            Boş bırakılan alan &quot;hedef yok&quot; demektir; çeyrek boşsa yıllık hedefin dörtte biri varsayılır.
+            Boş bırakılan alan &quot;hedef yok&quot; demektir. Yıllık hedef çeyreklere otomatik bölünür; bir çeyreği elle
+            değiştirirsen yıllık toplam ona göre güncellenir.
           </p>
         </div>
         <div className="tg-hero-actions">
@@ -184,8 +218,8 @@ export default function TargetsClient() {
                   <h3>Haftalık</h3>
                   <label className="tg-field">
                     <span>Aktivite hedefi <small>adet / hafta</small></span>
-                    <input type="number" inputMode="numeric" min={0} step={1} value={draft.weeklyTotal} placeholder="20"
-                      onChange={(event) => setField(user.id, (d) => ({ ...d, weeklyTotal: event.target.value }))} />
+                    <input type="text" inputMode="numeric" value={draft.weeklyTotal} placeholder="20"
+                      onChange={(event) => setField(user.id, (d) => ({ ...d, weeklyTotal: digitsOnly(event.target.value) }))} />
                   </label>
                   <p className="tg-note">Kanal kırılımı (görüşme / temas) Kullanıcı Yönetimi › Hedefleri Düzenle&apos;de kalır.</p>
                 </div>
@@ -196,8 +230,23 @@ export default function TargetsClient() {
                     {TARGET_DEFINITIONS.map((def) => (
                       <label className="tg-field" key={def.code} title={def.hint}>
                         <span>{def.label}{def.unit === 'money' ? <small>USD</small> : <small>adet</small>}</span>
-                        <input type="number" inputMode="numeric" min={0} step={1} value={draft.yearly[def.code]} placeholder="—"
-                          onChange={(event) => setField(user.id, (d) => ({ ...d, yearly: { ...d.yearly, [def.code]: event.target.value } }))} />
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          value={def.unit === 'money' ? withThousands(draft.yearly[def.code]) : draft.yearly[def.code]}
+                          placeholder="—"
+                          onChange={(event) => {
+                            const raw = digitsOnly(event.target.value);
+                            setField(user.id, (d) => {
+                              const next = { ...d, yearly: { ...d.yearly, [def.code]: raw } };
+                              // Yıllık girildi → çeyreklere böl (yalnız çeyreği olan hedefler).
+                              if (QUARTERLY_TARGET_CODES.includes(def.code)) {
+                                next.quarterly = { ...d.quarterly, [def.code]: splitToQuarters(raw) };
+                              }
+                              return next;
+                            });
+                          }}
+                        />
                       </label>
                     ))}
                   </div>
@@ -213,7 +262,7 @@ export default function TargetsClient() {
                           {q.label}<small>{q.months}</small>
                         </span>
                       ))}
-                      <span role="columnheader">Toplam / yıl</span>
+                      <span role="columnheader">Toplam</span>
                     </div>
                     {QUARTERLY_TARGET_CODES.map((code) => {
                       const def = TARGET_DEFINITIONS.find((d) => d.code === code)!;
@@ -226,24 +275,42 @@ export default function TargetsClient() {
                           <span role="rowheader">{def.label}</span>
                           {QUARTER_INDEXES.map((index) => (
                             <span role="cell" key={index} className={currentQuarter === index ? 'now' : ''}>
-                              <input type="number" inputMode="numeric" min={0} step={1} value={values[index - 1]}
-                                placeholder={yearValue != null ? String(Math.round(yearValue / 4)) : '—'}
+                              <input
+                                type="text"
+                                inputMode="numeric"
+                                value={def.unit === 'money' ? withThousands(values[index - 1]) : values[index - 1]}
+                                placeholder={yearValue != null ? fmtNum(Math.floor(yearValue / 4)) : '—'}
                                 aria-label={`${def.label} Q${index}`}
-                                onChange={(event) => setField(user.id, (d) => {
-                                  const next = [...d.quarterly[code]] as [string, string, string, string];
-                                  next[index - 1] = event.target.value;
-                                  return { ...d, quarterly: { ...d.quarterly, [code]: next } };
-                                })} />
+                                onChange={(event) => {
+                                  const raw = digitsOnly(event.target.value);
+                                  setField(user.id, (d) => {
+                                    const nextQuarters = [...d.quarterly[code]] as [string, string, string, string];
+                                    nextQuarters[index - 1] = raw;
+                                    // Çeyrek elle değişti → yıllık = çeyrek toplamı (Sinan: Q3 25→26 ise yıl 100→101).
+                                    const total = sumQuarters(nextQuarters);
+                                    return {
+                                      ...d,
+                                      quarterly: { ...d.quarterly, [code]: nextQuarters },
+                                      yearly: { ...d.yearly, [code]: total == null ? '' : String(total) },
+                                    };
+                                  });
+                                }}
+                              />
                             </span>
                           ))}
+                          {/* Yıl ↔ çeyrek senkron olduğu için normalde tek sayı: toplam. Elle bozulmuş
+                              (eski) kayıtlarda yıllık değer de sarı ile gösterilir. */}
                           <span role="cell" className={`tg-qsum ${mismatch ? 'warn' : ''}`}>
-                            {sum ? fmtNum(sum) : '—'} / {yearValue != null ? fmtNum(yearValue) : '—'}
+                            {sum ? fmtNum(sum) : '—'}{mismatch ? ` ≠ yıl ${fmtNum(yearValue)}` : ''}
                           </span>
                         </div>
                       );
                     })}
                   </div>
-                  <p className="tg-note">Boş çeyrek: yıllık hedefin ¼&apos;ü varsayılır. Toplam yıllıktan farklıysa sarı gösterilir (uyarı, engel değil).</p>
+                  <p className="tg-note">
+                    Yıllık hedef yazılınca çeyreklere bölünür (kalan son çeyreklere eklenir: 101 → 25·25·25·<b>26</b>).
+                    Bir çeyreği elle değiştirirsen yıllık toplam onu takip eder — Q3&apos;ü 25&apos;ten 26&apos;ya çıkarmak yıllığı 101 yapar.
+                  </p>
                 </div>
               </div>
             </section>

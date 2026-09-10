@@ -33,6 +33,7 @@ export type Permission =
   | 'quote.create'
   | 'quote.update.own'
   | 'quote.update.any'
+  | 'sale.create'
   | 'quote.status.own'
   | 'quote.status.any'
   | 'quote.catalog.manage'
@@ -99,6 +100,7 @@ export const ALL_PERMISSIONS: readonly Permission[] = [
   'quote.create',
   'quote.update.own',
   'quote.update.any',
+  'sale.create',
   'quote.status.own',
   'quote.status.any',
   'quote.catalog.manage',
@@ -157,6 +159,7 @@ const ROLE_PERMISSIONS: Readonly<Record<AllowedRole, ReadonlySet<Permission>>> =
     'quote.create',
     'quote.update.own',
     'quote.status.own',
+    'sale.create',
     'activity.read',
     'activity.read.any',
     'activity.create',

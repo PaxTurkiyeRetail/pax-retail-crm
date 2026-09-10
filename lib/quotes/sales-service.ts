@@ -1,6 +1,7 @@
 import 'server-only';
 import { db } from '@/lib/db';
 import { rentalMonths, round2 } from '@/lib/quotes/line-pricing';
+import { ApiError } from '@/lib/http/api-error';
 
 // Satış kaydı (crm_sales) — kazanılan teklifin türevi, DÜZENLENEBİLİR kayıt.
 // Teklif donmuş belgedir: satış düzenlenince teklif satırları/tutarı DEĞİŞMEZ.
@@ -12,10 +13,11 @@ import { rentalMonths, round2 } from '@/lib/quotes/line-pricing';
 
 export type SaleRow = {
   id: string;
-  quote_id: string;
+  /** Teklifsiz (doğrudan) satışta null — migration 027. */
+  quote_id: string | null;
   customer_id: string;
   musteri: string;
-  quote_no: string;
+  quote_no: string | null;
   owner_name: string;
   sale_date: string;
   device_count: number;
@@ -31,7 +33,11 @@ export type SaleRow = {
   rental_monthly_amount: number;
   /** Tek seferlik satış satırlarının tutarı. */
   hardware_amount: number;
-  /** Teklifteki orijinal değerler — satış düzenlendiyse fark görünür. */
+  /** Satış kanalı (Banka · Direkt Satış · Kanal) — Forecast'in listesiyle aynı kaynak (027). */
+  sales_channel: string | null;
+  /** quote = kazanılan teklifden · direct = Satışlar ekranından teklifsiz girildi (027). */
+  source: 'quote' | 'direct';
+  /** Teklifteki orijinal değerler — satış düzenlendiyse fark görünür (doğrudan satışta 0). */
   quote_device_count: number;
   quote_amount: number;
   updated_at: string | null;
@@ -152,7 +158,7 @@ export async function listSales(options?: { owner?: string; status?: string; q?:
     `
       select s.id::text, s.quote_id::text, s.customer_id::text, m.musteri, s.quote_no, s.owner_name,
              s.sale_date::text, s.device_count, s.amount::float8 as amount, s.price_source, s.status,
-             s.note, s.updated_at, s.updated_by,
+             s.note, s.updated_at, s.updated_by, s.sales_channel, s.source,
              s.sale_type, s.rental_start_date::text as rental_start_date, s.rental_end_date::text as rental_end_date,
              s.rental_monthly_amount::float8 as rental_monthly_amount, s.hardware_amount::float8 as hardware_amount,
              coalesce(q.total_device_count, 0) as quote_device_count,
@@ -162,7 +168,7 @@ export async function listSales(options?: { owner?: string; status?: string; q?:
       left join public.quotes q on q.id = s.quote_id
       where ($1 = '' or s.owner_name = $1)
         and ($2 = '' or s.status = $2)
-        and ($3 = '' or m.musteri ilike '%' || $3 || '%' or s.quote_no ilike '%' || $3 || '%')
+        and ($3 = '' or m.musteri ilike '%' || $3 || '%' or coalesce(s.quote_no, '') ilike '%' || $3 || '%')
       order by s.sale_date desc, s.created_at desc
       limit $4
     `,
@@ -184,4 +190,88 @@ export async function salesSummary(year: number) {
     [year],
   );
   return rows[0] as { sale_count: number; amount: number; devices: number };
+}
+
+/* ------------------------------------------------------------------------ */
+/* Doğrudan (teklifsiz) satış — Sinan/Furkan, 10.09; migration 027           */
+/* ------------------------------------------------------------------------ */
+
+export type DirectSaleLineInput = { product_id: string; quantity: number; sale_type?: 'sale' | 'rental'; rental_start_date?: string | null; rental_end_date?: string | null };
+
+export type DirectSaleInput = {
+  customerId: string;
+  saleDate: string;
+  salesChannel?: string | null;
+  note?: string | null;
+  /** Ürün + adet satırları; tutar katalog kademesinden hesaplanır (teklif ekranıyla aynı motor). */
+  lines: DirectSaleLineInput[];
+  /** Anlaşma fiyatı: verilirse katalog tutarını ezer, kayıt `manual` işaretlenir. */
+  agreedAmount?: number | null;
+};
+
+export type DirectSaleActor = { id: string; name: string; email: string };
+
+/**
+ * Teklifi olmayan satışı kaydeder. Fiyat teklif oluşturmadaki motorla hesaplanır
+ * (`resolveQuoteLines` → kademeli katalog fiyatı, kiralama tarifesi); böylece "ikinci bir
+ * fiyat mantığı" doğmaz. Satış tipi satırlardan türetilir: hepsi kiralama → 'rental',
+ * karışık → 'mixed', değilse 'sale'.
+ *
+ * Sahiplik kontrolü ÇAĞIRANDA (API): account_manager yalnız kendi portföyündeki firmaya.
+ */
+export async function createDirectSale(actor: DirectSaleActor, input: DirectSaleInput) {
+  const { getQuoteCatalog, resolveQuoteLines } = await import('@/lib/quotes/service');
+  const { createPgAdminClient } = await import('@/lib/pg/admin');
+  // Katalog DB'den (Ürün & Fiyat Yönetimi'ndeki yürürlükteki liste); `getQuoteCatalog()` istemcisiz
+  // çağrılırsa statik yedeğe düşer, satışta yanlış fiyat üretir.
+  const catalog = await getQuoteCatalog(createPgAdminClient());
+  const resolved = resolveQuoteLines(
+    input.lines.map((line) => ({
+      product_id: line.product_id,
+      quantity: Number(line.quantity ?? 0),
+      sale_type: line.sale_type ?? 'sale',
+      rental_start_date: line.rental_start_date ?? null,
+      rental_end_date: line.rental_end_date ?? null,
+    })),
+    catalog,
+  );
+  if (!resolved.items.length) throw new ApiError('SALE_NO_LINES', 'En az bir ürün satırı girilmeli.', 400);
+
+  const rentalLines = resolved.items.filter((line) => line.sale_type === 'rental');
+  const saleType = rentalLines.length === 0 ? 'sale' : rentalLines.length === resolved.items.length ? 'rental' : 'mixed';
+  const rentalStart = rentalLines.map((line) => String(line.rental_start_date ?? '')).filter(Boolean).sort()[0] ?? null;
+  const rentalEnd = rentalLines.map((line) => String(line.rental_end_date ?? '')).filter(Boolean).sort().at(-1) ?? null;
+  const rentalMonthly = round2(rentalLines.reduce((sum, line) => sum + Number(line.rental_monthly_price ?? 0) * Number(line.quantity ?? 0), 0));
+  const rentalTotal = rentalLines.reduce((sum, line) => sum + Number(line.total_price ?? 0), 0);
+  const hardwareAmount = round2(Math.max(0, resolved.totalAmount - rentalTotal));
+
+  const agreed = input.agreedAmount == null ? null : Number(input.agreedAmount);
+  const manual = agreed != null && Number.isFinite(agreed) && agreed >= 0 && round2(agreed) !== round2(resolved.totalAmount);
+  const amount = manual ? round2(agreed as number) : round2(resolved.totalAmount);
+
+  const { rows } = await db.query<{ id: string }>(
+    `
+      insert into public.crm_sales (
+        quote_id, quote_no, source, customer_id, owner_name, owner_email, owner_user_id,
+        sale_date, device_count, amount, hardware_amount, sale_type,
+        rental_start_date, rental_end_date, rental_monthly_amount,
+        currency, price_source, status, sales_channel, note,
+        created_by, created_by_user_id, updated_by
+      ) values (
+        null, null, 'direct', $1, $2, $3, $4,
+        $5::date, $6, $7, $8, $9,
+        $10::date, $11::date, $12,
+        'USD', $13, 'active', $14, $15,
+        $2, $4, $2
+      )
+      returning id::text as id
+    `,
+    [
+      input.customerId, actor.name, actor.email, actor.id,
+      input.saleDate, resolved.totalDeviceCount, amount, hardwareAmount, saleType,
+      rentalStart, rentalEnd, rentalMonthly,
+      manual ? 'manual' : 'catalog', input.salesChannel?.trim() || null, input.note?.trim() || null,
+    ],
+  );
+  return { id: rows[0]?.id ?? null, amount, deviceCount: resolved.totalDeviceCount, saleType, priceSource: manual ? 'manual' : 'catalog' };
 }

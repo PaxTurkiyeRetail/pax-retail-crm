@@ -52,6 +52,9 @@
   font-weight: 800; font-size: 14px; cursor: pointer;
 }
 .tg-shell .tg-btn:hover { border-color: var(--accent-border); color: var(--text); }
+/* Not: premium-enterprise.css:320 `.pax-main-inner :is(…, .primary, …)` TÜM primary düğmelere
+   indigo→mor gradyanı `!important` ile basar (Müşteri Listesi'nde de öyle). Aşağıdaki değerler
+   o kural kalkarsa devreye girecek yedek; ekranda görünen renk uygulamanın standart primary'sidir. */
 .tg-shell .tg-btn.primary { background: var(--tg-accent); border-color: var(--tg-accent); color: #fff; }
 [data-theme="dark"] .tg-shell .tg-btn.primary { color: #0b1020; }
 .tg-shell .tg-btn.light { color: #fff; border-color: rgba(255, 255, 255, 0.26); background: rgba(255, 255, 255, 0.14); }

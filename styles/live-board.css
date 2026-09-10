@@ -22,6 +22,8 @@
   --lb-danger: #b91c1c;
   --lb-info: #1d4ed8;
   --lb-neutral: #64748b;
+  /* Müşteri Takip Statüsü donut'unun 4. dilimi (Kasa Firması) — H/F/L ile karışmayan mor. */
+  --lb-violet: #6d28d9;
   --lb-ok-soft: rgba(21, 128, 61, 0.10);
   --lb-warn-soft: rgba(180, 83, 9, 0.12);
   --lb-danger-soft: rgba(185, 28, 28, 0.10);
@@ -50,6 +52,7 @@
   --lb-danger: #fca5a5;
   --lb-info: #93b4fd;
   --lb-neutral: #94a3b8;
+  --lb-violet: #c4b5fd;
   --lb-ok-soft: rgba(74, 222, 128, 0.12);
   --lb-warn-soft: rgba(251, 191, 36, 0.14);
   --lb-danger-soft: rgba(252, 165, 165, 0.14);
@@ -451,7 +454,6 @@
 .lb-mini { display: grid; justify-items: center; gap: 2px; }
 .lb-mini .lb-ring-center { padding: 0 8px; gap: 0; }
 .lb-mini-label { font-size: 10.5px; font-weight: 900; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-3); white-space: nowrap; }
-.lb-hf.solo { grid-template-columns: auto; gap: 0; }
 .lb-donut-card-note b { font-weight: 900; }
 .lb-donut-card-note { width: 100%; text-align: center; font-size: 13px; font-weight: 800; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lb-donut-card-note.tone-ok { color: var(--lb-ok); } .lb-donut-card-note.tone-warn { color: var(--lb-warn); } .lb-donut-card-note.tone-danger { color: var(--lb-danger); }
@@ -461,16 +463,11 @@
 .lb-donut-card .lb-mini .lb-ring-center strong { font-size: clamp(15px, 1.15vw, 21px); line-height: 1.05; }
 .lb-donut-card .lb-mini .lb-ring-center span { font-size: 9.5px; letter-spacing: 0.01em; text-transform: none; font-weight: 800; line-height: 1.2; }
 /* Hunter / Farmer donut'u: halka + sağda büyük lejant */
-.lb-hf { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 18px; align-items: center; min-width: 0; }
-.lb-hf .lb-hf-donut circle { stroke-width: 14; }
-.lb-hf .lb-ring-center strong { font-size: clamp(28px, 2.4vw, 40px); }
-.lb-hf .lb-ring-center span { font-size: 11px; letter-spacing: 0.06em; }
-.lb-hf-legend { display: grid; gap: 10px; min-width: 0; }
-.lb-hf-legend > div { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto auto; gap: 10px; align-items: center; font-size: 16px; }
-.lb-hf-legend i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
-.lb-hf-legend span { color: var(--text-2); font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.lb-hf-legend strong { color: var(--text); font-weight: 900; font-size: 22px; font-variant-numeric: tabular-nums; }
-.lb-hf-legend em { font-style: normal; color: var(--text-3); font-weight: 800; font-size: 14px; min-width: 44px; text-align: right; font-variant-numeric: tabular-nums; }
+/* Müşteri Takip Statüsü (v2.8): 4 dilimli donut (H/F/L/K); lejant yerine kart altındaki renkli not. */
+.lb-status-donut circle { stroke-width: 14; }
+.lb-status-donut .lb-ring-center strong { font-size: clamp(28px, 2.4vw, 40px); }
+.lb-status-donut .lb-ring-center span { font-size: 11px; letter-spacing: 0.06em; }
+.lb-status-pct { font-style: normal; color: var(--text-3); font-weight: 800; }
 /* Alt satır */
 .lb-owner-stats { grid-column: 1; }
 .lb-owner-recent { grid-column: 2 / -1; }
@@ -572,8 +569,6 @@
 .lb[data-compact="1"] .lb-card { padding: 12px 14px; gap: 10px; }
 .lb[data-compact="1"] .lb-donut-card { padding: 10px 12px 12px; gap: 4px; }
 .lb[data-compact="1"] .lb-donut-card-note { font-size: 12px; }
-.lb[data-compact="1"] .lb-hf-legend > div { font-size: 14px; }
-.lb[data-compact="1"] .lb-hf-legend strong { font-size: 19px; }
 .lb[data-compact="1"] .lb-mini-label { font-size: 9.5px; }
 .lb[data-compact="1"] .lb-donut-card .lb-mini .lb-ring-center span { font-size: 9px; }
 .lb[data-compact="1"] .lb-donut-card-body.with-aside { gap: 12px; }

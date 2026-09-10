@@ -179,3 +179,15 @@ export function targetYearOf(value: unknown, fallback: number): number {
   if (!Number.isFinite(parsed) || parsed < 2024 || parsed > 2100) return fallback;
   return Math.floor(parsed);
 }
+
+/**
+ * Yıllık hedefin çeyreklere bölünmesi (Sinan, 10.09): eşit böl, bölünmeyen kalanı SON çeyreklere ekle.
+ * 100 → 25·25·25·25 · 101 → 25·25·25·26 · 102 → 25·25·26·26. Ekran bu kuralı yazarken uygular;
+ * burada saf hâli testlerden ve ileride sunucu tarafından kullanılabilsin diye durur.
+ */
+export function splitYearlyToQuarters(total: number | null): QuarterValues {
+  if (total == null || total <= 0) return [null, null, null, null];
+  const base = Math.floor(total / 4);
+  const extra = total - base * 4;
+  return [0, 1, 2, 3].map((index) => base + (index >= 4 - extra ? 1 : 0)) as QuarterValues;
+}
