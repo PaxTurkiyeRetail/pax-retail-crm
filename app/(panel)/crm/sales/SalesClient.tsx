@@ -45,11 +45,15 @@ type SaleRow = {
 };
 
 type ChannelOption = { value: string; label: string };
+type OwnerOption = { id: string | null; name: string };
 type CustomerOption = { id: string; musteri: string };
 type ProductOption = { id: string; code: string; name: string; product_type: string; is_recurring: boolean; rental_monthly_price: number | null };
 type NewLine = { uid: string; product_id: string; quantity: string; sale_type: 'sale' | 'rental' };
 
 const newLine = (): NewLine => ({ uid: Math.random().toString(36).slice(2), product_id: '', quantity: '1', sale_type: 'sale' });
+/** Kanal listede etiketiyle gösterilir ("Direkt Satis" değil "Direkt Satış"); liste dışı değer ham görünür. */
+const channelLabel = (channels: ChannelOption[], value: string | null) =>
+  (value ? channels.find((channel) => channel.value === value)?.label ?? value : null);
 const todayIso = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Istanbul' });
 
 const usd = (value: number) =>
@@ -82,10 +86,11 @@ export default function SalesClient() {
   const [formDate, setFormDate] = useState('');
   const [formNote, setFormNote] = useState('');
   const [formChannel, setFormChannel] = useState('');
+  const [formOwner, setFormOwner] = useState('');
 
   // Yeni (teklifsiz) satış penceresi — 027
   const [creating, setCreating] = useState(false);
-  const [options, setOptions] = useState<{ customers: CustomerOption[]; products: ProductOption[] } | null>(null);
+  const [options, setOptions] = useState<{ customers: CustomerOption[]; products: ProductOption[]; owners: OwnerOption[] } | null>(null);
   const [newCustomer, setNewCustomer] = useState('');
   const [newDate, setNewDate] = useState(todayIso());
   const [newChannel, setNewChannel] = useState('');
@@ -128,27 +133,32 @@ export default function SalesClient() {
     setFormDate(String(row.sale_date ?? '').slice(0, 10));
     setFormNote(row.note ?? '');
     setFormChannel(row.sales_channel ?? '');
+    setFormOwner(row.owner_name ?? '');
     setMsg(null);
+    if (!options) void loadOptions();
   };
 
-  /** Teklifsiz satış penceresi: müşteri ve ürün listesi /api/sales/options'tan (ürünler teklif kataloğuyla aynı). */
-  const openCreate = async () => {
-    setCreating(true);
-    setMsg(null);
-    setNewCustomer(''); setNewDate(todayIso()); setNewChannel(''); setNewNote(''); setNewAgreed(''); setNewLines([newLine()]);
-    if (options) return;
-    // Müşteri listesi yetkiye göre daraltılmış gelir (satışçı → yalnız kendi portföyü).
+  /** Müşteri / ürün / satışçı listesi (yetkiye göre daraltılmış): hem "+ Satış Ekle" hem Düzenle kullanır. */
+  const loadOptions = useCallback(async () => {
     const res = await fetch('/api/sales/options', { cache: 'no-store' });
     const json = await res.json().catch(() => ({}));
     if (!res.ok) { setMsg(json?.message || 'Müşteri ve ürün listesi alınamadı.'); return; }
     setOptions({
       customers: ((json.customers ?? []) as any[]).map((row) => ({ id: String(row.id), musteri: String(row.musteri) })),
+      owners: ((json.owners ?? []) as any[]).map((row) => ({ id: row.id ? String(row.id) : null, name: String(row.name) })),
       products: ((json.products ?? []) as any[]).map((row) => ({
         id: String(row.id), code: String(row.code ?? ''), name: String(row.name ?? ''),
         product_type: String(row.product_type ?? 'device'), is_recurring: Boolean(row.is_recurring),
         rental_monthly_price: row.rental_monthly_price == null ? null : Number(row.rental_monthly_price),
       })),
     });
+  }, []);
+
+  const openCreate = async () => {
+    setCreating(true);
+    setMsg(null);
+    setNewCustomer(''); setNewDate(todayIso()); setNewChannel(''); setNewNote(''); setNewAgreed(''); setNewLines([newLine()]);
+    if (!options) await loadOptions();
   };
 
   async function submitCreate() {
@@ -191,6 +201,7 @@ export default function SalesClient() {
         sale_date: formDate || null,
         note: formNote,
         sales_channel: formChannel || null,
+        owner_name: formOwner || undefined,
       }),
     });
     const json = await res.json().catch(() => ({}));
@@ -304,7 +315,7 @@ export default function SalesClient() {
                         ? <Link href={`/crm/quotes/${row.quote_id}`} style={{ color: 'var(--text-2)', fontWeight: 700 }}>{row.quote_no}</Link>
                         : <span style={{ ...pillBase, ...pillMuted }}>Teklifsiz</span>}
                     </td>
-                    <td style={tableCell}>{row.sales_channel || <span style={{ color: 'var(--text-3)' }}>—</span>}</td>
+                    <td style={tableCell}>{channelLabel(channels, row.sales_channel) || <span style={{ color: 'var(--text-3)' }}>—</span>}</td>
                     <td style={tableCell}>{row.owner_name || '—'}</td>
                     <td style={tableCell}>{fmtDate(row.sale_date)}</td>
                     <td style={tableCell}>
@@ -373,7 +384,18 @@ export default function SalesClient() {
                 <option value="">Seçilmedi</option>
                 {channels.map((channel) => <option key={channel.value} value={channel.value}>{channel.label}</option>)}
               </select>
-              <small style={hintStyle}>Banka · Direkt Satış · Kanal (Forecast&apos;teki liste). Satış / Kiralama ayrımı ayrı bir alandır.</small>
+              <small style={hintStyle}>Banka · Direkt Satış · İş Ortağı · Kanal (Forecast&apos;teki liste). Satış / Kiralama ayrımı ayrı bir alandır.</small>
+            </label>
+            <label style={fieldStyle}>
+              <span style={labelStyle}>Satışçı</span>
+              <select value={formOwner} onChange={(e) => setFormOwner(e.target.value)} style={inputStyle}>
+                {options ? null : <option value={formOwner}>{formOwner || 'Yükleniyor…'}</option>}
+                {(options?.owners ?? []).map((owner) => <option key={owner.name} value={owner.name}>{owner.name}</option>)}
+                {options && formOwner && !(options.owners ?? []).some((owner) => owner.name === formOwner)
+                  ? <option value={formOwner}>{formOwner}</option>
+                  : null}
+              </select>
+              <small style={hintStyle}>Satış kaydının sahibi; ciro ve hedef gerçekleşmesi bu kişiye yazılır. İçe aktarılan geçmiş satışlar Havuz Account&apos;ta durur, buradan doğru satışçıya taşınır.</small>
             </label>
             {editing.sale_type !== 'sale' ? (
               <div style={{ padding: 12, borderRadius: 14, border: '1px solid var(--chip-gold-bd)', background: 'var(--chip-gold-bg)', marginBottom: 12, fontWeight: 800, fontSize: 13, color: 'var(--chip-gold-color)' }}>

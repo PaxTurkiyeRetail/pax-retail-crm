@@ -3,10 +3,15 @@ export const revalidate = 0;
 
 import { NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
-import { assertOwnedResourceAccess, requirePermissionOrThrow } from '@/lib/authz';
+import { requirePermissionOrThrow, userHasPermission } from '@/lib/authz';
 import { tryRecordAuditEvent } from '@/lib/audit';
 import { createPgAdminClient } from '@/lib/pg/admin';
 import { repriceFromCatalog } from '@/lib/quotes/sales-service';
+import { db } from '@/lib/db';
+import { OWNER_ORDER } from '@/lib/reports/live-board-shared';
+
+/** Kullanıcı karşılığı olmayan sabit satış sahipleri (Canlı Ekran sırasıyla aynı liste). */
+const FIXED_OWNERS = OWNER_ORDER;
 
 type Body = {
   sale_id?: string;
@@ -18,8 +23,10 @@ type Body = {
   /** Kiralama dönemi (08.09): satış kaydında düzenlenebilir; tutar = donanım + aylık kira × ay. */
   rental_start_date?: string | null;
   rental_end_date?: string | null;
-  /** Satış kanalı (027): Banka · Direkt Satış · Kanal — Forecast'in listesiyle aynı kaynak. */
+  /** Satış kanalı (027): Banka · Direkt Satış · İş Ortağı · Kanal — Forecast'in listesiyle aynı kaynak. */
   sales_channel?: string | null;
+  /** Satışçı (Sinan, 10.09): satış kaydının sahibi ekrandan değiştirilebilir. */
+  owner_name?: string | null;
 };
 
 const isoDate = (value: unknown) => {
@@ -45,7 +52,13 @@ export async function POST(request: Request) {
     if (readError) return NextResponse.json({ message: readError.message }, { status: 400 });
     if (!sale) return NextResponse.json({ message: 'Satış kaydı bulunamadı.' }, { status: 404 });
     if ((sale as any).status === 'cancelled') return NextResponse.json({ message: 'İptal edilmiş satış düzenlenemez.' }, { status: 409 });
-    assertOwnedResourceAccess({ user: me, resource: sale, ownPermission: 'quote.update.own', anyPermission: 'quote.update.any' });
+    // Satış kaydını düzenleme (Sinan, 10.09: "düzenleden herkes değiştirebiliyor olsun, sakıncası yok"):
+    // sahiplik aranmaz — satış ekibinden biri (quote.update.own) her satışı düzenleyebilir. Sebep:
+    // içe aktarılan geçmiş satışlar 'Havuz Account' üstünde duruyor, doğru satışçıya ancak böyle taşınır.
+    // Her değişiklik crm_audit_events'e düşer (kim değiştirdi görünür).
+    if (!userHasPermission(me, 'quote.update.own') && !userHasPermission(me, 'quote.update.any')) {
+      return NextResponse.json({ message: 'Satış düzenleme yetkiniz yok.' }, { status: 403 });
+    }
 
     const deviceCount = body.device_count == null ? Number((sale as any).device_count ?? 0) : Math.max(0, Math.floor(Number(body.device_count)));
     if (!Number.isFinite(deviceCount)) return NextResponse.json({ message: 'Cihaz adedi geçersiz.' }, { status: 400 });
@@ -96,6 +109,28 @@ export async function POST(request: Request) {
       }
     }
 
+    // Satışçı: verilirse aktif kullanıcı listesinden çözülür; kullanıcı olmayan sabit sahipler
+    // (Havuz Account, İş Ortakları, Yemek Kartları) ad olarak yazılır, owner_user_id boş kalır.
+    let ownerName: string | undefined;
+    let ownerUserId: string | null | undefined;
+    if (body.owner_name !== undefined) {
+      const requested = String(body.owner_name ?? '').trim();
+      if (!requested) return NextResponse.json({ message: 'Satışçı boş bırakılamaz.' }, { status: 400 });
+      const { rows: ownerRows } = await db.query<{ id: string; name: string }>(
+        `select u.id::text as id, coalesce(nullif(trim(u.full_name), ''), u.email) as name
+         from public.allowed_users u
+         where u.is_active = true and lower(coalesce(nullif(trim(u.full_name), ''), u.email)) = lower($1)
+         limit 1`,
+        [requested],
+      );
+      if (ownerRows[0]) { ownerName = ownerRows[0].name; ownerUserId = ownerRows[0].id; }
+      else if (FIXED_OWNERS.some((name) => name.toLocaleLowerCase('tr') === requested.toLocaleLowerCase('tr'))) {
+        ownerName = requested; ownerUserId = null;
+      } else {
+        return NextResponse.json({ message: 'Seçilen satışçı bulunamadı.' }, { status: 400 });
+      }
+    }
+
     const payload = {
       device_count: deviceCount,
       amount,
@@ -107,6 +142,7 @@ export async function POST(request: Request) {
       sale_date: String(body.sale_date ?? '').trim() || (sale as any).sale_date,
       note: body.note == null ? (sale as any).note : (String(body.note).trim() || null),
       sales_channel: body.sales_channel === undefined ? (sale as any).sales_channel : (String(body.sales_channel ?? '').trim() || null),
+      ...(ownerName === undefined ? {} : { owner_name: ownerName, owner_user_id: ownerUserId }),
       updated_by: String(me.full_name ?? me.email ?? '').trim() || null,
       updated_at: new Date().toISOString(),
     };
@@ -116,7 +152,7 @@ export async function POST(request: Request) {
 
     await tryRecordAuditEvent({
       actorId: me.id, actorEmail: me.email, action: 'sale.updated', resourceType: 'sale', resourceId: saleId,
-      before: { device_count: (sale as any).device_count, amount: (sale as any).amount, price_source: (sale as any).price_source, rental_start_date: (sale as any).rental_start_date, rental_end_date: (sale as any).rental_end_date },
+      before: { device_count: (sale as any).device_count, amount: (sale as any).amount, price_source: (sale as any).price_source, rental_start_date: (sale as any).rental_start_date, rental_end_date: (sale as any).rental_end_date, owner_name: (sale as any).owner_name, sales_channel: (sale as any).sales_channel },
       after: payload,
     });
 
