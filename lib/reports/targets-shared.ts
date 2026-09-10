@@ -8,6 +8,20 @@
  *
  * Bu dosya `server-only` içermez: istemci bileşeni, Canlı Ekran ve vitest buradan okur.
  */
+import { OWNER_ORDER, normalizeName } from './live-board-shared';
+
+/**
+ * Hedef girilebilen kişi mi? **Yalnız satış ekibi** — Canlı Ekran OWNER_ORDER'ında adı geçen
+ * kişiler (Sinan, 10.09: "Görkem İlbay olmasın direkt", ikinci kez). Rol listesine güvenilmez:
+ * migration 016 ikincil rolü `account_manager` olan yönetici hesaplarına da haftalık 20 yazdığı
+ * için "hedefi olan herkes" ölçütü genel müdürü geri getiriyordu. Yeni satışçı gelince
+ * OWNER_ORDER'a eklenir (Müşteri Listesi kolon kuralıyla aynı tek kaynak).
+ * `İş Ortakları`, `Havuz Account`, `Yemek Kartları` kullanıcı değildir; sorguya zaten düşmezler.
+ */
+export function isTargetOwnerName(name: string): boolean {
+  const key = normalizeName(name);
+  return OWNER_ORDER.some((known) => normalizeName(known) === key);
+}
 
 export type TargetCode =
   | 'sales_revenue'

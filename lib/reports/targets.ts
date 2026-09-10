@@ -3,12 +3,13 @@ import type { PoolClient } from 'pg';
 import { db } from '@/lib/db';
 import { recordAuditEvent } from '@/lib/audit';
 import { ApiError } from '@/lib/http/api-error';
-import { OWNER_ORDER, normalizeName, ownerOrderCompare } from './live-board-shared';
+import { ownerOrderCompare } from './live-board-shared';
 import {
   QUARTERLY_TARGET_CODES,
   QUARTER_INDEXES,
   TARGET_CODES,
   isTargetCode,
+  isTargetOwnerName,
   normalizeTargetValue,
   quarterRange,
   type QuarterValues,
@@ -28,9 +29,9 @@ import {
 
 type Actor = { id: string; email: string };
 
-// Hedef girilebilen kişiler: satış ekibi (Canlı Ekran OWNER_ORDER'da adı geçen aktif
-// account manager'lar) + halihazırda hedefi olan hesaplar. İkincil rolü account_manager
-// olan yönetici hesapları (ör. genel müdür) listeye girmez (Müşteri Listesi kolon kuralı).
+// Hedef girilebilen kişiler: YALNIZ satış ekibi (Canlı Ekran OWNER_ORDER'da adı geçen aktif
+// hesaplar) — `isTargetOwnerName`. Sorgu rol üzerinden daraltır, son söz OWNER_ORDER'ındır:
+// ikincil rolü account_manager olan yönetici hesapları (genel müdür) listeye girmez.
 const Q_USERS = `
   select u.id::text as id, coalesce(nullif(trim(u.full_name), ''), u.email) as name, u.email,
          coalesce(u.weekly_target_total_activities, 0)::int as weekly_total
@@ -49,10 +50,6 @@ const Q_VALUES = `
     and tv.period_start >= make_date($1::int, 1, 1) and tv.period_end <= make_date($1::int, 12, 31)
 `;
 
-function isSalesTeamName(name: string) {
-  return OWNER_ORDER.some((known) => normalizeName(known) === normalizeName(name));
-}
-
 function emptyQuarters(): QuarterValues {
   return [null, null, null, null];
 }
@@ -70,14 +67,12 @@ export async function loadTargetsAdmin(year: number): Promise<TargetsAdminPayloa
       quarterly: {},
     });
   }
-  const withValues = new Set<string>();
   for (const row of valueResult.rows as any[]) {
     const user = users.get(String(row.user_id));
     if (!user || !isTargetCode(row.code)) continue;
     const code: TargetCode = row.code;
     const value = Number(row.value);
     if (!Number.isFinite(value) || value <= 0) continue;
-    withValues.add(user.id);
     if (row.period_type === 'year') {
       user.yearly[code] = value;
     } else {
@@ -89,7 +84,7 @@ export async function loadTargetsAdmin(year: number): Promise<TargetsAdminPayloa
     }
   }
   const list = Array.from(users.values())
-    .filter((user) => isSalesTeamName(user.name) || withValues.has(user.id) || user.weeklyTotal > 0)
+    .filter((user) => isTargetOwnerName(user.name))
     .sort((a, b) => ownerOrderCompare(a.name, b.name));
   return {
     generatedAt: new Date().toISOString(),

@@ -3,6 +3,7 @@ import {
   QUARTERLY_TARGET_CODES,
   TARGET_CODES,
   goalPair,
+  isTargetOwnerName,
   normalizeTargetValue,
   quarterElapsedPct,
   quarterOf,
@@ -70,6 +71,23 @@ describe('hedefler v2 — goalPair ve kod listeleri', () => {
     expect(TARGET_CODES).toContain('hunter_to_farmer');
     expect(TARGET_CODES).toContain('lead_to_hunter');
     expect(TARGET_CODES).toContain('quotes_won_count');
+  });
+});
+
+describe('hedefler v2 — kim hedef alır', () => {
+  it('yalnız satış ekibi; yönetici hesabı (genel müdür) listeye girmez', () => {
+    for (const name of ['Cem Koç', 'Ömer Canatar', 'Furkan Kızılkurt', 'Erdi Toraman', 'Seda Kesikoğlu']) {
+      expect(isTargetOwnerName(name)).toBe(true);
+    }
+    // Sinan, 10.09 (iki kez): "Görkem İlbay olmasın direkt" — ikincil rolü account_manager olsa da,
+    // migration 016 ona da haftalık 20 yazmış olsa da listede yok.
+    expect(isTargetOwnerName('Görkem İlbay')).toBe(false);
+    expect(isTargetOwnerName('Taha Bitim')).toBe(false);
+    expect(isTargetOwnerName('')).toBe(false);
+  });
+  it('yazım farkı (büyük/küçük harf, Türkçe karakter) kişiyi düşürmez', () => {
+    expect(isTargetOwnerName('ÖMER CANATAR')).toBe(true);
+    expect(isTargetOwnerName(' cem koç ')).toBe(true); // normalizeName baş/son boşluğu da kırpar
   });
 });
 
