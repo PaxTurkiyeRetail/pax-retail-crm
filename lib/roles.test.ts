@@ -42,6 +42,16 @@ describe('enterprise role permissions', () => {
     expect(hasPermission('user', 'customer.assignment_list.manage')).toBe(false);
   });
 
+  it('hedef yönetimi (admin.targets.manage + ekran) yalnız admin ve super_admin', () => {
+    for (const permission of ['admin.targets.manage', 'screen.admin.targets.view'] as const) {
+      expect(hasPermission('super_admin', permission)).toBe(true);
+      expect(hasPermission('admin', permission)).toBe(true);
+      expect(hasPermission('account_manager', permission)).toBe(false);
+      expect(hasPermission('itsm', permission)).toBe(false);
+      expect(hasPermission('user', permission)).toBe(false);
+    }
+  });
+
   it('preserves ITSM read access while keeping user administration separated', () => {
     expect(canManageRequests('itsm')).toBe(true);
     expect(canManageParameters('itsm')).toBe(true);

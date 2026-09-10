@@ -177,6 +177,11 @@ export async function requireAdminOrThrow() {
   return requirePermissionOrThrow('admin.users.manage');
 }
 
+/** Hedefler ekranı / API (Çağdaş Bey, 10.09): yalnız admin.targets.manage (admin + super_admin). */
+export async function requireTargetsAccessOrThrow() {
+  return requirePermissionOrThrow('admin.targets.manage');
+}
+
 export async function requireBackupAccessOrThrow() {
   return requirePermissionOrThrow('admin.backup.execute');
 }

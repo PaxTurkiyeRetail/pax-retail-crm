@@ -74,6 +74,18 @@
 .lb:fullscreen .lb-kpi-value { font-size: clamp(30px, 2.4vw, 44px); }
 .lb:fullscreen .lb-kpi.small .lb-kpi-value { font-size: clamp(22px, 1.7vw, 30px); }
 
+/* v2.7 — TV modunda üst ve alt şerit yüzen katman (Çağdaş Bey 10.09: "üst kısmı da kullanalım,
+   mouse gelince açılsın"). Gövde ekranın tamamını alır; fare durunca şeritler dışarı kayar,
+   ince başlık çubuğu (kişi adı + saat) kalır. Şeritler akışta yer tutmadığından yeniden yerleşim olmaz. */
+.lb-top.lb-top-fs { position: absolute; top: 0; left: 0; right: 0; z-index: 6; transition: transform .3s ease, opacity .3s ease; box-shadow: 0 12px 30px rgba(15, 23, 42, 0.22); }
+.lb-top.lb-top-fs.hidden { transform: translateY(-100%); opacity: 0; pointer-events: none; }
+.lb-fs-title { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 16px; padding: 9px 36px; background: var(--surface); border-bottom: 1px solid var(--border); }
+.lb-fs-eyebrow { font-size: 11px; font-weight: 900; letter-spacing: 0.12em; text-transform: uppercase; color: var(--lb-accent); }
+.lb-fs-clock { text-align: right; font-size: clamp(18px, 1.5vw, 24px); font-weight: 900; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.lb-strip.lb-strip-fs { position: absolute; left: 0; right: 0; bottom: 0; z-index: 6; background: var(--surface); border-top: 1px solid var(--border); padding: 10px 36px !important; transition: transform .3s ease, opacity .3s ease; }
+.lb-strip.lb-strip-fs.hidden { transform: translateY(100%); opacity: 0; pointer-events: none; }
+.lb-new-version { color: var(--lb-warn); font-weight: 900; }
+
 /* --- Üst şerit --------------------------------------------------------- */
 .lb-top {
   display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 16px;
@@ -431,12 +443,23 @@
 .lb-donut-card { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 6px; align-items: center; justify-items: center; height: var(--lb-donut-row-h, 344px); padding: 12px 16px 14px; }
 .lb-donut-card .lb-card-head { width: 100%; }
 .lb-donut-card .lb-card-head h3 { font-size: 15px; }
-.lb-donut-card-body { display: grid; place-items: center; min-height: 0; }
+.lb-donut-card-body { display: grid; place-items: center; min-height: 0; min-width: 0; }
+/* v2.7: büyük halka solda, iki küçük halka sağda alt alta (Çağdaş Bey 10.09: "bir büyük, iki küçük simit"). */
+.lb-donut-card-body.with-aside { grid-template-columns: auto auto; gap: 16px; justify-content: center; align-items: center; }
+.lb-donut-main { display: grid; place-items: center; min-width: 0; }
+.lb-donut-aside { display: grid; grid-auto-rows: 1fr; gap: 6px; align-content: center; justify-items: center; }
+.lb-mini { display: grid; justify-items: center; gap: 2px; }
+.lb-mini .lb-ring-center { padding: 0 8px; gap: 0; }
+.lb-mini-label { font-size: 10.5px; font-weight: 900; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-3); white-space: nowrap; }
+.lb-hf.solo { grid-template-columns: auto; gap: 0; }
+.lb-donut-card-note b { font-weight: 900; }
 .lb-donut-card-note { width: 100%; text-align: center; font-size: 13px; font-weight: 800; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lb-donut-card-note.tone-ok { color: var(--lb-ok); } .lb-donut-card-note.tone-warn { color: var(--lb-warn); } .lb-donut-card-note.tone-danger { color: var(--lb-danger); }
 /* Büyük halkanın merkezi: yüzde büyük, alt yazı okunur */
 .lb-donut-card .lb-ring-center strong { font-size: clamp(30px, 2.6vw, 44px); }
 .lb-donut-card .lb-ring-center span { font-size: 12px; }
+.lb-donut-card .lb-mini .lb-ring-center strong { font-size: clamp(15px, 1.15vw, 21px); line-height: 1.05; }
+.lb-donut-card .lb-mini .lb-ring-center span { font-size: 9.5px; letter-spacing: 0.01em; text-transform: none; font-weight: 800; line-height: 1.2; }
 /* Hunter / Farmer donut'u: halka + sağda büyük lejant */
 .lb-hf { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 18px; align-items: center; min-width: 0; }
 .lb-hf .lb-hf-donut circle { stroke-width: 14; }
@@ -551,6 +574,9 @@
 .lb[data-compact="1"] .lb-donut-card-note { font-size: 12px; }
 .lb[data-compact="1"] .lb-hf-legend > div { font-size: 14px; }
 .lb[data-compact="1"] .lb-hf-legend strong { font-size: 19px; }
+.lb[data-compact="1"] .lb-mini-label { font-size: 9.5px; }
+.lb[data-compact="1"] .lb-donut-card .lb-mini .lb-ring-center span { font-size: 9px; }
+.lb[data-compact="1"] .lb-donut-card-body.with-aside { gap: 12px; }
 .lb[data-compact="1"] .lb-stat-grid div { padding: 7px 10px; }
 /* kompakt gövdede alt satır kısa: 6 sayaç 3×2 dizilir (2×3 sığmıyordu, 1366×768) */
 .lb[data-compact="1"] .lb-stat-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }

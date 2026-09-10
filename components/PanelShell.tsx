@@ -267,6 +267,7 @@ function routeMeta(pathname: string) {
     ["/requests", "Operasyon", "Talepler"],
         ["/admin/parameters", "Yönetim", "Parametre Yönetimi"],
     ["/admin/users", "Yönetim", "Kullanıcı Yönetimi"],
+    ["/admin/targets", "Yönetim", "Hedefler"],
     ["/admin/db-backup", "Yönetim", "DB Yedeği"],
     ["/crm", "Genel", "Komuta Merkezi"],
   ];
@@ -441,6 +442,14 @@ export default function PanelShell({
         href: "/crm/customer-list",
         label: "Müşteri Listesi (H/F/L/K)",
         iconKey: "customers",
+      });
+    // Hedefler (Çağdaş Bey, 10.09): kişi bazlı hedef girişi; yalnız admin.targets.manage
+    // (admin, super_admin) görür — satışçının menüsünde çıkmaz. Yönetim menüsünde de var.
+    if (allowed('admin.targets.manage') && allowed('screen.admin.targets.view'))
+      operations.push({
+        href: "/admin/targets",
+        label: "Hedefler",
+        iconKey: "forecast",
       });
     if (allowed('activity.read') && allowed('screen.crm.activities.view'))
       operations.push({
@@ -786,7 +795,8 @@ export default function PanelShell({
                     const showUsers = allowed('admin.users.manage') && allowed('screen.admin.users.view');
                     const showRbac = allowed('admin.rbac.manage') && allowed('screen.admin.rbac.view');
                     const showIdentity = allowed('admin.identity.manage') && allowed('screen.admin.identity.view');
-                    if (!(showParameterManagement || showBackup || showUsers || showRbac || showIdentity)) return null;
+                    const showTargets = allowed('admin.targets.manage') && allowed('screen.admin.targets.view');
+                    if (!(showParameterManagement || showBackup || showUsers || showRbac || showIdentity || showTargets)) return null;
                     return (
                       <div className="pax-user-dropdown-section">
                         {showParameterManagement && (
@@ -811,6 +821,14 @@ export default function PanelShell({
                             className="pax-user-dropdown-link"
                           >
                             Kullanıcı Yönetimi
+                          </Link>
+                        )}
+                        {showTargets && (
+                          <Link
+                            href="/admin/targets"
+                            className="pax-user-dropdown-link"
+                          >
+                            Hedefler
                           </Link>
                         )}
                         {showRbac && (

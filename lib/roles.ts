@@ -9,6 +9,7 @@ export type Permission =
   | 'admin.users.manage'
   | 'admin.parameters.manage'
   | 'admin.backup.execute'
+  | 'admin.targets.manage'
   | 'admin.rbac.manage'
   | 'admin.identity.manage'
   | 'admin.notifications.manage'
@@ -64,6 +65,7 @@ export type Permission =
   | 'screen.admin.notifications.view'
   | 'screen.admin.rbac.view'
   | 'screen.admin.backup.view'
+  | 'screen.admin.targets.view'
   | 'screen.crm.nova_core.view'
   | 'screen.crm.sales_process.view'
   | 'screen.crm.customer_status_guide.view'
@@ -74,6 +76,7 @@ export const ALL_PERMISSIONS: readonly Permission[] = [
   'admin.users.manage',
   'admin.parameters.manage',
   'admin.backup.execute',
+  'admin.targets.manage',
   'admin.rbac.manage',
   'admin.identity.manage',
   'admin.notifications.manage',
@@ -128,6 +131,7 @@ export const ALL_PERMISSIONS: readonly Permission[] = [
   'screen.admin.notifications.view',
   'screen.admin.rbac.view',
   'screen.admin.backup.view',
+  'screen.admin.targets.view',
   'screen.crm.nova_core.view',
   'screen.crm.sales_process.view',
   'screen.crm.customer_status_guide.view',

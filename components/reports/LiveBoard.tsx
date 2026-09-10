@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import '@/styles/live-board.css';
 import { SALES_CHANNEL_GROUPS, WEEKLY_TARGET_LABELS, achievementPct, sumKinds, type WeeklyTargetCounters } from '@/lib/reports/weekly-targets-shared';
+import type { GoalPair } from '@/lib/reports/targets-shared';
 import {
   ALERT_ORDER,
   LIVE_BOARD_RULES,
@@ -19,6 +20,8 @@ import {
   dueTone,
   fmtMoney,
   layoutMetrics,
+  msUntilIstanbulTime,
+  paceTone,
   pageBounds,
   pctOf,
   pageCount,
@@ -861,7 +864,7 @@ function JiraSlide({ data, caps, page }: { data: LiveBoardPayload; caps: Capacit
 
 /* --- Müşteri Listesi (H/F/L/K) donut'u — kişi slaytı ------------------------ */
 /** Hunter/Farmer oranı: Raporlar › Müşteri Listesi'ndeki (crm_musteri_listesi) kayıtlardan (Sinan, 09.09). */
-function HfDonut({ list, size }: { list: CustomerListSplit; size: number }) {
+function HfDonut({ list, size, legend = true }: { list: CustomerListSplit; size: number; legend?: boolean }) {
   const total = list.hunter + list.farmer;
   const radius = 40;
   const circumference = 2 * Math.PI * radius;
@@ -871,7 +874,7 @@ function HfDonut({ list, size }: { list: CustomerListSplit; size: number }) {
   const farmerLen = Math.max(0, (1 - hunterShare) * circumference - gap);
   const pct = (value: number) => (total ? `%${Math.round((value / total) * 100)}` : '—');
   return (
-    <div className="lb-hf">
+    <div className={`lb-hf ${legend ? '' : 'solo'}`}>
       <div className="lb-donut lb-hf-donut" style={{ width: size, height: size }} role="img" aria-label={`Hunter ${list.hunter} · Farmer ${list.farmer}`}>
         <svg viewBox="0 0 100 100">
           <circle className="track" cx="50" cy="50" r={radius} />
@@ -880,81 +883,131 @@ function HfDonut({ list, size }: { list: CustomerListSplit; size: number }) {
         </svg>
         <div className="lb-ring-center"><strong>{fmt(total)}</strong><span>H + F</span></div>
       </div>
-      <div className="lb-hf-legend">
-        <div><i style={{ background: 'var(--lb-info)' }} /><span>Hunter</span><strong>{fmt(list.hunter)}</strong><em>{pct(list.hunter)}</em></div>
-        <div><i style={{ background: 'var(--lb-ok)' }} /><span>Farmer</span><strong>{fmt(list.farmer)}</strong><em>{pct(list.farmer)}</em></div>
-      </div>
+      {legend ? (
+        <div className="lb-hf-legend">
+          <div><i style={{ background: 'var(--lb-info)' }} /><span>Hunter</span><strong>{fmt(list.hunter)}</strong><em>{pct(list.hunter)}</em></div>
+          <div><i style={{ background: 'var(--lb-ok)' }} /><span>Farmer</span><strong>{fmt(list.farmer)}</strong><em>{pct(list.farmer)}</em></div>
+        </div>
+      ) : null}
     </div>
   );
 }
 
 /* --- Kişi slaytı (Sales Performance) --------------------------------------- */
 
-/** Büyük donut kartı: başlık + halka + tek satır değer (Çağdaş Bey 10.09: "büyük, net, yan yana"). */
-function DonutCard({ title, children, note, tone }: { title: string; children: ReactNode; note: ReactNode; tone?: Tone }) {
+/**
+ * Büyük donut kartı: başlık + büyük halka (sol) + iki küçük halka (sağ, alt alta) + tek satır değer.
+ * v2.7 (Çağdaş Bey 10.09 toplantısı): "her donut'un yanına iki küçük simit daha — bir büyük, bir küçük".
+ */
+function DonutCard({ title, children, aside, note, tone }: { title: string; children: ReactNode; aside?: ReactNode; note: ReactNode; tone?: Tone }) {
   return (
     <div className="lb-card lb-donut-card">
       <div className="lb-card-head"><h3>{title}</h3></div>
-      <div className="lb-donut-card-body">{children}</div>
+      <div className={`lb-donut-card-body ${aside ? 'with-aside' : ''}`}>
+        <div className="lb-donut-main">{children}</div>
+        {aside ? <div className="lb-donut-aside">{aside}</div> : null}
+      </div>
       <div className={`lb-donut-card-note tone-${tone ?? 'neutral'}`}>{note}</div>
     </div>
   );
 }
 
+/** Küçük hedef halkası: hedef varsa % ve "gerçekleşen / hedef", yoksa yalnız gerçekleşen. Altında kısa etiket. */
+function MiniRing({ pair, label, tone, size, money = false }: { pair: GoalPair; label: string; tone: Tone; size: number; money?: boolean }) {
+  const has = pair.target != null;
+  const val = (value: number) => (money ? fmtMoney(value) : fmt(value));
+  return (
+    <div className={`lb-mini tone-${tone}`} title={has ? `${val(pair.actual)} / ${val(pair.target ?? 0)}` : undefined}>
+      <Ring pct={has ? pair.pct : null} tone={tone} big={has ? `%${pair.pct ?? 0}` : val(pair.actual)} sub={has ? `${val(pair.actual)} / ${val(pair.target ?? 0)}` : 'hedef yok'} size={size} stroke={10} />
+      <span className="lb-mini-label">{label}</span>
+    </div>
+  );
+}
+
+/** Hedefe göre ton: hız (zamanın önünde/gerisinde) verilmişse o, yoksa düz yüzde eşiği. */
+function goalTone(pair: GoalPair, elapsedPct?: number): Tone {
+  if (pair.target == null) return 'neutral';
+  if (elapsedPct != null) return paceTone(pair.pct, elapsedPct) ?? 'neutral';
+  return pctTone(pair.pct);
+}
+
 function OwnerSlide({ owner, todayKey, caps, donutRowH }: { owner: LiveOwner; todayKey: string; caps: Capacities; donutRowH: number }) {
   const r = owner.revenue;
-  // v2.6 (Çağdaş Bey, 10.09 toplantısı — "Furkan'ın sayfası Portföy gibi büyük donutlarla olsun, bu kadar
-  // detaya gerek yok; kanal kırılımı kalksın; hint'ler kalksın"):
-  //   bant (hint'siz) → 3 büyük donut yan yana: Haftalık Hedef · Yıllık Ciro Hedefi · Hunter/Farmer (Müşteri Listesi)
-  //   → alt satır: Teklif & Pipeline sayaçları | Son Hareketler. Profil kolonu (avatar, kanal kırılımı, huni) kalktı;
-  //   ad zaten üst başlıkta. Donut çapı satır yüksekliğinden türer (ölçü tek kaynak: donutRowH).
+  const g = owner.goals;
+  // v2.7 (Çağdaş Bey, 10.09 toplantı transkripti):
+  //   * 3 kart, her biri 1 büyük + 2 küçük donut:
+  //       Aktivite Hedefi   : hafta (büyük) | çeyrek ziyaret · yıl ziyaret
+  //       Yıllık Bütçe Hedefi: yıl (büyük)  | çeyrek bütçe · entegrasyon
+  //       Hunter / Farmer   : H+F (büyük)   | Hunter→Farmer çevirme · Lead→Hunter çevirme
+  //     "Haftalık Hedef" → "Aktivite Hedefi", "Yıllık Ciro Hedefi" → "Yıllık Bütçe Hedefi".
+  //   * Teklif kutusu: Açık (gönderilmiş + taslak) · Kazanılan (hedefe karşı) · Kaybedilen + pipeline sayaçları.
+  //   * Hedefler Admin / Super Admin'in Hedefler ekranından (crm_target_values, yıl + çeyrek).
+  //   Hint yok (v2.6): etiket + değer + renk. Donut çapı satır yüksekliğinden türer (donutRowH).
   const ring = Math.max(120, donutRowH - 122);
+  const mini = Math.round(ring * 0.45);
   const recentRows = owner.recentActivities.slice(0, caps.recent);
   const recentMore = owner.recentActivities.length - recentRows.length;
   const hasRevenueTarget = r.target != null;
   const weeklyTarget = owner.target.totalActivities || 0;
   const weeklyPct = owner.achievementPct;
   const weeklyTone: Tone = weeklyTarget ? pctTone(weeklyPct) : 'neutral';
+  const q = g.quarter.label;
+  const wonTone: Tone = g.wonQuotes.target != null ? pctTone(g.wonQuotes.pct) : 'neutral';
+  const colored = (tone: Tone, text: string) => <b className={`tone-${tone}`}>{text}</b>;
   return (
     <div className="lb-slide lb-owner" key={owner.owner}>
       <MoneyBand r={r} pipeline={owner.pipeline} weekQuotes={owner.quotes.weekCount} />
 
       <DonutCard
-        title="Haftalık Hedef"
+        title="Aktivite Hedefi"
         tone={weeklyTone}
-        note={weeklyTarget ? `${fmt(owner.actual.totalActivities)} / ${fmt(weeklyTarget)} aktivite · bugün ${fmt(owner.todayActivities)}` : `${fmt(owner.actual.totalActivities)} aktivite · haftalık hedef girilmedi`}
+        note={weeklyTarget
+          ? <>Hafta {fmt(owner.actual.totalActivities)} / {fmt(weeklyTarget)} · bugün {fmt(owner.todayActivities)} · ziyaret {q} {fmt(g.visitsQuarter.actual)} · yıl {fmt(g.visitsYear.actual)}</>
+          : <>Hafta {fmt(owner.actual.totalActivities)} aktivite · ziyaret {q} {fmt(g.visitsQuarter.actual)} · yıl {fmt(g.visitsYear.actual)}</>}
+        aside={<>
+          <MiniRing pair={g.visitsQuarter} label={`${q} ziyaret`} tone={goalTone(g.visitsQuarter, g.quarter.elapsedPct)} size={mini} />
+          <MiniRing pair={g.visitsYear} label="Yıl ziyaret" tone={goalTone(g.visitsYear, r.yearElapsedPct)} size={mini} />
+        </>}
       >
-        <Ring pct={weeklyTarget ? weeklyPct : null} tone={weeklyTone} big={weeklyTarget ? `%${weeklyPct ?? 0}` : fmt(owner.actual.totalActivities)} sub={weeklyTarget ? 'aktivite' : 'bu hafta'} size={ring} stroke={11} />
+        <Ring pct={weeklyTarget ? weeklyPct : null} tone={weeklyTone} big={weeklyTarget ? `%${weeklyPct ?? 0}` : fmt(owner.actual.totalActivities)} sub={weeklyTarget ? 'hafta' : 'bu hafta'} size={ring} stroke={11} />
       </DonutCard>
 
       <DonutCard
-        title={`Yıllık Ciro Hedefi · ${r.year}`}
+        title={`Yıllık Bütçe Hedefi · ${r.year}`}
         tone={hasRevenueTarget ? (r.pace ?? 'neutral') : 'neutral'}
         note={hasRevenueTarget
-          ? `${fmtMoney(r.actualYtd)} / ${fmtMoney(r.target)} · ${r.pace === 'ok' ? `zamanın ${(r.attainmentPct ?? 0) - r.yearElapsedPct} puan önünde` : `zamanın ${r.yearElapsedPct - (r.attainmentPct ?? 0)} puan gerisinde`}`
-          : `${fmtMoney(r.actualYtd)} · yıllık ciro hedefi girilmedi`}
+          ? <>{fmtMoney(r.actualYtd)} / {fmtMoney(r.target)} · {q} {fmtMoney(g.budgetQuarter.actual)}{g.budgetQuarter.target != null ? ` / ${fmtMoney(g.budgetQuarter.target)}` : ''} · entegrasyon {fmt(g.integration.actual)}{g.integration.target != null ? ` / ${fmt(g.integration.target)}` : ''}</>
+          : <>{fmtMoney(r.actualYtd)} YTD · {q} {fmtMoney(g.budgetQuarter.actual)} · entegrasyon {fmt(g.integration.actual)}</>}
+        aside={<>
+          <MiniRing pair={g.budgetQuarter} label={`${q} bütçe`} tone={goalTone(g.budgetQuarter, g.quarter.elapsedPct)} size={mini} money />
+          <MiniRing pair={g.integration} label="Entegrasyon" tone={goalTone(g.integration)} size={mini} />
+        </>}
       >
-        <Ring pct={hasRevenueTarget ? r.attainmentPct : null} tone={hasRevenueTarget ? (r.pace ?? 'neutral') : 'neutral'} big={hasRevenueTarget ? `%${r.attainmentPct ?? 0}` : fmtMoney(r.actualYtd)} sub={hasRevenueTarget ? 'gerçekleşme' : 'YTD ciro'} size={ring} stroke={11} />
+        <Ring pct={hasRevenueTarget ? r.attainmentPct : null} tone={hasRevenueTarget ? (r.pace ?? 'neutral') : 'neutral'} big={hasRevenueTarget ? `%${r.attainmentPct ?? 0}` : fmtMoney(r.actualYtd)} sub={hasRevenueTarget ? 'yıl' : 'YTD ciro'} size={ring} stroke={11} />
       </DonutCard>
 
       <DonutCard
         title="Hunter / Farmer"
-        note={owner.list ? `Hunter ${fmt(owner.list.hunter)} · Farmer ${fmt(owner.list.farmer)} · Lead ${fmt(owner.list.lead)} · Kasa ${fmt(owner.list.kasa)}` : 'Müşteri Listesi henüz doldurulmadı'}
+        note={owner.list
+          ? <>{colored('info', `Hunter ${fmt(owner.list.hunter)}`)} · {colored('ok', `Farmer ${fmt(owner.list.farmer)}`)} · Lead {fmt(owner.list.lead)} · Kasa {fmt(owner.list.kasa)}</>
+          : 'Müşteri Listesi henüz doldurulmadı'}
+        aside={<>
+          <MiniRing pair={g.hunterToFarmer} label="H → F çevirme" tone={goalTone(g.hunterToFarmer)} size={mini} />
+          <MiniRing pair={g.leadToHunter} label="L → H çevirme" tone={goalTone(g.leadToHunter)} size={mini} />
+        </>}
       >
-        {owner.list ? <HfDonut list={owner.list} size={ring} /> : <Ring pct={null} tone="neutral" big="—" sub="liste yok" size={ring} stroke={11} />}
+        {owner.list ? <HfDonut list={owner.list} size={ring} legend={false} /> : <Ring pct={null} tone="neutral" big="—" sub="liste yok" size={ring} stroke={11} />}
       </DonutCard>
 
       <div className="lb-card lb-owner-stats">
         <div className="lb-card-head"><h3>Teklif &amp; Pipeline</h3></div>
         <div className="lb-stat-grid">
-          <div className={r.expiredOpenQuotes ? 'tone-warn' : ''}><strong>{fmt(r.openQuotes)}</strong><span>Açık Teklif</span></div>
+          <div className={r.expiredOpenQuotes ? 'tone-warn' : ''}><strong>{fmt(g.openAll)}</strong><span>Açık Teklif</span></div>
+          <div className={`tone-${wonTone}`}><strong>{g.wonQuotes.target != null ? `${fmt(g.wonQuotes.actual)} / ${fmt(g.wonQuotes.target)}` : fmt(g.wonQuotes.actual)}</strong><span>Kazanılan</span></div>
+          <div className={g.lostQuotes ? 'tone-danger' : ''}><strong>{fmt(g.lostQuotes)}</strong><span>Kaybedilen</span></div>
           <div><strong>{fmtMoney(r.pipeline)}</strong><span>Pipeline</span></div>
           <div><strong>{fmt(owner.pipeline.activeCustomers)}</strong><span>Aktif Fırsat</span></div>
           <div className={owner.pipeline.staleCritical ? 'tone-danger' : owner.pipeline.stale ? 'tone-warn' : ''}><strong>{fmt(owner.pipeline.stale)}</strong><span>Hareketsiz</span></div>
-          <div className={owner.pipeline.overdueActions ? 'tone-danger' : ''}><strong>{fmt(owner.pipeline.overdueActions)}</strong><span>Gecikmiş</span></div>
-          {owner.jira
-            ? <div className={owner.jira.open ? 'tone-warn' : ''}><strong>{fmt(owner.jira.open)}</strong><span>Jira Ticket</span></div>
-            : <div className={r.expiredOpenQuotes ? 'tone-warn' : ''}><strong>{fmt(r.expiredOpenQuotes)}</strong><span>Süresi Dolmuş</span></div>}
         </div>
       </div>
 
@@ -984,6 +1037,10 @@ export default function LiveBoard({ active }: { active: boolean }) {
   const [controlsVisible, setControlsVisible] = useState(true);
   const [now, setNow] = useState(() => new Date());
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
+  // Sunucu sürecinin başlama anı: değişince deploy olmuş demektir → "yeni sürüm" uyarısı (TV modunda
+  // sayfayı kendimiz yenileyemeyiz; tam ekran düşer).
+  const serverStartedAt = useRef<string | null>(null);
+  const [newVersion, setNewVersion] = useState(false);
   const hideTimer = useRef<number | null>(null);
   const wakeLock = useRef<any>(null);
   const bodyRef = useRef<HTMLDivElement | null>(null);
@@ -1024,9 +1081,15 @@ export default function LiveBoard({ active }: { active: boolean }) {
       const res = await fetch('/api/reports/live-board', { cache: 'no-store' });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json?.message || 'Canlı ekran verisi alınamadı.');
-      setData(json as LiveBoardPayload);
+      const payload = json as LiveBoardPayload;
+      setData(payload);
       setError(null);
       setUpdatedAt(new Date());
+      const started = payload.server?.startedAt ?? null;
+      if (started) {
+        if (serverStartedAt.current && serverStartedAt.current !== started) setNewVersion(true);
+        serverStartedAt.current = started;
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Canlı ekran verisi alınamadı.');
     } finally {
@@ -1055,6 +1118,37 @@ export default function LiveBoard({ active }: { active: boolean }) {
     const timer = window.setInterval(() => setNow(new Date()), 30_000);
     return () => window.clearInterval(timer);
   }, [active]);
+
+  /**
+   * Sıfırla (↻ / R): veriyi yeniden çeker, döngüyü ilk slayta alır, ekran kilidini yeniler.
+   * Sinan (10.09): "reset tuşu verileri tekrar çekebilsin".
+   */
+  const hardRefresh = useCallback(() => {
+    setIndex(0);
+    setCycle((value) => value + 1);
+    void load();
+    try {
+      const api = (navigator as any).wakeLock;
+      if (api?.request && !wakeLock.current) void api.request('screen').then((lock: unknown) => { wakeLock.current = lock; }).catch(() => {});
+    } catch {}
+  }, [load]);
+
+  // Her sabah 08:00 (İstanbul) otomatik yenileme — Sinan (10.09): "ekran uzun süre açık kalacak".
+  // Tam ekranda sayfa yenilenmez (TV modu düşer): veri + döngü sıfırlanır. Tam ekran değilse sayfa
+  // yeniden yüklenir; böylece gece deploy edilen sürüm de alınır.
+  useEffect(() => {
+    if (!active) return;
+    let timer = 0;
+    const arm = () => {
+      const ms = msUntilIstanbulTime(new Date(), LIVE_BOARD_TIMING.dailyRefreshHour, LIVE_BOARD_TIMING.dailyRefreshMinute);
+      timer = window.setTimeout(() => {
+        if (document.fullscreenElement) { hardRefresh(); arm(); }
+        else window.location.reload();
+      }, ms);
+    };
+    arm();
+    return () => window.clearTimeout(timer);
+  }, [active, hardRefresh]);
 
   const goTo = useCallback((next: number) => {
     const total = Math.max(1, plan.length);
@@ -1122,11 +1216,11 @@ export default function LiveBoard({ active }: { active: boolean }) {
       else if (event.key === 'ArrowRight') step(1);
       else if (event.key === 'ArrowLeft') step(-1);
       else if (event.key === 'f' || event.key === 'F') toggleFullscreen();
-      else if (event.key === 'r' || event.key === 'R') void load();
+      else if (event.key === 'r' || event.key === 'R') hardRefresh();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [active, step, toggleFullscreen, load]);
+  }, [active, step, toggleFullscreen, hardRefresh]);
 
   const poke = useCallback(() => {
     setControlsVisible(true);
@@ -1212,7 +1306,9 @@ export default function LiveBoard({ active }: { active: boolean }) {
       aria-label="PAX Retail Command Center canlı ekran"
       aria-live="polite"
     >
-      <div className="lb-top">
+      {/* Tam ekranda üst şerit yüzen katmandır (Çağdaş Bey 10.09: "üst kısmı da kullanalım, mouse gelince
+          açılsın; ama kişinin adı görünsün"): fare durunca yukarı kayar, ince başlık çubuğu (lb-fs-title) kalır. */}
+      <div className={`lb-top ${fullscreen ? 'lb-top-fs' : ''} ${controlsHidden ? 'hidden' : ''}`}>
         <div className="lb-brand">
           <span className="lb-eyebrow">PAX Retail Command Center</span>
           <span className="lb-range">{data ? `Hafta: ${data.range.label}` : 'Yükleniyor…'}</span>
@@ -1234,7 +1330,7 @@ export default function LiveBoard({ active }: { active: boolean }) {
                 <option key={key} value={key}>{LIVE_BOARD_SPEEDS[key].label}</option>
               ))}
             </select>
-            <button type="button" className="lb-ctl" onClick={() => void load()} aria-label="Veriyi yenile" title="Yenile (R)">↻</button>
+            <button type="button" className="lb-ctl" onClick={hardRefresh} aria-label="Veriyi yenile ve baştan başlat" title="Yenile · baştan başlat (R)">↻</button>
             <button type="button" className={`lb-ctl ${fullscreen ? 'on' : ''}`} onClick={toggleFullscreen} aria-label="Tam ekran" title="Tam ekran (F)">
               {fullscreen ? 'Çık' : '⛶ TV modu'}
             </button>
@@ -1245,6 +1341,14 @@ export default function LiveBoard({ active }: { active: boolean }) {
           </div>
         </div>
       </div>
+
+      {fullscreen ? (
+        <div className="lb-fs-title" aria-hidden="true">
+          <span className="lb-fs-eyebrow">PAX Retail Command Center</span>
+          <div className="lb-title">{title.main}<small>{title.sub}</small></div>
+          <span className="lb-fs-clock">{fmtClock(now)}</span>
+        </div>
+      ) : null}
 
       <div className={`lb-progress ${paused ? 'paused' : ''}`} aria-hidden="true">
         <i key={`${index}-${cycle}-${speed}`} style={{ animationDuration: `${durationMs}ms` }} />
@@ -1259,7 +1363,7 @@ export default function LiveBoard({ active }: { active: boolean }) {
       </div>
 
       {data ? (
-        <div className={`lb-strip ${controlsHidden ? 'lb-controls hidden' : ''}`}>
+        <div className={`lb-strip ${fullscreen ? 'lb-strip-fs' : ''} ${controlsHidden ? 'hidden' : ''}`}>
           {/* Ekran başına tek nokta: sayfalar (Seda 1/2, 2/2) tek girdide toplanır,
               tıklayınca o ekranın ilk sayfasına gider. Sayfalı ekranlarda oranı ⅟ ile
               gösterilir; böylece 30+ slaytta şerit taşmaz. */}
@@ -1279,6 +1383,7 @@ export default function LiveBoard({ active }: { active: boolean }) {
             <b>{index + 1}/{plan.length}</b>
             <span className="lb-kbd">Boşluk</span> duraklat · <span className="lb-kbd">←</span><span className="lb-kbd">→</span> gezin · <span className="lb-kbd">F</span> TV modu
             {error ? ` · yenileme başarısız` : ''}
+            {newVersion ? <b className="lb-new-version"> · yeni sürüm var — sayfayı yenileyin (F5, sonra F)</b> : ''}
           </span>
         </div>
       ) : null}

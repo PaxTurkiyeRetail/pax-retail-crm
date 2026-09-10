@@ -6,6 +6,7 @@
 // Teklifler & Forecast → Uyarılar → (Jira) ve aralara kişi slaytları (Sales Performance).
 
 import type { WeeklyTargetCounters } from '@/lib/reports/weekly-targets-shared';
+import type { GoalPair } from '@/lib/reports/targets-shared';
 
 /* ------------------------------------------------------------------------ */
 /* Zamanlama                                                                 */
@@ -19,7 +20,31 @@ export const LIVE_BOARD_TIMING = {
   /** Kaç takım ekranından sonra kişi slaytlarına geçilir (dönüşümlü akış). */
   teamBurst: 2,
   ownerBurst: 2,
+  /**
+   * Günlük tam yenileme saati (İstanbul) — Sinan, 10.09: "ekran uzun süre açık kalacak, her sabah
+   * 08:00'de otomatik güncellensin". TV modunda (tam ekran) veri + döngü sıfırlanır (sayfa yenilenirse
+   * tam ekran düşer); tam ekran değilse sayfa yeniden yüklenir (yeni sürüm de alınır).
+   */
+  dailyRefreshHour: 8,
+  dailyRefreshMinute: 0,
 } as const;
+
+/**
+ * İstanbul saatine göre bir sonraki HH:MM'e kalan milisaniye (bugün geçtiyse yarın).
+ * Saf fonksiyon: `now` verilerek test edilir.
+ */
+export function msUntilIstanbulTime(now: Date, hour: number, minute: number): number {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Europe/Istanbul', hour12: false,
+    year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit',
+  }).formatToParts(now);
+  const get = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? 0);
+  // İstanbul duvar saati (UTC gibi kurulur; fark hesabı için yeter)
+  const wallNow = Date.UTC(get('year'), get('month') - 1, get('day'), get('hour') % 24, get('minute'), get('second'));
+  let wallTarget = Date.UTC(get('year'), get('month') - 1, get('day'), hour, minute, 0);
+  if (wallTarget <= wallNow) wallTarget += 86_400_000;
+  return Math.max(60_000, wallTarget - wallNow);
+}
 
 export type LiveBoardSpeed = 'slow' | 'normal' | 'fast';
 export const LIVE_BOARD_SPEEDS: Record<LiveBoardSpeed, { label: string; factor: number }> = {
@@ -262,6 +287,36 @@ export type LiveOwner = {
    * künye `satici_etiketi` değil. Liste hiç doldurulmamışsa null (donut yerine not).
    */
   list: CustomerListSplit | null;
+  /** v2.7 (Çağdaş Bey, 10.09): küçük donut'lar + Teklif kutusu hedefleri (Hedefler ekranı, migration 026). */
+  goals: OwnerGoals;
+};
+
+/**
+ * Kişi slaytı v2.7 hedef çiftleri. Kaynak: Hedefler ekranı (crm_target_values, yıl + çeyrek).
+ *   * visitsQuarter / visitsYear : fiziki + online satış görüşmesi (aktiviteyi giren kişi)
+ *   * budgetQuarter              : çeyrek ciro (crm_sales, satış tarihi çeyrekte) — çeyrek hedefi
+ *                                  girilmemişse yıllık / 4 varsayılır (`budgetQuarterAssumed`)
+ *   * integration                : faz ≥ 9 entegrasyon firması (integration_count)
+ *   * hunterToFarmer / leadToHunter : Müşteri Listesi taşımaları (crm_musteri_listesi_hareket, yıl içi)
+ *   * wonQuotes                  : yıl içi kazanılan teklif adedi (quotes_won_count)
+ *   * openAll / draft            : açık teklif = gönderilmiş + taslak (Çağdaş Bey: "Ömer'in açık teklifi
+ *                                  var ama 0 görünüyor" — taslaklar da açık sayılır); pipeline tutarı
+ *                                  yine yalnız gönderilmiş tekliflerden.
+ */
+export type OwnerGoals = {
+  quarter: { label: string; months: string; elapsedPct: number };
+  visitsQuarter: GoalPair;
+  visitsYear: GoalPair;
+  visitsQuarterAssumed: boolean;
+  budgetQuarter: GoalPair;
+  budgetQuarterAssumed: boolean;
+  integration: GoalPair;
+  hunterToFarmer: GoalPair;
+  leadToHunter: GoalPair;
+  wonQuotes: GoalPair;
+  lostQuotes: number;
+  openAll: number;
+  draft: number;
 };
 
 /** Kişinin Müşteri Listesi sayıları: H Hunter · F Farmer · L Lead · K Kasa Firması. */
@@ -316,6 +371,8 @@ export type QuoteRow = {
 
 export type LiveBoardPayload = {
   generatedAt: string;
+  /** API katmanı ekler: sunucu sürecinin başlama anı (pm2 reload → değişir → istemci "yeni sürüm" uyarısı). */
+  server?: { startedAt: string };
   range: { from: string; to: string; label: string; today: string; year: number };
   status: { crm: 'ok'; jira: 'ok' | 'off' | 'error' };
   team: {

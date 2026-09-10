@@ -1,0 +1,130 @@
+/* Hedefler — Yönetim › Hedefler (/admin/targets) — Çağdaş Bey, 10.09.2026.
+   Kişi kartı: haftalık aktivite · yıl hedefleri · çeyrek tablosu (bütçe, ziyaret).
+
+   TEMA KURALI (tek sinyal): renkler yalnız app/globals.css token'larından; bu dosya
+   `prefers-color-scheme` KULLANMAZ (PanelShell <html data-theme> yazar). Sabit hex
+   yalnız koyu hero üstündeki beyaz yazıda.
+
+   KAPSAM KURALI (kılavuz §4 madde 21): her seçici .tg-shell ile başlar. */
+
+.tg-shell {
+  display: grid;
+  gap: 18px;
+  padding-bottom: 40px;
+  color: var(--text);
+  --tg-accent: #1d4ed8;
+}
+[data-theme="dark"] .tg-shell { --tg-accent: #93b4fd; }
+
+/* --- Hero ------------------------------------------------------------------- */
+.tg-shell .tg-hero {
+  position: relative; overflow: hidden;
+  display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 24px;
+  padding: 30px 34px; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 26px; color: #fff;
+  background:
+    radial-gradient(circle at 88% 12%, rgba(255, 255, 255, 0.14), transparent 30%),
+    linear-gradient(122deg, #0f172a 0%, #1e3a8a 55%, #1d4ed8 100%);
+  box-shadow: 0 22px 50px rgba(30, 58, 138, 0.24);
+}
+.tg-shell .tg-hero-copy { position: relative; z-index: 1; max-width: 820px; }
+.tg-shell .tg-eyebrow {
+  display: inline-flex; align-items: center; gap: 7px; padding: 7px 11px;
+  border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 999px; background: rgba(255, 255, 255, 0.1);
+  font-size: 12px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase;
+}
+.tg-shell .tg-hero h1 { margin: 16px 0 8px; font-size: clamp(26px, 2.6vw, 38px); line-height: 1.1; letter-spacing: -0.03em; color: #fff; }
+.tg-shell .tg-hero p { margin: 0; color: rgba(255, 255, 255, 0.86); font-size: 14px; line-height: 1.65; }
+.tg-shell .tg-hero p b { color: #fff; }
+.tg-shell .tg-hero-actions { position: relative; z-index: 1; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.tg-shell .tg-year { display: inline-flex; align-items: center; gap: 8px; font-weight: 800; font-size: 13px; color: rgba(255, 255, 255, 0.86); }
+.tg-shell .tg-year select {
+  min-height: 42px; padding: 0 12px; border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.26) !important; background: rgba(255, 255, 255, 0.14) !important;
+  color: #fff !important; font-weight: 800; font-size: 15px;
+}
+.tg-shell .tg-year select option { background: #0f172a; color: #fff; }
+
+/* --- Düğmeler ---------------------------------------------------------------- */
+.tg-shell .tg-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 40px; padding: 0 16px; border-radius: 12px;
+  border: 1px solid var(--border); background: var(--surface); color: var(--text-2);
+  font-weight: 800; font-size: 14px; cursor: pointer;
+}
+.tg-shell .tg-btn:hover { border-color: var(--accent-border); color: var(--text); }
+.tg-shell .tg-btn.primary { background: var(--tg-accent); border-color: var(--tg-accent); color: #fff; }
+[data-theme="dark"] .tg-shell .tg-btn.primary { color: #0b1020; }
+.tg-shell .tg-btn.light { color: #fff; border-color: rgba(255, 255, 255, 0.26); background: rgba(255, 255, 255, 0.14); }
+.tg-shell .tg-btn.light:hover { background: rgba(255, 255, 255, 0.22); color: #fff; }
+.tg-shell .tg-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+/* --- Özet kartları ------------------------------------------------------------ */
+.tg-shell .tg-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; }
+.tg-shell .tg-kpi {
+  display: grid; gap: 4px; padding: 18px 20px; border: 1px solid var(--border); border-radius: 20px; background: var(--surface);
+}
+.tg-shell .tg-kpi span { font-size: 12px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-3); }
+.tg-shell .tg-kpi strong { font-size: 28px; font-weight: 900; letter-spacing: -0.03em; color: var(--text); font-variant-numeric: tabular-nums; }
+.tg-shell .tg-kpi small { font-size: 12px; color: var(--text-3); font-weight: 600; }
+.tg-shell .tg-kpi.warn strong { color: var(--chip-gold-color); }
+
+.tg-shell .tg-error { padding: 14px 18px; border-radius: 14px; border: 1px solid var(--chip-red-bd); background: var(--chip-red-bg); color: var(--chip-red-color); font-weight: 700; }
+.tg-shell .tg-empty { padding: 40px; text-align: center; border: 1px dashed var(--border); border-radius: 20px; color: var(--text-3); font-weight: 700; }
+
+/* --- Kişi kartı ----------------------------------------------------------------- */
+.tg-shell .tg-people { display: grid; gap: 16px; }
+.tg-shell .tg-person { border: 1px solid var(--border); border-radius: 22px; background: var(--surface); overflow: hidden; }
+.tg-shell .tg-person.dirty { border-color: var(--accent-border); box-shadow: 0 0 0 3px var(--accent-soft); }
+.tg-shell .tg-person-head {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 16px 22px; border-bottom: 1px solid var(--border); background: var(--surface-2);
+}
+.tg-shell .tg-person-head h2 { margin: 0; font-size: 20px; font-weight: 900; letter-spacing: -0.02em; color: var(--text); }
+.tg-shell .tg-person-head h2 + span { display: block; margin-top: 2px; font-size: 12px; color: var(--text-3); font-weight: 600; }
+.tg-shell .tg-person-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.tg-shell .tg-person-actions em { font-style: normal; font-size: 12px; font-weight: 700; color: var(--text-3); }
+.tg-shell .tg-person-actions em.pending { color: var(--chip-gold-color); }
+
+.tg-shell .tg-grid { display: grid; grid-template-columns: minmax(180px, 0.7fr) minmax(300px, 1.5fr) minmax(0, 2.3fr); gap: 0; }
+.tg-shell .tg-block { padding: 18px 22px; border-right: 1px solid var(--border); min-width: 0; }
+.tg-shell .tg-block:last-child { border-right: none; }
+.tg-shell .tg-block h3 { margin: 0 0 12px; font-size: 12px; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-3); }
+.tg-shell .tg-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px 12px; }
+.tg-shell .tg-field { display: grid; gap: 5px; min-width: 0; }
+.tg-shell .tg-field > span { font-size: 12.5px; font-weight: 800; color: var(--text-2); display: flex; justify-content: space-between; gap: 6px; }
+.tg-shell .tg-field > span small { font-weight: 700; color: var(--text-3); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
+.tg-shell .tg-field input,
+.tg-shell .tg-qrow input {
+  width: 100%; min-height: 38px; padding: 0 10px; border-radius: 10px;
+  border: 1px solid var(--border); background: var(--surface-2); color: var(--text);
+  font: inherit; font-size: 14px; font-weight: 800; font-variant-numeric: tabular-nums;
+}
+.tg-shell .tg-field input:focus, .tg-shell .tg-qrow input:focus { outline: none; border-color: var(--accent-border); box-shadow: 0 0 0 3px var(--accent-soft); }
+.tg-shell .tg-field input::placeholder, .tg-shell .tg-qrow input::placeholder { color: var(--text-3); font-weight: 700; }
+.tg-shell .tg-note { margin: 12px 0 0; font-size: 12px; line-height: 1.5; color: var(--text-3); font-weight: 600; }
+
+/* Çeyrek tablosu (CSS grid) */
+.tg-shell .tg-qtable { display: grid; gap: 6px; min-width: 0; overflow-x: auto; }
+.tg-shell .tg-qrow { display: grid; grid-template-columns: minmax(84px, 0.9fr) repeat(4, minmax(96px, 1fr)) minmax(124px, 1.1fr); gap: 8px; align-items: center; }
+.tg-shell .tg-qrow input { padding: 0 8px; font-size: 13.5px; }
+.tg-shell .tg-qhead span { font-size: 11px; font-weight: 900; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-3); display: grid; gap: 1px; }
+.tg-shell .tg-qhead span small { font-size: 10px; letter-spacing: 0.02em; text-transform: none; color: var(--text-3); font-weight: 700; }
+.tg-shell .tg-qhead span.now, .tg-shell .tg-qhead span.now small { color: var(--tg-accent); }
+.tg-shell .tg-qrow > span[role="rowheader"] { font-size: 13px; font-weight: 800; color: var(--text-2); }
+.tg-shell .tg-qrow > span.now input { border-color: var(--accent-border); background: var(--accent-soft); }
+.tg-shell .tg-qsum { font-size: 12.5px; font-weight: 800; color: var(--text-3); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tg-shell .tg-qsum.warn { color: var(--chip-gold-color); }
+
+@media (max-width: 1560px) {
+  .tg-shell .tg-grid { grid-template-columns: minmax(180px, 1fr) minmax(0, 2fr); }
+  .tg-shell .tg-block:nth-child(2) { border-right: none; }
+  .tg-shell .tg-quarters { grid-column: 1 / -1; border-top: 1px solid var(--border); }
+}
+@media (max-width: 760px) {
+  .tg-shell .tg-hero { padding: 22px; }
+  .tg-shell .tg-grid { grid-template-columns: 1fr; }
+  .tg-shell .tg-block { border-right: none; border-top: 1px solid var(--border); }
+  .tg-shell .tg-block:first-child { border-top: none; }
+  .tg-shell .tg-qtable { overflow-x: auto; }
+  .tg-shell .tg-qrow { min-width: 560px; }
+}

@@ -95,6 +95,35 @@ export async function loadCustomerListCounts(): Promise<Map<string, CustomerList
   }
 }
 
+/** Kişi başına yıl içi kategori çevirme sayıları (H→F, L→H) — Canlı Ekran donut'ları. Tablo yoksa boş. */
+export type ConversionCounts = { hunterToFarmer: number; leadToHunter: number };
+
+export async function loadConversionCounts(year: number): Promise<Map<string, ConversionCounts>> {
+  try {
+    const { rows } = await db.query<{ satici: string; hf: number; lh: number }>(
+      `select h.satici,
+              count(*) filter (where h.from_kategori = 'H' and h.to_kategori = 'F')::int as hf,
+              count(*) filter (where h.from_kategori = 'L' and h.to_kategori = 'H')::int as lh
+       from public.crm_musteri_listesi_hareket h
+       where h.moved_at >= make_date($1::int, 1, 1) and h.moved_at < make_date($1::int + 1, 1, 1)
+       group by h.satici`,
+      [year],
+    );
+    const result = new Map<string, ConversionCounts>();
+    for (const row of rows) {
+      const key = normalizeName(row.satici);
+      const cur = result.get(key) ?? { hunterToFarmer: 0, leadToHunter: 0 };
+      cur.hunterToFarmer += Number(row.hf ?? 0);
+      cur.leadToHunter += Number(row.lh ?? 0);
+      result.set(key, cur);
+    }
+    return result;
+  } catch (error) {
+    if (isMissingTable(error)) return new Map();
+    throw error;
+  }
+}
+
 /* ------------------------------------------------------------------------ */
 /* Yazma işlemleri                                                           */
 /* ------------------------------------------------------------------------ */
@@ -254,6 +283,22 @@ export async function updateItem(actor: Actor, id: string, input: UpdateItemInpu
       [id, category, owner.satici, owner.ownerUserId, firma, sira, note, actor.email],
     );
     const after = toItem(rows[0]);
+    if (movingCell) {
+      // Hareket günlüğü (migration 026): Canlı Ekran H→F / L→H çevirme donut'ları buradan sayar.
+      // Tablo henüz yoksa (migration uygulanmamış) taşıma yine de tamamlanır.
+      await client.query('savepoint hareket');
+      try {
+        await client.query(
+          `insert into public.crm_musteri_listesi_hareket
+             (item_id, firma, satici, owner_user_id, from_satici, from_kategori, to_kategori, moved_by)
+           values ($1, $2, $3, $4, $5, $6, $7, $8)`,
+          [id, firma, owner.satici, owner.ownerUserId, before.owner, before.category, category, actor.email],
+        );
+      } catch (error) {
+        if (!isMissingTable(error)) throw error;
+        await client.query('rollback to savepoint hareket');
+      }
+    }
     await recordAuditEvent({
       actorId: actor.id, actorEmail: actor.email,
       action: movingCell ? 'customer_list.item.moved' : 'customer_list.item.updated',

@@ -3,7 +3,8 @@ import { db } from '@/lib/db';
 import { activityLabelFromRow, isDisplayableActivityRow } from '@/lib/activities/presentation';
 import { buildSellerFollowupReport, type SellerFollowupRow } from '@/lib/reports/seller-followup';
 import { buildWeeklyTargets } from '@/lib/reports/weekly-targets';
-import { loadCustomerListCounts } from '@/lib/reports/customer-list';
+import { loadConversionCounts, loadCustomerListCounts } from '@/lib/reports/customer-list';
+import { goalPair, quarterElapsedPct, quarterOf, type TargetCode } from '@/lib/reports/targets-shared';
 import {
   achievementPct,
   activityTargetKind,
@@ -122,6 +123,7 @@ type DbQuoteRow = {
   customer_id: string | null;
   musteri: string | null;
   owner_name: string | null;
+  owner_user_id: string | null;
   status: string;
   closed_reason: string | null;
   probability: number | null;
@@ -140,7 +142,7 @@ type DbQuoteRow = {
   sale_date: string | null;
 };
 
-type TargetRow = { scope_type: 'company' | 'user'; user_id: string | null; code: string; value: number };
+type TargetRow = { scope_type: 'company' | 'user'; user_id: string | null; code: string; period_type: 'year' | 'quarter'; value: number };
 
 const MONTHS_TR = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'];
 
@@ -302,7 +304,7 @@ const Q_WEEK_EVENTS = `
 `;
 
 const Q_QUOTES = `
-  select q.id::text as id, q.quote_no, q.customer_id::text as customer_id, m.musteri, q.owner_name, q.status, q.closed_reason,
+  select q.id::text as id, q.quote_no, q.customer_id::text as customer_id, m.musteri, q.owner_name, q.owner_user_id::text as owner_user_id, q.status, q.closed_reason,
          q.probability, q.total_amount::float8 as total_amount, q.total_device_count,
          q.proposal_date::text as proposal_date, q.valid_until::text as valid_until,
          q.created_at, q.updated_at, coalesce(q.closed_at, case when q.status = 'closed' then q.updated_at end) as closed_at,
@@ -313,14 +315,25 @@ const Q_QUOTES = `
   left join public.crm_sales s on s.quote_id = q.id
 `;
 
+// Hedefler: bugünü kapsayan YIL ve ÇEYREK kayıtları (Hedefler ekranı, migration 026).
+// Kod listesi targets-shared TARGET_CODES ile aynı; bilinmeyen kod yok sayılır.
 const Q_TARGETS = `
-  select tv.scope_type, tv.scope_user_id::text as user_id, td.code, tv.target_value::float8 as value
+  select tv.scope_type, tv.scope_user_id::text as user_id, td.code, tv.period_type, tv.target_value::float8 as value
   from public.crm_target_values tv
   join public.crm_target_definitions td on td.id = tv.definition_id
   where td.is_active = true
-    and tv.period_type = 'year'
+    and tv.period_type in ('year', 'quarter')
     and tv.period_start <= $1::date and tv.period_end >= $1::date
-    and td.code in ('sales_revenue', 'device_count', 'integration_count')
+`;
+
+// Ziyaret (v2.7): yıl içindeki satış görüşmeleri (fiziki + online) — aktiviteyi GİREN kişiye göre,
+// haftalık hedef kartıyla aynı sınıflandırma (activityTargetKind). Planlanan aksiyon kayıtları sayılmaz.
+const Q_YEAR_ACTIVITIES = `
+  select pe.aksiyon, pe.durum, pe.created_by,
+         coalesce(pe.aktivite_tarihi, (pe.created_at at time zone 'Europe/Istanbul')::date)::text as day
+  from public.pipeline_eventleri pe
+  where coalesce(pe.aktivite_tarihi, (pe.created_at at time zone 'Europe/Istanbul')::date) between make_date($1::int, 1, 1) and $2::date
+    and not (pe.durum = 'Başlamadı' and pe.hedef_tarihi is not null)
 `;
 
 // KasaPOS entegrasyonu: entegrasyon süreci açık tüm firmalar; faz ≥ 9 =
@@ -406,7 +419,8 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
   ]);
   const { from, to } = targets.range;
 
-  const [ownerResult, customerResult, eventResult, quoteResult, targetResult, forecastMonthResult, forecastOwnerResult, integrationResult, customerListCounts] = await Promise.all([
+  const quarter = quarterOf(todayKey);
+  const [ownerResult, customerResult, eventResult, quoteResult, targetResult, forecastMonthResult, forecastOwnerResult, integrationResult, customerListCounts, conversionCounts, yearActivityResult] = await Promise.all([
     db.query(Q_OWNERS),
     db.query(Q_CUSTOMERS),
     db.query(Q_WEEK_EVENTS, [from, to]),
@@ -417,6 +431,9 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
     db.query(Q_INTEGRATIONS, [R.integrationDonePhase]),
     // Müşteri Listesi (H/F/L/K) — tablo yoksa boş harita (pano çökmez).
     loadCustomerListCounts(),
+    // H→F / L→H çevirme sayıları (hareket günlüğü, migration 026) — tablo yoksa boş.
+    loadConversionCounts(year),
+    db.query(Q_YEAR_ACTIVITIES, [year, todayKey]),
   ]);
   // Liste hiç doldurulmamışsa kişi slaytında donut yerine not gösterilir (null); doluysa
   // listede adı geçmeyen kişi 0 ile görünür.
@@ -435,6 +452,32 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
   const ownerSet = new Set(ownerNames);
   const ownerIdByName = new Map(ownerRows.map((row) => [row.name, row.id]));
   const ownerNameById = new Map(ownerRows.map((row) => [row.id, row.name]));
+  const ownerNameByKey = new Map(ownerRows.map((row) => [normalizeName(row.name), row.name]));
+  /**
+   * Teklif → kişi eşlemesi (v2.7): önce owner_user_id, sonra ad (NFC + tr küçük harf) —
+   * "Ömer CANATAR" / "Ömer Canatar" yazım farkı kişiyi düşürmesin (Çağdaş Bey: "açık teklifi var ama 0").
+   */
+  const resolveQuoteOwner = (row: { owner_user_id: string | null; owner_name: string | null }): string => {
+    const byId = row.owner_user_id ? ownerNameById.get(row.owner_user_id) : null;
+    if (byId) return byId;
+    const name = text(row.owner_name);
+    if (!name) return '—';
+    return ownerNameByKey.get(normalizeName(name)) ?? name;
+  };
+
+  /* --- Ziyaretler (yıl / çeyrek) — v2.7 ------------------------------------ */
+  const visitsByOwner = new Map<string, { quarter: number; year: number }>();
+  for (const row of yearActivityResult.rows as Array<{ aksiyon: string | null; durum: string | null; created_by: string | null; day: string }>) {
+    const creator = text(row.created_by);
+    if (!creator) continue;
+    const kind = activityTargetKind(activityLabelFromRow(row));
+    if (kind !== 'salesPhysical' && kind !== 'salesOnline') continue;
+    const owner = ownerNameByKey.get(normalizeName(creator)) ?? creator;
+    const cur = visitsByOwner.get(owner) ?? { quarter: 0, year: 0 };
+    cur.year += 1;
+    if (row.day >= quarter.start && row.day <= quarter.end) cur.quarter += 1;
+    visitsByOwner.set(owner, cur);
+  }
 
   const customers = customerResult.rows as CustomerRow[];
   const events = eventResult.rows as EventRow[];
@@ -467,12 +510,15 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
     /** Satış kaydı (crm_sales) tarafı: ciro ve cihaz artık buradan hesaplanır. */
     saleYtd: number; saleYtdAmount: number; saleYtdDevices: number; saleMonth: number; saleMonthAmount: number;
     saleCancelled: number;
+    /** v2.7: taslak teklifler (açık sayısına dahil, pipeline tutarına değil) ve çeyrek cirosu. */
+    draft: number; saleQuarter: number; saleQuarterAmount: number;
   };
   const emptyQuoteAgg = (): QuoteAgg => ({
     open: 0, openAmount: 0, weighted: 0, weightedValid: 0, expiredOpen: 0, passiveOpen: 0,
     wonYtd: 0, wonYtdAmount: 0, wonYtdDevices: 0, wonMonth: 0, wonMonthAmount: 0,
     lostYtd: 0, lostYtdAmount: 0, weekCount: 0, weekAmount: 0, monthCount: 0, monthAmount: 0,
     saleYtd: 0, saleYtdAmount: 0, saleYtdDevices: 0, saleMonth: 0, saleMonthAmount: 0, saleCancelled: 0,
+    draft: 0, saleQuarter: 0, saleQuarterAmount: 0,
   });
   const quoteAggByOwner = new Map<string, QuoteAgg>();
   /** Bu hafta teklifi kazanılan müşteriler (sahip → müşteri id); huninin "Sipariş" adımı. */
@@ -485,13 +531,14 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
   const REASON_LABEL: Record<string, string> = { lost: 'Kaybedildi', expired: 'Süresi doldu', no_interest: 'İlgi yok' };
 
   for (const q of quotes) {
-    const owner = text(q.owner_name) ?? '—';
+    const owner = resolveQuoteOwner(q);
     const amount = num(q.total_amount);
     const prob = num(q.probability);
     const createdKey = dateKey(q.created_at) ?? '';
     const closedKey = dateKey(q.closed_at);
     const agg = quoteAggByOwner.get(owner) ?? emptyQuoteAgg();
     const isOpen = q.status === 'sent';
+    if (q.status === 'draft') agg.draft += 1;
     const isWon = q.status === 'closed' && q.closed_reason === 'won';
     const isLost = q.status === 'closed' && LOST.has(String(q.closed_reason ?? ''));
     const expired = Boolean(isOpen && q.valid_until && q.valid_until < todayKey);
@@ -511,7 +558,7 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
         openQuoteByCustomer.set(q.customer_id, cur);
       }
       openQuoteRows.push({
-        quoteNo: text(q.quote_no) ?? '—', musteri: text(q.musteri) ?? '—', owner: text(q.owner_name), amount, devices: num(q.total_device_count),
+        quoteNo: text(q.quote_no) ?? '—', musteri: text(q.musteri) ?? '—', owner: owner === '—' ? null : owner, amount, devices: num(q.total_device_count),
         probability: prob, status: 'open', reason: null, date: q.valid_until ?? null, expired,
       });
     }
@@ -529,6 +576,7 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
         if (saleKey.slice(0, 4) === String(year)) {
           agg.saleYtd += 1; agg.saleYtdAmount += saleAmount; agg.saleYtdDevices += saleDevices;
           if (saleKey.slice(0, 7) === monthKey) { agg.saleMonth += 1; agg.saleMonthAmount += saleAmount; }
+          if (saleKey >= quarter.start && saleKey <= quarter.end) { agg.saleQuarter += 1; agg.saleQuarterAmount += saleAmount; }
         }
       }
       if (closedKey >= from && closedKey <= to) {
@@ -547,7 +595,7 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
       const showAmount = isWon && q.sale_id && q.sale_status !== 'cancelled' ? num(q.sale_amount) : amount;
       const showDevices = isWon && q.sale_id && q.sale_status !== 'cancelled' ? num(q.sale_device_count) : num(q.total_device_count);
       closedQuoteRows.push({
-        quoteNo: text(q.quote_no) ?? '—', musteri: text(q.musteri) ?? '—', owner: text(q.owner_name), amount: showAmount, devices: showDevices,
+        quoteNo: text(q.quote_no) ?? '—', musteri: text(q.musteri) ?? '—', owner: owner === '—' ? null : owner, amount: showAmount, devices: showDevices,
         probability: prob, status: isWon ? 'won' : 'lost', reason: isWon ? null : (REASON_LABEL[String(q.closed_reason)] ?? 'Diğer'), date: closedKey, expired: false,
         saleCancelled: isWon && q.sale_status === 'cancelled',
       });
@@ -560,8 +608,9 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
   const closedQuotesShown = closedQuoteRows.filter(ownedQuote).sort((a, b) => String(b.date).localeCompare(String(a.date)));
 
   /* --- Hedefler ------------------------------------------------------------ */
-  type UserTargets = { revenue: number | null; devices: number | null; integrations: number | null };
-  const emptyTargets = (): UserTargets => ({ revenue: null, devices: null, integrations: null });
+  // Yıl hedefleri (revenue/devices/integrations eski alanlar) + v2.7: tüm kodlar yıl ve içinde bulunulan çeyrek.
+  type UserTargets = { revenue: number | null; devices: number | null; integrations: number | null; year: Partial<Record<TargetCode, number>>; quarter: Partial<Record<TargetCode, number>> };
+  const emptyTargets = (): UserTargets => ({ revenue: null, devices: null, integrations: null, year: {}, quarter: {} });
   const targetByUser = new Map<string, UserTargets>();
   let companyRevenueTarget: number | null = null;
   let companyDeviceTarget: number | null = null;
@@ -569,6 +618,7 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
   for (const row of targetRows) {
     const value = num(row.value) > 0 ? num(row.value) : null;
     if (row.scope_type === 'company') {
+      if (row.period_type !== 'year') continue;
       if (row.code === 'sales_revenue') companyRevenueTarget = value;
       if (row.code === 'device_count') companyDeviceTarget = value;
       if (row.code === 'integration_count') companyIntegrationTarget = value;
@@ -576,11 +626,24 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
     }
     if (!row.user_id) continue;
     const cur = targetByUser.get(row.user_id) ?? emptyTargets();
-    if (row.code === 'sales_revenue') cur.revenue = value;
-    if (row.code === 'device_count') cur.devices = value;
-    if (row.code === 'integration_count') cur.integrations = value;
+    const code = row.code as TargetCode;
+    if (row.period_type === 'year') {
+      if (value != null) cur.year[code] = value;
+      if (row.code === 'sales_revenue') cur.revenue = value;
+      if (row.code === 'device_count') cur.devices = value;
+      if (row.code === 'integration_count') cur.integrations = value;
+    } else if (value != null) {
+      cur.quarter[code] = value;
+    }
     targetByUser.set(row.user_id, cur);
   }
+  const quarterElapsed = quarterElapsedPct(todayKey);
+  /** Çeyrek hedefi girilmemişse yıllık / 4 (Hedefler ekranındaki not ile aynı kural). */
+  const quarterTargetOf = (t: UserTargets, code: TargetCode): { target: number | null; assumed: boolean } => {
+    if (t.quarter[code] != null) return { target: t.quarter[code]!, assumed: false };
+    if (t.year[code] != null) return { target: Math.round(t.year[code]! / 4), assumed: true };
+    return { target: null, assumed: false };
+  };
 
   const revenueBlock = (
     agg: QuoteAgg,
@@ -951,6 +1014,27 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
       recentActivities: weekActivitiesByOwner.get(owner) ?? [],
       jira,
       list: customerListSplitOf(owner),
+      goals: (() => {
+        const visits = visitsByOwner.get(owner) ?? { quarter: 0, year: 0 };
+        const conv = conversionCounts.get(normalizeName(owner)) ?? { hunterToFarmer: 0, leadToHunter: 0 };
+        const visitQ = quarterTargetOf(userTargets, 'visit_count');
+        const budgetQ = quarterTargetOf(userTargets, 'sales_revenue');
+        return {
+          quarter: { label: quarter.label, months: quarter.months, elapsedPct: quarterElapsed },
+          visitsQuarter: goalPair(visits.quarter, visitQ.target),
+          visitsQuarterAssumed: visitQ.assumed,
+          visitsYear: goalPair(visits.year, userTargets.year.visit_count ?? null),
+          budgetQuarter: goalPair(agg.saleQuarterAmount, budgetQ.target),
+          budgetQuarterAssumed: budgetQ.assumed,
+          integration: goalPair(ownerIntegration.done, userTargets.integrations),
+          hunterToFarmer: goalPair(conv.hunterToFarmer, userTargets.year.hunter_to_farmer ?? null),
+          leadToHunter: goalPair(conv.leadToHunter, userTargets.year.lead_to_hunter ?? null),
+          wonQuotes: goalPair(agg.wonYtd, userTargets.year.quotes_won_count ?? null),
+          lostQuotes: agg.lostYtd,
+          openAll: agg.open + agg.draft,
+          draft: agg.draft,
+        };
+      })(),
     };
   });
   // Portföyü, hedefi, teklifi ve bu hafta aktivitesi olmayan hesaplar boş slayt
@@ -963,6 +1047,7 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
     || row.actual.totalActivities > 0
     || row.revenue.target != null
     || row.revenue.openQuotes > 0
+    || row.goals.openAll > 0
     || row.revenue.wonYtd.count > 0)).sort((a, b) => ownerOrderCompare(a.owner, b.owner));
 
   /* --- Takım -------------------------------------------------------------- */
