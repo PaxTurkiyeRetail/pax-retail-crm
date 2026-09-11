@@ -34,17 +34,35 @@ export async function GET(req: Request) {
       .limit(1)
       .maybeSingle();
 
-    const { data: pipeline } = await admin
-      .from('organization_pipeline_states')
-      .select('active_phase_no, status, owner, partner_owner')
-      .eq('customer_id', musteriId)
-      .eq('context_key', activityContext)
+    const { data: latestWaitingParty } = await admin
+      .from('pipeline_eventleri')
+      .select('partner_owner, created_at')
+      .eq('musteri_id', musteriId)
+      .not('partner_owner', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(1)
       .maybeSingle();
 
+    const { data: pipeline } = activityContext === 'business_partner'
+      ? await admin
+        .from('organization_pipeline_states')
+        .select('active_phase_no, status, owner, partner_owner')
+        .eq('customer_id', musteriId)
+        .eq('context_key', activityContext)
+        .maybeSingle()
+      : await admin
+        .from('musteri_pipeline')
+        .select('aktif_faz_no, durum, owner, partner_owner')
+        .eq('musteri_id', musteriId)
+        .maybeSingle();
+
+    const pipelinePhaseNo = pipeline?.active_phase_no ?? pipeline?.aktif_faz_no;
+    const pipelineStatus = pipeline?.status ?? pipeline?.durum;
+
     return NextResponse.json({
-      durum: phaseStatus?.durum ?? (pipeline?.active_phase_no === fazNo ? pipeline?.status ?? null : null),
-      owner: phaseStatus?.owner ?? (pipeline?.active_phase_no === fazNo ? pipeline?.owner ?? null : null),
-      partner_owner: phaseStatus?.partner_owner ?? (pipeline?.active_phase_no === fazNo ? pipeline?.partner_owner ?? null : null),
+      durum: phaseStatus?.durum ?? (pipelinePhaseNo === fazNo ? pipelineStatus ?? null : null),
+      owner: phaseStatus?.owner ?? (pipelinePhaseNo === fazNo ? pipeline?.owner ?? null : null),
+      partner_owner: phaseStatus?.partner_owner ?? latestWaitingParty?.partner_owner ?? (pipelinePhaseNo === fazNo ? pipeline?.partner_owner ?? null : null),
     });
   } catch (e: any) {
     return NextResponse.json({ message: 'Yetkisiz' }, { status: e?.status || 401 });

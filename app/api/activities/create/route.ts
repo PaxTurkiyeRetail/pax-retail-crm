@@ -268,7 +268,7 @@ export async function POST(req: Request) {
     faz_no != null
       ? admin.from('pipeline_eventleri').select('partner_owner').eq('musteri_id', musteri_id).eq('activity_context', activity_context).eq('faz_no', faz_no).not('partner_owner', 'is', null).order('created_at', { ascending: false }).limit(1).maybeSingle()
       : Promise.resolve({ data: null }),
-    admin.from('pipeline_eventleri').select('partner_owner').eq('musteri_id', musteri_id).eq('activity_context', activity_context).not('partner_owner', 'is', null).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+    admin.from('pipeline_eventleri').select('partner_owner').eq('musteri_id', musteri_id).not('partner_owner', 'is', null).order('created_at', { ascending: false }).limit(1).maybeSingle(),
   ]);
 
   const iteration_no = Number((latestPhaseEvent as any)?.iteration_no ?? 1) || 1;
@@ -278,7 +278,7 @@ export async function POST(req: Request) {
     : (normalizeDurum(faz_durum ?? currentPipelineStatus ?? 'Devam Ediyor') ?? 'Devam Ediyor');
   const fazOwner = String((isTechnicalActivity ? technicalSnapshot?.owner : null) ?? currentFaz?.owner ?? currentPipeline?.owner ?? customer.sorumlu ?? '').trim() || null;
   const resolvedBekleyenTarafRaw = isTechnicalActivity
-    ? (technicalSnapshot?.partner_owner ?? currentPipeline?.partner_owner ?? latestPartnerFromSamePhase?.partner_owner ?? latestPartnerFromCustomer?.partner_owner ?? (phaseOptionalCustomer ? customer.sorumlu : null))
+    ? (technicalSnapshot?.partner_owner ?? latestPartnerFromSamePhase?.partner_owner ?? latestPartnerFromCustomer?.partner_owner ?? currentPipeline?.partner_owner ?? (phaseOptionalCustomer ? customer.sorumlu : null))
     : (explicitBekleyenTaraf ?? currentPipeline?.partner_owner ?? latestPartnerFromSamePhase?.partner_owner ?? latestPartnerFromCustomer?.partner_owner ?? (phaseOptionalCustomer ? customer.sorumlu : null));
   const resolvedBekleyenTaraf = resolvedBekleyenTarafRaw ? String(resolvedBekleyenTarafRaw).trim() : null;
 

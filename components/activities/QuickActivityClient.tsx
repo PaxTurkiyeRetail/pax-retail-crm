@@ -281,7 +281,11 @@ export default function QuickActivityClient() {
         const data = await res.json().catch(() => ({}));
         if (!cancelled && res.ok) {
           if (data?.durum) setFazDurum(coercePhaseStatus(data.durum));
-          if (data?.partner_owner) setBekleyenTaraf(data.partner_owner as WaitingSide);
+          if (data?.partner_owner) {
+            const latestWaitingSide = String(data.partner_owner).trim();
+            setBekleyenTaraf(latestWaitingSide as WaitingSide);
+            setWaitingSideOptions((current) => current.includes(latestWaitingSide) ? current : [...current, latestWaitingSide]);
+          }
         }
       } finally {
         if (!cancelled) setPhaseMetaLoading(false);
@@ -474,6 +478,7 @@ export default function QuickActivityClient() {
                 const nextMusteriId = e.target.value;
                 setMusteriId(nextMusteriId);
                 setContactSelection(null);
+                setBekleyenTaraf('');
                 if (!editId) {
                   const nextCustomer = customers.find(c => c.musteri_id === nextMusteriId) || null;
                   const preferredFaz = nextCustomer?.son_kalinan_faz_no ?? nextCustomer?.aktif_faz_no ?? null;
