@@ -76,30 +76,37 @@ describe('activity edits through the create endpoint', () => {
     expect(await response.json()).toEqual({ message: 'faz_no gerekli' });
   });
   it('rejects a contact belonging to another firm before writing', async () => {
+    state.integrationEnabled = true;
+    state.user.role = 'super_admin';
     const id = '11111111-1111-4111-8111-111111111111';
     state.contact = { id, customer_id: 'firm-b', is_active: true };
-    const response = await POST(request({ technical_contact_id: id }));
+    const response = await POST(request({ kanal: 'Entegrasyon Süreci', technical_contact_id: id }));
     expect(response.status).toBe(400);
     expect((await response.json()).message).toContain('aktif bir teknik yetkili');
     expect(state.writes).not.toHaveBeenCalled();
   });
   it('rejects newly selecting an inactive contact', async () => {
+    state.integrationEnabled = true;
+    state.user.role = 'super_admin';
     const id = '11111111-1111-4111-8111-111111111111';
     state.contact = { id, customer_id: 'firm-a', is_active: false };
-    expect((await (await POST(request({ technical_contact_id: id }))).json()).message).toContain('aktif bir teknik yetkili');
+    expect((await (await POST(request({ kanal: 'Entegrasyon Süreci', technical_contact_id: id }))).json()).message).toContain('aktif bir teknik yetkili');
     expect(state.writes).not.toHaveBeenCalled();
   });
   it('preserves an existing inactive contact during an authorized edit', async () => {
+    state.integrationEnabled = true;
+    state.user.role = 'super_admin';
     const id = '11111111-1111-4111-8111-111111111111';
     state.contact = { id, customer_id: 'firm-a', is_active: false };
     state.existing!.technical_contact_id = id;
-    expect(await (await POST(request({ technical_contact_id: id }))).json()).toEqual({ message: 'faz_no gerekli' });
+    expect(await (await POST(request({ kanal: 'Entegrasyon Süreci', technical_contact_id: id }))).json()).toEqual({ message: 'faz_no gerekli' });
   });
-  it('persists a valid contact on a new activity', async () => {
-    state.phaseOptional = true;
+  it('persists a valid contact on a new integration activity', async () => {
+    state.integrationEnabled = true;
+    state.user.role = 'super_admin';
     const id = '11111111-1111-4111-8111-111111111111';
     state.contact = { id, customer_id: 'firm-a', is_active: true };
-    expect((await POST(request({ activity_id: null, technical_contact_id: id }))).status).toBe(200);
+    expect((await POST(request({ activity_id: null, kanal: 'Entegrasyon Süreci', faz_no: 1, bekleyen_taraf: 'Müşteri', technical_contact_id: id }))).status).toBe(200);
     expect(state.writes).toHaveBeenCalledWith(expect.objectContaining({ technical_contact_id: id, musteri_id: 'firm-a' }));
   });
   it('does not clear an existing contact when an older client omits the field', async () => {
@@ -108,18 +115,19 @@ describe('activity edits through the create endpoint', () => {
     expect(state.writes).toHaveBeenCalledOnce();
     expect(state.writes.mock.calls[0][0]).not.toHaveProperty('technical_contact_id');
   });
-  it('clears the contact only when explicitly requested', async () => {
+  it('ignores a technical contact sent for a non-integration activity', async () => {
     state.phaseOptional = true;
     expect((await POST(request({ technical_contact_id: null }))).status).toBe(200);
-    expect(state.writes).toHaveBeenCalledWith(expect.objectContaining({ technical_contact_id: null }));
+    expect(state.writes.mock.calls[0][0]).not.toHaveProperty('technical_contact_id');
   });
-  it('allows a non-integration activity for a business-partner-only firm without integration capability', async () => {
+  it('allows a technical activity in customer context for a business-partner-only firm without integration capability', async () => {
     state.phaseOptional = true;
     state.customerType = 'business_partner';
     state.relationships = [];
-    const response = await POST(request({ activity_id: null, kanal: 'Telefon' }));
+    state.user.permissions.push('activity.technical.create');
+    const response = await POST(request({ activity_id: null, kanal: 'Teknik Online' }));
     expect(response.status).toBe(200);
-    expect(state.writes).toHaveBeenCalledWith(expect.objectContaining({ activity_context: 'business_partner' }));
+    expect(state.writes).toHaveBeenCalledWith(expect.objectContaining({ activity_context: 'customer' }));
   });
   it('still rejects an integration activity when the firm lacks integration capability', async () => {
     state.phaseOptional = true;
