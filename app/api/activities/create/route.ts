@@ -212,7 +212,7 @@ export async function POST(req: Request) {
   const relationshipKeys = new Set((relationships ?? []).map((row: any) => String(row.role_key)));
   const activity_context: 'customer' | 'business_partner' = partnerActivity || existingActivityContext === 'business_partner' || (isBusinessPartnerCustomer && !relationshipKeys.has('customer')) ? 'business_partner' : 'customer';
   const canUseIntegrationProcess = Boolean(customer.integration_enabled) || (Boolean(activity_id) && existingActivityContext === 'business_partner');
-  if (activity_context === 'business_partner' && !canUseIntegrationProcess) {
+  if (partnerActivity && !canUseIntegrationProcess) {
     return NextResponse.json({ message: 'Bu firma için Entegrasyon Süreci yeteneği açık değil.' }, { status: 400 });
   }
   if (activity_context === 'customer' && !relationshipKeys.has('customer')) {
