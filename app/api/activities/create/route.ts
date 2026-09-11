@@ -47,7 +47,6 @@ type Body = {
 
 const EMPTY_WAITING_SIDE_MESSAGE = 'Bekleyen Taraf boş olamaz. Lütfen seçim yapın; eski kayıt varsa backend fallback alacaktır.';
 const TECHNICAL_PHASE_REQUIRED_MESSAGE = 'Bu müşteri için faz bilgisi bulunamadı. Lütfen önce account ekibine bilgi veriniz; teknik aktivite girebilmek için müşterinin faz bilgisi olmalıdır.';
-const BUSINESS_PARTNER_PHASE_REQUIRED_MESSAGE = 'Bu firmanın entegrasyon süreci için faz bulunamadı. Account ekibine haber veriniz.';
 function isMeaningfulPhaseStatus(value: string | null | undefined) {
   const normalized = normalizeDurum(value as ActivityDurum);
   return Boolean(normalized && normalized !== 'Başlamadı');
@@ -205,22 +204,18 @@ export async function POST(req: Request) {
     return NextResponse.json({ message: 'Bu müşteri için aktivite oluşturma yetkiniz yok.' }, { status: 403 });
   }
 
-  const isBusinessPartnerCustomer = String(customer.customer_type ?? 'standard') === 'business_partner';
   const { data: relationships, error: relationshipError } = await admin.from('organization_roles')
     .select('role_key,is_active').eq('customer_id', musteri_id).eq('is_active', true);
   if (relationshipError) return NextResponse.json({ message: 'Firma ilişkileri kontrol edilemedi.' }, { status: 503 });
   const relationshipKeys = new Set((relationships ?? []).map((row: any) => String(row.role_key)));
-  const activity_context: 'customer' | 'business_partner' = partnerActivity || existingActivityContext === 'business_partner' || (isBusinessPartnerCustomer && !relationshipKeys.has('customer')) ? 'business_partner' : 'customer';
+  const activity_context: 'customer' | 'business_partner' = partnerActivity ? 'business_partner' : 'customer';
   const canUseIntegrationProcess = Boolean(customer.integration_enabled) || (Boolean(activity_id) && existingActivityContext === 'business_partner');
-  if (activity_context === 'business_partner' && !canUseIntegrationProcess) {
+  if (partnerActivity && !canUseIntegrationProcess) {
     return NextResponse.json({ message: 'Bu firma için Entegrasyon Süreci yeteneği açık değil.' }, { status: 400 });
-  }
-  if (activity_context === 'customer' && !relationshipKeys.has('customer')) {
-    return NextResponse.json({ message: 'Bu firmada aktif Müşteri ilişkisi yok.' }, { status: 400 });
   }
   const syncLegacyPipeline = activity_context === 'customer' || !relationshipKeys.has('customer');
   const contactPatch: { technical_contact_id?: string | null } = {};
-  if (body.technical_contact_id !== undefined) {
+  if (partnerActivity && body.technical_contact_id !== undefined) {
     const contactId = body.technical_contact_id;
     if (contactId !== null) {
       if (typeof contactId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(contactId)) {
@@ -245,7 +240,7 @@ export async function POST(req: Request) {
   if (!isTechnicalActivity && !phaseOptionalCustomer && requestedFazNo == null) return NextResponse.json({ message: 'faz_no gerekli' }, { status: 400 });
 
   if (isTechnicalActivity && !phaseOptionalCustomer && !technicalSnapshot?.faz_no) {
-    return NextResponse.json({ message: isBusinessPartnerCustomer ? BUSINESS_PARTNER_PHASE_REQUIRED_MESSAGE : TECHNICAL_PHASE_REQUIRED_MESSAGE }, { status: 400 });
+    return NextResponse.json({ message: TECHNICAL_PHASE_REQUIRED_MESSAGE }, { status: 400 });
   }
 
   const faz_no = phaseOptionalCustomer
@@ -273,7 +268,7 @@ export async function POST(req: Request) {
     faz_no != null
       ? admin.from('pipeline_eventleri').select('partner_owner').eq('musteri_id', musteri_id).eq('activity_context', activity_context).eq('faz_no', faz_no).not('partner_owner', 'is', null).order('created_at', { ascending: false }).limit(1).maybeSingle()
       : Promise.resolve({ data: null }),
-    admin.from('pipeline_eventleri').select('partner_owner').eq('musteri_id', musteri_id).eq('activity_context', activity_context).not('partner_owner', 'is', null).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+    admin.from('pipeline_eventleri').select('partner_owner').eq('musteri_id', musteri_id).not('partner_owner', 'is', null).order('created_at', { ascending: false }).limit(1).maybeSingle(),
   ]);
 
   const iteration_no = Number((latestPhaseEvent as any)?.iteration_no ?? 1) || 1;
@@ -283,7 +278,7 @@ export async function POST(req: Request) {
     : (normalizeDurum(faz_durum ?? currentPipelineStatus ?? 'Devam Ediyor') ?? 'Devam Ediyor');
   const fazOwner = String((isTechnicalActivity ? technicalSnapshot?.owner : null) ?? currentFaz?.owner ?? currentPipeline?.owner ?? customer.sorumlu ?? '').trim() || null;
   const resolvedBekleyenTarafRaw = isTechnicalActivity
-    ? (technicalSnapshot?.partner_owner ?? currentPipeline?.partner_owner ?? latestPartnerFromSamePhase?.partner_owner ?? latestPartnerFromCustomer?.partner_owner ?? (phaseOptionalCustomer ? customer.sorumlu : null))
+    ? (technicalSnapshot?.partner_owner ?? latestPartnerFromSamePhase?.partner_owner ?? latestPartnerFromCustomer?.partner_owner ?? currentPipeline?.partner_owner ?? (phaseOptionalCustomer ? customer.sorumlu : null))
     : (explicitBekleyenTaraf ?? currentPipeline?.partner_owner ?? latestPartnerFromSamePhase?.partner_owner ?? latestPartnerFromCustomer?.partner_owner ?? (phaseOptionalCustomer ? customer.sorumlu : null));
   const resolvedBekleyenTaraf = resolvedBekleyenTarafRaw ? String(resolvedBekleyenTarafRaw).trim() : null;
 

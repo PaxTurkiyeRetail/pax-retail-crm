@@ -6,6 +6,8 @@ const state = vi.hoisted(() => ({
   existing: null as Record<string, unknown> | null,
   contact: null as Record<string, unknown> | null,
   phaseOptional: false,
+  customerType: 'standard',
+  integrationEnabled: false,
   relationships: [{ role_key: 'customer', is_active: true }] as Record<string, unknown>[],
   writes: vi.fn(),
 }));
@@ -28,7 +30,7 @@ vi.mock('@/lib/pg/admin', () => ({ createPgAdminClient: () => ({
       not: () => query, order: () => query, limit: () => query,
       eq: (key: string, value: unknown) => { filters[key] = value; return query; },
       maybeSingle: async () => ({ data: table === 'musteriler'
-        ? { id: 'firm-a', owner_user_id: 'u1', pipeline_policy: state.phaseOptional ? 'phase_optional' : 'phase_required' }
+        ? { id: 'firm-a', owner_user_id: 'u1', customer_type: state.customerType, integration_enabled: state.integrationEnabled, pipeline_policy: state.phaseOptional ? 'phase_optional' : 'phase_required' }
         : table === 'customer_technical_contacts'
           ? state.contact && Object.entries(filters).every(([k, v]) => state.contact?.[k] === v) ? state.contact : null
           : state.existing && Object.entries(filters).every(([k, v]) => state.existing?.[k] === v) ? state.existing : null }),
@@ -47,7 +49,7 @@ function request(extra: Record<string, unknown> = {}) {
   return new Request('http://localhost/api/activities/create', { method: 'POST', body: JSON.stringify({ activity_id: 'activity-1', musteri_id: 'firm-a', kanal: 'Telefon', ...extra }) });
 }
 describe('activity edits through the create endpoint', () => {
-  beforeEach(() => { state.writes.mockClear(); state.phaseOptional = false; state.contact = null; state.relationships = [{ role_key: 'customer', is_active: true }]; state.user.permissions = ['activity.create', 'activity.update.own']; state.existing = { id: 'activity-1', musteri_id: 'firm-a', created_by_user_id: 'u1' }; });
+  beforeEach(() => { state.writes.mockClear(); state.phaseOptional = false; state.customerType = 'standard'; state.integrationEnabled = false; state.contact = null; state.relationships = [{ role_key: 'customer', is_active: true }]; state.user.role = 'account_manager'; state.user.permissions = ['activity.create', 'activity.update.own']; state.existing = { id: 'activity-1', musteri_id: 'firm-a', created_by_user_id: 'u1' }; });
   it('rejects an activity belonging to another firm before any writes', async () => {
     state.existing!.musteri_id = 'firm-b';
     expect((await POST(request())).status).toBe(404);
@@ -74,30 +76,37 @@ describe('activity edits through the create endpoint', () => {
     expect(await response.json()).toEqual({ message: 'faz_no gerekli' });
   });
   it('rejects a contact belonging to another firm before writing', async () => {
+    state.integrationEnabled = true;
+    state.user.role = 'super_admin';
     const id = '11111111-1111-4111-8111-111111111111';
     state.contact = { id, customer_id: 'firm-b', is_active: true };
-    const response = await POST(request({ technical_contact_id: id }));
+    const response = await POST(request({ kanal: 'Entegrasyon Süreci', technical_contact_id: id }));
     expect(response.status).toBe(400);
     expect((await response.json()).message).toContain('aktif bir teknik yetkili');
     expect(state.writes).not.toHaveBeenCalled();
   });
   it('rejects newly selecting an inactive contact', async () => {
+    state.integrationEnabled = true;
+    state.user.role = 'super_admin';
     const id = '11111111-1111-4111-8111-111111111111';
     state.contact = { id, customer_id: 'firm-a', is_active: false };
-    expect((await (await POST(request({ technical_contact_id: id }))).json()).message).toContain('aktif bir teknik yetkili');
+    expect((await (await POST(request({ kanal: 'Entegrasyon Süreci', technical_contact_id: id }))).json()).message).toContain('aktif bir teknik yetkili');
     expect(state.writes).not.toHaveBeenCalled();
   });
   it('preserves an existing inactive contact during an authorized edit', async () => {
+    state.integrationEnabled = true;
+    state.user.role = 'super_admin';
     const id = '11111111-1111-4111-8111-111111111111';
     state.contact = { id, customer_id: 'firm-a', is_active: false };
     state.existing!.technical_contact_id = id;
-    expect(await (await POST(request({ technical_contact_id: id }))).json()).toEqual({ message: 'faz_no gerekli' });
+    expect(await (await POST(request({ kanal: 'Entegrasyon Süreci', technical_contact_id: id }))).json()).toEqual({ message: 'faz_no gerekli' });
   });
-  it('persists a valid contact on a new activity', async () => {
-    state.phaseOptional = true;
+  it('persists a valid contact on a new integration activity', async () => {
+    state.integrationEnabled = true;
+    state.user.role = 'super_admin';
     const id = '11111111-1111-4111-8111-111111111111';
     state.contact = { id, customer_id: 'firm-a', is_active: true };
-    expect((await POST(request({ activity_id: null, technical_contact_id: id }))).status).toBe(200);
+    expect((await POST(request({ activity_id: null, kanal: 'Entegrasyon Süreci', faz_no: 1, bekleyen_taraf: 'Müşteri', technical_contact_id: id }))).status).toBe(200);
     expect(state.writes).toHaveBeenCalledWith(expect.objectContaining({ technical_contact_id: id, musteri_id: 'firm-a' }));
   });
   it('does not clear an existing contact when an older client omits the field', async () => {
@@ -106,9 +115,28 @@ describe('activity edits through the create endpoint', () => {
     expect(state.writes).toHaveBeenCalledOnce();
     expect(state.writes.mock.calls[0][0]).not.toHaveProperty('technical_contact_id');
   });
-  it('clears the contact only when explicitly requested', async () => {
+  it('ignores a technical contact sent for a non-integration activity', async () => {
     state.phaseOptional = true;
     expect((await POST(request({ technical_contact_id: null }))).status).toBe(200);
-    expect(state.writes).toHaveBeenCalledWith(expect.objectContaining({ technical_contact_id: null }));
+    expect(state.writes.mock.calls[0][0]).not.toHaveProperty('technical_contact_id');
+  });
+  it('allows a technical activity in customer context for a business-partner-only firm without integration capability', async () => {
+    state.phaseOptional = true;
+    state.customerType = 'business_partner';
+    state.relationships = [];
+    state.user.permissions.push('activity.technical.create');
+    const response = await POST(request({ activity_id: null, kanal: 'Teknik Online' }));
+    expect(response.status).toBe(200);
+    expect(state.writes).toHaveBeenCalledWith(expect.objectContaining({ activity_context: 'customer' }));
+  });
+  it('still rejects an integration activity when the firm lacks integration capability', async () => {
+    state.phaseOptional = true;
+    state.customerType = 'business_partner';
+    state.relationships = [];
+    state.user.role = 'super_admin';
+    const response = await POST(request({ activity_id: null, kanal: 'Entegrasyon Süreci' }));
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ message: 'Bu firma için Entegrasyon Süreci yeteneği açık değil.' });
+    expect(state.writes).not.toHaveBeenCalled();
   });
 });

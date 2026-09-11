@@ -257,9 +257,9 @@ export default function QuickActivityClient() {
     }
   }, [isTechnicalActivity, selectedCustomer]);
 
-  const isBusinessPartnerCustomer = isPartnerActivityType || (Boolean(editId) && originalActivityContext === 'business_partner') || Boolean((selectedCustomer?.is_business_partner || selectedCustomer?.has_business_partner_role) && !selectedCustomer?.has_customer_role);
+  const usesBusinessPartnerContext = isPartnerActivityType;
   const phaseOptionalCustomer = !isPartnerActivityType && isPhaseOptionalCustomer(selectedCustomer);
-  const phaseOptions = isBusinessPartnerCustomer ? partnerFazlar : fazlar;
+  const phaseOptions = usesBusinessPartnerContext ? partnerFazlar : fazlar;
   const phaseOptionalTechnicalCustomer = isTechnicalActivity && phaseOptionalCustomer;
 
   useEffect(() => {
@@ -276,12 +276,16 @@ export default function QuickActivityClient() {
     const loadPhaseMeta = async () => {
       setPhaseMetaLoading(true);
       try {
-        const activityContext = isBusinessPartnerCustomer ? 'business_partner' : 'customer';
+        const activityContext = usesBusinessPartnerContext ? 'business_partner' : 'customer';
         const res = await fetch(`/api/activities/meta?musteri_id=${encodeURIComponent(musteriId)}&faz_no=${encodeURIComponent(String(fazNo))}&activity_context=${activityContext}`, { cache: 'no-store' });
         const data = await res.json().catch(() => ({}));
         if (!cancelled && res.ok) {
           if (data?.durum) setFazDurum(coercePhaseStatus(data.durum));
-          if (data?.partner_owner) setBekleyenTaraf(data.partner_owner as WaitingSide);
+          if (data?.partner_owner) {
+            const latestWaitingSide = String(data.partner_owner).trim();
+            setBekleyenTaraf(latestWaitingSide as WaitingSide);
+            setWaitingSideOptions((current) => current.includes(latestWaitingSide) ? current : [...current, latestWaitingSide]);
+          }
         }
       } finally {
         if (!cancelled) setPhaseMetaLoading(false);
@@ -291,7 +295,7 @@ export default function QuickActivityClient() {
     return () => {
       cancelled = true;
     };
-  }, [musteriId, fazNo, isBusinessPartnerCustomer]);
+  }, [musteriId, fazNo, usesBusinessPartnerContext]);
 
   useEffect(() => {
     if (!editId) {
@@ -376,7 +380,7 @@ export default function QuickActivityClient() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (technicalMissingPhase) {
-      setError(isBusinessPartnerCustomer ? 'Bu firmanın entegrasyon süreci için faz bulunamadı. Account ekibine haber veriniz.' : TECHNICAL_PHASE_REQUIRED_MESSAGE);
+      setError(TECHNICAL_PHASE_REQUIRED_MESSAGE);
       return;
     }
     if (!isValid || saving) return;
@@ -388,8 +392,8 @@ export default function QuickActivityClient() {
       const payload = {
         ...(editId ? { activity_id: editId } : {}),
         musteri_id: musteriId,
-        activity_context: isBusinessPartnerCustomer ? 'business_partner' : 'customer',
-        ...(contactSelection?.customerId === musteriId ? { technical_contact_id: contactSelection.id } : {}),
+        activity_context: usesBusinessPartnerContext ? 'business_partner' : 'customer',
+        ...(isPartnerActivityType && contactSelection?.customerId === musteriId ? { technical_contact_id: contactSelection.id } : {}),
         faz_no: fazNo,
         kanal: aktiviteTipi,
         faz_durum: fazDurum,
@@ -474,6 +478,7 @@ export default function QuickActivityClient() {
                 const nextMusteriId = e.target.value;
                 setMusteriId(nextMusteriId);
                 setContactSelection(null);
+                setBekleyenTaraf('');
                 if (!editId) {
                   const nextCustomer = customers.find(c => c.musteri_id === nextMusteriId) || null;
                   const preferredFaz = nextCustomer?.son_kalinan_faz_no ?? nextCustomer?.aktif_faz_no ?? null;
@@ -503,7 +508,7 @@ export default function QuickActivityClient() {
           </div>
 
           <div>
-            {isBusinessPartnerCustomer && musteriId && <TechnicalContactSelect
+            {isPartnerActivityType && musteriId && <TechnicalContactSelect
               key={musteriId} customerId={musteriId}
               value={contactSelection?.customerId === musteriId ? contactSelection.id : originalContact?.customerId === musteriId ? originalContact.id : null}
               originalId={originalContact?.customerId === musteriId ? originalContact.id : null}
@@ -542,7 +547,7 @@ export default function QuickActivityClient() {
 
           {technicalMissingPhase && (
             <div style={{ padding: 14, background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 'var(--radius-md)', color: '#9a3412', fontSize: 14 }}>
-              {isBusinessPartnerCustomer ? 'Bu firmanın entegrasyon süreci için faz bulunamadı. Account ekibine haber veriniz.' : TECHNICAL_PHASE_REQUIRED_MESSAGE}
+              {TECHNICAL_PHASE_REQUIRED_MESSAGE}
             </div>
           )}
 
