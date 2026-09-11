@@ -261,6 +261,8 @@ function routeMeta(pathname: string) {
     ["/crm/customers", "Operasyon", "Müşteriler"],
     ["/crm/sales-radar", "Operasyon", "Satış Radarı"],
     ["/crm/customer-status-guide", "Operasyon", "Müşteri Durum Rehberi"],
+    // Menüde yoktur: Canlı Ekran kişi slaydındaki "Hareketsiz Firma" sayacından yeni sekmede açılır.
+    ["/crm/hareketsiz", "Operasyon", "Hareketsiz Firmalar"],
     ["/crm/nova-core", "Strateji", "Nova Core"],
     ["/crm/sales-process", "Strateji", "Satış Süreci"],
     ["/crm/me", "Profil", "Hesabım"],

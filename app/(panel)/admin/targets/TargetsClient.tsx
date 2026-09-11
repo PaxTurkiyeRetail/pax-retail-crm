@@ -16,7 +16,8 @@ import {
 import '@/styles/targets.css';
 
 // Hedefler — Yönetim › Hedefler (Çağdaş Bey, 10.09.2026).
-//   * Kişi kartı: haftalık aktivite · yıl hedefleri · çeyrek hedefleri (bütçe, ziyaret).
+//   * Kişi kartı: haftalık aktivite · yıl hedefleri · çeyrek hedefleri (bütçe, ziyaret, entegrasyon).
+//   * v2.9 (11.09): entegrasyon çeyreğe bölünür; kapsanan firma ve ortalama temas / firma eklendi.
 //   * Boş bırakılan alan = hedef yok (kayıt silinir); çeyrek boşsa Canlı Ekran yıllık/4'ü varsayar.
 //   * YIL ↔ ÇEYREK canlı bağlıdır (Sinan, 10.09): yıllık yazılınca 4 çeyreğe bölünür (kalan son
 //     çeyreklere eklenir: 101 → 25·25·25·26); bir çeyrek elle değişince yıllık = çeyrek toplamı
@@ -165,8 +166,9 @@ export default function TargetsClient() {
           <h1>Hedefler · {year}</h1>
           <p>
             Satış ekibinin kişi bazlı hedefleri. Canlı Ekran kişi slaytındaki donut&apos;lar buradan beslenir:
-            <b> haftalık aktivite</b>, <b>çeyrek ve yıl ziyaret</b>, <b>yıl ve çeyrek bütçe</b>, <b>entegrasyon</b>,
-            <b> Hunter → Farmer</b> ve <b>Lead → Hunter</b> çevirme, <b>kazanılan teklif</b>.
+            <b> haftalık aktivite</b>, <b>çeyrek ve yıl ziyaret</b>, <b>yıl ve çeyrek bütçe</b>,
+            <b> çeyrek ve yıl entegrasyon</b>, <b>Hunter → Farmer</b> ve <b>Lead → Hunter</b> çevirme,
+            <b> kazanılan teklif</b>, <b>kapsanan firma</b> ve <b>ortalama temas</b>.
             Boş bırakılan alan &quot;hedef yok&quot; demektir. Yıllık hedef çeyreklere otomatik bölünür; bir çeyreği elle
             değiştirirsen yıllık toplam ona göre güncellenir.
           </p>

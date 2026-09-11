@@ -192,6 +192,139 @@ export async function salesSummary(year: number) {
   return rows[0] as { sale_count: number; amount: number; devices: number };
 }
 
+
+/* ------------------------------------------------------------------------ */
+/* Satış kalemleri (crm_sale_items · migration 030)                          */
+/* ------------------------------------------------------------------------ */
+
+export type SaleItemInput = {
+  product_id: string | null;
+  product_code: string;
+  product_name?: string | null;
+  product_type?: string | null;
+  is_recurring?: boolean;
+  quantity: number;
+  sale_type?: 'sale' | 'rental';
+  unit_price?: number;
+  total_price?: number;
+  rental_monthly_price?: number | null;
+  rental_start_date?: string | null;
+  rental_end_date?: string | null;
+};
+
+/**
+ * Bir satışın kalemlerini (fatura satırları) yazar — önce varsa siler, sonra yeniden kurar.
+ * Çağdaş Bey, 11.09: "Bunun altta kalemler olmalı… basınca ne sattığını göreyim."
+ * Canlı Ekran'ın model bazlı cihaz kırılımı BU tablodan okunur; kalem yazılmayan satış
+ * kırılımda görünmez (toplamda "kalemsiz" olarak sayılır).
+ */
+export async function replaceSaleItems(saleId: string, items: SaleItemInput[]) {
+  await db.query('delete from public.crm_sale_items where sale_id = $1', [saleId]);
+  let lineNo = 0;
+  for (const item of items) {
+    const quantity = Math.floor(Number(item.quantity ?? 0));
+    if (!Number.isFinite(quantity) || quantity <= 0) continue;
+    lineNo += 1;
+    await db.query(
+      `insert into public.crm_sale_items
+         (sale_id, line_no, product_id, product_code, product_name, product_type, is_recurring,
+          quantity, sale_type, unit_price, total_price, rental_monthly_price, rental_start_date, rental_end_date)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::date, $14::date)`,
+      [
+        saleId, lineNo, item.product_id, String(item.product_code ?? '').trim() || 'BILINMIYOR',
+        item.product_name ?? null, item.product_type ?? 'device', Boolean(item.is_recurring),
+        quantity, item.sale_type === 'rental' ? 'rental' : 'sale',
+        round2(Number(item.unit_price ?? 0)), round2(Number(item.total_price ?? 0)),
+        item.rental_monthly_price == null ? null : round2(Number(item.rental_monthly_price)),
+        item.rental_start_date ?? null, item.rental_end_date ?? null,
+      ],
+    );
+  }
+  return lineNo;
+}
+
+/** Teklif kazanılınca açılan satışın kalemleri: teklifin kalemlerinin KOPYASI (teklif donmuş belgedir). */
+export async function copySaleItemsFromQuote(saleId: string, quoteId: string) {
+  const { rows } = await db.query<SaleItemInput>(
+    `select qi.product_id::text as product_id,
+            coalesce(nullif(trim(p.code), ''), 'BILINMIYOR') as product_code,
+            coalesce(nullif(trim(p.name), ''), nullif(trim(p.code), '')) as product_name,
+            coalesce(nullif(trim(qi.product_type), ''), 'device') as product_type,
+            coalesce(qi.is_recurring, false) as is_recurring,
+            qi.quantity,
+            case when qi.sale_type = 'rental' then 'rental' else 'sale' end as sale_type,
+            coalesce(qi.unit_price, 0)::float8 as unit_price,
+            coalesce(qi.total_price, 0)::float8 as total_price,
+            qi.rental_monthly_price::float8 as rental_monthly_price,
+            qi.rental_start_date::text as rental_start_date,
+            qi.rental_end_date::text as rental_end_date
+     from public.quote_items qi
+     left join public.quote_products p on p.id = qi.product_id
+     where qi.quote_id = $1
+     order by qi.line_no, qi.id`,
+    [quoteId],
+  );
+  return replaceSaleItems(saleId, rows);
+}
+
+/**
+ * Satış düzenlenince (cihaz adedi değişince) kalemlerin adetleri ORANTILI ölçeklenir —
+ * `repriceFromCatalog` tutarı nasıl ölçekliyorsa kalemler de öyle. Kalem yoksa hiçbir şey yapılmaz.
+ * Aylık hizmet kalemleri (is_recurring) cihaz sayılmadığı için dokunulmaz.
+ */
+export async function rescaleSaleItems(saleId: string, newDeviceCount: number) {
+  const { rows } = await db.query<{ id: string; quantity: number; unit_price: number; is_device: boolean }>(
+    `select i.id::text as id, i.quantity, i.unit_price::float8 as unit_price,
+            public.crm_sale_item_is_device(i.product_type, i.is_recurring) as is_device
+     from public.crm_sale_items i where i.sale_id = $1 order by i.line_no`,
+    [saleId],
+  );
+  const deviceRows = rows.filter((row) => row.is_device);
+  const current = deviceRows.reduce((sum, row) => sum + Number(row.quantity ?? 0), 0);
+  if (!deviceRows.length || current === newDeviceCount) return false;
+  let left = Math.max(0, Math.floor(newDeviceCount));
+  for (let index = 0; index < deviceRows.length; index += 1) {
+    const row = deviceRows[index];
+    const last = index === deviceRows.length - 1;
+    const share = current > 0 ? Number(row.quantity ?? 0) / current : 1 / deviceRows.length;
+    const quantity = last ? left : Math.min(left, Math.max(0, Math.round(newDeviceCount * share)));
+    left -= quantity;
+    if (quantity <= 0) {
+      await db.query('delete from public.crm_sale_items where id = $1', [row.id]);
+      continue;
+    }
+    await db.query(
+      'update public.crm_sale_items set quantity = $2, total_price = $3 where id = $1',
+      [row.id, quantity, round2(Number(row.unit_price ?? 0) * quantity)],
+    );
+  }
+  return true;
+}
+
+/** Satışın kalem tutarları toplamı — doğrudan satışta başlık tutarı buradan tazelenir. */
+export async function sumSaleItems(saleId: string): Promise<number | null> {
+  const { rows } = await db.query<{ total: number | null }>(
+    'select sum(total_price)::float8 as total from public.crm_sale_items where sale_id = $1',
+    [saleId],
+  );
+  const total = rows[0]?.total;
+  return total == null ? null : round2(Number(total));
+}
+
+/** Satışın kalemleri (satış detayı ve model kırılımı). */
+export async function listSaleItems(saleId: string) {
+  const { rows } = await db.query(
+    `select i.id::text as id, i.line_no, i.product_id::text as product_id, i.product_code, i.product_name,
+            i.product_type, i.is_recurring, i.quantity, i.sale_type,
+            i.unit_price::float8 as unit_price, i.total_price::float8 as total_price,
+            i.rental_monthly_price::float8 as rental_monthly_price,
+            i.rental_start_date::text as rental_start_date, i.rental_end_date::text as rental_end_date
+     from public.crm_sale_items i where i.sale_id = $1 order by i.line_no`,
+    [saleId],
+  );
+  return rows;
+}
+
 /* ------------------------------------------------------------------------ */
 /* Doğrudan (teklifsiz) satış — Sinan/Furkan, 10.09; migration 027           */
 /* ------------------------------------------------------------------------ */
@@ -273,5 +406,23 @@ export async function createDirectSale(actor: DirectSaleActor, input: DirectSale
       manual ? 'manual' : 'catalog', input.salesChannel?.trim() || null, input.note?.trim() || null,
     ],
   );
-  return { id: rows[0]?.id ?? null, amount, deviceCount: resolved.totalDeviceCount, saleType, priceSource: manual ? 'manual' : 'catalog' };
+  const saleId = rows[0]?.id ?? null;
+  // Fatura satırları (030): model bazlı cihaz kırılımı ve satış detayı buradan okunur.
+  if (saleId) {
+    await replaceSaleItems(saleId, resolved.items.map((line) => ({
+      product_id: line.product_id,
+      product_code: line.product_code,
+      product_name: line.product_name,
+      product_type: line.product_type,
+      is_recurring: line.is_recurring,
+      quantity: line.quantity,
+      sale_type: line.sale_type === 'rental' ? 'rental' : 'sale',
+      unit_price: line.unit_price,
+      total_price: line.total_price,
+      rental_monthly_price: line.rental_monthly_price,
+      rental_start_date: line.rental_start_date,
+      rental_end_date: line.rental_end_date,
+    })));
+  }
+  return { id: saleId, amount, deviceCount: resolved.totalDeviceCount, saleType, priceSource: manual ? 'manual' : 'catalog' };
 }

@@ -30,7 +30,9 @@ export type TargetCode =
   | 'visit_count'
   | 'hunter_to_farmer'
   | 'lead_to_hunter'
-  | 'quotes_won_count';
+  | 'quotes_won_count'
+  | 'covered_customers'
+  | 'contacts_per_customer';
 
 export type TargetPeriod = 'year' | 'quarter';
 
@@ -40,18 +42,20 @@ export type TargetDefinition = {
   /** Kısa açıklama (Hedefler ekranı). */
   hint: string;
   unit: 'money' | 'count';
-  /** Girilebilen dönemler: yıl her zaman; çeyrek yalnız bütçe ve ziyaret (toplantı kararı). */
+  /** Girilebilen dönemler: yıl her zaman; çeyrek bütçe, ziyaret ve entegrasyon (11.09 toplantısı). */
   periods: readonly TargetPeriod[];
 };
 
 export const TARGET_DEFINITIONS: readonly TargetDefinition[] = [
   { code: 'sales_revenue', label: 'Bütçe (ciro, USD)', hint: 'Satış kaydına dönen tekliflerin tutarı (crm_sales)', unit: 'money', periods: ['year', 'quarter'] },
   { code: 'visit_count', label: 'Ziyaret', hint: 'Fiziki + online satış görüşmesi sayısı', unit: 'count', periods: ['year', 'quarter'] },
-  { code: 'integration_count', label: 'Entegrasyon', hint: 'KasaPOS entegrasyonu tamamlanan (faz ≥ 9) firma', unit: 'count', periods: ['year'] },
+  { code: 'integration_count', label: 'Entegrasyon', hint: 'KasaPOS entegrasyonu tamamlanan firma (gerçekleşen sayaç fatura verisi bağlanınca açılır)', unit: 'count', periods: ['year', 'quarter'] },
   { code: 'device_count', label: 'Cihaz', hint: 'Satışa dönen cihaz adedi', unit: 'count', periods: ['year'] },
   { code: 'hunter_to_farmer', label: 'Hunter → Farmer', hint: 'Müşteri Listesi’nde H’den F’ye taşınan firma', unit: 'count', periods: ['year'] },
   { code: 'lead_to_hunter', label: 'Lead → Hunter', hint: 'Müşteri Listesi’nde L’den H’ye taşınan firma', unit: 'count', periods: ['year'] },
   { code: 'quotes_won_count', label: 'Kazanılan teklif', hint: 'Yıl içinde kazanılan (closed · won) teklif adedi', unit: 'count', periods: ['year'] },
+  { code: 'covered_customers', label: 'Kapsanan firma', hint: 'Yıl içinde en az bir aktivite girilen tekil firma', unit: 'count', periods: ['year'] },
+  { code: 'contacts_per_customer', label: 'Ortalama temas / firma', hint: 'Yıl içi aktivite / kapsanan firma', unit: 'count', periods: ['year'] },
 ];
 
 export const TARGET_CODES: readonly TargetCode[] = TARGET_DEFINITIONS.map((d) => d.code);

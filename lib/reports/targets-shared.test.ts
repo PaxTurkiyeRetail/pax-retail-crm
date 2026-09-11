@@ -66,12 +66,16 @@ describe('hedefler v2 — goalPair ve kod listeleri', () => {
     expect(goalPair(9, 30)).toEqual({ actual: 9, target: 30, pct: 30 });
     expect(goalPair(117000, 100000).pct).toBe(117);
   });
-  it('çeyrek girilebilen kodlar yalnız bütçe ve ziyaret; 7 tanım', () => {
-    expect(QUARTERLY_TARGET_CODES).toEqual(['sales_revenue', 'visit_count']);
-    expect(TARGET_CODES).toHaveLength(7);
+  // v2.9 (Çağdaş Bey, 11.09): "İntegrasyon aleti de aynı şekilde çeyreklere bölünecek."
+  // Yeni yıllık hedefler: kapsanan firma ve ortalama temas / firma (Sinan'ın KPI listesi).
+  it('çeyrek girilebilen kodlar: bütçe, ziyaret, entegrasyon; 9 tanım', () => {
+    expect(QUARTERLY_TARGET_CODES).toEqual(['sales_revenue', 'visit_count', 'integration_count']);
+    expect(TARGET_CODES).toHaveLength(9);
     expect(TARGET_CODES).toContain('hunter_to_farmer');
     expect(TARGET_CODES).toContain('lead_to_hunter');
     expect(TARGET_CODES).toContain('quotes_won_count');
+    expect(TARGET_CODES).toContain('covered_customers');
+    expect(TARGET_CODES).toContain('contacts_per_customer');
   });
 });
 

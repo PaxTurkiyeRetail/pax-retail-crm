@@ -79,14 +79,18 @@ export const LIVE_BOARD_RULES = {
   hotPhases: [10, 11, 12, 13, 14, 24] as readonly number[],
   /** TV'de listelenen maksimum fırsat sayısı. */
   hotTeamLimit: 20,
-  /** Kişi slaydı: en yakın hedef tarihli 5 fırsat, sayfalanmaz (Çağdaş Bey, 04.09). */
-  hotOwnerLimit: 5,
   /** Entegrasyon firması bu fazdan itibaren "entegre" sayılır (Entegrasyon Raporu yeşil eşiği). */
   integrationDonePhase: 9,
   /** Açık teklif bu kadar gün dokunulmadıysa "pasif" sayılır (Çağdaş Bey, 07.09: 30 gün cevap yoksa). */
   quotePassiveDays: 30,
   /** Bir sorumlunun üzerinde bu kadar ve fazla firma varsa "portföy yükü" uyarısı (Çağdaş Bey, 07.09: 50–60'ı geçmesin). */
   portfolioLoadLimit: 60,
+  /**
+   * Kişi slaydı "Hareketsiz" (Çağdaş Bey, 11.09): Müşteri Listesi'nde **Hunter ya da Farmer**
+   * olup bu kadar gündür üzerinde işlem olmayan firma. Eski tanım (aktif fırsatlardan 7 gün
+   * dokunulmayanlar) kalktı — "15 gündür üzerinde işlem olmayan firma sayısı".
+   */
+  inactiveOwnerDays: 15,
   pocLimit: 20,
   alertLimit: 6,
   recentActivities: 8,
@@ -275,10 +279,8 @@ export type LiveOwner = {
   achievementPct: number | null;
   todayActivities: number;
   quotes: { weekCount: number; weekAmount: number; monthCount: number; monthAmount: number };
-  /** En yakın hedef tarihli 5 fırsat (LIVE_BOARD_RULES.hotOwnerLimit). */
-  hot: HotItem[];
-  /** Kriterlere uyan toplam fırsat (5'ten fazlası "+N fırsat daha" notuyla belirtilir). */
-  hotTotal: number;
+  // v2.9 (11.09): kişi bazlı Hot Pipeline listesi KALKTI — Çağdaş Bey: "kişi bazında pipeline
+  // istemiyoruz… Pipeline diye bir şey yok." Takım "Hot Pipeline" ekranı (payload.team.hot) durur.
   recentActivities: LiveActivity[];
   jira: { open: number; customerWaiting: number } | null;
   /**
@@ -289,6 +291,16 @@ export type LiveOwner = {
   list: CustomerListSplit | null;
   /** v2.7 (Çağdaş Bey, 10.09): küçük donut'lar + Teklif kutusu hedefleri (Hedefler ekranı, migration 026). */
   goals: OwnerGoals;
+  /** v2.9: Satış Çıktısı bloğu — model bazlı cihaz kırılımı (satış / kiralama). */
+  devices: OwnerDevices;
+  /** v2.9: Account Performansı bloğu — kapsanan firma ve ortalama temas. */
+  coverage: OwnerCoverage;
+  /** v2.9: Portföy Sağlığı bloğu — 15 gündür işlem görmeyen Hunter/Farmer firma sayısı. */
+  inactive: OwnerInactive;
+  /** v2.9: Teklif kutusu — açık / kazanılan / kaybedilen, her biri adet + tutar. */
+  quoteBox: OwnerQuoteBox;
+  /** v2.9: Kesilen fatura adedi (aktif satış kaydı sayısı, YTD). */
+  invoices: number;
 };
 
 /**
@@ -311,6 +323,14 @@ export type OwnerGoals = {
   budgetQuarter: GoalPair;
   budgetQuarterAssumed: boolean;
   integration: GoalPair;
+  /** Çeyrek entegrasyon hedefi (Çağdaş Bey, 11.09: "entegrasyon da çeyreklere bölünecek"). */
+  integrationQuarter: GoalPair;
+  integrationQuarterAssumed: boolean;
+  /**
+   * Gerçekleşen entegrasyon sayacı henüz bağlanmadı (Furkan'ın fatura kalemi bekleniyor;
+   * Sinan 11.09: "boş bırak, veri gelince doldur"). true iken ekran sayı yerine not gösterir.
+   */
+  integrationPending: boolean;
   hunterToFarmer: GoalPair;
   leadToHunter: GoalPair;
   wonQuotes: GoalPair;
@@ -321,6 +341,47 @@ export type OwnerGoals = {
 
 /** Kişinin Müşteri Listesi sayıları: H Hunter · F Farmer · L Lead · K Kasa Firması. */
 export type CustomerListSplit = { hunter: number; farmer: number; lead: number; kasa: number; total: number };
+
+/* --- Kişi slaytı v2.9 (Çağdaş Bey, 11.09.2026) ---------------------------- */
+
+/** Model bazlı cihaz kırılımı (crm_sale_items) — satılan / kiralanan ayrı. */
+export type DeviceModelRow = { code: string; sold: number; rental: number; total: number };
+
+/**
+ * "Toplam / satılan / kiralanan cihaz adedi" + model kırılımı.
+ * Kaynak: aktif satışların kalemleri (migration 030). `unlinked`, kalemi girilmemiş eski
+ * satışların cihaz adedi — model kırılımında görünmez, toplamda sayılır (sayı kaybolmasın).
+ */
+export type OwnerDevices = {
+  total: number;
+  sold: number;
+  rental: number;
+  byModel: DeviceModelRow[];
+  unlinked: number;
+};
+
+/**
+ * Portföy kapsama (Sinan'ın KPI listesi, 11.09): yıl içinde dokunulan firma ve firma başına temas.
+ * "Kapsanan firma" = yıl içinde en az bir aktivite girilen tekil firma (aktiviteyi giren kişiye göre).
+ */
+export type OwnerCoverage = {
+  covered: GoalPair;
+  /** Aktivite / kapsanan firma — bir ondalık basamak (ör. 4.6). */
+  contactsPer: GoalPair;
+  activitiesYear: number;
+};
+
+/**
+ * Hareketsiz firmalar (Çağdaş Bey, 11.09): Müşteri Listesi'nde Hunter/Farmer olup
+ * `LIVE_BOARD_RULES.inactiveOwnerDays` gündür üzerinde işlem olmayanlar. Sayıya basınca
+ * liste YENİ SEKMEDE açılır (/crm/hareketsiz).
+ * `unmatched`: listedeki adı CRM künyesinde bulunamayan firma (aktivite bilinmiyor, sayıya girmez).
+ */
+export type OwnerInactive = { count: number; days: number; unmatched: number };
+
+/** Teklif kutusu: adet + tutar yan yana (Çağdaş Bey: "yanına yaz açık tekliflerin tutarı"). */
+export type CountAmount = { count: number; amount: number };
+export type OwnerQuoteBox = { open: CountAmount; won: CountAmount; lost: CountAmount };
 
 /** Jira · Retail Support özeti (haftalık pivot + firma kırılımı). */
 export type JiraCompanyRow = {
@@ -527,9 +588,9 @@ export type LayoutMetrics = {
   compact: boolean;
   bandH: number;        // kişi slaydı ticari bant
   channelsH: number;    // (eski) kanal kırılımı + huni kartı — Pulse'ta kullanılmıyor, kişi slaytından 10.09'da kalktı
-  donutRowH: number;    // kişi slaydı: 3 büyük donut kartının satır yüksekliği (10.09)
+  donutRowH: number;    // kişi slaydı: 4 büyük donut kartının satır yüksekliği (11.09 · v2.9)
   hotH: number;         // Hot Pipeline kartı (kişi)
-  actH: number;         // Son Hareketler satırı
+  actH: number;         // kişi slaydı Son Hareketler satırı (v2.9: tek satırlık küçük kutu)
   leaderH: number;      // Kim hedefinde satırı
   revenueH: number;     // Business Pulse ciro kartı
   rowH: number;         // tablo satırı (Hot / POC)
@@ -547,13 +608,13 @@ export type LayoutMetrics = {
 // yüksekliklere sığar. Değiştirirsen harness'ı koştur — kırpılan 0 olmalı.
 export const BASE_METRICS: LayoutMetrics = {
   compact: false,
-  bandH: 84, channelsH: 330, donutRowH: 344, hotH: 106, actH: 92, leaderH: 124, revenueH: 372,
+  bandH: 84, channelsH: 330, donutRowH: 412, hotH: 106, actH: 38, leaderH: 124, revenueH: 372,
   rowH: 82, quoteRowH: 72, ownerQuoteRowH: 60, alertH: 82, kpiRowH: 124, chipsH: 76,
   cardChrome: 68, gap: 14, listGap: 8,
 };
 export const COMPACT_METRICS: LayoutMetrics = {
   compact: true,
-  bandH: 76, channelsH: 306, donutRowH: 288, hotH: 100, actH: 90, leaderH: 112, revenueH: 330,
+  bandH: 76, channelsH: 306, donutRowH: 272, hotH: 100, actH: 34, leaderH: 112, revenueH: 330,
   rowH: 74, quoteRowH: 66, ownerQuoteRowH: 60, alertH: 74, kpiRowH: 110, chipsH: 68,
   cardChrome: 62, gap: 12, listGap: 6,
 };
@@ -581,6 +642,8 @@ export type Capacities = {
   alertItems: number; // uyarı grubu başına satır
   alertGroups: number; // sayfa başına uyarı paneli (kolon)
   portfolioRows: number; // Portföy ekranındaki bar/açıklama satırı
+  /** Kişi slaydı model kırılımında gösterilen satır (fazlası "+N model" satırında toplanır). */
+  ownerModels: number;
   jiraRows: number;      // Jira ekranı firma tablosu satırı
   /** Business Pulse tek ekrana sığmıyor: ciro+sıralama / aktivite+dönüşüm olarak ikiye böl. */
   pulseSplit: boolean;
@@ -592,8 +655,10 @@ export function capacities(bodyHeight: number, bodyWidth = 1920): Capacities {
   const H = Math.max(360, bodyHeight || 900);
   const colH = H - m.bandH - m.gap;                               // kişi slaydı kolonları
   const hot = rowsThatFit(colH - m.cardChrome, m.hotH, m.listGap);
-  // Kişi slaydı (10.09): bant + 3 donut satırı + alt satır (Teklif & Pipeline | Son Hareketler).
-  const recent = rowsThatFit(colH - m.donutRowH - m.gap - m.cardChrome, m.actH, m.listGap);
+  // Kişi slaydı (11.09 · v2.9): bant + 4 donut satırı + alt satır
+  // (Son Hareketler | Satış Çıktısı | Portföy Sağlığı). Son Hareketler kutusu küçüldü:
+  // Çağdaş Bey "tek kutu içerisinde 1, 2, 3, 4, 5 gibi" dedi → en fazla 5 satır gösterilir.
+  const recent = Math.min(5, rowsThatFit(colH - m.donutRowH - m.gap - m.cardChrome, m.actH, m.listGap));
   const leader = rowsThatFit(H - m.cardChrome, m.leaderH, 10);
   const tableRows = rowsThatFit(H - m.cardChrome - 28, m.rowH, 6);   // 28: tablo başlık satırı
   // Teklifler: KPI şeridinin altında iki kolon; sol kolonda açık teklifler ve
@@ -611,7 +676,11 @@ export function capacities(bodyHeight: number, bodyWidth = 1920): Capacities {
   const pulseSplit = H < 690;
   // Jira: KPI şeridi altında firma tablosu (kompakt satır) — 28: tablo başlığı.
   const jiraRows = rowsThatFit(H - m.kpiRowH - m.gap - m.cardChrome - 28, m.ownerQuoteRowH, 6);
-  return { hot, recent, leader, tableRows, openQuotes, closedQuotes: Math.max(1, closedQuotes), alertItems, alertGroups, portfolioRows, jiraRows, pulseSplit };
+  // Kişi slaydı "Satış Çıktısı" kartında model listesine kalan alan ölçüldü (Playwright, v2.9):
+  // 1920×1080'de 140 px (7 satır sığar), 1366×768 kompaktta 65 px (3 satır). Gösterilen satır +
+  // "+N model" satırı toplamı bu sınırın altında kalmalı — aşarsa liste kırpılır.
+  const ownerModels = m.compact ? 2 : 6;
+  return { hot, recent, leader, tableRows, openQuotes, closedQuotes: Math.max(1, closedQuotes), alertItems, alertGroups, portfolioRows, jiraRows, ownerModels, pulseSplit };
 }
 
 /**

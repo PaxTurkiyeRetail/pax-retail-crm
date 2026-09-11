@@ -4,6 +4,7 @@ import { assertOwnedResourceAccess, requireCrmAccessOrThrow } from '@/lib/authz'
 import { tryRecordAuditEvent } from '@/lib/audit';
 import { createPgAdminClient } from '@/lib/pg/admin';
 import { addDaysToIsoDate, buildQuoteSummaryText, createQuoteActivity, getQuoteDetailById, getTurkeyTodayIso, normalizeDateOnly } from '@/lib/quotes/service';
+import { copySaleItemsFromQuote } from '@/lib/quotes/sales-service';
 import { assertActiveParameterValue } from '@/lib/system-parameters';
 
 export const dynamic = 'force-dynamic';
@@ -147,6 +148,10 @@ ${closeNoteBlock}` : closeNoteBlock;
         .maybeSingle();
       if (saleError) return NextResponse.json({ message: `Satış kaydı oluşturulamadı: ${saleError.message}` }, { status: 400 });
       saleId = String((sale as any)?.id ?? '') || null;
+      // Fatura satırları (migration 030): teklifin kalemleri satışa KOPYALANIR. Canlı Ekran'daki
+      // model bazlı cihaz kırılımı ve satış detayı buradan okunur (Çağdaş Bey, 11.09).
+      // Kalem yazımı satışın kendisini bozmamalı: hata olursa satış kaydı yine de durur.
+      if (saleId) await copySaleItemsFromQuote(saleId, quoteId).catch(() => undefined);
 
       // Müşteriyi Sipariş fazına taşı (satıcı onay kutusuyla seçer). Aktivite kaydı
       // olarak yazılır; musteri_pipeline tetikleyiciyle güncellenir.

@@ -6,7 +6,7 @@ import { revalidatePath } from 'next/cache';
 import { requirePermissionOrThrow, userHasPermission } from '@/lib/authz';
 import { tryRecordAuditEvent } from '@/lib/audit';
 import { createPgAdminClient } from '@/lib/pg/admin';
-import { repriceFromCatalog } from '@/lib/quotes/sales-service';
+import { repriceFromCatalog, rescaleSaleItems, sumSaleItems } from '@/lib/quotes/sales-service';
 import { db } from '@/lib/db';
 import { OWNER_ORDER } from '@/lib/reports/live-board-shared';
 
@@ -96,14 +96,28 @@ export async function POST(request: Request) {
       hardwareAmount = repriced.hardwareAmount;
       rentalMonthlyAmount = repriced.rentalMonthlyAmount;
     }
+    // DOĞRUDAN SATIŞ + FATURA SATIRI (030): teklif yok ama satışın kendi kalemleri var.
+    // Cihaz adedi değişince kalemler orantılı ölçeklenir ve tutar kalemlerden yeniden toplanır —
+    // böylece başlıktaki tutar ile alttaki kalemler çelişmez (Çağdaş Bey, 11.09: "altta kalemler olmalı").
+    // Anlaşma fiyatı girilmişse (manual) tutara dokunulmaz; kalemler yine de ölçeklenir.
+    let directItemsTotal: number | null = null;
+    if (!quoteId && body.device_count != null && deviceCount !== Number((sale as any).device_count ?? 0)) {
+      const scaled = await rescaleSaleItems(saleId, deviceCount).catch(() => false);
+      if (scaled) directItemsTotal = await sumSaleItems(saleId).catch(() => null);
+    }
+
     if (amount == null) {
       pricedFully = repriced.priced;
       priceSource = (sale as any).price_source === 'manual' ? 'manual' : 'catalog';
       if (repriced.hasLines) {
         amount = repriced.amount;
         priceSource = 'catalog';
+      } else if (directItemsTotal != null && (sale as any).price_source !== 'manual') {
+        amount = directItemsTotal;
+        hardwareAmount = directItemsTotal;
+        priceSource = 'catalog';
       } else {
-        // Kalemi olmayan teklif: cihaz adedi güncellenir, tutar olduğu gibi korunur.
+        // Kalemi olmayan teklif / elle fiyatlanmış satış: cihaz adedi güncellenir, tutar korunur.
         amount = Number((sale as any).amount ?? 0);
         noLines = true;
       }
@@ -149,6 +163,10 @@ export async function POST(request: Request) {
 
     const { error } = await admin.from('crm_sales').update(payload).eq('id', saleId);
     if (error) return NextResponse.json({ message: error.message }, { status: 400 });
+    // Teklife bağlı satışta kalem adetleri teklifin ölçeklenmesiyle aynı oranda güncellenir (030).
+    if (quoteId && body.device_count != null && deviceCount !== Number((sale as any).device_count ?? 0)) {
+      await rescaleSaleItems(saleId, deviceCount).catch(() => undefined);
+    }
 
     await tryRecordAuditEvent({
       actorId: me.id, actorEmail: me.email, action: 'sale.updated', resourceType: 'sale', resourceId: saleId,

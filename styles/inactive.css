@@ -1,0 +1,62 @@
+/* Hareketsiz Firmalar — Operasyon › /crm/hareketsiz (Çağdaş Bey, 11.09.2026).
+   Canlı Ekran kişi slaydındaki "Hareketsiz Firma" sayacından YENİ SEKMEDE açılır.
+
+   TEMA KURALI (tek sinyal): renkler yalnız app/globals.css token'larından; bu dosya
+   `prefers-color-scheme` KULLANMAZ (PanelShell <html data-theme> yazar). Sabit hex
+   yalnız koyu hero üstündeki beyaz yazıda.
+
+   KAPSAM KURALI (kılavuz §4 madde 21): her seçici .iv-shell ile başlar. */
+
+.iv-shell {
+  display: grid;
+  gap: 18px;
+  padding-bottom: 40px;
+  color: var(--text);
+}
+
+/* --- Hero ------------------------------------------------------------------- */
+.iv-shell .iv-hero {
+  position: relative; overflow: hidden;
+  display: grid; gap: 8px;
+  padding: 26px 30px; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 26px; color: #fff;
+  background:
+    radial-gradient(circle at 88% 12%, rgba(255, 255, 255, 0.14), transparent 30%),
+    linear-gradient(122deg, #0f172a 0%, #1e3a8a 55%, #1d4ed8 100%);
+  box-shadow: 0 22px 50px rgba(30, 58, 138, 0.24);
+}
+.iv-shell .iv-eyebrow { font-size: 12px; font-weight: 900; letter-spacing: 0.12em; text-transform: uppercase; color: rgba(255, 255, 255, 0.76); }
+.iv-shell .iv-hero h1 { margin: 0; font-size: clamp(22px, 2.4vw, 32px); font-weight: 900; letter-spacing: -0.02em; }
+.iv-shell .iv-hero p { margin: 0; max-width: 860px; font-size: 14px; line-height: 1.55; color: rgba(255, 255, 255, 0.88); }
+.iv-shell .iv-hero p b { color: #fff; font-weight: 900; }
+
+/* --- Özet ------------------------------------------------------------------- */
+.iv-shell .iv-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+.iv-shell .iv-summary > div { display: grid; gap: 3px; padding: 14px 18px; border: 1px solid var(--border); border-radius: 16px; background: var(--surface); }
+.iv-shell .iv-summary strong { font-size: 28px; font-weight: 900; letter-spacing: -0.02em; color: var(--text); font-variant-numeric: tabular-nums; }
+.iv-shell .iv-summary span { font-size: 11.5px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-3); }
+
+/* --- Tablo ------------------------------------------------------------------ */
+.iv-shell .iv-table { display: grid; gap: 6px; }
+.iv-shell .iv-tr {
+  display: grid; grid-template-columns: minmax(0, 2.2fr) minmax(0, 1.1fr) 120px 150px 74px;
+  gap: 14px; align-items: center;
+  padding: 11px 16px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface);
+  font-size: 13.5px; font-weight: 700; color: var(--text);
+}
+.iv-shell .iv-tr > span { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.iv-shell .iv-th { background: var(--surface-2); border-style: dashed; font-size: 11px; font-weight: 900; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-3); padding: 8px 16px; }
+.iv-shell .iv-tr a { color: var(--text); font-weight: 800; text-decoration: none; border-bottom: 1px solid var(--border); }
+.iv-shell .iv-tr a:hover { color: var(--accent); border-bottom-color: currentColor; }
+.iv-shell .iv-chip { font-style: normal; display: inline-block; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface-2); font-size: 11px; font-weight: 900; letter-spacing: 0.04em; color: var(--text-2); }
+.iv-shell .iv-days { text-align: right; font-weight: 900; font-variant-numeric: tabular-nums; color: var(--text-2); }
+.iv-shell .iv-days.hot { color: var(--chip-red-color); }
+
+/* --- Boş / not -------------------------------------------------------------- */
+.iv-shell .iv-empty { padding: 28px; border: 1px dashed var(--border); border-radius: 18px; background: var(--surface); color: var(--text-2); font-size: 14px; font-weight: 700; text-align: center; }
+.iv-shell .iv-note { padding: 14px 18px; border: 1px solid var(--border); border-radius: 16px; background: var(--surface-2); color: var(--text-2); font-size: 12.5px; line-height: 1.6; }
+.iv-shell .iv-note b { color: var(--text); font-weight: 900; }
+
+@media (max-width: 900px) {
+  .iv-shell .iv-tr { grid-template-columns: minmax(0, 1fr) 84px 64px; gap: 10px; }
+  .iv-shell .iv-tr > span:nth-child(2), .iv-shell .iv-tr > span:nth-child(4) { display: none; }
+}
