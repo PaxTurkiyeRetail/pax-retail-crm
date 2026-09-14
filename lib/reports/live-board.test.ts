@@ -10,6 +10,10 @@ import {
   agoLabel,
   alertPanels,
   capacities,
+  layoutMetrics,
+  ownerDonutRowHeight,
+  BASE_METRICS,
+  COMPACT_METRICS,
   pageBounds,
   pageCount,
   pageSlice,
@@ -277,5 +281,22 @@ describe('Müşteri Listesi eşlemesi — kişi adı anahtarı', () => {
     expect(normalizeName('Furkan Kızılkurt')).toBe(normalizeName('FURKAN  KIZILKURT'));
     expect(normalizeName('Ömer Canatar')).toBe(normalizeName('ömer canatar'));
     expect(normalizeName('Erdi Toraman')).not.toBe(normalizeName('Seda Kesikoğlu'));
+  });
+});
+
+describe('kişi slaydı donut satırı — gövdeyle orantılı (v3.0, 14.09)', () => {
+  it('bant düşüldükten sonra kalanın %46\'sı; 240–560 px arasında', () => {
+    // 1920×1080 tam ekran: gövde ≈ 1037 → (1037 − 84 − 14) × 0.46 ≈ 432
+    expect(ownerDonutRowHeight(1037, BASE_METRICS)).toBe(432);
+    // 1366×768 kompakt: gövde ≈ 729 → (729 − 76 − 12) × 0.46 ≈ 295
+    expect(ownerDonutRowHeight(729, COMPACT_METRICS)).toBe(295);
+    expect(ownerDonutRowHeight(300, COMPACT_METRICS)).toBe(240);   // alt sınır
+    expect(ownerDonutRowHeight(5000, BASE_METRICS)).toBe(560);     // üst sınır
+  });
+  it('gövde ölçülmeden (0) taban ölçü döner; layoutMetrics orantılı değeri taşır', () => {
+    expect(ownerDonutRowHeight(0, BASE_METRICS)).toBe(BASE_METRICS.donutRowH);
+    expect(layoutMetrics(1037).donutRowH).toBe(432);
+    expect(layoutMetrics(729).compact).toBe(true);
+    expect(layoutMetrics(729).donutRowH).toBe(295);
   });
 });

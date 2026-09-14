@@ -623,8 +623,22 @@ export const COMPACT_METRICS: LayoutMetrics = {
 export const COMPACT_BODY_HEIGHT = 780;
 
 
+/**
+ * Kişi slaydı donut satırı yüksekliği gövdeyle ORANTILI (v3.0, 14.09 — Çağdaş Bey: "dashboard'u genel
+ * büyütelim"): sabit 412/272 px yerine bant düşüldükten sonra kalanın %46'sı; böylece tam ekranda
+ * kazanılan her piksel donutlara ve alt kartlara paylaştırılır. Alt satıra en az ~%54 kalır (sayı
+ * hücreleri + model listesi ölçüldüğü kadar). Sınırlar: 240–560 px; gövde ölçülmeden (0) taban değer.
+ */
+export const OWNER_DONUT_ROW_SHARE = 0.46;
+export function ownerDonutRowHeight(bodyHeight: number, m: LayoutMetrics): number {
+  if (!(bodyHeight > 0)) return m.donutRowH;
+  const column = bodyHeight - m.bandH - m.gap;
+  return Math.max(240, Math.min(560, Math.round(column * OWNER_DONUT_ROW_SHARE)));
+}
+
 export function layoutMetrics(bodyHeight: number): LayoutMetrics {
-  return bodyHeight > 0 && bodyHeight < COMPACT_BODY_HEIGHT ? COMPACT_METRICS : BASE_METRICS;
+  const base = bodyHeight > 0 && bodyHeight < COMPACT_BODY_HEIGHT ? COMPACT_METRICS : BASE_METRICS;
+  return { ...base, donutRowH: ownerDonutRowHeight(bodyHeight, base) };
 }
 
 /** Bir listeye kaç satır sığar: (alan + aralık) / (satır + aralık), en az 1. */

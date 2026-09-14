@@ -71,8 +71,11 @@
 
 /* Tam ekran: pano ekranı doldurur. */
 .lb:fullscreen { border-radius: 0; border: none; min-height: 0; height: 100vh; padding: 0; background: var(--app-bg); }
-.lb:fullscreen .lb-body { padding: 22px 36px 16px; }
-.lb:fullscreen .lb-top { padding: 14px 36px; }
+/* v3.0 (Çağdaş Bey, 14.09: "üst kısmı da komple kullanalım, dashboard'u genel büyütelim"): tam ekranda
+   gövde boşlukları kısıldı — üst 22→10, yan 36→22, alt 16→10 px. Şeritler için yer AYRILMAZ; ikisi de
+   fare durunca gizlenen yüzen katman. */
+.lb:fullscreen .lb-body { padding: 10px 22px 10px; }
+.lb:fullscreen .lb-top { padding: 10px 22px; }
 .lb:fullscreen .lb-strip { padding: 0 36px 14px; }
 .lb:fullscreen .lb-kpi-value { font-size: clamp(30px, 2.4vw, 44px); }
 .lb:fullscreen .lb-kpi.small .lb-kpi-value { font-size: clamp(22px, 1.7vw, 30px); }
@@ -80,12 +83,16 @@
 /* v2.7 — TV modunda üst ve alt şerit yüzen katman (Çağdaş Bey 10.09: "üst kısmı da kullanalım,
    mouse gelince açılsın"). Gövde ekranın tamamını alır; fare durunca şeritler dışarı kayar,
    ince başlık çubuğu (kişi adı + saat) kalır. Şeritler akışta yer tutmadığından yeniden yerleşim olmaz. */
-.lb-top.lb-top-fs { position: absolute; top: 0; left: 0; right: 0; z-index: 6; transition: transform .3s ease, opacity .3s ease; box-shadow: 0 12px 30px rgba(15, 23, 42, 0.22); }
+.lb-top.lb-top-fs { position: absolute; top: 0; left: 0; right: 0; z-index: 6; transition: transform .3s ease, opacity .3s ease; box-shadow: 0 12px 30px rgba(15, 23, 42, 0.22); background: var(--surface); }
 .lb-top.lb-top-fs.hidden { transform: translateY(-100%); opacity: 0; pointer-events: none; }
-.lb-fs-title { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 16px; padding: 9px 36px; background: var(--surface); border-bottom: 1px solid var(--border); }
-.lb-fs-eyebrow { font-size: 11px; font-weight: 900; letter-spacing: 0.12em; text-transform: uppercase; color: var(--lb-accent); }
-.lb-fs-clock { text-align: right; font-size: clamp(18px, 1.5vw, 24px); font-weight: 900; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
-.lb-strip.lb-strip-fs { position: absolute; left: 0; right: 0; bottom: 0; z-index: 6; background: var(--surface); border-top: 1px solid var(--border); padding: 10px 36px !important; transition: transform .3s ease, opacity .3s ease; }
+/* İnce başlık çubuğu (v3.0): 80 px → tek satır ~34 px. Kişinin adı hâlâ hep görünür (Çağdaş Bey 10.09
+   şartı), ama alt başlık ve marka yazısı aynı satıra iner; kazanılan yükseklik slayda gider. */
+.lb-fs-title { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 16px; padding: 5px 22px; background: var(--surface); border-bottom: 1px solid var(--border); min-height: 34px; }
+.lb-fs-title .lb-title { display: flex; align-items: baseline; gap: 10px; font-size: clamp(15px, 1.15vw, 19px); }
+.lb-fs-title .lb-title small { display: inline; font-size: 11px; }
+.lb-fs-eyebrow { font-size: 10.5px; font-weight: 900; letter-spacing: 0.12em; text-transform: uppercase; color: var(--lb-accent); }
+.lb-fs-clock { text-align: right; font-size: clamp(15px, 1.15vw, 19px); font-weight: 900; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; line-height: 1; }
+.lb-strip.lb-strip-fs { position: absolute; left: 0; right: 0; bottom: 0; z-index: 6; background: var(--surface); border-top: 1px solid var(--border); padding: 8px 22px !important; transition: transform .3s ease, opacity .3s ease; }
 .lb-strip.lb-strip-fs.hidden { transform: translateY(100%); opacity: 0; pointer-events: none; }
 .lb-new-version { color: var(--lb-warn); font-weight: 900; }
 
@@ -479,8 +486,8 @@
 /* Alt satırda boş alan kalmaz ama sayı hücreleri de ezilmez: hücre satırları DOĞAL yüksekliğini
    alır (etiket ve ipucu satırı kırpılmasın), kalan yüksekliği model listesi / kart içi boşluk paylaşır.
    Kompakt ekranlarda (1366×768) `1fr` bölüşümü etiketleri 4 px'e sıkıştırıyordu — bu yüzden auto. */
-.lb-owner-output { grid-template-rows: auto auto auto minmax(0, 1fr); gap: 8px; align-content: stretch; }
-.lb-owner-health { grid-template-rows: auto auto auto; gap: 8px; align-content: space-between; }
+.lb-owner-output { grid-template-rows: auto minmax(min-content, 1fr) minmax(min-content, 1fr) minmax(0, 1.3fr); gap: 8px; align-content: stretch; }
+.lb-owner-health { grid-template-rows: auto minmax(min-content, 1fr) minmax(min-content, 1fr); gap: 8px; align-content: stretch; }
 .lb-owner-recent { grid-template-rows: auto minmax(0, 1fr); gap: 8px; align-content: stretch; }
 
 /* Sayı hücresi: değer (+ yanında tutar) · etiket · küçük not. Tıklanabilir olanı "↗" ile işaretlidir. */
@@ -697,13 +704,11 @@
   .lb-funnel { flex-wrap: wrap; }
 }
 
-/* TAM EKRAN — yüzen alt şeridin altında içerik kalmasın (v2.9, 11.09.2026).
-   Tam ekranda üst bar ve alt şerit `position: absolute` (fare durunca gizlenirler), bu yüzden
-   gövdenin yüksekliğinden düşmezler. Kişi slaydının alt satırı artık tam boyu kullandığı için
-   şerit kartların son satırını örtüyordu; gövdeye şerit yüksekliği kadar (ölçülen 51 px + pay)
-   alt boşluk bırakılır. Bu kural kompakt bloğundan SONRA gelmeli (aynı özgüllük). */
-.lb:fullscreen .lb-body { padding-bottom: 58px; }
-.lb:fullscreen[data-compact="1"] .lb-body { padding-bottom: 50px; }
+/* TAM EKRAN alt boşluk (v3.0, 14.09): v2.9'da yüzen şerit için 58 px ayrılıyordu; Çağdaş Bey
+   "o alanı da komple kullanalım" dedi → yer ayrılmaz, şerit göründüğü birkaç saniyede içeriğin
+   üstünde durur, fare durunca gizlenir. Kompakt kuralı da aynı (özgüllük eşit, sonra gelen kazanır). */
+.lb:fullscreen .lb-body { padding-bottom: 10px; }
+.lb:fullscreen[data-compact="1"] .lb-body { padding: 10px 18px 10px; }
 /* Kompakt (dizüstü) ekranlarda Son Hareketler kutusu dar: aktivite türü çipi gizlenir,
    firma adı tam görünür (tür bilgisi başlık ipucunda kalır). */
 .lb[data-compact="1"] .lb-mini-kind { display: none; }

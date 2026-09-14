@@ -464,6 +464,19 @@ export const FORECAST_PARAMETER_GROUPS = [
   },
 ] as const;
 
+// Hizmet faturaları (migration 032, 14.09): faturada seçilen hizmet kalemleri. Fatura satırında
+// kalem adı KOPYA saklanır; liste değişse eski satır değişmez. Yeni hizmet → buradan eklenir, kod değişmez.
+export const SALES_PARAMETER_GROUPS = [
+  {
+    key: "service_invoice_item",
+    module: "CRM",
+    category: "Satışlar",
+    title: "Hizmet Kalemleri",
+    description: "Hizmet faturasi satirinda secilecek hizmet listesi (KasaPOS entegrasyonu, TMS, Max Store, AirViewer…).",
+    type: "text",
+  },
+] as const;
+
 export const NOTIFICATION_PARAMETER_GROUPS = [
   {
     key: "notify_request_assignee_enabled",
@@ -641,6 +654,7 @@ export const ALL_PARAMETER_GROUPS = [
   ...PHASE_PARAMETER_GROUPS,
   ...CRM_MASTER_DATA_PARAMETER_GROUPS,
   ...FORECAST_PARAMETER_GROUPS,
+  ...SALES_PARAMETER_GROUPS,
   ...SYSTEM_BEHAVIOR_PARAMETER_GROUPS,
   ...NOTIFICATION_PARAMETER_GROUPS,
 ] as const;
@@ -655,6 +669,15 @@ export const DEFAULT_FORECAST_OPTIONS: Record<string, ParameterOption[]> = {
     { label: "%30", value: "30", sortOrder: 10 },
     { label: "%60", value: "60", sortOrder: 20 },
     { label: "%90", value: "90", sortOrder: 30 },
+  ],
+};
+
+export const DEFAULT_SALES_OPTIONS: Record<string, ParameterOption[]> = {
+  service_invoice_item: [
+    { label: "KasaPOS Entegrasyonu + TMS", value: "KasaPOS Entegrasyonu + TMS", sortOrder: 10 },
+    { label: "KasaPOS Entegrasyonu", value: "KasaPOS Entegrasyonu", sortOrder: 20 },
+    { label: "Max Store Kullanım", value: "Max Store Kullanim", sortOrder: 30 },
+    { label: "AirViewer Kullanım", value: "AirViewer Kullanim", sortOrder: 40 },
   ],
 };
 
@@ -741,6 +764,7 @@ export const DEFAULT_PARAMETER_OPTIONS: Record<string, ParameterOption[]> = {
   ...DEFAULT_KUNYE_OPTIONS,
   ...DEFAULT_CRM_MASTER_DATA_OPTIONS,
   ...DEFAULT_FORECAST_OPTIONS,
+  ...DEFAULT_SALES_OPTIONS,
   ...DEFAULT_SYSTEM_BEHAVIOR_OPTIONS,
   ...DEFAULT_NOTIFICATION_OPTIONS,
 };
@@ -820,6 +844,7 @@ export const PARAMETER_GROUPS_REQUIRING_ACTIVE_VALUE = new Set([
   "activity_waiting_party",
   "forecast_sales_channel",
   "forecast_probability",
+  "service_invoice_item",
   "system_page_size",
 ]);
 
