@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { LIVE_BOARD_RULES, capacities, normalizeName } from './live-board-shared';
-import { dayDiffKeys, inactiveCountsByOwner, isInactiveRow, type InactiveRow } from './inactive-customers-shared';
+import {
+  INACTIVE_SORT_DEFAULT_DIR, dayDiffKeys, inactiveCountsByOwner, isInactiveRow, isInactiveSort,
+  sortInactiveRows, type InactiveRow,
+} from './inactive-customers-shared';
 
 // Hareketsiz firma kuralı — Çağdaş Bey, 11.09.2026 toplantısı.
 // "Firma Hunter'da ya da Farmer'da olsun; 15 gündür üzerinde hareket yoksa hareketsize dönsün."
@@ -75,14 +78,59 @@ describe('gün farkı', () => {
   });
 });
 
-describe('kişi slaydı model listesi kapasitesi (v2.9)', () => {
-  it('kompakt ekranda az, büyük ekranda çok satır', () => {
-    expect(capacities(1000, 1920).ownerModels).toBe(6);
-    // 780 px altı = kompakt ölçüler (1366×768 dizüstü) — model listesine ~65 px kalır.
-    expect(capacities(694, 1366).ownerModels).toBe(2);
-  });
+describe('kişi slaydı kapasiteleri', () => {
   it('Son Hareketler kutusu en fazla 5 satır (Çağdaş Bey: "1, 2, 3, 4, 5 gibi")', () => {
     expect(capacities(1000, 1920).recent).toBeLessThanOrEqual(5);
     expect(capacities(694, 1366).recent).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe('sortInactiveRows (15.09 — tarih/gün sıralaması)', () => {
+  const row = (firma: string, days: number | null, last: string | null, owner = 'Cem Koç'): InactiveRow => ({
+    owner, ownerUserId: null, category: 'H', firma, customerId: null, musteri: null,
+    matched: true, lastActivityAt: last, days,
+  });
+  const rows = [
+    row('Bravo', 20, '2026-08-26'),
+    row('Alfa', 40, '2026-08-06'),
+    row('Cesur', null, null),
+    row('Delta', 30, '2026-08-16'),
+  ];
+
+  it('gün · desc: en uzun süredir hareketsiz başta, hiç hareketsiz en tepede', () => {
+    expect(sortInactiveRows(rows, 'gun', 'desc').map((r) => r.firma)).toEqual(['Cesur', 'Alfa', 'Delta', 'Bravo']);
+  });
+
+  it('gün · asc: en yeni dokunulan başta', () => {
+    expect(sortInactiveRows(rows, 'gun', 'asc').map((r) => r.firma)).toEqual(['Bravo', 'Delta', 'Alfa', 'Cesur']);
+  });
+
+  it('tarih · asc: en eski son hareket başta; hiç hareket yok en eski sayılır', () => {
+    expect(sortInactiveRows(rows, 'tarih', 'asc').map((r) => r.firma)).toEqual(['Cesur', 'Alfa', 'Delta', 'Bravo']);
+  });
+
+  it('firma adı sıralaması Türkçe harf sırasına göre', () => {
+    expect(sortInactiveRows([row('Ünlü', 1, '2026-09-01'), row('Ahmet', 1, '2026-09-01')], 'firma', 'asc')
+      .map((r) => r.firma)).toEqual(['Ahmet', 'Ünlü']);
+  });
+
+  it('kişi sıralaması verilen karşılaştırıcıyı kullanır (OWNER_ORDER)', () => {
+    const list = [row('X', 5, '2026-09-01', 'Seda Kesikoğlu'), row('Y', 5, '2026-09-01', 'Cem Koç')];
+    const order = ['Cem Koç', 'Seda Kesikoğlu'];
+    const cmp = (a: string, b: string) => order.indexOf(a) - order.indexOf(b);
+    expect(sortInactiveRows(list, 'kisi', 'asc', cmp).map((r) => r.owner)).toEqual(['Cem Koç', 'Seda Kesikoğlu']);
+  });
+
+  it('eşitlikte firma adına düşer ve girdi dizisini bozmaz', () => {
+    const before = rows.map((r) => r.firma);
+    const tie = sortInactiveRows([row('Zeta', 10, '2026-09-01'), row('Ata', 10, '2026-09-01')], 'gun', 'desc');
+    expect(tie.map((r) => r.firma)).toEqual(['Ata', 'Zeta']);
+    expect(rows.map((r) => r.firma)).toEqual(before);
+  });
+
+  it('isInactiveSort bilinmeyen değeri reddeder', () => {
+    expect(isInactiveSort('gun')).toBe(true);
+    expect(isInactiveSort('tutar')).toBe(false);
+    expect(INACTIVE_SORT_DEFAULT_DIR.gun).toBe('desc');
   });
 });

@@ -131,3 +131,20 @@
   .tg-shell .tg-qtable { overflow-x: auto; }
   .tg-shell .tg-qrow { min-width: 560px; }
 }
+
+/* --- Ortak hedefler (15.09.2026) -------------------------------------------
+   Çağdaş Bey: "Ortalama temas / firma default 5 olacak, aynı şekilde aktivite hedefi;
+   bunları girerken ortak hedef alanı olsun, herkesi etkileyecek şekilde."
+   Kişi kartlarının ÜSTÜNDE tek kutu; kişi kartlarında bu alanlar yoktur. */
+.tg-shell .tg-company {
+  display: grid; gap: 14px;
+  padding: 20px 24px; border: 1px solid var(--accent-border); border-radius: 22px;
+  background: var(--accent-soft); box-shadow: var(--shadow-sm);
+}
+.tg-shell .tg-company-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; flex-wrap: wrap; }
+.tg-shell .tg-company-head h2 { margin: 0; font-size: 18px; font-weight: 900; letter-spacing: -0.01em; color: var(--text); }
+.tg-shell .tg-company-head p { margin: 4px 0 0; font-size: 13px; font-weight: 700; color: var(--text-2); }
+.tg-shell .tg-company-head p b { color: var(--text); font-weight: 900; }
+.tg-shell .tg-company .tg-fields { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.tg-shell .tg-company .tg-field input { background: var(--surface); }
+.tg-shell .tg-field-hint { font-size: 11.5px; font-weight: 700; color: var(--text-3); }

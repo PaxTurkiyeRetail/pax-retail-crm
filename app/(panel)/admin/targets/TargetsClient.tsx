@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  COMPANY_TARGET_DEFINITIONS,
   QUARTERLY_TARGET_CODES,
   QUARTER_INDEXES,
-  TARGET_DEFINITIONS,
+  USER_TARGET_DEFINITIONS,
   normalizeTargetValue,
   quarterOf,
   splitYearlyToQuarters,
@@ -33,7 +34,7 @@ type Draft = {
   quarterly: Record<TargetCode, [string, string, string, string]>;
 };
 
-const CODES = TARGET_DEFINITIONS.map((d) => d.code);
+const CODES = USER_TARGET_DEFINITIONS.map((d) => d.code);
 
 function toDraft(user: TargetsAdminUser): Draft {
   const yearly = Object.fromEntries(CODES.map((code) => [code, user.yearly[code] != null ? String(user.yearly[code]) : ''])) as Record<TargetCode, string>;
@@ -95,6 +96,10 @@ export default function TargetsClient() {
   const [savedAt, setSavedAt] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Ortak (şirket) hedefleri — 15.09: haftalık aktivite ve ortalama temas herkes için tek alandan.
+  const [company, setCompany] = useState<Record<string, string>>({});
+  const [companySaved, setCompanySaved] = useState<string | null>(null);
+  const [companyBusy, setCompanyBusy] = useState(false);
 
   const load = useCallback(async (targetYear: number) => {
     setLoading(true);
@@ -105,6 +110,7 @@ export default function TargetsClient() {
       const json = (await res.json()) as TargetsAdminPayload;
       setPayload(json);
       setDrafts(Object.fromEntries(json.users.map((user) => [user.id, toDraft(user)])));
+      setCompany(Object.fromEntries(COMPANY_TARGET_DEFINITIONS.map((def) => [def.code, json.company?.[def.code] != null ? String(json.company[def.code]) : ''])));
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Hedefler yüklenemedi.');
@@ -155,6 +161,27 @@ export default function TargetsClient() {
     }
   };
 
+  const saveCompany = async () => {
+    setCompanyBusy(true);
+    try {
+      const res = await fetch('/api/admin/targets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ year, values: company }),
+      });
+      if (!res.ok) throw new Error(await readError(res, 'Ortak hedefler kaydedilemedi.'));
+      const json = (await res.json()) as { company: Record<string, number | null> };
+      setPayload((prev) => (prev ? { ...prev, company: json.company } : prev));
+      setCompany(Object.fromEntries(COMPANY_TARGET_DEFINITIONS.map((def) => [def.code, json.company?.[def.code] != null ? String(json.company[def.code]) : ''])));
+      setCompanySaved(new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Ortak hedefler kaydedilemedi.');
+    } finally {
+      setCompanyBusy(false);
+    }
+  };
+  const companyDirty = COMPANY_TARGET_DEFINITIONS.some((def) => (company[def.code] ?? '') !== (payload?.company?.[def.code] != null ? String(payload.company[def.code]) : ''));
+
   const years = [currentYear - 1, currentYear, currentYear + 1];
   const quarters: Quarter[] = payload?.quarters ?? [];
 
@@ -192,6 +219,36 @@ export default function TargetsClient() {
         <div className={`tg-kpi ${totals.missing ? 'warn' : ''}`}><span>Hedefi eksik</span><strong>{payload ? totals.missing : '—'}</strong><small>bütçe ya da ziyaret girilmemiş</small></div>
       </section>
 
+      <section className="tg-company" aria-label="Ortak hedefler">
+        <div className="tg-company-head">
+          <div>
+            <h2>Ortak Hedefler · {year}</h2>
+            <p>Tek yerden girilir, <b>tüm satış ekibine</b> uygulanır — kişi kartlarında bu alanlar yoktur.</p>
+          </div>
+          <div className="tg-person-actions">
+            {companySaved && !companyDirty ? <em>Kaydedildi {companySaved}</em> : companyDirty ? <em className="pending">Kaydedilmemiş değişiklik</em> : null}
+            <button type="button" className="tg-btn primary" onClick={() => void saveCompany()} disabled={!companyDirty || companyBusy}>
+              {companyBusy ? 'Kaydediliyor…' : 'Kaydet'}
+            </button>
+          </div>
+        </div>
+        <div className="tg-fields">
+          {COMPANY_TARGET_DEFINITIONS.map((def) => (
+            <label className="tg-field" key={def.code} title={def.hint}>
+              <span>{def.label}<small>adet</small></span>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={company[def.code] ?? ''}
+                placeholder={def.defaultValue != null ? String(def.defaultValue) : '—'}
+                onChange={(event) => setCompany((prev) => ({ ...prev, [def.code]: digitsOnly(event.target.value) }))}
+              />
+              <small className="tg-field-hint">{def.hint}</small>
+            </label>
+          ))}
+        </div>
+      </section>
+
       {error ? <div className="tg-error" role="alert">{error}</div> : null}
       {loading && !payload ? <div className="tg-empty">Hedefler yükleniyor…</div> : null}
       {payload && !payload.users.length ? <div className="tg-empty">Hedef girilebilecek aktif satışçı bulunamadı.</div> : null}
@@ -217,19 +274,9 @@ export default function TargetsClient() {
 
               <div className="tg-grid">
                 <div className="tg-block">
-                  <h3>Haftalık</h3>
-                  <label className="tg-field">
-                    <span>Aktivite hedefi <small>adet / hafta</small></span>
-                    <input type="text" inputMode="numeric" value={draft.weeklyTotal} placeholder="20"
-                      onChange={(event) => setField(user.id, (d) => ({ ...d, weeklyTotal: digitsOnly(event.target.value) }))} />
-                  </label>
-                  <p className="tg-note">Kanal kırılımı (görüşme / temas) Kullanıcı Yönetimi › Hedefleri Düzenle&apos;de kalır.</p>
-                </div>
-
-                <div className="tg-block">
                   <h3>Yıl · {year}</h3>
                   <div className="tg-fields">
-                    {TARGET_DEFINITIONS.map((def) => (
+                    {USER_TARGET_DEFINITIONS.map((def) => (
                       <label className="tg-field" key={def.code} title={def.hint}>
                         <span>{def.label}{def.unit === 'money' ? <small>USD</small> : <small>adet</small>}</span>
                         <input
@@ -267,7 +314,7 @@ export default function TargetsClient() {
                       <span role="columnheader">Toplam</span>
                     </div>
                     {QUARTERLY_TARGET_CODES.map((code) => {
-                      const def = TARGET_DEFINITIONS.find((d) => d.code === code)!;
+                      const def = USER_TARGET_DEFINITIONS.find((d) => d.code === code)!;
                       const values = draft.quarterly[code];
                       const sum = values.reduce((acc, v) => acc + (normalizeTargetValue(v) ?? 0), 0);
                       const yearValue = normalizeTargetValue(draft.yearly[code]);

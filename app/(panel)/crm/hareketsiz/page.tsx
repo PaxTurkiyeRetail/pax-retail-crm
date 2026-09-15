@@ -1,12 +1,18 @@
 import Link from 'next/link';
 import { requireCrmAccessOrThrow, requireScreenAccessOrThrow } from '@/lib/authz';
 import { isInactiveRow, loadHunterFarmerActivity } from '@/lib/reports/inactive-customers';
+import {
+  INACTIVE_SORT_DEFAULT_DIR, isInactiveSort, sortInactiveRows,
+  type InactiveSort, type InactiveSortDir,
+} from '@/lib/reports/inactive-customers-shared';
 import { LIVE_BOARD_RULES, normalizeName, ownerOrderCompare } from '@/lib/reports/live-board-shared';
 import '@/styles/inactive.css';
 
 // HAREKETSİZ FİRMALAR — Çağdaş Bey, 11.09.2026:
 //   "15 gündür üzerinde işlem olmayan firma sayısı… Basınca gitsin o firmaları göreyim,
 //    listesi açılsın… New Tab açsın."
+// 15.09.2026 eki: "Hareketsiz firmalarda sıralama olmalı, tarihe göre güne göre sıralama
+// yapması lazım." → başlıklar link; sıra URL'de (?sirala=gun&yon=desc), istemci JS'i yok.
 // Canlı Ekran kişi slaydındaki "Hareketsiz Firma" sayacı bu sayfayı YENİ SEKMEDE açar
 // (/crm/hareketsiz?satici=...&gun=15). TV'de açılacağı için sunucu bileşeni: istemci JS'i,
 // yüklenme animasyonu ve ek istek yok — sayfa tek seferde basılır.
@@ -28,7 +34,7 @@ function fmtDay(value: string | null) {
 export default async function InactiveCustomersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ satici?: string; gun?: string }>;
+  searchParams: Promise<{ satici?: string; gun?: string; sirala?: string; yon?: string }>;
 }) {
   await requireCrmAccessOrThrow();
   await requireScreenAccessOrThrow('screen.crm.customers.view');
@@ -37,14 +43,29 @@ export default async function InactiveCustomersPage({
   const ownerFilter = String(params.satici ?? '').trim();
   const days = Math.min(365, Math.max(1, Number(params.gun) || LIVE_BOARD_RULES.inactiveOwnerDays));
 
+  // Varsayılan: en uzun süredir hareketsiz olan başta (tek kişi filtresi yoksa da aynı).
+  const sort: InactiveSort = isInactiveSort(params.sirala) ? params.sirala : 'gun';
+  const dir: InactiveSortDir = params.yon === 'asc' || params.yon === 'desc'
+    ? params.yon
+    : INACTIVE_SORT_DEFAULT_DIR[sort];
+
   const all = await loadHunterFarmerActivity();
   const scoped = ownerFilter ? all.filter((row) => normalizeName(row.owner) === normalizeName(ownerFilter)) : all;
-  const rows = scoped.filter((row) => isInactiveRow(row, days))
-    .sort((a, b) => ownerOrderCompare(a.owner, b.owner)
-      || (b.days ?? 99_999) - (a.days ?? 99_999)
-      || a.firma.localeCompare(b.firma, 'tr'));
+  const rows = sortInactiveRows(scoped.filter((row) => isInactiveRow(row, days)), sort, dir, ownerOrderCompare);
   const unmatched = scoped.filter((row) => !row.matched);
   const owners = Array.from(new Set(rows.map((row) => row.owner)));
+
+  // Başlık linki: aynı kolona tekrar basınca yön döner, başka kolona basınca o kolonun
+  // doğal yönüyle başlar (gün → en çok bekleyen, firma → A'dan Z'ye).
+  const sortHref = (key: InactiveSort) => {
+    const query = new URLSearchParams();
+    if (ownerFilter) query.set('satici', ownerFilter);
+    if (params.gun) query.set('gun', String(days));
+    query.set('sirala', key);
+    query.set('yon', key === sort ? (dir === 'asc' ? 'desc' : 'asc') : INACTIVE_SORT_DEFAULT_DIR[key]);
+    return `/crm/hareketsiz?${query.toString()}`;
+  };
+  const sortMark = (key: InactiveSort) => (key === sort ? (dir === 'asc' ? ' ↑' : ' ↓') : '');
 
   return (
     <div className="iv-shell">
@@ -68,11 +89,16 @@ export default async function InactiveCustomersPage({
       ) : (
         <div className="iv-table" role="table">
           <div className="iv-tr iv-th" role="row">
-            <span role="columnheader">Firma</span>
-            <span role="columnheader">Kişi</span>
-            <span role="columnheader">Kategori</span>
-            <span role="columnheader">Son hareket</span>
-            <span role="columnheader">Gün</span>
+            {([
+              ['firma', 'Firma'], ['kisi', 'Kişi'], ['kategori', 'Kategori'],
+              ['tarih', 'Son hareket'], ['gun', 'Gün'],
+            ] as Array<[InactiveSort, string]>).map(([key, label]) => (
+              <span role="columnheader" key={key} aria-sort={key === sort ? (dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                <Link className={`iv-sort${key === sort ? ' is-on' : ''}`} href={sortHref(key)}>
+                  {label}<i>{sortMark(key)}</i>
+                </Link>
+              </span>
+            ))}
           </div>
           {rows.map((row) => (
             <div className="iv-tr" role="row" key={`${row.owner}-${row.category}-${row.firma}`}>

@@ -5,6 +5,7 @@ import { recordAuditEvent } from '@/lib/audit';
 import { ApiError } from '@/lib/http/api-error';
 import { ownerOrderCompare } from './live-board-shared';
 import {
+  COMPANY_TARGET_DEFINITIONS,
   QUARTERLY_TARGET_CODES,
   QUARTER_INDEXES,
   TARGET_CODES,
@@ -13,6 +14,7 @@ import {
   normalizeTargetValue,
   quarterRange,
   type QuarterValues,
+  type SaveCompanyTargetsInput,
   type SaveTargetsInput,
   type TargetCode,
   type TargetsAdminPayload,
@@ -41,6 +43,16 @@ const Q_USERS = `
   order by 2
 `;
 
+// Ortak (şirket) hedefleri: haftalık aktivite ve ortalama temas (15.09). Kişi satırı olsa bile
+// ekran ve Canlı Ekran bu değeri kullanır.
+const Q_COMPANY = `
+  select td.code, tv.target_value::float8 as value
+  from public.crm_target_values tv
+  join public.crm_target_definitions td on td.id = tv.definition_id
+  where tv.scope_type = 'company' and tv.period_type = 'year'
+    and tv.period_start >= make_date($1::int, 1, 1) and tv.period_end <= make_date($1::int, 12, 31)
+`;
+
 const Q_VALUES = `
   select tv.scope_user_id::text as user_id, td.code, tv.period_type, tv.period_start::text as period_start, tv.target_value::float8 as value
   from public.crm_target_values tv
@@ -55,7 +67,9 @@ function emptyQuarters(): QuarterValues {
 }
 
 export async function loadTargetsAdmin(year: number): Promise<TargetsAdminPayload> {
-  const [userResult, valueResult] = await Promise.all([db.query(Q_USERS), db.query(Q_VALUES, [year])]);
+  const [userResult, valueResult, companyResult] = await Promise.all([
+    db.query(Q_USERS), db.query(Q_VALUES, [year]), db.query(Q_COMPANY, [year]),
+  ]);
   const users = new Map<string, TargetsAdminUser>();
   for (const row of userResult.rows as any[]) {
     users.set(String(row.id), {
@@ -86,12 +100,81 @@ export async function loadTargetsAdmin(year: number): Promise<TargetsAdminPayloa
   const list = Array.from(users.values())
     .filter((user) => isTargetOwnerName(user.name))
     .sort((a, b) => ownerOrderCompare(a.name, b.name));
+  const company: TargetsAdminPayload['company'] = {};
+  for (const row of companyResult.rows as any[]) {
+    if (!isTargetCode(row.code)) continue;
+    const value = Number(row.value);
+    if (Number.isFinite(value) && value > 0) company[row.code as TargetCode] = value;
+  }
   return {
     generatedAt: new Date().toISOString(),
     year,
     quarters: QUARTER_INDEXES.map((index) => quarterRange(year, index)),
     users: list,
+    company,
   };
+}
+
+/**
+ * ORTAK hedefleri kaydeder (scope_type='company'): haftalık aktivite ve ortalama temas / firma.
+ * Tek yazma herkesi etkiler — kişi kartlarında bu iki alan yoktur (Çağdaş Bey, 15.09).
+ */
+export async function saveCompanyTargets(actor: Actor, input: SaveCompanyTargetsInput): Promise<TargetsAdminPayload['company']> {
+  return withTransaction(async (client) => {
+    const definitions = await client.query('select id::text as id, code from public.crm_target_definitions where is_active = true');
+    const definitionIdByCode = new Map<string, string>((definitions.rows as any[]).map((row) => [String(row.code), String(row.id)]));
+    const start = `${input.year}-01-01`;
+    const end = `${input.year}-12-31`;
+    const before = await companySnapshot(client, input.year);
+
+    for (const definition of COMPANY_TARGET_DEFINITIONS) {
+      if (!(definition.code in (input.values ?? {}))) continue;
+      const definitionId = definitionIdByCode.get(definition.code);
+      if (!definitionId) throw new ApiError('TARGET_DEFINITION_MISSING', `Hedef tanımı eksik (migration 033 uygulanmalı): ${definition.code}`, 409);
+      const value = normalizeTargetValue(input.values[definition.code]);
+      if (value == null) {
+        await client.query(
+          `delete from public.crm_target_values
+           where definition_id = $1 and scope_type = 'company' and period_type = 'year'
+             and period_start = $2::date and period_end = $3::date`,
+          [definitionId, start, end],
+        );
+        continue;
+      }
+      // scope_user_id null olduğu için benzersiz kısıt eşleşmez; önce sil, sonra yaz.
+      await client.query(
+        `delete from public.crm_target_values
+         where definition_id = $1 and scope_type = 'company' and period_type = 'year'
+           and period_start = $2::date and period_end = $3::date`,
+        [definitionId, start, end],
+      );
+      await client.query(
+        `insert into public.crm_target_values
+           (definition_id, scope_type, scope_user_id, period_type, period_start, period_end, target_value, created_by, updated_by)
+         values ($1, 'company', null, 'year', $2::date, $3::date, $4, $5, $5)`,
+        [definitionId, start, end, value, actor.id],
+      );
+    }
+
+    const after = await companySnapshot(client, input.year);
+    await recordAuditEvent({
+      actorId: actor.id, actorEmail: actor.email,
+      action: 'targets.company.updated', resourceType: 'company_targets', resourceId: String(input.year),
+      before, after, metadata: { year: input.year },
+    }, client);
+    return after;
+  });
+}
+
+async function companySnapshot(client: PoolClient, year: number): Promise<TargetsAdminPayload['company']> {
+  const { rows } = await client.query(Q_COMPANY, [year]);
+  const result: TargetsAdminPayload['company'] = {};
+  for (const row of rows as any[]) {
+    if (!isTargetCode(row.code)) continue;
+    const value = Number(row.value);
+    if (Number.isFinite(value) && value > 0) result[row.code as TargetCode] = value;
+  }
+  return result;
 }
 
 async function withTransaction<T>(fn: (client: PoolClient) => Promise<T>): Promise<T> {

@@ -2,13 +2,14 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireTargetsAccessOrThrow } from '@/lib/authz';
 import { apiErrorResponse, parseJsonBody } from '@/lib/http/api-error';
-import { loadTargetsAdmin, saveUserTargets } from '@/lib/reports/targets';
+import { loadTargetsAdmin, saveCompanyTargets, saveUserTargets } from '@/lib/reports/targets';
 import { TARGET_CODES, targetYearOf } from '@/lib/reports/targets-shared';
 
 // Hedefler (v2) — Yönetim › Hedefler (/admin/targets). Çağdaş Bey (10.09.2026): kişi bazlı
 // hedefleri yalnız Admin / Super Admin girer (admin.targets.manage).
-//   GET ?year=2026 : kişi × hedef değerleri (yıl + çeyrek) + haftalık aktivite hedefi
+//   GET ?year=2026 : ortak hedefler + kişi × hedef değerleri (yıl + çeyrek)
 //   PUT            : bir kişinin bir yılına ait hedefleri (gönderilmeyen alanlara dokunulmaz)
+//   POST           : ORTAK hedefler (haftalık aktivite, ortalama temas) — herkesi etkiler (15.09)
 // Ekran görünmese de API yetkiyi kendisi doğrular.
 
 export const dynamic = 'force-dynamic';
@@ -35,6 +36,22 @@ export async function GET(request: Request) {
     return NextResponse.json(payload, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
     return apiErrorResponse(error, 'Hedefler yüklenemedi.');
+  }
+}
+
+const companySchema = z.object({
+  year: z.number().int().min(2024).max(2100),
+  values: z.object(codeKeys).partial(),
+});
+
+export async function POST(request: Request) {
+  try {
+    const actor = await requireTargetsAccessOrThrow();
+    const input = await parseJsonBody(request, companySchema);
+    const company = await saveCompanyTargets(actor, { year: input.year, values: input.values });
+    return NextResponse.json({ company });
+  } catch (error) {
+    return apiErrorResponse(error, 'Ortak hedefler kaydedilemedi.');
   }
 }
 

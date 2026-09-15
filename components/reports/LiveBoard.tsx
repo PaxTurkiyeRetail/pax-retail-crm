@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, 
 import '@/styles/live-board.css';
 import { SALES_CHANNEL_GROUPS, WEEKLY_TARGET_LABELS, achievementPct, sumKinds, type WeeklyTargetCounters } from '@/lib/reports/weekly-targets-shared';
 import type { GoalPair } from '@/lib/reports/targets-shared';
+import { drilldownHref } from '@/lib/reports/drilldown-shared';
 import {
   ALERT_ORDER,
   LIVE_BOARD_RULES,
@@ -38,7 +39,6 @@ import {
   type LiveBoardPayload,
   type LiveBoardSpeed,
   type LiveOwner,
-  type OwnerDevices,
   type CustomerListSplit,
   type LiveSlide,
   type PocItem,
@@ -271,23 +271,28 @@ function Kpi({ label, value, sub, tone = 'neutral', small }: { label: string; va
  * Pipeline hücresi KALKTI (Çağdaş Bey, 11.09: "Pipeline diye bir şey yok").
  * Cihaz ve entegrasyon kendi kartlarına taşındı — aynı sayı iki yerde tekrar etmez.
  */
-function CommercialBand({ r, invoices }: { r: RevenueBlock; invoices: number }) {
-  const items: Array<{ k: string; v: string; tone?: Tone }> = [
+function CommercialBand({ r, invoices, invoicesHref }: { r: RevenueBlock; invoices: number; invoicesHref?: string }) {
+  const items: Array<{ k: string; v: string; tone?: Tone; href?: string }> = [
     { k: `Yıllık Ciro Hedefi · ${r.year}`, v: fmtMoney(r.target) },
     { k: 'YTD Ciro', v: fmtMoney(r.actualYtd), tone: r.pace ?? 'neutral' },
     { k: 'Forecast · yıl sonu', v: fmtMoney(r.forecast) },
     { k: 'Gap', v: r.forecastGap == null ? '—' : fmtMoney(r.forecastGap, { sign: true }), tone: r.forecastGap == null ? 'neutral' : r.forecastGap >= 0 ? 'ok' : 'danger' },
-    { k: 'Kesilen Fatura', v: fmt(invoices), tone: invoices ? 'ok' : 'neutral' },
+    { k: 'Kesilen Fatura', v: fmt(invoices), tone: invoices ? 'ok' : 'neutral', href: invoicesHref },
     { k: 'Dönüşüm', v: r.conversionPct == null ? '—' : `%${r.conversionPct}`, tone: conversionTone(r.conversionPct) },
   ];
   return (
     <div className="lb-band no-hints" aria-label="Ticari sonuç" style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}>
-      {items.map((item) => (
+      {items.map((item) => (item.href ? (
+        <a className={`lb-band-item tone-${item.tone ?? 'neutral'} is-link`} key={item.k} href={item.href} target="_blank" rel="noreferrer" title="Listeyi yeni sekmede aç">
+          <span>{item.k}</span>
+          <strong>{item.v}</strong>
+        </a>
+      ) : (
         <div className={`lb-band-item tone-${item.tone ?? 'neutral'}`} key={item.k}>
           <span>{item.k}</span>
           <strong>{item.v}</strong>
         </div>
-      ))}
+      )))}
     </div>
   );
 }
@@ -837,12 +842,20 @@ function JiraSlide({ data, caps, page }: { data: LiveBoardPayload; caps: Capacit
  * küçük halkaya yer kalsın diye).
  */
 const STATUS_SEGMENTS = [
-  { key: 'hunter', label: 'Hunter', color: 'var(--lb-info)' },
-  { key: 'farmer', label: 'Farmer', color: 'var(--lb-ok)' },
+  { key: 'hunter', label: 'Hunter', color: 'var(--lb-hunter)' },
+  { key: 'farmer', label: 'Farmer', color: 'var(--lb-farmer)' },
   { key: 'lead', label: 'Lead', color: 'var(--lb-warn)' },
   { key: 'kasa', label: 'Kasa', color: 'var(--lb-violet)' },
 ] as const;
 
+/**
+ * Müşteri Takip Statüsü donut'u — v3.1 (Çağdaş Bey, 15.09):
+ *   * Dilim adları ve yüzdeleri **simidin içinde** (eski alt not satırı kalktı: "onlar simitin
+ *     içinde yazsın görselde"). Yer yoksa (dilim %7'nin altı) etiket düşer, merkez toplamı taşır.
+ *   * Renkler: **Hunter açık mavi · Farmer açık yeşil** (Çağdaş Bey'in seçimi), Lead sarı, Kasa mor.
+ * SVG `rotate(-90deg)` ile döndürüldüğü için etiketler SVG'ye değil, üstteki HTML katmanına
+ * açı hesabıyla konur — yoksa yazılar yan yatardı.
+ */
 function StatusDonut({ list, size }: { list: CustomerListSplit; size: number }) {
   const total = list.hunter + list.farmer + list.lead + list.kasa;
   const radius = 40;
@@ -853,7 +866,15 @@ function StatusDonut({ list, size }: { list: CustomerListSplit; size: number }) 
   const arcs = shown.map((segment) => {
     const share = total ? segment.value / total : 0;
     const length = Math.max(0, share * circumference - gap);
-    const arc = { ...segment, length, dashOffset: -offset };
+    const mid = offset / circumference + share / 2;          // 12 yönünden saat yönünde oran
+    const angle = mid * 2 * Math.PI;
+    const arc = {
+      ...segment, share, length, dashOffset: -offset,
+      // Etiket konumu: bandın biraz içi (37) → kutu yüzdesi (viewBox 100). Bant dışına taşarsa
+      // kart kırpar; harness 1366×768'de bunu yakalıyor.
+      x: 50 + Math.sin(angle) * 37,
+      y: 50 - Math.cos(angle) * 37,
+    };
     offset += share * circumference;
     return arc;
   });
@@ -867,24 +888,14 @@ function StatusDonut({ list, size }: { list: CustomerListSplit; size: number }) 
             strokeDasharray={`${arc.length} ${circumference - arc.length}`} strokeDashoffset={arc.dashOffset} />
         ))}
       </svg>
+      {arcs.filter((arc) => arc.share >= 0.05).map((arc) => (
+        <div className="lb-slice-label" key={arc.key} style={{ left: `${arc.x}%`, top: `${arc.y}%` }}>
+          <b>{arc.label}</b>
+          <em>{fmt(arc.value)} · %{Math.round(arc.share * 100)}</em>
+        </div>
+      ))}
       <div className="lb-ring-center"><strong>{fmt(total)}</strong><span>firma</span></div>
     </div>
-  );
-}
-
-/** Donut altındaki renkli not: "Hunter 9 %38 · Farmer 4 %17 · Lead 8 %33 · Kasa 3 %12". */
-function StatusNote({ list }: { list: CustomerListSplit }) {
-  const total = list.hunter + list.farmer + list.lead + list.kasa;
-  return (
-    <>
-      {STATUS_SEGMENTS.map((segment, index) => (
-        <span key={segment.key}>
-          {index ? ' · ' : ''}
-          <b style={{ color: segment.color }}>{segment.label} {fmt(list[segment.key])}</b>
-          {total ? <em className="lb-status-pct"> %{Math.round((list[segment.key] / total) * 100)}</em> : null}
-        </span>
-      ))}
-    </>
   );
 }
 
@@ -894,7 +905,13 @@ function StatusNote({ list }: { list: CustomerListSplit }) {
  * Büyük donut kartı: başlık + büyük halka (sol) + iki küçük halka (sağ, alt alta) + tek satır değer.
  * v2.7 (Çağdaş Bey 10.09 toplantısı): "her donut'un yanına iki küçük simit daha — bir büyük, bir küçük".
  */
-function DonutCard({ title, children, aside, note, tone }: { title: string; children: ReactNode; aside?: ReactNode; note: ReactNode; tone?: Tone }) {
+/**
+ * Büyük donut kartı: başlık + büyük halka (sol) + küçük halkalar (sağ).
+ * v3.1 (Çağdaş Bey, 15.09): **kart altındaki not satırı kalktı** — değerler artık halkanın
+ * İÇİNDE ("hafta hedefi büyük simidin içine yazsın… altta hint bir yazsın"). Kazanılan yer
+ * halkalara verilir; ekran rahatlar, puntolar büyür.
+ */
+function DonutCard({ title, children, aside }: { title: string; children: ReactNode; aside?: ReactNode }) {
   return (
     <div className="lb-card lb-donut-card">
       <div className="lb-card-head"><h3>{title}</h3></div>
@@ -902,7 +919,6 @@ function DonutCard({ title, children, aside, note, tone }: { title: string; chil
         <div className="lb-donut-main">{children}</div>
         {aside ? <div className="lb-donut-aside">{aside}</div> : null}
       </div>
-      <div className={`lb-donut-card-note tone-${tone ?? 'neutral'}`}>{note}</div>
     </div>
   );
 }
@@ -940,15 +956,22 @@ function goalTone(pair: GoalPair, elapsedPct?: number): Tone {
 /* --- v2.9 yardımcı kutuları (11.09 toplantısı) ----------------------------- */
 
 /** Teklif hücresi: adet BÜYÜK, tutarı hemen yanında (Çağdaş Bey: "yanına yaz açık tekliflerin tutarı"). */
-function QuoteCell({ label, value, tone }: { label: string; value: CountAmount; tone: Tone }) {
-  return (
-    <div className={`lb-figure tone-${tone}`}>
+function QuoteCell({ label, value, tone, href }: { label: string; value: CountAmount; tone: Tone; href?: string }) {
+  const body = (
+    <>
       <div className="lb-figure-value">
         <strong>{fmt(value.count)}</strong>
         <em>{value.count ? fmtMoney(value.amount) : '—'}</em>
       </div>
       <span>{label}</span>
-    </div>
+    </>
+  );
+  if (!href) return <div className={`lb-figure tone-${tone}`}>{body}</div>;
+  return (
+    <a className={`lb-figure tone-${tone} is-link`} href={href} target="_blank" rel="noreferrer" title="Listeyi yeni sekmede aç">
+      {body}
+      <i className="lb-figure-go" aria-hidden="true">↗</i>
+    </a>
   );
 }
 
@@ -971,37 +994,6 @@ function Figure({ label, value, note, tone = 'neutral', href, title }: { label: 
     );
   }
   return <div className={`lb-figure tone-${tone}`} title={title}>{body}</div>;
-}
-
-/**
- * MODEL BAZLI CİHAZ KIRILIMI (Çağdaş Bey, 11.09: "model bazlı cihaz kurulumu… kişi bazında,
- * canlı ekranda"). Her satır bir model; bar iki renkli: satılan (mavi) + kiralanan (mor).
- * Sığmayan modeller son satırda "+N model · M cihaz" olarak toplanır — sayı kaybolmaz.
- */
-function ModelBars({ devices, limit }: { devices: OwnerDevices; limit: number }) {
-  const rows = devices.byModel;
-  if (!rows.length) {
-    return <div className="lb-muted">{devices.unlinked ? `${fmt(devices.unlinked)} cihaz · kalem girilmemiş satışlardan` : 'Bu yıl satış kalemi yok.'}</div>;
-  }
-  const shown = rows.slice(0, limit);
-  const rest = rows.slice(limit);
-  const restTotal = rest.reduce((sum, row) => sum + row.total, 0);
-  const max = Math.max(1, ...rows.map((row) => row.total));
-  return (
-    <div className="lb-models">
-      {shown.map((row) => (
-        <div className="lb-model" key={row.code} title={`${row.code} · satılan ${row.sold} · kiralanan ${row.rental}`}>
-          <span className="lb-model-code">{row.code}</span>
-          <div className="lb-model-bar">
-            <i className="sold" style={{ width: `${(row.sold / max) * 100}%` }} />
-            <i className="rental" style={{ width: `${(row.rental / max) * 100}%` }} />
-          </div>
-          <strong>{fmt(row.total)}</strong>
-        </div>
-      ))}
-      {rest.length ? <div className="lb-model lb-model-rest"><span className="lb-model-code">+{rest.length} model</span><div className="lb-model-bar" /><strong>{fmt(restTotal)}</strong></div> : null}
-    </div>
-  );
 }
 
 /**
@@ -1040,11 +1032,22 @@ function MiniActivityList({ rows, todayKey }: { rows: LiveActivity[]; todayKey: 
  * KALKANLAR: "Pipeline" (Çağdaş Bey: "Pipeline diye bir şey yok") ve "Aktif Fırsat"
  * ("aktif fırsatı görmek istemiyorum, bana teklif sayısı önemli").
  */
+/**
+ * KİŞİ SLAYDI — v3.1 (Çağdaş Bey, 15.09.2026 ses kaydı).
+ * Değişenler:
+ *   * Değerler **halkaların içinde**: büyük halkada yüzde + altında "gerçekleşen / hedef".
+ *     Kart altındaki not satırları kalktı → halkalar ve puntolar büyüdü.
+ *   * Müşteri Takip Statüsü'nde dilim adları ve yüzdeleri simidin içinde; Hunter mavi, Farmer yeşil.
+ *   * **Her kutu linkli** ("her şey için linkleme istiyoruz"): yeni sekmede /crm/kirilim ya da
+ *     /crm/hareketsiz açılır.
+ *   * Model bazlı cihaz kırılımı slayttan KALKTI — kutular büyüdü, model listesi cihaz kutularının
+ *     arkasındaki kırılım sayfasında ("ayrı bir ekran gerekir… öyle bir ekran yapsın").
+ */
 function OwnerSlide({ owner, todayKey, caps, donutRowH }: { owner: LiveOwner; todayKey: string; caps: Capacities; donutRowH: number }) {
   const r = owner.revenue;
   const g = owner.goals;
-  // Dört donut kartı yan yana: halka çapı satır yüksekliğinden türer, küçük halkalar yanında kalır.
-  const ring = Math.max(112, donutRowH - 132);
+  // Not satırı kalktığı için halka çapı büyüdü (donutRowH − 104; v3.0'da −132).
+  const ring = Math.max(120, donutRowH - 104);
   const mini = Math.round(ring * 0.44);
   const recentRows = owner.recentActivities.slice(0, Math.min(5, caps.recent));
   const hasRevenueTarget = r.target != null;
@@ -1054,63 +1057,70 @@ function OwnerSlide({ owner, todayKey, caps, donutRowH }: { owner: LiveOwner; to
   const q = g.quarter.label;
   const deviceGoal: GoalPair = { actual: r.deviceActualYtd, target: r.deviceTarget, pct: pctOf(r.deviceActualYtd, r.deviceTarget) };
   const inactiveTone: Tone = owner.inactive.count === 0 ? 'ok' : owner.inactive.count >= 5 ? 'danger' : 'warn';
-  const inactiveHref = `/crm/hareketsiz?satici=${encodeURIComponent(owner.owner)}&gun=${owner.inactive.days}`;
+  const link = (kind: Parameters<typeof drilldownHref>[0]['kind'], extra: Omit<Parameters<typeof drilldownHref>[0], 'kind' | 'owner'> = {}) =>
+    drilldownHref({ kind, owner: owner.owner, year: r.year, ...extra });
   return (
     <div className="lb-slide lb-owner" key={owner.owner}>
-      <CommercialBand r={r} invoices={owner.invoices} />
+      <CommercialBand r={r} invoices={owner.invoices} invoicesHref={link('fatura')} />
 
       <DonutCard
         title="Aktivite Hedefi"
-        tone={weeklyTone}
-        note={weeklyTarget
-          ? <>Hafta {fmt(owner.actual.totalActivities)} / {fmt(weeklyTarget)} · bugün {fmt(owner.todayActivities)} · yıl {fmt(owner.coverage.activitiesYear)} aktivite</>
-          : <>Hafta {fmt(owner.actual.totalActivities)} aktivite · bugün {fmt(owner.todayActivities)} · yıl {fmt(owner.coverage.activitiesYear)}</>}
         aside={<>
           <MiniRing pair={g.visitsQuarter} label={`${q} ziyaret`} tone={goalTone(g.visitsQuarter, g.quarter.elapsedPct)} size={mini} />
           <MiniRing pair={g.visitsYear} label="Yıl ziyaret" tone={goalTone(g.visitsYear, r.yearElapsedPct)} size={mini} />
         </>}
       >
-        <Ring pct={weeklyTarget ? weeklyPct : null} tone={weeklyTone} big={weeklyTarget ? `%${weeklyPct ?? 0}` : fmt(owner.actual.totalActivities)} sub={weeklyTarget ? 'hafta' : 'bu hafta'} size={ring} stroke={11} />
+        <Ring
+          pct={weeklyTarget ? weeklyPct : null}
+          tone={weeklyTone}
+          big={weeklyTarget ? `%${weeklyPct ?? 0}` : fmt(owner.actual.totalActivities)}
+          sub={weeklyTarget ? `${fmt(owner.actual.totalActivities)} / ${fmt(weeklyTarget)}` : 'bu hafta'}
+          size={ring}
+          stroke={12}
+        />
       </DonutCard>
 
       <DonutCard
         title={`Yıllık Bütçe Hedefi · ${r.year}`}
-        tone={hasRevenueTarget ? (r.pace ?? 'neutral') : 'neutral'}
-        note={hasRevenueTarget
-          ? <>{fmtMoney(r.actualYtd)} / {fmtMoney(r.target)} · {q} {fmtMoney(g.budgetQuarter.actual)}{g.budgetQuarter.target != null ? ` / ${fmtMoney(g.budgetQuarter.target)}` : ''}</>
-          : <>{fmtMoney(r.actualYtd)} YTD · {q} {fmtMoney(g.budgetQuarter.actual)}</>}
         aside={<>
           <MiniRing pair={g.budgetQuarter} label={`${q} bütçe`} tone={goalTone(g.budgetQuarter, g.quarter.elapsedPct)} size={mini} money />
           <MiniRing pair={deviceGoal} label="Cihaz" tone={goalTone(deviceGoal, r.yearElapsedPct)} size={mini} />
         </>}
       >
-        <Ring pct={hasRevenueTarget ? r.attainmentPct : null} tone={hasRevenueTarget ? (r.pace ?? 'neutral') : 'neutral'} big={hasRevenueTarget ? `%${r.attainmentPct ?? 0}` : fmtMoney(r.actualYtd)} sub={hasRevenueTarget ? 'yıl' : 'YTD ciro'} size={ring} stroke={11} />
+        <Ring
+          pct={hasRevenueTarget ? r.attainmentPct : null}
+          tone={hasRevenueTarget ? (r.pace ?? 'neutral') : 'neutral'}
+          big={hasRevenueTarget ? `%${r.attainmentPct ?? 0}` : fmtMoney(r.actualYtd)}
+          sub={hasRevenueTarget ? `${fmtMoney(r.actualYtd)} / ${fmtMoney(r.target)}` : 'YTD ciro'}
+          size={ring}
+          stroke={12}
+        />
       </DonutCard>
 
-      {/* Entegrasyon: hedef + çeyrek girilir (11.09); GERÇEKLEŞEN sayaç Furkan'ın fatura verisi
-          bağlanınca açılacak — o güne kadar yanlış sayı gösterilmez (Sinan'ın kararı). */}
+      {/* Entegrasyon: büyükte yüzde, altında adet (Çağdaş Bey: "burası yüzde olsun, altında adet
+          yazsın"). Gerçekleşen sayaç Furkan'ın fatura verisine bağlanana kadar 0 / hedef görünür. */}
       <DonutCard
         title="Entegrasyon Hedefi"
-        tone="neutral"
-        note={g.integrationPending
-          ? <>Gerçekleşen veri bekleniyor · hedef {g.integration.target == null ? '—' : fmt(g.integration.target)} · {q} {g.integrationQuarter.target == null ? '—' : fmt(g.integrationQuarter.target)}{g.integrationQuarterAssumed ? ' (yıl/4)' : ''}</>
-          : <>{fmt(g.integration.actual)}{g.integration.target != null ? ` / ${fmt(g.integration.target)}` : ''} entegrasyon</>}
-        aside={<MiniRing pair={g.integrationQuarter} label={`${q} entegrasyon`} tone={g.integrationPending ? 'neutral' : goalTone(g.integrationQuarter, g.quarter.elapsedPct)} size={mini} pending={g.integrationPending} />}
+        aside={<MiniRing pair={g.integrationQuarter} label={`${q} entegrasyon`} tone="neutral" size={mini} pending={g.integrationPending} />}
       >
-        <Ring pct={g.integrationPending ? null : g.integration.pct} tone={g.integrationPending ? 'neutral' : goalTone(g.integration, r.yearElapsedPct)}
-          big={g.integrationPending ? (g.integration.target == null ? '—' : fmt(g.integration.target)) : `%${g.integration.pct ?? 0}`}
-          sub={g.integrationPending ? 'yıl hedefi' : 'yıl'} size={ring} stroke={11} />
+        <Ring
+          pct={g.integrationPending ? null : g.integration.pct}
+          tone={g.integrationPending ? 'neutral' : goalTone(g.integration, r.yearElapsedPct)}
+          big={g.integration.target == null ? '—' : `%${g.integration.pct ?? 0}`}
+          sub={g.integration.target == null ? 'hedef yok' : `${g.integrationPending ? '—' : fmt(g.integration.actual)} / ${fmt(g.integration.target)}`}
+          size={ring}
+          stroke={12}
+        />
       </DonutCard>
 
       <DonutCard
         title="Müşteri Takip Statüsü"
-        note={owner.list ? <StatusNote list={owner.list} /> : 'Müşteri Listesi henüz doldurulmadı'}
         aside={<>
           <MiniRing pair={g.hunterToFarmer} label="H → F çevirme" tone={goalTone(g.hunterToFarmer)} size={mini} />
           <MiniRing pair={g.leadToHunter} label="L → H çevirme" tone={goalTone(g.leadToHunter)} size={mini} />
         </>}
       >
-        {owner.list ? <StatusDonut list={owner.list} size={ring} /> : <Ring pct={null} tone="neutral" big="—" sub="liste yok" size={ring} stroke={11} />}
+        {owner.list ? <StatusDonut list={owner.list} size={ring} /> : <Ring pct={null} tone="neutral" big="—" sub="liste yok" size={ring} stroke={12} />}
       </DonutCard>
 
       <div className="lb-card lb-owner-recent">
@@ -1119,19 +1129,18 @@ function OwnerSlide({ owner, todayKey, caps, donutRowH }: { owner: LiveOwner; to
       </div>
 
       <div className="lb-card lb-owner-output">
-        <div className="lb-card-head"><h3>Satış Çıktısı</h3><span>teklif · cihaz · model</span></div>
+        <div className="lb-card-head"><h3>Satış Çıktısı</h3><span>teklif · cihaz</span></div>
         <div className="lb-figure-row three">
-          <QuoteCell label="Açık Teklif" value={owner.quoteBox.open} tone={r.expiredOpenQuotes ? 'warn' : 'info'} />
-          <QuoteCell label="Kazanılan" value={owner.quoteBox.won} tone={owner.quoteBox.won.count ? 'ok' : 'neutral'} />
-          <QuoteCell label="Kaybedilen" value={owner.quoteBox.lost} tone={owner.quoteBox.lost.count ? 'danger' : 'neutral'} />
+          <QuoteCell label="Açık Teklif" value={owner.quoteBox.open} tone={r.expiredOpenQuotes ? 'warn' : 'info'} href={link('teklif', { state: 'acik' })} />
+          <QuoteCell label="Kazanılan" value={owner.quoteBox.won} tone={owner.quoteBox.won.count ? 'ok' : 'neutral'} href={link('teklif', { state: 'kazanilan' })} />
+          <QuoteCell label="Kaybedilen" value={owner.quoteBox.lost} tone={owner.quoteBox.lost.count ? 'danger' : 'neutral'} href={link('teklif', { state: 'kaybedilen' })} />
         </div>
         <div className="lb-figure-row four">
-          <Figure label="Toplam Cihaz" value={fmt(owner.devices.total)} />
-          <Figure label="Satılan" value={fmt(owner.devices.sold)} tone={owner.devices.sold ? 'info' : 'neutral'} />
-          <Figure label="Kiralanan" value={fmt(owner.devices.rental)} tone={owner.devices.rental ? 'info' : 'neutral'} />
-          <Figure label="Aktif POC" value={fmt(owner.pipeline.poc)} />
+          <Figure label="Toplam Cihaz" value={fmt(owner.devices.total)} href={link('cihaz')} />
+          <Figure label="Satılan" value={fmt(owner.devices.sold)} tone={owner.devices.sold ? 'info' : 'neutral'} href={link('cihaz', { mode: 'sale' })} />
+          <Figure label="Kiralanan" value={fmt(owner.devices.rental)} tone={owner.devices.rental ? 'info' : 'neutral'} href={link('cihaz', { mode: 'rental' })} />
+          <Figure label="Aktif POC" value={fmt(owner.pipeline.poc)} href={link('poc')} />
         </div>
-        <ModelBars devices={owner.devices} limit={caps.ownerModels} />
       </div>
 
       <div className="lb-card lb-owner-health">
@@ -1142,14 +1151,14 @@ function OwnerSlide({ owner, todayKey, caps, donutRowH }: { owner: LiveOwner; to
             value={fmt(owner.inactive.count)}
             note={`${owner.inactive.days} gündür üzerinde işlem olmayan firma`}
             tone={inactiveTone}
-            href={inactiveHref}
-            title="Listeyi yeni sekmede aç"
+            href={`/crm/hareketsiz?satici=${encodeURIComponent(owner.owner)}&gun=${owner.inactive.days}`}
           />
           <Figure
             label="Kapsanan Firma"
             value={owner.coverage.covered.target != null ? `${fmt(owner.coverage.covered.actual)} / ${fmt(owner.coverage.covered.target)}` : fmt(owner.coverage.covered.actual)}
-            note="yıl içinde en az 1 aktivite"
+            note="yıl içinde ziyaret / online görüşme"
             tone={goalTone(owner.coverage.covered, r.yearElapsedPct)}
+            href={link('kapsama')}
           />
         </div>
         <div className="lb-figure-row two">
@@ -1158,14 +1167,16 @@ function OwnerSlide({ owner, todayKey, caps, donutRowH }: { owner: LiveOwner; to
             value={owner.coverage.contactsPer.target != null
               ? `${owner.coverage.contactsPer.actual.toLocaleString('tr-TR')} / ${fmt(owner.coverage.contactsPer.target)}`
               : owner.coverage.contactsPer.actual.toLocaleString('tr-TR')}
-            note={`${fmt(owner.coverage.activitiesYear)} aktivite · yıl`}
+            note={`${fmt(owner.coverage.activitiesYear)} görüşme · yıl`}
             tone={goalTone(owner.coverage.contactsPer)}
+            href={link('kapsama')}
           />
           <Figure
             label="Portföy"
             value={fmt(owner.portfolio.total)}
             note={owner.inactive.unmatched ? `${fmt(owner.inactive.unmatched)} liste satırı künyeyle eşleşmedi` : `${fmt(owner.portfolio.active)} firmada son 90 günde hareket`}
             tone={owner.portfolio.total >= LIVE_BOARD_RULES.portfolioLoadLimit ? 'warn' : 'neutral'}
+            href={link('portfoy')}
           />
         </div>
       </div>

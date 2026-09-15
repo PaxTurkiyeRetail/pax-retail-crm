@@ -32,7 +32,8 @@ export type TargetCode =
   | 'lead_to_hunter'
   | 'quotes_won_count'
   | 'covered_customers'
-  | 'contacts_per_customer';
+  | 'contacts_per_customer'
+  | 'weekly_activity';
 
 export type TargetPeriod = 'year' | 'quarter';
 
@@ -44,22 +45,36 @@ export type TargetDefinition = {
   unit: 'money' | 'count';
   /** Girilebilen dönemler: yıl her zaman; çeyrek bütçe, ziyaret ve entegrasyon (11.09 toplantısı). */
   periods: readonly TargetPeriod[];
+  /**
+   * 'user' = kişi kartından girilir · 'company' = **ORTAK hedef**, tek alandan herkese uygulanır
+   * (Çağdaş Bey, 15.09: "ortak hedef alanı olsun, kişi bazlıya bunlarda gerek yok").
+   */
+  scope: 'user' | 'company';
+  /** Ortak hedeflerin ekrandaki varsayılanı (placeholder). */
+  defaultValue?: number;
 };
 
 export const TARGET_DEFINITIONS: readonly TargetDefinition[] = [
-  { code: 'sales_revenue', label: 'Bütçe (ciro, USD)', hint: 'Satış kaydına dönen tekliflerin tutarı (crm_sales)', unit: 'money', periods: ['year', 'quarter'] },
-  { code: 'visit_count', label: 'Ziyaret', hint: 'Fiziki + online satış görüşmesi sayısı', unit: 'count', periods: ['year', 'quarter'] },
-  { code: 'integration_count', label: 'Entegrasyon', hint: 'KasaPOS entegrasyonu tamamlanan firma (gerçekleşen sayaç fatura verisi bağlanınca açılır)', unit: 'count', periods: ['year', 'quarter'] },
-  { code: 'device_count', label: 'Cihaz', hint: 'Satışa dönen cihaz adedi', unit: 'count', periods: ['year'] },
-  { code: 'hunter_to_farmer', label: 'Hunter → Farmer', hint: 'Müşteri Listesi’nde H’den F’ye taşınan firma', unit: 'count', periods: ['year'] },
-  { code: 'lead_to_hunter', label: 'Lead → Hunter', hint: 'Müşteri Listesi’nde L’den H’ye taşınan firma', unit: 'count', periods: ['year'] },
-  { code: 'quotes_won_count', label: 'Kazanılan teklif', hint: 'Yıl içinde kazanılan (closed · won) teklif adedi', unit: 'count', periods: ['year'] },
-  { code: 'covered_customers', label: 'Kapsanan firma', hint: 'Yıl içinde en az bir aktivite girilen tekil firma', unit: 'count', periods: ['year'] },
-  { code: 'contacts_per_customer', label: 'Ortalama temas / firma', hint: 'Yıl içi aktivite / kapsanan firma', unit: 'count', periods: ['year'] },
+  // --- Ortak hedefler (tek alandan herkese; 15.09) --------------------------
+  { code: 'weekly_activity', label: 'Haftalık aktivite', hint: 'Kişi başına haftalık toplam aktivite', unit: 'count', periods: ['year'], scope: 'company', defaultValue: 20 },
+  { code: 'contacts_per_customer', label: 'Ortalama temas / firma', hint: 'Kapsanan firma başına ziyaret + online görüşme', unit: 'count', periods: ['year'], scope: 'company', defaultValue: 5 },
+  // --- Kişi bazlı hedefler --------------------------------------------------
+  { code: 'sales_revenue', label: 'Bütçe (ciro, USD)', hint: 'Satış kaydına dönen tekliflerin tutarı (crm_sales)', unit: 'money', periods: ['year', 'quarter'], scope: 'user' },
+  { code: 'visit_count', label: 'Ziyaret', hint: 'Fiziki + online satış görüşmesi sayısı', unit: 'count', periods: ['year', 'quarter'], scope: 'user' },
+  { code: 'integration_count', label: 'Entegrasyon', hint: 'KasaPOS entegrasyonu tamamlanan firma (gerçekleşen sayaç fatura verisi bağlanınca açılır)', unit: 'count', periods: ['year', 'quarter'], scope: 'user' },
+  { code: 'device_count', label: 'Cihaz', hint: 'Satışa dönen cihaz adedi', unit: 'count', periods: ['year'], scope: 'user' },
+  { code: 'hunter_to_farmer', label: 'Hunter → Farmer', hint: 'Müşteri Listesi’nde H’den F’ye taşınan firma', unit: 'count', periods: ['year'], scope: 'user' },
+  { code: 'lead_to_hunter', label: 'Lead → Hunter', hint: 'Müşteri Listesi’nde L’den H’ye taşınan firma', unit: 'count', periods: ['year'], scope: 'user' },
+  { code: 'covered_customers', label: 'Kapsanan firma', hint: 'Yıl içinde en az bir ziyaret / online görüşme yapılan tekil firma', unit: 'count', periods: ['year'], scope: 'user' },
 ];
 
+/** Ortak (şirket) hedefleri — Hedefler ekranının üstündeki tek kutudan girilir. */
+export const COMPANY_TARGET_DEFINITIONS: readonly TargetDefinition[] = TARGET_DEFINITIONS.filter((d) => d.scope === 'company');
+/** Kişi kartlarında girilen hedefler. */
+export const USER_TARGET_DEFINITIONS: readonly TargetDefinition[] = TARGET_DEFINITIONS.filter((d) => d.scope === 'user');
+
 export const TARGET_CODES: readonly TargetCode[] = TARGET_DEFINITIONS.map((d) => d.code);
-export const QUARTERLY_TARGET_CODES: readonly TargetCode[] = TARGET_DEFINITIONS.filter((d) => d.periods.includes('quarter')).map((d) => d.code);
+export const QUARTERLY_TARGET_CODES: readonly TargetCode[] = USER_TARGET_DEFINITIONS.filter((d) => d.periods.includes('quarter')).map((d) => d.code);
 
 export function isTargetCode(value: unknown): value is TargetCode {
   return typeof value === 'string' && (TARGET_CODES as readonly string[]).includes(value);
@@ -138,7 +153,10 @@ export type TargetsAdminUser = {
   id: string;
   name: string;
   email: string;
-  /** allowed_users.weekly_target_total_activities (0 = hedef yok). */
+  /**
+   * allowed_users.weekly_target_total_activities — 15.09'dan itibaren ORTAK hedefe taşındı;
+   * ekranda girilmez, ortak değer yoksa yedek olarak okunur (Kullanıcı Yönetimi hâlâ yazabilir).
+   */
   weeklyTotal: number;
   yearly: Partial<Record<TargetCode, number | null>>;
   quarterly: Partial<Record<TargetCode, QuarterValues>>;
@@ -149,10 +167,17 @@ export type TargetsAdminPayload = {
   year: number;
   quarters: Quarter[];
   users: TargetsAdminUser[];
+  /** Ortak (şirket) hedefleri — kişi kartlarında değil, üstteki tek kutuda (15.09). */
+  company: Partial<Record<TargetCode, number | null>>;
 };
 
 /** Ekrandan gelen ham değer: sayı, metin ("1.500.000"), boş. normalizeTargetValue ile sayıya iner. */
 export type TargetInputValue = number | string | null | undefined;
+
+export type SaveCompanyTargetsInput = {
+  year: number;
+  values: Partial<Record<TargetCode, TargetInputValue>>;
+};
 
 export type SaveTargetsInput = {
   year: number;

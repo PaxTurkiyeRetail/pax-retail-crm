@@ -24,6 +24,10 @@
   --lb-neutral: #64748b;
   /* Müşteri Takip Statüsü donut'unun 4. dilimi (Kasa Firması) — H/F/L ile karışmayan mor. */
   --lb-violet: #6d28d9;
+  /* Müşteri Takip Statüsü dilim renkleri (Çağdaş Bey, 15.09): Hunter AÇIK MAVİ, Farmer AÇIK YEŞİL.
+     Yalnız dolgu olarak kullanılır (yazı değil), bu yüzden açık tonlar kontrast denetimine girmez. */
+  --lb-hunter: #3b82f6;
+  --lb-farmer: #22c55e;
   --lb-ok-soft: rgba(21, 128, 61, 0.10);
   --lb-warn-soft: rgba(180, 83, 9, 0.12);
   --lb-danger-soft: rgba(185, 28, 28, 0.10);
@@ -53,6 +57,8 @@
   --lb-info: #93b4fd;
   --lb-neutral: #94a3b8;
   --lb-violet: #c4b5fd;
+  --lb-hunter: #60a5fa;
+  --lb-farmer: #4ade80;
   --lb-ok-soft: rgba(74, 222, 128, 0.12);
   --lb-warn-soft: rgba(251, 191, 36, 0.14);
   --lb-danger-soft: rgba(252, 165, 165, 0.14);
@@ -457,9 +463,10 @@
 .lb-owner-output { grid-column: span 5; }
 .lb-owner-health { grid-column: span 4; }
 
-.lb-donut-card { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 6px; align-items: center; justify-items: center; height: var(--lb-donut-row-h, 344px); padding: 12px 14px 14px; }
+/* v3.1: kart = başlık + gövde (alt not satırı kalktı) → halka büyür, punto büyür. */
+.lb-donut-card { display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 6px; align-items: center; justify-items: center; height: var(--lb-donut-row-h, 344px); padding: 12px 14px 14px; }
 .lb-donut-card .lb-card-head { width: 100%; }
-.lb-donut-card .lb-card-head h3 { font-size: 14px; }
+.lb-donut-card .lb-card-head h3 { font-size: clamp(15px, 1.05vw, 19px); }
 .lb-donut-card-body { display: grid; place-items: center; min-height: 0; min-width: 0; }
 /* v2.7: büyük halka solda, küçük halkalar sağda alt alta (Çağdaş Bey 10.09: "bir büyük, iki küçük simit"). */
 .lb-donut-card-body.with-aside { grid-template-columns: auto auto; gap: 12px; justify-content: center; align-items: center; }
@@ -468,25 +475,30 @@
 .lb-mini { display: grid; justify-items: center; gap: 2px; }
 .lb-mini .lb-ring-center { padding: 0 8px; gap: 0; }
 .lb-mini-label { font-size: 10px; font-weight: 900; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-3); white-space: nowrap; }
-.lb-donut-card-note b { font-weight: 900; }
-.lb-donut-card-note { width: 100%; text-align: center; font-size: 12.5px; font-weight: 800; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.lb-donut-card-note.tone-ok { color: var(--lb-ok); } .lb-donut-card-note.tone-warn { color: var(--lb-warn); } .lb-donut-card-note.tone-danger { color: var(--lb-danger); }
-/* Büyük halkanın merkezi: yüzde büyük, alt yazı okunur */
-.lb-donut-card .lb-ring-center strong { font-size: clamp(26px, 2.2vw, 40px); }
-.lb-donut-card .lb-ring-center span { font-size: 11.5px; }
-.lb-donut-card .lb-mini .lb-ring-center strong { font-size: clamp(14px, 1.05vw, 19px); line-height: 1.05; }
-.lb-donut-card .lb-mini .lb-ring-center span { font-size: 9px; letter-spacing: 0.01em; text-transform: none; font-weight: 800; line-height: 1.2; }
-/* Müşteri Takip Statüsü (v2.8): 4 dilimli donut (H/F/L/K); lejant yerine kart altındaki renkli not. */
-.lb-status-donut circle { stroke-width: 14; }
-.lb-status-donut .lb-ring-center strong { font-size: clamp(24px, 2vw, 36px); }
-.lb-status-donut .lb-ring-center span { font-size: 10.5px; letter-spacing: 0.06em; }
-.lb-status-pct { font-style: normal; color: var(--text-3); font-weight: 800; }
+/* Büyük halkanın merkezi: yüzde ÇOK büyük, altında "gerçekleşen / hedef" (Çağdaş Bey, 15.09:
+   "hafta hedefi büyük simidin içine yazsın, altta hint bir yazsın"). */
+.lb-donut-card .lb-ring-center strong { font-size: clamp(32px, 2.9vw, 52px); }
+.lb-donut-card .lb-ring-center span { font-size: clamp(13px, 0.95vw, 17px); font-weight: 900; color: var(--text-2); text-transform: none; letter-spacing: 0; }
+.lb-donut-card .lb-mini .lb-ring-center strong { font-size: clamp(16px, 1.25vw, 23px); line-height: 1.05; }
+.lb-donut-card .lb-mini .lb-ring-center span { font-size: clamp(10px, 0.72vw, 13px); letter-spacing: 0; text-transform: none; font-weight: 800; line-height: 1.2; }
+/* Müşteri Takip Statüsü (v3.1): 4 dilimli donut (H/F/L/K); ad + adet + yüzde DİLİMİN ÜSTÜNDE. */
+.lb-status-donut circle { stroke-width: 17; }
+.lb-status-donut .lb-ring-center strong { font-size: clamp(28px, 2.3vw, 42px); }
+.lb-status-donut .lb-ring-center span { font-size: clamp(11px, 0.8vw, 14px); letter-spacing: 0.06em; }
+.lb-slice-label {
+  position: absolute; transform: translate(-50%, -50%); display: grid; justify-items: center; gap: 0;
+  padding: 2px 6px; border-radius: 8px; background: color-mix(in srgb, var(--surface-2) 88%, transparent);
+  pointer-events: none; white-space: nowrap; line-height: 1.15;
+}
+.lb-slice-label b { font-size: clamp(10px, 0.72vw, 13px); font-weight: 900; color: var(--text); letter-spacing: 0.02em; }
+.lb-slice-label em { font-style: normal; font-size: clamp(9.5px, 0.66vw, 12px); font-weight: 800; color: var(--text-2); font-variant-numeric: tabular-nums; }
 
 /* --- Alt satır kartları --------------------------------------------------- */
-/* Alt satırda boş alan kalmaz ama sayı hücreleri de ezilmez: hücre satırları DOĞAL yüksekliğini
-   alır (etiket ve ipucu satırı kırpılmasın), kalan yüksekliği model listesi / kart içi boşluk paylaşır.
-   Kompakt ekranlarda (1366×768) `1fr` bölüşümü etiketleri 4 px'e sıkıştırıyordu — bu yüzden auto. */
-.lb-owner-output { grid-template-rows: auto minmax(min-content, 1fr) minmax(min-content, 1fr) minmax(0, 1.3fr); gap: 8px; align-content: stretch; }
+/* v3.1: model listesi kartla birlikte kalktı (Çağdaş Bey: "satış kalemini orada göstermek istemiyoruz,
+   kutucuklar daha büyük olsun, linke basınca kırılım sayfasında görelim") → kart 2 hücre satırından
+   ibaret; iki satır kalan yüksekliği paylaşır, böylece altta boşluk kalmaz.
+   Hücre satırları yine min-content taban alır: 1366×768'de `1fr` etiketleri 4 px'e sıkıştırıyordu. */
+.lb-owner-output { grid-template-rows: auto minmax(min-content, 1fr) minmax(min-content, 1fr); gap: 8px; align-content: stretch; }
 .lb-owner-health { grid-template-rows: auto minmax(min-content, 1fr) minmax(min-content, 1fr); gap: 8px; align-content: stretch; }
 .lb-owner-recent { grid-template-rows: auto minmax(0, 1fr); gap: 8px; align-content: stretch; }
 
@@ -495,12 +507,12 @@
 .lb-figure-row.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .lb-figure-row.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .lb-figure-row.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-.lb-figure { position: relative; display: grid; gap: 2px; align-content: center; padding: 8px 12px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); min-width: 0; overflow: hidden; text-decoration: none; }
+.lb-figure { position: relative; display: grid; gap: 3px; align-content: center; padding: 10px 14px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); min-width: 0; overflow: hidden; text-decoration: none; }
 .lb-figure-value { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
-.lb-figure-value strong { font-size: clamp(19px, 1.5vw, 27px); font-weight: 900; letter-spacing: -0.02em; line-height: 1.15; color: var(--text); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.lb-figure-value em { font-style: normal; font-size: clamp(12px, 0.95vw, 16px); font-weight: 800; color: var(--text-2); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.lb-figure > span { font-size: 10.5px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.lb-figure small { font-size: 10.5px; font-weight: 700; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lb-figure-value strong { font-size: clamp(24px, 2.6vw, 50px); font-weight: 900; letter-spacing: -0.02em; line-height: 1.15; color: var(--text); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lb-figure-value em { font-style: normal; font-size: clamp(14px, 1.35vw, 26px); font-weight: 800; color: var(--text-2); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lb-figure > span { font-size: clamp(11px, 0.95vw, 17px); font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lb-figure small { font-size: clamp(11px, 0.85vw, 15px); font-weight: 700; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lb-figure.tone-ok .lb-figure-value strong { color: var(--lb-ok); }
 .lb-figure.tone-warn .lb-figure-value strong { color: var(--lb-warn); }
 .lb-figure.tone-danger .lb-figure-value strong { color: var(--lb-danger); }
@@ -524,24 +536,28 @@
 .lb-mini-list { display: grid; gap: 5px; margin: 0; padding: 0; list-style: none; grid-auto-rows: minmax(var(--lb-act-h, 38px), 1fr); align-content: stretch; min-height: 0; overflow: hidden; }
 .lb-mini-list li { display: grid; grid-template-columns: 14px minmax(0, 1fr) auto auto; gap: 8px; align-items: center; min-height: var(--lb-act-h, 38px); padding: 0 10px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); }
 .lb-mini-list li > b { font-size: 11px; font-weight: 900; color: var(--text-3); font-variant-numeric: tabular-nums; }
-.lb-mini-firm { font-size: 12.5px; font-weight: 800; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lb-mini-firm { font-size: clamp(13px, 1.05vw, 19px); font-weight: 800; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lb-mini-kind { font-size: 10px; font-weight: 800; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 96px; }
 .lb-mini-list li > i { font-style: normal; font-size: 11px; font-weight: 900; color: var(--text-3); }
 .lb-mini-list li > i.tone-ok { color: var(--lb-ok); }
-.lb-mini-list small { font-size: 10.5px; font-weight: 700; color: var(--text-3); white-space: nowrap; }
+.lb-mini-list small { font-size: clamp(11px, 0.88vw, 15px); font-weight: 700; color: var(--text-3); white-space: nowrap; }
 .lb-owner .lb-card { gap: 10px; }
+.lb-owner .lb-card-head h3 { font-size: clamp(14px, 1.15vw, 21px); }
+.lb-owner .lb-card-head span { font-size: clamp(11px, 0.88vw, 16px); }
 
 
 /* Ticari bant */
 .lb-band { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 6px; padding: 8px 10px; border-radius: 14px; border: 1px solid var(--border); background: var(--surface-2); }
 .lb-band-item { display: grid; gap: 1px; min-width: 0; padding: 4px 12px; border-left: 1px solid var(--border); }
 .lb-band-item:first-child { border-left: none; }
-.lb-band-item span { font-size: 10px; font-weight: 900; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lb-band-item span { font-size: clamp(11px, 0.76vw, 13.5px); font-weight: 900; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lb-band-item strong { font-size: 20px; font-weight: 900; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: -0.02em; line-height: 1.2; }
 .lb-band.no-hints .lb-band-item { gap: 3px; padding: 6px 12px; }
-.lb-band.no-hints .lb-band-item strong { font-size: 24px; }
+.lb-band.no-hints .lb-band-item strong { font-size: clamp(24px, 1.8vw, 34px); }
 .lb-band-item small { font-size: 11px; font-weight: 700; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lb-band-item.tone-ok strong { color: var(--lb-ok); } .lb-band-item.tone-warn strong { color: var(--lb-warn); } .lb-band-item.tone-danger strong { color: var(--lb-danger); }
+.lb-band-item.is-link { text-decoration: none; cursor: pointer; }
+.lb-band-item.is-link:hover strong { text-decoration: underline; }
 
 /* Hot Pipeline kartları (kişi slaytı) */
 .lb-hot-col { gap: 8px; }

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  COMPANY_TARGET_DEFINITIONS,
+  USER_TARGET_DEFINITIONS,
   QUARTERLY_TARGET_CODES,
   TARGET_CODES,
   goalPair,
@@ -66,16 +68,24 @@ describe('hedefler v2 — goalPair ve kod listeleri', () => {
     expect(goalPair(9, 30)).toEqual({ actual: 9, target: 30, pct: 30 });
     expect(goalPair(117000, 100000).pct).toBe(117);
   });
-  // v2.9 (Çağdaş Bey, 11.09): "İntegrasyon aleti de aynı şekilde çeyreklere bölünecek."
-  // Yeni yıllık hedefler: kapsanan firma ve ortalama temas / firma (Sinan'ın KPI listesi).
-  it('çeyrek girilebilen kodlar: bütçe, ziyaret, entegrasyon; 9 tanım', () => {
+  // v2.9 (11.09): entegrasyon çeyreğe bölündü. v3.1 (15.09, Çağdaş Bey): kazanılan teklif HEDEFİ
+  // kalktı ("hedef olarak gerek yok"), haftalık aktivite ve ortalama temas ORTAK hedefe taşındı.
+  it('çeyrek girilebilen kodlar yalnız kişi hedeflerinden: bütçe, ziyaret, entegrasyon', () => {
     expect(QUARTERLY_TARGET_CODES).toEqual(['sales_revenue', 'visit_count', 'integration_count']);
+  });
+  it('ortak hedefler: haftalık aktivite + ortalama temas (varsayılan 5)', () => {
+    expect(COMPANY_TARGET_DEFINITIONS.map((d) => d.code)).toEqual(['weekly_activity', 'contacts_per_customer']);
+    expect(COMPANY_TARGET_DEFINITIONS.find((d) => d.code === 'contacts_per_customer')?.defaultValue).toBe(5);
+    expect(COMPANY_TARGET_DEFINITIONS.every((d) => d.scope === 'company')).toBe(true);
+  });
+  it('kişi hedefleri: kazanılan teklif artık yok, kapsanan firma var', () => {
+    const codes = USER_TARGET_DEFINITIONS.map((d) => d.code);
+    expect(codes).not.toContain('quotes_won_count');
+    expect(codes).toContain('covered_customers');
+    expect(codes).toContain('hunter_to_farmer');
+    expect(codes).toContain('lead_to_hunter');
+    expect(USER_TARGET_DEFINITIONS.every((d) => d.scope === 'user')).toBe(true);
     expect(TARGET_CODES).toHaveLength(9);
-    expect(TARGET_CODES).toContain('hunter_to_farmer');
-    expect(TARGET_CODES).toContain('lead_to_hunter');
-    expect(TARGET_CODES).toContain('quotes_won_count');
-    expect(TARGET_CODES).toContain('covered_customers');
-    expect(TARGET_CODES).toContain('contacts_per_customer');
   });
 });
 

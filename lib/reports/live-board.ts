@@ -559,13 +559,16 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
     const creator = text(row.created_by);
     if (!creator) continue;
     const owner = ownerNameByKey.get(normalizeName(creator)) ?? creator;
+    // v3.1 (Çağdaş Bey, 15.09): kapsama ve temas YALNIZ ziyaret + online görüşmeyi sayar —
+    // "mail ve telefon görüşmelerini biz aktivite olarak almıyoruz, portföy sağlığı içinde almıyoruz".
+    // Ziyaret sayacıyla birebir aynı sınıflandırma; haftalık aktivite kartı tüm türleri saymaya devam eder.
+    const kind = activityTargetKind(activityLabelFromRow(row));
+    if (kind !== 'salesPhysical' && kind !== 'salesOnline') continue;
     const cover = coverageByOwner.get(owner) ?? { activities: 0, customers: new Set<string>() };
     cover.activities += 1;
     if (row.musteri_id) cover.customers.add(String(row.musteri_id));
     coverageByOwner.set(owner, cover);
 
-    const kind = activityTargetKind(activityLabelFromRow(row));
-    if (kind !== 'salesPhysical' && kind !== 'salesOnline') continue;
     const cur = visitsByOwner.get(owner) ?? { quarter: 0, year: 0 };
     cur.year += 1;
     if (row.day >= quarter.start && row.day <= quarter.end) cur.quarter += 1;
@@ -749,6 +752,9 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
   let companyRevenueTarget: number | null = null;
   let companyDeviceTarget: number | null = null;
   let companyIntegrationTarget: number | null = null;
+  // ORTAK hedefler (033, 15.09): tek alandan girilir, HERKESE uygulanır — kişi satırı olsa bile bu kazanır.
+  let companyWeeklyActivity: number | null = null;
+  let companyContactsPerCustomer: number | null = null;
   for (const row of targetRows) {
     const value = num(row.value) > 0 ? num(row.value) : null;
     if (row.scope_type === 'company') {
@@ -756,6 +762,8 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
       if (row.code === 'sales_revenue') companyRevenueTarget = value;
       if (row.code === 'device_count') companyDeviceTarget = value;
       if (row.code === 'integration_count') companyIntegrationTarget = value;
+      if (row.code === 'weekly_activity') companyWeeklyActivity = value;
+      if (row.code === 'contacts_per_customer') companyContactsPerCustomer = value;
       continue;
     }
     if (!row.user_id) continue;
@@ -1099,7 +1107,11 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
   const unranked = ownerNames.map((owner) => {
     const targetRow = targetRowByOwner.get(owner);
     const actual: WeeklyTargetCounters = targetRow?.actual ?? emptyWeeklyCounters();
-    const target: WeeklyTargetCounters = targetRow?.target ?? emptyWeeklyCounters();
+    const baseTarget: WeeklyTargetCounters = targetRow?.target ?? emptyWeeklyCounters();
+    // Ortak haftalık aktivite hedefi girilmişse kişinin kendi kolonunu (allowed_users) EZER (15.09).
+    const target: WeeklyTargetCounters = companyWeeklyActivity != null
+      ? { ...baseTarget, totalActivities: companyWeeklyActivity }
+      : baseTarget;
     const rows = customersByOwner.get(owner) ?? [];
     const agg = quoteAggByOwner.get(owner) ?? emptyQuoteAgg();
     const userTargets = targetByUser.get(ownerIdByName.get(owner) ?? '') ?? emptyTargets();
@@ -1175,7 +1187,7 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
         const per = covered ? Math.round((cover.activities / covered) * 10) / 10 : 0;
         return {
           covered: goalPair(covered, userTargets.year.covered_customers ?? null),
-          contactsPer: goalPair(per, userTargets.year.contacts_per_customer ?? null),
+          contactsPer: goalPair(per, companyContactsPerCustomer ?? userTargets.year.contacts_per_customer ?? null),
           activitiesYear: cover.activities,
         } satisfies OwnerCoverage;
       })(),

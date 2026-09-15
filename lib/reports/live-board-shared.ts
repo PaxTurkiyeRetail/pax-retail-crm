@@ -656,8 +656,6 @@ export type Capacities = {
   alertItems: number; // uyarı grubu başına satır
   alertGroups: number; // sayfa başına uyarı paneli (kolon)
   portfolioRows: number; // Portföy ekranındaki bar/açıklama satırı
-  /** Kişi slaydı model kırılımında gösterilen satır (fazlası "+N model" satırında toplanır). */
-  ownerModels: number;
   jiraRows: number;      // Jira ekranı firma tablosu satırı
   /** Business Pulse tek ekrana sığmıyor: ciro+sıralama / aktivite+dönüşüm olarak ikiye böl. */
   pulseSplit: boolean;
@@ -690,11 +688,9 @@ export function capacities(bodyHeight: number, bodyWidth = 1920): Capacities {
   const pulseSplit = H < 690;
   // Jira: KPI şeridi altında firma tablosu (kompakt satır) — 28: tablo başlığı.
   const jiraRows = rowsThatFit(H - m.kpiRowH - m.gap - m.cardChrome - 28, m.ownerQuoteRowH, 6);
-  // Kişi slaydı "Satış Çıktısı" kartında model listesine kalan alan ölçüldü (Playwright, v2.9):
-  // 1920×1080'de 140 px (7 satır sığar), 1366×768 kompaktta 65 px (3 satır). Gösterilen satır +
-  // "+N model" satırı toplamı bu sınırın altında kalmalı — aşarsa liste kırpılır.
-  const ownerModels = m.compact ? 2 : 6;
-  return { hot, recent, leader, tableRows, openQuotes, closedQuotes: Math.max(1, closedQuotes), alertItems, alertGroups, portfolioRows, jiraRows, ownerModels, pulseSplit };
+  // v3.1 (15.09): model kırılımı kişi slaydından kalktı — cihaz kutularının arkasındaki
+  // /crm/kirilim sayfasında listeleniyor, bu yüzden ayrı bir kapasite hesabı gerekmiyor.
+  return { hot, recent, leader, tableRows, openQuotes, closedQuotes: Math.max(1, closedQuotes), alertItems, alertGroups, portfolioRows, jiraRows, pulseSplit };
 }
 
 /**
