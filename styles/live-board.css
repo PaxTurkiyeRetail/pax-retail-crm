@@ -446,15 +446,18 @@
 .lb-status-donut circle { stroke-width: 17; }
 .lb-status-donut .lb-ring-center strong { font-size: clamp(28px, 2.3vw, 42px); }
 .lb-status-donut .lb-ring-center span { font-size: clamp(11px, 0.8vw, 14px); letter-spacing: 0.06em; }
-/* Dilim etiketi TEK SATIR (15.09 akşam): iki satırlık kutu komşu dilimlerin etiketiyle ve
-   merkezdeki toplamla çakışıyordu. Zemin tam opak — bandın rengi yazının arkasından geçmesin. */
-.lb-slice-label {
-  position: absolute; transform: translate(-50%, -50%); display: flex; align-items: baseline; gap: 5px;
-  padding: 2px 7px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--border);
-  pointer-events: none; white-space: nowrap; line-height: 1.25;
-}
-.lb-slice-label b { font-size: clamp(9.5px, 0.68vw, 12.5px); font-weight: 900; color: var(--text); letter-spacing: 0.02em; }
-.lb-slice-label em { font-style: normal; font-size: clamp(9.5px, 0.64vw, 12px); font-weight: 800; color: var(--text-2); font-variant-numeric: tabular-nums; }
+/* MÜŞTERİ TAKİP STATÜSÜ — v3.3: dilim adları simidin ALTINDA (2×2 künye satırı).
+   v3.1'de etiketler bandın üstündeydi; tam ekranda halka büyüyünce hem birbirlerine hem
+   merkezdeki toplama biniyordu (Sinan, 15.09 akşam). Simidin üstü artık temiz. */
+/* Künye satırı halkadan geniş olmasın diye kutu kolonun genişliğini alır (sabit px değil):
+   `.lb-donut-main` kolonu kart dar kaldığında büzülüyor, sabit genişlik verilirse künye
+   kartın dışına taşıp kırpılıyordu (15.09 akşam). */
+.lb-status-wrap { display: grid; gap: 8px; justify-items: center; align-content: center; width: 100%; min-width: 0; }
+.lb-status-legend { display: grid; grid-template-columns: minmax(0, 1fr); gap: 3px; width: 100%; min-width: 0; }
+.lb-status-legend-item { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.lb-status-legend-item i { flex: 0 0 auto; width: 11px; height: 11px; border-radius: 4px; }
+.lb-status-legend-item b { font-size: clamp(11px, 0.85vw, 15px); font-weight: 900; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lb-status-legend-item em { margin-left: auto; font-style: normal; font-size: clamp(11px, 0.8vw, 14px); font-weight: 800; color: var(--text-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
 
 /* --- Alt satır kartları --------------------------------------------------- */
 /* v3.1: model listesi kartla birlikte kalktı (Çağdaş Bey: "satış kalemini orada göstermek istemiyoruz,

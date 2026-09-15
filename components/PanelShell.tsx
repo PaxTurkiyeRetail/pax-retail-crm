@@ -241,7 +241,7 @@ function routeMeta(pathname: string) {
       "Haftalık Yönetim Sunumu",
     ],
     ["/crm/reports/seller-presentation", "Rapor Merkezi", "Satışçı Sunumu"],
-    ["/crm/reports/seller-followup", "Rapor Merkezi", "Satışçı Takip Raporu"],
+    ["/crm/reports/seller-followup", "Rapor Merkezi", "Dashboard"],
     ["/crm/reports/entegrasyon-raporu", "Rapor Merkezi", "Entegrasyon Raporu"],
     ["/crm/reports/forecast", "Rapor Merkezi", "Forecast Raporu"],
     ["/crm/reports/quotes", "Rapor Merkezi", "Teklif Raporları"],
@@ -491,7 +491,7 @@ export default function PanelShell({
       });
     // RAPORLAR MENÜ SIRASI — Çağdaş Bey, 15.09.2026. Sıra bilinçlidir, alfabetik
     // ya da ekleme sırası değildir; yeni rapor eklerken bu listeye yerini sorarak koy.
-    //   1 Satışçı Takip Raporu (dashboard; Faz Raporu ve Canlı Ekran onun sekmeleri)
+    //   1 Dashboard (eski adı "Satışçı Takip Raporu"; Faz Raporu ve Canlı Ekran onun sekmeleri)
     //   2 Teklif Raporları · 3 Forecast Raporu · 4 KasaPOS Raporu · 5 Aktiviteler Raporu
     //   6 Satışçı Sunumu · 7 Yönetim Sunumu · 8 Entegrasyon Raporu
     // Menüden KALKANLAR: Faz Raporu (artık Satışçı Takip Raporu'nun sekmesi),
@@ -499,9 +499,11 @@ export default function PanelShell({
     if (allowed('report.read.all') && allowed('screen.reports.view')) {
       // Canlı Ekran (Command Center) ve Faz bu raporun sekmeleridir (?tab=live / ?tab=faz);
       // ayrı menü girdileri bilinçli olarak yok (Sinan, 04.09 · 15.09).
+      // "Satışçı Takip Raporu" adı 15.09 akşam **Dashboard** oldu (Çağdaş Bey'in listesindeki
+      // ilk satır); Takip Listesi · Kişi Bazlı Aktivite · Faz · Canlı Ekran bunun sekmeleridir.
       reports.push({
         href: "/crm/reports/seller-followup",
-        label: "Satışçı Takip Raporu",
+        label: "Dashboard",
         iconKey: "weekly",
         exact: true,
       });

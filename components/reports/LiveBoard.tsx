@@ -862,22 +862,18 @@ const STATUS_SEGMENTS = [
 ] as const;
 
 /**
- * Müşteri Takip Statüsü donut'u — v3.2 (Çağdaş Bey, 15.09):
- *   * Dilim adları ve yüzdeleri **simidin içinde** (eski alt not satırı kalktı: "onlar simitin
- *     içinde yazsın görselde"). Yer yoksa (dilim %5'in altı) etiket düşer, merkez toplamı taşır.
- *   * Renkler: **Hunter açık mavi · Farmer açık yeşil** (Çağdaş Bey'in seçimi), Lead sarı, Kasa mor.
- * SVG `rotate(-90deg)` ile döndürüldüğü için etiketler SVG'ye değil, üstteki HTML katmanına
- * açı hesabıyla konur — yoksa yazılar yan yatardı.
+ * Müşteri Takip Statüsü donut'u — v3.3 (Sinan, 15.09 akşam).
  *
- * ÜST ÜSTE BİNME DÜZELTMESİ (15.09 akşam, Sinan): etiketler iki satırdan **tek satıra** indi,
- * ad yerine **H/F/L/K kısaltması** kullanılıyor (`H 9 · %25`) ve kutu bandın tam ortasına
- * (r = 40) oturtuldu:
- *   * iki satırlık kutu, komşu küçük dilimlerin (Farmer ↔ Lead) etiketleriyle dikeyde çakışıyordu;
- *   * eski yarıçap (37) kutuyu deliğe doğru kaydırdığı için merkezdeki toplamın ("36 firma")
- *     üstüne biniyordu — Özet slaydında halka daha küçük olduğu için orada daha belirgindi.
- * Kart `overflow: hidden` olduğundan etiketler bandın DIŞINA çıkarılamaz (yan taraftaki küçük
- * halkalarla çakışır ve kart keser) — bu yüzden çözüm kutuyu küçültmek oldu. Uzun ad `title`
- * ile duruyor, ekran okuyucu için `aria-label`'da tam liste var.
+ * v3.1'de dilim adları **bandın üstüne** yazılıyordu (Çağdaş Bey: "onlar simidin içinde yazsın").
+ * TAM EKRANDA bu çalışmadı: halka büyüyünce etiket kutuları hem birbirine hem merkezdeki
+ * toplama biniyordu (Sinan: *"bu simit üstündeki yazılar çok karışık oldu… altına yazalım,
+ * fazla kalabalık oldu"*). Pencere modunda binmiyordu, ama TV'de kullanılan hâli tam ekran.
+ *
+ * Çözüm: simidin üstü **temiz** (yalnız toplam), dört değer **simidin altında** 2×2 künye
+ * satırında — renk kutusu + ad + adet · yüzde. Hiçbir çapta çakışma kalmıyor, punto da
+ * küçülmüyor. Halka çapı künye satırı kadar küçülür (kart yüksekliği aynı kalsın diye).
+ *
+ * Renkler: Hunter açık mavi · Farmer açık yeşil (Çağdaş Bey'in seçimi), Lead sarı, Kasa mor.
  */
 function StatusDonut({ list, size }: { list: CustomerListSplit; size: number }) {
   const total = list.hunter + list.farmer + list.lead + list.kasa;
@@ -889,41 +885,35 @@ function StatusDonut({ list, size }: { list: CustomerListSplit; size: number }) 
   const arcs = shown.map((segment) => {
     const share = total ? segment.value / total : 0;
     const length = Math.max(0, share * circumference - gap);
-    const mid = offset / circumference + share / 2;          // 12 yönünden saat yönünde oran
-    const angle = mid * 2 * Math.PI;
-    const arc = {
-      ...segment, share, length, dashOffset: -offset,
-      // Etiket konumu: **bandın tam ortası** (r = 40; bant 31.5–48.5 arası). Daha içeri alınırsa
-      // merkezdeki toplamın üstüne biner, daha dışarı alınırsa kart (overflow: hidden) keser.
-      x: 50 + Math.sin(angle) * 40,
-      y: 50 - Math.cos(angle) * 40,
-    };
+    const arc = { ...segment, share, length, dashOffset: -offset };
     offset += share * circumference;
     return arc;
   });
-  // Etiket, halka çapına göre kısalır: küçük halkada uzun kutu merkezdeki toplamın üstüne biner.
-  // 1366×768'de Özet halkası ~150 px'e düşüyor — orada yalnız harf kalır.
-  const labelDetail: 'full' | 'pct' | 'letter' = size >= 240 ? 'full' : size >= 175 ? 'pct' : 'letter';
+  // Künye **tek kolon, dört satır**: iki kolona sıkıştırıldığında "Hunter" → "Hu…" diye
+  // kısalıyordu (kart dar). Halka künye kadar küçülür, kart yüksekliği değişmez.
+  const ring = Math.max(96, size - 96);
   return (
-    <div className="lb-donut lb-status-donut" style={{ width: size, height: size }} role="img"
-      aria-label={STATUS_SEGMENTS.map((segment) => `${segment.label} ${list[segment.key]}`).join(' · ')}>
-      <svg viewBox="0 0 100 100">
-        <circle className="track" cx="50" cy="50" r={radius} />
+    <div className="lb-status-wrap">
+      <div className="lb-donut lb-status-donut" style={{ width: ring, height: ring }} role="img"
+        aria-label={STATUS_SEGMENTS.map((segment) => `${segment.label} ${list[segment.key]}`).join(' · ')}>
+        <svg viewBox="0 0 100 100">
+          <circle className="track" cx="50" cy="50" r={radius} />
+          {arcs.map((arc) => (
+            <circle key={arc.key} cx="50" cy="50" r={radius} stroke={arc.color}
+              strokeDasharray={`${arc.length} ${circumference - arc.length}`} strokeDashoffset={arc.dashOffset} />
+          ))}
+        </svg>
+        <div className="lb-ring-center"><strong>{fmt(total)}</strong><span>firma</span></div>
+      </div>
+      <div className="lb-status-legend">
         {arcs.map((arc) => (
-          <circle key={arc.key} cx="50" cy="50" r={radius} stroke={arc.color}
-            strokeDasharray={`${arc.length} ${circumference - arc.length}`} strokeDashoffset={arc.dashOffset} />
+          <span className="lb-status-legend-item" key={arc.key}>
+            <i style={{ background: arc.color }} aria-hidden="true" />
+            <b>{arc.label}</b>
+            <em>{fmt(arc.value)} · %{Math.round(arc.share * 100)}</em>
+          </span>
         ))}
-      </svg>
-      {arcs.filter((arc) => arc.share >= 0.05).map((arc) => (
-        <div className="lb-slice-label" key={arc.key} style={{ left: `${arc.x}%`, top: `${arc.y}%` }}
-          title={`${arc.label} ${fmt(arc.value)} · %${Math.round(arc.share * 100)}`}>
-          <b>{arc.short}</b>
-          {labelDetail === 'letter' ? null : (
-            <em>{labelDetail === 'full' ? `${fmt(arc.value)} · ` : ''}%{Math.round(arc.share * 100)}</em>
-          )}
-        </div>
-      ))}
-      <div className="lb-ring-center"><strong>{fmt(total)}</strong><span>firma</span></div>
+      </div>
     </div>
   );
 }
@@ -1375,6 +1365,21 @@ export default function LiveBoard({ active }: { active: boolean }) {
   useEffect(() => {
     if (index >= plan.length) setIndex(0);
   }, [plan.length, index]);
+
+  /**
+   * DÖNGÜ BAŞA DÖNÜNCE VERİYİ TAZELE (Sinan, 15.09 akşam): *"bu sunum her loopa girdiğinde
+   * en baştaki sayfaya geldiğinde tekrardan kendini güncellemeli"*. TV'de ekran saatlerce
+   * açık kalıyor; her tur ilk slayttan (Özet) yeni veriyle başlar. 5 dakikalık periyodik
+   * yenileme duruyor — bu ona ek, tur uzunluğu kısa olduğunda bile güncel kalsın diye.
+   * Elle ←/→ ile başa dönmek de tazeler; sayfa ilk açıldığında (0 → 0) tetiklenmez.
+   */
+  const lastIndex = useRef(0);
+  useEffect(() => {
+    const previous = lastIndex.current;
+    lastIndex.current = index;
+    if (!active || !hasData) return;
+    if (index === 0 && previous !== 0) void load();
+  }, [index, active, hasData, load]);
 
   useEffect(() => {
     const onChange = () => setFullscreen(Boolean(document.fullscreenElement && document.fullscreenElement === boardRef.current));

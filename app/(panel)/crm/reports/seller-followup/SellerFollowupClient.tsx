@@ -5,7 +5,7 @@ import LiveBoard from '@/components/reports/LiveBoard';
 import PhaseReport from '@/app/(panel)/crm/reports/phase-report/PhaseReportClient';
 import '@/styles/seller-followup.css';
 
-// Satışçı Takip Raporu
+// DASHBOARD (15.09 akşam'a kadar "Satışçı Takip Raporu")
 //   Sekme 1 — Takip Listesi: açık engeller (Engel & Etki verisinden), 10 firma/sayfa.
 //   Sekme 2 — Kişi Bazlı Aktivite: temas edilen müşteriler, kanal kırılımı + hedef.
 //   Sekme 3 — Faz: eski "Faz Raporu" ekranı (15.09'da buraya gömüldü, Çağdaş Bey).
@@ -243,7 +243,7 @@ export default function SellerFollowupClient() {
     <main className="sfu-page pax-page-container">
       <section className="sfu-hero">
         <div className="sfu-hero-copy">
-          <span className="sfu-eyebrow">Rapor Merkezi · Satışçı Takip</span>
+          <span className="sfu-eyebrow">Rapor Merkezi · Dashboard</span>
           <h1>{heroTitle}</h1>
           <p>
             Engel &amp; Etki ekranındaki <strong>açık engeller</strong> takip listesine dönüştürülür: konu kimde, hangi modelden kaç adet
