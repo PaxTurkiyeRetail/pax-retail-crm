@@ -88,7 +88,12 @@
 .tg-shell .tg-person-actions em { font-style: normal; font-size: 12px; font-weight: 700; color: var(--text-3); }
 .tg-shell .tg-person-actions em.pending { color: var(--chip-gold-color); }
 
-.tg-shell .tg-grid { display: grid; grid-template-columns: minmax(180px, 0.7fr) minmax(300px, 1.5fr) minmax(0, 2.3fr); gap: 0; }
+/* Kişi kartı İKİ bloktan oluşur: "Yıl" alanları + "Çeyrekler" tablosu.
+   15.09 sabahında haftalık aktivite ve ortalama temas ortak hedefe taşınınca üçüncü blok
+   kalkmıştı ama ızgara üç kolon tanımlı kaldı: çeyrek tablosu ortadaki dar kolona sıkışıp
+   Q4'ü kaydırma çubuğunun arkasına atıyor, sağda koca bir boşluk kalıyordu (Sinan, 15.09
+   akşam: "hedef kısmını görsel olarak bozmuşsun"). Artık kolon sayısı blok sayısıyla aynı. */
+.tg-shell .tg-grid { display: grid; grid-template-columns: minmax(240px, 0.85fr) minmax(0, 2.4fr); gap: 0; }
 .tg-shell .tg-block { padding: 18px 22px; border-right: 1px solid var(--border); min-width: 0; }
 .tg-shell .tg-block:last-child { border-right: none; }
 .tg-shell .tg-block h3 { margin: 0 0 12px; font-size: 12px; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-3); }
@@ -108,7 +113,7 @@
 
 /* Çeyrek tablosu (CSS grid) */
 .tg-shell .tg-qtable { display: grid; gap: 6px; min-width: 0; overflow-x: auto; }
-.tg-shell .tg-qrow { display: grid; grid-template-columns: minmax(84px, 0.9fr) repeat(4, minmax(96px, 1fr)) minmax(124px, 1.1fr); gap: 8px; align-items: center; }
+.tg-shell .tg-qrow { display: grid; grid-template-columns: minmax(96px, 0.85fr) repeat(4, minmax(0, 1fr)) minmax(110px, 0.9fr); gap: 8px; align-items: center; }
 .tg-shell .tg-qrow input { padding: 0 8px; font-size: 13.5px; }
 .tg-shell .tg-qhead span { font-size: 11px; font-weight: 900; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-3); display: grid; gap: 1px; }
 .tg-shell .tg-qhead span small { font-size: 10px; letter-spacing: 0.02em; text-transform: none; color: var(--text-3); font-weight: 700; }
@@ -118,10 +123,11 @@
 .tg-shell .tg-qsum { font-size: 12.5px; font-weight: 800; color: var(--text-3); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .tg-shell .tg-qsum.warn { color: var(--chip-gold-color); }
 
-@media (max-width: 1560px) {
-  .tg-shell .tg-grid { grid-template-columns: minmax(180px, 1fr) minmax(0, 2fr); }
-  .tg-shell .tg-block:nth-child(2) { border-right: none; }
-  .tg-shell .tg-quarters { grid-column: 1 / -1; border-top: 1px solid var(--border); }
+/* Dar ekranda çeyrek tablosu alta iner — yan yana sıkıştırmak Q4'ü kesiyordu. */
+@media (max-width: 1180px) {
+  .tg-shell .tg-grid { grid-template-columns: minmax(0, 1fr); }
+  .tg-shell .tg-block { border-right: none; }
+  .tg-shell .tg-quarters { border-top: 1px solid var(--border); }
 }
 @media (max-width: 760px) {
   .tg-shell .tg-hero { padding: 22px; }

@@ -184,8 +184,22 @@ function stripAksiyon(value: string | null | undefined) {
   return raw.replace(/^AKTIVITE:/, '').trim() || null;
 }
 /** Hunter / Farmer: künye etiketi; boş = Hunter (yeni müşteri varsayılanı, Çağdaş Bey 07.09). */
+/**
+ * Künye satıcı etiketi → H/F/L/K. 15.09 akşam listeye **Lead** ve **Kasa** eklendi
+ * (migration 035): künye ile Müşteri Listesi artık AYNI sözlüğü kullanıyor. Eskiden
+ * "farmer değilse hunter" sayılıyordu; Lead ve Kasa da hunter'a yazılırdı.
+ * Etiketi boş kalan eski kayıt Hunter sayılır (035 hepsini doldurur, kalmamalı).
+ */
+function saticiEtiketi(row: { satici_etiketi: string | null }): 'Hunter' | 'Farmer' | 'Lead' | 'Kasa' {
+  switch (String(row.satici_etiketi ?? '').trim().toLocaleLowerCase('tr')) {
+    case 'farmer': return 'Farmer';
+    case 'lead': return 'Lead';
+    case 'kasa': return 'Kasa';
+    default: return 'Hunter';
+  }
+}
 function isFarmer(row: { satici_etiketi: string | null }) {
-  return String(row.satici_etiketi ?? '').trim().toLocaleLowerCase('tr') === 'farmer';
+  return saticiEtiketi(row) === 'Farmer';
 }
 function worstTone(...tones: Tone[]): Tone {
   const order: Tone[] = ['danger', 'warn', 'ok', 'info', 'neutral'];
@@ -1165,12 +1179,25 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
           visitsYear: goalPair(visits.year, userTargets.year.visit_count ?? null),
           budgetQuarter: goalPair(agg.saleQuarterAmount + (directByOwner.get(owner)?.quarterAmount ?? 0), budgetQ.target),
           budgetQuarterAssumed: budgetQ.assumed,
-          // Gerçekleşen entegrasyon sayacı henüz bağlı değil (Sinan, 11.09: "boş bırak, veri gelince
-          // doldur"); hedef ve çeyrek görünür, gerçekleşen 0 + `integrationPending` notu.
-          integration: goalPair(0, userTargets.year.integration_count ?? null),
+          /**
+           * GERÇEKLEŞEN ENTEGRASYON — 15.09 akşam bağlandı (Sinan: "entegrasyonlar girili
+           * ama canlı ekran çekemiyor"). 11.09'daki "boş bırak" kararı, ortada hiç sayaç
+           * yokken verilmişti; artık **Entegrasyon Raporu ile aynı tanım** kullanılıyor
+           * (altın kural 17 — ikinci bir tanım üretilmez):
+           *   entegrasyon süreci açık firma (`musteriler.integration_enabled`) +
+           *   iş ortağı hattındaki aktif faz ≥ 9 (`LIVE_BOARD_RULES.integrationDonePhase`).
+           * Sorgu `Q_INTEGRATIONS`, sonuç `integrationByOwner`.
+           *
+           * ÇEYREK hâlâ bekliyor: fazın NE ZAMAN ≥ 9'a geçtiği `organization_pipeline_states`'te
+           * tutulmuyor (`updated_at` her düzenlemede değişiyor), o yüzden çeyreğe bölünemiyor —
+           * küçük halka hedefi gösterir, gerçekleşeni "veri bekleniyor" kalır. Uydurma sayı
+           * yazılmaz (altın kural 34).
+           */
+          integration: goalPair(ownerIntegration.done, userTargets.year.integration_count ?? null),
           integrationQuarter: goalPair(0, integrationQ.target),
           integrationQuarterAssumed: integrationQ.assumed,
-          integrationPending: true,
+          integrationPending: false,
+          integrationQuarterPending: true,
           hunterToFarmer: goalPair(conv.hunterToFarmer, userTargets.year.hunter_to_farmer ?? null),
           leadToHunter: goalPair(conv.leadToHunter, userTargets.year.lead_to_hunter ?? null),
           wonQuotes: goalPair(agg.wonYtd, userTargets.year.quotes_won_count ?? null),
@@ -1186,7 +1213,9 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
         // Bir ondalık: "4.6 temas / firma". Kapsanan firma yoksa 0.
         const per = covered ? Math.round((cover.activities / covered) * 10) / 10 : 0;
         return {
-          covered: goalPair(covered, userTargets.year.covered_customers ?? null),
+          // "Kapsanan firma" HEDEFİ 15.09 akşam kalktı (migration 034) — sayı yalnız
+          // "ortalama temas / firma"nın paydası olarak hesaplanıyor, ekranda kutusu yok.
+          covered: goalPair(covered, null),
           contactsPer: goalPair(per, companyContactsPerCustomer ?? userTargets.year.contacts_per_customer ?? null),
           activitiesYear: cover.activities,
         } satisfies OwnerCoverage;
@@ -1401,9 +1430,12 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
         const farmer = farmerByOwnerLabel.get(row.label) ?? 0;
         return { ...row, split: farmer, hint: `${row.value - farmer} hunter · ${farmer} farmer` };
       }),
+      // Dört kategori (035'ten itibaren): Hunter · Farmer · Lead · Kasa.
       hunterFarmer: [
-        { label: 'Hunter', value: customers.filter((row) => !isFarmer(row)).length, hint: 'yeni müşteri kazanımı' },
-        { label: 'Farmer', value: customers.filter(isFarmer).length, hint: 'mevcut portföyü büyütme' },
+        { label: 'Hunter', value: customers.filter((row) => saticiEtiketi(row) === 'Hunter').length, hint: 'yeni müşteri kazanımı' },
+        { label: 'Farmer', value: customers.filter((row) => saticiEtiketi(row) === 'Farmer').length, hint: 'mevcut portföyü büyütme' },
+        { label: 'Lead', value: customers.filter((row) => saticiEtiketi(row) === 'Lead').length, hint: 'henüz temas edilmemiş' },
+        { label: 'Kasa', value: customers.filter((row) => saticiEtiketi(row) === 'Kasa').length, hint: 'kasa firması' },
       ],
       byPhaseGroup: PHASE_GROUPS.map((g) => ({ label: g.label, value: phaseGroupCounts.get(g.label) ?? 0 })).filter((row) => row.value > 0),
       bySector: orderDistribution(toDistribution(sectorCounts), SECTOR_ORDER),

@@ -351,7 +351,7 @@ function PulseSlide({ data, caps, page, rollup, ringSize }: {
               "veri bekleniyor" kalır (altın kural 34) — takım toplamında da uydurulmaz. */}
           <DonutCard
             title="Entegrasyon Hedefi · Takım"
-            aside={<MiniRing pair={g.integrationQuarter} label={`${q} entegrasyon`} tone="neutral" size={mini} pending={g.integrationPending} />}
+            aside={<MiniRing pair={g.integrationQuarter} label={`${q} entegrasyon`} tone="neutral" size={mini} pending={g.integrationQuarterPending} />}
           >
             <Ring
               pct={g.integrationPending ? null : g.integration.pct}
@@ -401,10 +401,9 @@ function PulseSlide({ data, caps, page, rollup, ringSize }: {
                 href={`/crm/hareketsiz?gun=${g.inactive.days}`}
               />
               <Figure
-                label="Kapsanan Firma"
-                value={g.coverage.covered.target != null ? `${fmt(g.coverage.covered.actual)} / ${fmt(g.coverage.covered.target)}` : fmt(g.coverage.covered.actual)}
-                note="yıl içinde ziyaret / online görüşme"
-                tone={goalTone(g.coverage.covered, r.yearElapsedPct)}
+                label="Temas Edilen Müşteri"
+                value={fmt(g.coverage.covered.actual)}
+                note="yıl içinde ziyaret / online görüşme yapılan tekil firma"
                 href={link('kapsama')}
               />
             </div>
@@ -511,8 +510,11 @@ function PortfolioSlide({ data, caps, page }: { data: LiveBoardPayload; caps: Ca
   const ownerPage = page % pageCount(portfolio.byOwner.length, cap);
   const sectorPage = page % pageCount(portfolio.bySector.length, cap);
   const ownerBounds = pageBounds(portfolio.byOwner.length, ownerPage, cap);
-  const hunterTotal = portfolio.hunterFarmer?.find((r) => r.label === 'Hunter')?.value ?? 0;
-  const farmerTotal = portfolio.hunterFarmer?.find((r) => r.label === 'Farmer')?.value ?? 0;
+  // 035'ten itibaren dört kategori (Hunter · Farmer · Lead · Kasa); başlıkta kısa kod.
+  const hfSummary = (portfolio.hunterFarmer ?? [])
+    .filter((row) => row.value > 0)
+    .map((row) => `${fmt(row.value)} ${row.label.slice(0, 1).toLocaleUpperCase('tr')}`)
+    .join(' · ');
   const sectorBounds = pageBounds(portfolio.bySector.length, sectorPage, cap);
   return (
     <div className="lb-slide lb-portfolio" key="portfolio">
@@ -520,7 +522,7 @@ function PortfolioSlide({ data, caps, page }: { data: LiveBoardPayload; caps: Ca
         <div className="lb-card-head">
           <h3>Account Yapısı</h3>
           <span>
-            {fmt(portfolio.total)} firma · <b title="Künye satıcı etiketi (boş = Hunter)">{fmt(hunterTotal)} hunter · {fmt(farmerTotal)} farmer</b>
+            {fmt(portfolio.total)} firma · <b title="Künye satıcı etiketi — H Hunter · F Farmer · L Lead · K Kasa">{hfSummary}</b>
             {ownerBounds.paged ? ` · ${ownerBounds.from}–${ownerBounds.to} / ${portfolio.byOwner.length}` : ''}
           </span>
         </div>
@@ -1125,7 +1127,7 @@ function OwnerSlide({ owner, todayKey, caps, ringSize }: { owner: LiveOwner; tod
           yazsın"). Gerçekleşen sayaç Furkan'ın fatura verisine bağlanana kadar 0 / hedef görünür. */}
       <DonutCard
         title="Entegrasyon Hedefi"
-        aside={<MiniRing pair={g.integrationQuarter} label={`${q} entegrasyon`} tone="neutral" size={mini} pending={g.integrationPending} />}
+        aside={<MiniRing pair={g.integrationQuarter} label={`${q} entegrasyon`} tone="neutral" size={mini} pending={g.integrationQuarterPending} />}
       >
         <Ring
           pct={g.integrationPending ? null : g.integration.pct}
@@ -1177,11 +1179,13 @@ function OwnerSlide({ owner, todayKey, caps, ringSize }: { owner: LiveOwner; tod
             tone={inactiveTone}
             href={`/crm/hareketsiz?satici=${encodeURIComponent(owner.owner)}&gun=${owner.inactive.days}`}
           />
+          {/* "Kapsanan Firma" 15.09 akşam **Temas Edilen Müşteri** oldu ve HEDEFİ kalktı
+              (migration 034) — Sinan: "kapsanan firmayı kaldıralım… temas edilen müşteri
+              sayısı olarak değiştirelim". Sayı duruyor, "/ hedef" kısmı yok. */}
           <Figure
-            label="Kapsanan Firma"
-            value={owner.coverage.covered.target != null ? `${fmt(owner.coverage.covered.actual)} / ${fmt(owner.coverage.covered.target)}` : fmt(owner.coverage.covered.actual)}
-            note="yıl içinde ziyaret / online görüşme"
-            tone={goalTone(owner.coverage.covered, r.yearElapsedPct)}
+            label="Temas Edilen Müşteri"
+            value={fmt(owner.coverage.covered.actual)}
+            note="yıl içinde ziyaret / online görüşme yapılan tekil firma"
             href={link('kapsama')}
           />
         </div>

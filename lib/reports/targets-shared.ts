@@ -65,7 +65,9 @@ export const TARGET_DEFINITIONS: readonly TargetDefinition[] = [
   { code: 'device_count', label: 'Cihaz', hint: 'Satışa dönen cihaz adedi', unit: 'count', periods: ['year'], scope: 'user' },
   { code: 'hunter_to_farmer', label: 'Hunter → Farmer', hint: 'Müşteri Listesi’nde H’den F’ye taşınan firma', unit: 'count', periods: ['year'], scope: 'user' },
   { code: 'lead_to_hunter', label: 'Lead → Hunter', hint: 'Müşteri Listesi’nde L’den H’ye taşınan firma', unit: 'count', periods: ['year'], scope: 'user' },
-  { code: 'covered_customers', label: 'Kapsanan firma', hint: 'Yıl içinde en az bir ziyaret / online görüşme yapılan tekil firma', unit: 'count', periods: ['year'], scope: 'user' },
+  // KALKANLAR (tanım tabloda `is_active = false`, girilmiş değerler tarihçe olarak durur):
+  //   * quotes_won_count — 15.09 sabah, migration 033 (Çağdaş Bey: "hedefte kazanılan teklife gerek yok")
+  //   * covered_customers — 15.09 akşam, migration 034 (Sinan: "kapsanan firmayı kaldıralım")
 ];
 
 /** Ortak (şirket) hedefleri — Hedefler ekranının üstündeki tek kutudan girilir. */

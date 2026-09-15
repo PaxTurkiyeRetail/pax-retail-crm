@@ -78,14 +78,15 @@ describe('hedefler v2 — goalPair ve kod listeleri', () => {
     expect(COMPANY_TARGET_DEFINITIONS.find((d) => d.code === 'contacts_per_customer')?.defaultValue).toBe(5);
     expect(COMPANY_TARGET_DEFINITIONS.every((d) => d.scope === 'company')).toBe(true);
   });
-  it('kişi hedefleri: kazanılan teklif artık yok, kapsanan firma var', () => {
+  it('kişi hedefleri: kazanılan teklif ve kapsanan firma listeden kalktı', () => {
     const codes = USER_TARGET_DEFINITIONS.map((d) => d.code);
+    // İkisi de tanım tablosunda pasif (033 · 034); kod listesinde de yer almazlar.
     expect(codes).not.toContain('quotes_won_count');
-    expect(codes).toContain('covered_customers');
+    expect(codes).not.toContain('covered_customers');
     expect(codes).toContain('hunter_to_farmer');
     expect(codes).toContain('lead_to_hunter');
     expect(USER_TARGET_DEFINITIONS.every((d) => d.scope === 'user')).toBe(true);
-    expect(TARGET_CODES).toHaveLength(9);
+    expect(TARGET_CODES).toHaveLength(8);
   });
 });
 

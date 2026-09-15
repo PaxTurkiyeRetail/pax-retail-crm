@@ -327,10 +327,16 @@ export type OwnerGoals = {
   integrationQuarter: GoalPair;
   integrationQuarterAssumed: boolean;
   /**
-   * Gerçekleşen entegrasyon sayacı henüz bağlanmadı (Furkan'ın fatura kalemi bekleniyor;
-   * Sinan 11.09: "boş bırak, veri gelince doldur"). true iken ekran sayı yerine not gösterir.
+   * YILLIK gerçekleşen entegrasyon sayacı bağlı mı? 15.09 akşam bağlandı (Entegrasyon
+   * Raporu ile aynı tanım: entegrasyon süreci açık + faz ≥ 9) → artık `false`.
+   * Alan duruyor ki sayaç bir gün kopmak zorunda kalırsa ekran yine "veri bekleniyor" desin.
    */
   integrationPending: boolean;
+  /**
+   * ÇEYREK gerçekleşeni hâlâ bekliyor: fazın ne zaman ≥ 9'a geçtiği tutulmuyor, çeyreğe
+   * bölünemiyor. Küçük halka hedefi gösterir, gerçekleşen yerine not çıkar (altın kural 34).
+   */
+  integrationQuarterPending: boolean;
   hunterToFarmer: GoalPair;
   leadToHunter: GoalPair;
   wonQuotes: GoalPair;
@@ -990,6 +996,7 @@ export type TeamRollup = {
   integration: GoalPair;
   integrationQuarter: GoalPair;
   integrationPending: boolean;
+  integrationQuarterPending: boolean;
   hunterToFarmer: GoalPair;
   leadToHunter: GoalPair;
   /** Müşteri Listesi (H/F/L/K) toplamı; hiç kimsede liste yoksa null. */
@@ -1035,6 +1042,7 @@ export function teamRollup(owners: LiveOwner[]): TeamRollup {
     integration: sumGoal(goals.map((goal) => goal.integration)),
     integrationQuarter: sumGoal(goals.map((goal) => goal.integrationQuarter)),
     integrationPending: goals.some((goal) => goal.integrationPending),
+    integrationQuarterPending: goals.some((goal) => goal.integrationQuarterPending),
     hunterToFarmer: sumGoal(goals.map((goal) => goal.hunterToFarmer)),
     leadToHunter: sumGoal(goals.map((goal) => goal.leadToHunter)),
     list: lists.length
