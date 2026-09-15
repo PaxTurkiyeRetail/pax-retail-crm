@@ -11,6 +11,13 @@
 --   Künyede olup listede olmayan firmalar: **künye sorumlusunun Lead kolonuna** (sorumlusu
 --   yoksa Havuz Account).
 --
+--   TEK İSTİSNA (Sinan, 15.09 akşam, canlı RAPOR §C'yi gördükten sonra): künye
+--   sorumlusu "İş Ortakları" (reseller/iş ortağı kanalı) olan satırlarda bu ibare
+--   silinmesin — bu satırlarda KÜNYE KAZANIR, liste ona göre düzelir. Bu istisna
+--   SADECE bu tek seferlik migration içindir; 7. bölümdeki trigger'lar bundan sonra
+--   simetrik kalır (özel bir "İş Ortakları" kuralı trigger'a EKLENMEDİ — bilinçli
+--   tercih, Sinan: "sadece bugünkü migration için").
+--
 -- SÖZLÜK (tek eşleme, iki tarafta da aynı):
 --   H ↔ Hunter · F ↔ Farmer · L ↔ Lead · K ↔ Kasa
 --
@@ -103,13 +110,29 @@ where l.is_active and l.musteri_id is null and tek.k = public.crm_firma_key(l.fi
 
 -- ---------------------------------------------------------------------------
 -- 5) ÇELİŞKİLERDE LİSTE KAZANIR — künye sorumlusu ve satıcı etiketi listeye çekilir
+--    TEK İSTİSNA: künye sorumlusu "İş Ortakları" ise (5a) KÜNYE KAZANIR, liste
+--    ona uyar; geri kalan tüm çelişkilerde (5b) her zamanki gibi LİSTE KAZANIR.
 -- ---------------------------------------------------------------------------
+
+-- 5a) İSTİSNA — künye sorumlusu İş Ortakları: bu ibare korunur, liste künyeye uyar
+update public.crm_musteri_listesi l
+set satici = m.sorumlu,
+    owner_user_id = m.owner_user_id,
+    updated_by = 'migration-035', updated_at = now()
+from public.musteriler m
+where l.is_active and l.musteri_id = m.id
+  and m.sorumlu = 'İş Ortakları'
+  and (coalesce(l.satici, '') is distinct from m.sorumlu
+       or l.owner_user_id is distinct from m.owner_user_id);
+
+-- 5b) GENEL KURAL — diğer tüm çelişkilerde liste kazanır (İş Ortakları satırları hariç)
 update public.musteriler m
 set sorumlu = nullif(l.satici, 'Havuz Account'),
     owner_user_id = l.owner_user_id,
     updated_by = 'migration-035', updated_at = now()
 from public.crm_musteri_listesi l
 where l.is_active and l.musteri_id = m.id
+  and coalesce(m.sorumlu, '') is distinct from 'İş Ortakları'
   and (coalesce(m.sorumlu, 'Havuz Account') is distinct from coalesce(l.satici, 'Havuz Account')
        or m.owner_user_id is distinct from l.owner_user_id);
 
