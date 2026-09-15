@@ -944,6 +944,9 @@ function DonutCard({ title, children, aside }: { title: string; children: ReactN
 
 /**
  * Küçük hedef halkası: hedef varsa % ve "gerçekleşen / hedef", yoksa yalnız gerçekleşen.
+ * Kutu genişliği = halka çapı (15.09 akşam): etiket tek satır ve `nowrap` olduğu için
+ * "Q3 ENTEGRASYON" gibi uzun bir etiket sağ kolonu şişirip büyük halkayı sıkıştırıyordu —
+ * büyük halka da sabit px olduğu için kartın dışına taşıyordu. Artık etiket alt satıra iner.
  * `pending` — gerçekleşen sayaç henüz bağlanmadı (entegrasyon, 11.09): yüzde yerine hedef yazılır.
  */
 function MiniRing({ pair, label, tone, size, money = false, pending = false }: { pair: GoalPair; label: string; tone: Tone; size: number; money?: boolean; pending?: boolean }) {
@@ -951,14 +954,14 @@ function MiniRing({ pair, label, tone, size, money = false, pending = false }: {
   const val = (value: number) => (money ? fmtMoney(value) : fmt(value));
   if (pending) {
     return (
-      <div className={`lb-mini tone-${tone}`} title="Gerçekleşen veri bekleniyor">
+      <div className={`lb-mini tone-${tone}`} style={{ width: size }} title="Gerçekleşen veri bekleniyor">
         <Ring pct={null} tone={tone} big={has ? val(pair.target ?? 0) : '—'} sub={has ? 'hedef' : 'hedef yok'} size={size} stroke={10} />
         <span className="lb-mini-label">{label}</span>
       </div>
     );
   }
   return (
-    <div className={`lb-mini tone-${tone}`} title={has ? `${val(pair.actual)} / ${val(pair.target ?? 0)}` : undefined}>
+    <div className={`lb-mini tone-${tone}`} style={{ width: size }} title={has ? `${val(pair.actual)} / ${val(pair.target ?? 0)}` : undefined}>
       <Ring pct={has ? pair.pct : null} tone={tone} big={has ? `%${pair.pct ?? 0}` : val(pair.actual)} sub={has ? `${val(pair.actual)} / ${val(pair.target ?? 0)}` : 'hedef yok'} size={size} stroke={10} />
       <span className="lb-mini-label">{label}</span>
     </div>
@@ -1062,11 +1065,13 @@ function MiniActivityList({ rows, todayKey }: { rows: LiveActivity[]; todayKey: 
  *   * Model bazlı cihaz kırılımı slayttan KALKTI — kutular büyüdü, model listesi cihaz kutularının
  *     arkasındaki kırılım sayfasında ("ayrı bir ekran gerekir… öyle bir ekran yapsın").
  */
-function OwnerSlide({ owner, todayKey, caps, donutRowH }: { owner: LiveOwner; todayKey: string; caps: Capacities; donutRowH: number }) {
+function OwnerSlide({ owner, todayKey, caps, ringSize }: { owner: LiveOwner; todayKey: string; caps: Capacities; ringSize: number }) {
   const r = owner.revenue;
   const g = owner.goals;
-  // Not satırı kalktığı için halka çapı büyüdü (donutRowH − 104; v3.0'da −132).
-  const ring = Math.max(120, donutRowH - 104);
+  // Halka çapı LiveBoard'da hesaplanır: hem satır yüksekliğine hem KART GENİŞLİĞİNE sığmalı
+  // (15.09 akşam — yalnız yüksekliğe bakılınca büyük halka kartın soluna dayanıp sağdaki
+  // küçük halkanın üstüne biniyordu; Sinan'ın işaretlediği hata).
+  const ring = ringSize;
   const mini = Math.round(ring * 0.44);
   const recentRows = owner.recentActivities.slice(0, Math.min(5, caps.recent));
   const hasRevenueTarget = r.target != null;
@@ -1253,10 +1258,23 @@ export default function LiveBoard({ active }: { active: boolean }) {
   const rollup = useMemo(() => teamRollup(data?.owners ?? []), [data]);
   // Özet'te sol taraf 2×2 kart ızgarasıdır (12 kolonun 8'i) ve iki satıra bölünür;
   // halka çapı hem yüksekliğe hem kart genişliğine sığmalı, yoksa harness kırpma yakalar.
+  /**
+   * KİŞİ SLAYDI halka çapı: dört donut kartı 12 kolonun 3'erini alır; her kartta büyük halka +
+   * yanında küçük halka(lar) var. Çap yalnız satır yüksekliğinden hesaplanırsa (eski kod:
+   * `donutRowH − 104`) geniş ekranda kartın genişliğini aşıyor: solda kartın kenarına dayanıyor,
+   * sağda küçük halkanın üstüne biniyor (Sinan, 15.09 akşam). Bu yüzden genişlik de sınır:
+   * büyük + küçük = 1.44 × çap, üstüne kart iç boşluğu ve aradaki boşluk.
+   */
+  const ownerRing = useMemo(() => {
+    const cardW = Math.max(160, Math.round((box.w || 1920) / 4 - metrics.gap));
+    const usable = cardW - 32 - 12;
+    return Math.max(110, Math.min(metrics.donutRowH - 104, Math.round(usable / 1.46)));
+  }, [box.w, metrics.donutRowH, metrics.gap]);
   const pulseRing = useMemo(() => {
     const rowH = Math.max(140, Math.round(((box.h || 900) - metrics.bandH - metrics.gap * 2) / 2));
     const cardW = Math.max(180, Math.round((((box.w || 1920) * 8) / 12 - metrics.gap * 3) / 2));
-    return Math.max(104, Math.min(rowH - 96, Math.round(cardW * 0.52)));
+    // Kişi slaydıyla aynı genişlik kuralı: büyük + küçük halka = 1.46 × çap (+ kart iç boşluğu).
+    return Math.max(104, Math.min(rowH - 96, Math.round((cardW - 32 - 18) / 1.46)));
   }, [box.h, box.w, metrics.bandH, metrics.gap]);
   const pagePlan = useMemo(() => (data ? buildPagePlan(data, caps) : undefined), [data, caps]);
 
@@ -1469,7 +1487,7 @@ export default function LiveBoard({ active }: { active: boolean }) {
     if (current.type === 'owner') {
       const owner = data.owners[current.index];
       return owner
-        ? <OwnerSlide owner={owner} todayKey={data.range.today} caps={caps} donutRowH={metrics.donutRowH} />
+        ? <OwnerSlide owner={owner} todayKey={data.range.today} caps={caps} ringSize={ownerRing} />
         : <PulseSlide data={data} caps={caps} page={0} rollup={rollup} ringSize={pulseRing} />;
     }
     switch (current.key) {

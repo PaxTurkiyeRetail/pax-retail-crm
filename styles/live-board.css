@@ -432,10 +432,17 @@
 /* v2.7: büyük halka solda, küçük halkalar sağda alt alta (Çağdaş Bey 10.09: "bir büyük, iki küçük simit"). */
 .lb-donut-card-body.with-aside { grid-template-columns: auto auto; gap: 12px; justify-content: center; align-items: center; }
 .lb-donut-main { display: grid; place-items: center; min-width: 0; }
+/* EMNİYET KEMERİ (15.09 akşam): halka çapı JS'te hesaplanıyor; hesap bir şekilde şaşarsa
+   halka kartın dışına taşmasın — SVG `preserveAspectRatio` sayesinde daralınca yine yuvarlak
+   kalır, sadece küçülür. Sinan'ın işaretlediği hata buydu: büyük halka kartın soluna dayanıp
+   sağdaki küçük halkanın üstüne biniyordu. */
+.lb-donut-card .lb-ring, .lb-donut-card .lb-donut { max-width: 100%; }
 .lb-donut-aside { display: grid; grid-auto-rows: 1fr; gap: 6px; align-content: center; justify-items: center; }
-.lb-mini { display: grid; justify-items: center; gap: 2px; }
+.lb-mini { display: grid; justify-items: center; gap: 2px; min-width: 0; }
 .lb-mini .lb-ring-center { padding: 0 8px; gap: 0; }
-.lb-mini-label { font-size: 10px; font-weight: 900; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-3); white-space: nowrap; }
+/* Etiket iki satıra inebilir: tek satır + nowrap iken "Q3 ENTEGRASYON" sağ kolonu şişirip
+   büyük halkayı kartın dışına itiyordu (15.09 akşam). Kutu genişliği halka çapına eşit. */
+.lb-mini-label { font-size: 10px; font-weight: 900; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-3); white-space: normal; text-align: center; line-height: 1.15; max-width: 100%; overflow-wrap: anywhere; }
 /* Büyük halkanın merkezi: yüzde ÇOK büyük, altında "gerçekleşen / hedef" (Çağdaş Bey, 15.09:
    "hafta hedefi büyük simidin içine yazsın, altta hint bir yazsın"). */
 .lb-donut-card .lb-ring-center strong { font-size: clamp(32px, 2.9vw, 52px); }
