@@ -51,7 +51,13 @@ const KUNYE_BADGE: Record<string, { label: string; color: string; bg: string; bo
   'Yok':   { label: 'Yok',   color: '#9f1239', bg: '#fff1f2', border: '#fecdd3' },
 };
 
-export default function PhaseReportPage() {
+/**
+ * FAZ RAPORU — 15.09.2026'dan itibaren Satışçı Takip Raporu'nun "Faz" sekmesi içinde çalışır
+ * (Çağdaş Bey: "Faz Raporu dashboard'un içine gömülsün"). `embedded` verildiğinde kök öğe
+ * <main> yerine <div> olur (sayfada tek <main> kalsın) ve dış boşluk kapanır; ekranın kendi
+ * başlık çubuğu (satıcı seçimi, arama) sekme içinde de durur — filtreleri oradan geliyor.
+ */
+export default function PhaseReportPage({ embedded = false }: { embedded?: boolean } = {}) {
   const [payload, setPayload] = useState<Payload>(EMPTY);
   const [seller, setSeller] = useState('');
   const [activeGroup, setActiveGroup] = useState<MacroGroup | 'all'>('all');
@@ -145,8 +151,9 @@ export default function PhaseReportPage() {
     </th>
   );
 
+  const Root = embedded ? 'div' : 'main';
   return (
-    <main className="ph-page">
+    <Root className={`ph-page ${embedded ? 'embedded' : ''}`}>
 
       {/* ── HEADER BAR ── */}
       <div className="ph-topbar">
@@ -406,6 +413,6 @@ export default function PhaseReportPage() {
           </table>
         </div>
       </div>
-    </main>
+    </Root>
   );
 }

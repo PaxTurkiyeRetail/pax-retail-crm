@@ -2,16 +2,19 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import LiveBoard from '@/components/reports/LiveBoard';
+import PhaseReport from '@/app/(panel)/crm/reports/phase-report/PhaseReportClient';
 import '@/styles/seller-followup.css';
 
 // Satışçı Takip Raporu
 //   Sekme 1 — Takip Listesi: açık engeller (Engel & Etki verisinden), 10 firma/sayfa.
 //   Sekme 2 — Kişi Bazlı Aktivite: temas edilen müşteriler, kanal kırılımı + hedef.
-//   Sekme 3 — Canlı Ekran: kendi kendine dönen yönetici panosu (takım özeti + kişi
+//   Sekme 3 — Faz: eski "Faz Raporu" ekranı (15.09'da buraya gömüldü, Çağdaş Bey).
+//             /crm/reports/phase-report adresi ?tab=faz'a yönlendirilir.
+//   Sekme 4 — Canlı Ekran: kendi kendine dönen yönetici panosu (takım özeti + kişi
 //             slaytları). ?tab=live ile doğrudan açılır — TV/ikinci ekran için yer imi.
 
-type TabKey = 'followup' | 'activity' | 'live';
-const TAB_KEYS: TabKey[] = ['followup', 'activity', 'live'];
+type TabKey = 'followup' | 'activity' | 'faz' | 'live';
+const TAB_KEYS: TabKey[] = ['followup', 'activity', 'faz', 'live'];
 
 function tabFromUrl(): TabKey {
   if (typeof window === 'undefined') return 'followup';
@@ -283,6 +286,9 @@ export default function SellerFollowupClient() {
         <button type="button" className={`sfu-tab ${tab === 'activity' ? 'active' : ''}`} onClick={() => switchTab('activity')}>
           Kişi Bazlı Aktivite
         </button>
+        <button type="button" className={`sfu-tab ${tab === 'faz' ? 'active' : ''}`} onClick={() => switchTab('faz')} title="Firmaların faz dağılımı">
+          Faz
+        </button>
         <button type="button" className={`sfu-tab ${tab === 'live' ? 'active' : ''}`} onClick={() => switchTab('live')} title="Kendi kendine dönen yönetici panosu">
           ● Canlı Ekran
         </button>
@@ -294,7 +300,9 @@ export default function SellerFollowupClient() {
         <LiveBoard active={tab === 'live'} />
       </div>
 
-      {tab === 'live' ? null : tab === 'followup' ? (
+      {tab === 'faz' ? <PhaseReport embedded /> : null}
+
+      {tab === 'live' || tab === 'faz' ? null : tab === 'followup' ? (
         <section className="sfu-panel">
           <div className="sfu-panel-head">
             <h2>Takip Listesi</h2>

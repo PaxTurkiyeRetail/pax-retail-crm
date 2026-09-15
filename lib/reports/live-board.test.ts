@@ -35,10 +35,12 @@ import {
   slideDurationMs,
   slidePlan,
   staleTone,
+  teamRollup,
   weekRangeLabel,
   yearElapsedPct,
 } from './live-board-shared';
 import { emptyWeeklyCounters } from './weekly-targets-shared';
+import type { LiveOwner } from './live-board-shared';
 
 describe('initialsOf', () => {
   it('takes first letters of first and last name, Turkish-uppercased', () => {
@@ -100,18 +102,16 @@ describe('slidePlan', () => {
   const show = (plan: ReturnType<typeof slidePlan>) => plan
     .map((s) => (s.type === 'team' ? s.key : `#${s.index}`) + (s.pages > 1 ? `(${s.page + 1}/${s.pages})` : ''))
     .join(' ');
-  it('keeps the fixed order: pulse, portfolio, everybody, quotes, alerts', () => {
-    // Sinan, 09.09: kişiler blok hâlinde ve Portföy'den sonra; Hot Pipeline / POC yayında değil.
-    expect(show(slidePlan(5))).toBe('pulse portfolio #0 #1 #2 #3 #4 quotes alerts');
+  it('keeps the fixed order: Özet, everybody, quotes, alerts, portfolio, Jira, hot, POC', () => {
+    // Çağdaş Bey, 15.09: Özet → Kişiler → Teklifler → Uyarı → Portföy → [Faz] → Jira →
+    // Hot Pipeline → POC. Hot ve POC 09.09'da rotasyondan çıkmıştı, sona eklenerek döndü.
+    expect(show(slidePlan(5))).toBe('pulse #0 #1 #2 #3 #4 quotes alerts portfolio hot poc');
   });
   it('shows only the team screens when there is nobody to show', () => {
-    expect(show(slidePlan(0))).toBe('pulse portfolio quotes alerts');
+    expect(show(slidePlan(0))).toBe('pulse quotes alerts portfolio hot poc');
   });
-  it('never puts Hot Pipeline or POC into the rotation', () => {
-    const keys = show(slidePlan(3, { jira: true }));
-    expect(keys).not.toContain('hot');
-    expect(keys).not.toContain('poc');
-    expect(keys).toBe('pulse portfolio #0 #1 #2 quotes alerts jira');
+  it('puts Hot Pipeline and POC at the very end, after Jira', () => {
+    expect(show(slidePlan(3, { jira: true }))).toBe('pulse #0 #1 #2 quotes alerts portfolio jira hot poc');
   });
   it('adds the Jira screen only when the integration is on', () => {
     expect(show(slidePlan(0, { jira: true }))).toContain('jira');
@@ -119,7 +119,7 @@ describe('slidePlan', () => {
   });
   it('expands a screen that needs more than one page into consecutive slides', () => {
     const plan = slidePlan(2, { pages: { team: { portfolio: 2, quotes: 3 }, owners: [2, 1] } });
-    expect(show(plan)).toBe('pulse portfolio(1/2) portfolio(2/2) #0(1/2) #0(2/2) #1 quotes(1/3) quotes(2/3) quotes(3/3) alerts');
+    expect(show(plan)).toBe('pulse #0(1/2) #0(2/2) #1 quotes(1/3) quotes(2/3) quotes(3/3) alerts portfolio(1/2) portfolio(2/2) hot poc');
   });
   it('gives team screens more time than a person slide and scales with speed', () => {
     expect(slideDurationMs({ type: 'team', key: 'pulse', page: 0, pages: 1 })).toBe(LIVE_BOARD_TIMING.teamMs);
@@ -298,5 +298,116 @@ describe('kişi slaydı donut satırı — gövdeyle orantılı (v3.0, 14.09)', 
     expect(layoutMetrics(1037).donutRowH).toBe(432);
     expect(layoutMetrics(729).compact).toBe(true);
     expect(layoutMetrics(729).donutRowH).toBe(295);
+  });
+});
+
+
+/* ------------------------------------------------------------------------ */
+/* ÖZET slaydı — takım toplamı (v3.2, Çağdaş Bey 15.09)                      */
+/* ------------------------------------------------------------------------ */
+
+describe('teamRollup — Özet slaydının sol tarafı', () => {
+  const pair = (actual: number, target: number | null) => ({
+    actual, target, pct: target == null ? null : Math.round((actual / target) * 100),
+  });
+  /** Yalnız teamRollup'ın okuduğu alanlar; kalanı ekranın işi. */
+  const owner = (over: {
+    visits?: [number, number | null];
+    budget?: [number, number | null];
+    integration?: [number, number | null];
+    pending?: boolean;
+    list?: { hunter: number; farmer: number; lead: number; kasa: number } | null;
+    open?: [number, number];
+    devices?: [number, number, number];
+    poc?: number;
+    invoices?: number;
+    covered?: [number, number | null];
+    contactsTarget?: number | null;
+    activitiesYear?: number;
+    inactive?: [number, number];
+    portfolio?: [number, number];
+  }) => ({
+    goals: {
+      quarter: { label: 'Ç3', months: 'Tem–Eyl', elapsedPct: 60 },
+      visitsQuarter: pair(...(over.visits ?? [0, null] as [number, number | null])),
+      visitsYear: pair(0, null),
+      budgetQuarter: pair(...(over.budget ?? [0, null] as [number, number | null])),
+      integration: pair(...(over.integration ?? [0, null] as [number, number | null])),
+      integrationQuarter: pair(0, null),
+      integrationPending: over.pending ?? false,
+      hunterToFarmer: pair(0, null),
+      leadToHunter: pair(0, null),
+    },
+    list: over.list ? { ...over.list, total: over.list.hunter + over.list.farmer + over.list.lead + over.list.kasa } : null,
+    quoteBox: {
+      open: { count: over.open?.[0] ?? 0, amount: over.open?.[1] ?? 0 },
+      won: { count: 0, amount: 0 },
+      lost: { count: 0, amount: 0 },
+    },
+    devices: { total: over.devices?.[0] ?? 0, sold: over.devices?.[1] ?? 0, rental: over.devices?.[2] ?? 0 },
+    pipeline: { poc: over.poc ?? 0 },
+    invoices: over.invoices ?? 0,
+    coverage: {
+      covered: pair(...(over.covered ?? [0, null] as [number, number | null])),
+      contactsPer: pair(0, over.contactsTarget ?? null),
+      activitiesYear: over.activitiesYear ?? 0,
+    },
+    inactive: { count: over.inactive?.[0] ?? 0, days: 15, unmatched: over.inactive?.[1] ?? 0 },
+    portfolio: { total: over.portfolio?.[0] ?? 0, active: over.portfolio?.[1] ?? 0 },
+  }) as unknown as LiveOwner;
+
+  it('sayıları ve tutarları toplar, yüzdeyi yeniden hesaplar', () => {
+    const rollup = teamRollup([
+      owner({ visits: [6, 10], open: [3, 1500], devices: [10, 6, 4], poc: 1, invoices: 2, portfolio: [40, 30] }),
+      owner({ visits: [9, 10], open: [2, 500], devices: [5, 5, 0], poc: 2, invoices: 3, portfolio: [20, 11] }),
+    ]);
+    expect(rollup.owners).toBe(2);
+    expect(rollup.visitsQuarter).toEqual({ actual: 15, target: 20, pct: 75 });
+    expect(rollup.quoteBox.open).toEqual({ count: 5, amount: 2000 });
+    expect(rollup.devices).toEqual({ total: 15, sold: 11, rental: 4 });
+    expect(rollup.poc).toBe(3);
+    expect(rollup.invoices).toBe(5);
+    expect(rollup.portfolio).toEqual({ total: 60, active: 41 });
+  });
+
+  it('hedefi olmayan kişi toplam hedefi düşürmez; hiç hedef yoksa "hedef yok"', () => {
+    const some = teamRollup([owner({ budget: [100, 400] }), owner({ budget: [50, null] })]);
+    expect(some.budgetQuarter).toEqual({ actual: 150, target: 400, pct: 38 });
+    const none = teamRollup([owner({ budget: [100, null] }), owner({ budget: [50, null] })]);
+    expect(none.budgetQuarter.target).toBeNull();
+    expect(none.budgetQuarter.pct).toBeNull();
+  });
+
+  it('ortalama temas toplanmaz, toplam görüşme / toplam kapsanan firmadan yeniden bölünür', () => {
+    // Ortak hedef (033) kişilerde aynı değerdir: toplanmaz, aynen kalır.
+    const rollup = teamRollup([
+      owner({ covered: [20, 30], activitiesYear: 100, contactsTarget: 5 }),
+      owner({ covered: [30, 30], activitiesYear: 125, contactsTarget: 5 }),
+    ]);
+    expect(rollup.coverage.covered).toEqual({ actual: 50, target: 60, pct: 83 });
+    expect(rollup.coverage.contactsPer.actual).toBe(4.5);
+    expect(rollup.coverage.contactsPer.target).toBe(5);
+  });
+
+  it('Müşteri Listesi toplanır; hiç kimsede liste yoksa null kalır', () => {
+    const withList = teamRollup([
+      owner({ list: { hunter: 10, farmer: 4, lead: 2, kasa: 1 } }),
+      owner({ list: null }),
+    ]);
+    expect(withList.list).toEqual({ hunter: 10, farmer: 4, lead: 2, kasa: 1, total: 17 });
+    expect(teamRollup([owner({ list: null })]).list).toBeNull();
+  });
+
+  it('tek kişi bile entegrasyon verisini bekliyorsa takım toplamı da bekler', () => {
+    expect(teamRollup([owner({ pending: false }), owner({ pending: true })]).integrationPending).toBe(true);
+    expect(teamRollup([owner({ pending: false })]).integrationPending).toBe(false);
+  });
+
+  it('kişi yoksa çökmeden boş toplam döner', () => {
+    const empty = teamRollup([]);
+    expect(empty.owners).toBe(0);
+    expect(empty.quarter).toBeNull();
+    expect(empty.coverage.contactsPer.actual).toBe(0);
+    expect(empty.inactive.days).toBe(15);
   });
 });

@@ -240,14 +240,11 @@ function routeMeta(pathname: string) {
       "Rapor Merkezi",
       "Haftalık Yönetim Sunumu",
     ],
-    ["/crm/reports/user-activity-presentation", "Rapor Merkezi", "Kullanıcı Aktivite Sunumu"],
     ["/crm/reports/seller-presentation", "Rapor Merkezi", "Satışçı Sunumu"],
     ["/crm/reports/seller-followup", "Rapor Merkezi", "Satışçı Takip Raporu"],
     ["/crm/reports/entegrasyon-raporu", "Rapor Merkezi", "Entegrasyon Raporu"],
-    ["/crm/reports/seller-summary", "Rapor Merkezi", "Satıcı Özeti"],
     ["/crm/reports/forecast", "Rapor Merkezi", "Forecast Raporu"],
     ["/crm/reports/quotes", "Rapor Merkezi", "Teklif Raporları"],
-    ["/crm/reports/phase-report", "Rapor Merkezi", "Faz Raporu"],
     ["/crm/reports/kasapos-summary", "Rapor Merkezi", "KasaPOS Raporu"],
     ["/crm/reports/weekly-activities", "Rapor Merkezi", "Aktivite Raporu"],
     ["/crm/quotes/catalog", "Operasyon", "Ürün Kataloğu"],
@@ -492,7 +489,22 @@ export default function PanelShell({
         label: "Satış Radarı",
         iconKey: "weekly",
       });
+    // RAPORLAR MENÜ SIRASI — Çağdaş Bey, 15.09.2026. Sıra bilinçlidir, alfabetik
+    // ya da ekleme sırası değildir; yeni rapor eklerken bu listeye yerini sorarak koy.
+    //   1 Satışçı Takip Raporu (dashboard; Faz Raporu ve Canlı Ekran onun sekmeleri)
+    //   2 Teklif Raporları · 3 Forecast Raporu · 4 KasaPOS Raporu · 5 Aktiviteler Raporu
+    //   6 Satışçı Sunumu · 7 Yönetim Sunumu · 8 Entegrasyon Raporu
+    // Menüden KALKANLAR: Faz Raporu (artık Satışçı Takip Raporu'nun sekmesi),
+    // Satıcı Özeti ve Kullanıcı Aktivite Sunumu (15.09'da tamamen kapatıldı — sayfaları 404).
     if (allowed('report.read.all') && allowed('screen.reports.view')) {
+      // Canlı Ekran (Command Center) ve Faz bu raporun sekmeleridir (?tab=live / ?tab=faz);
+      // ayrı menü girdileri bilinçli olarak yok (Sinan, 04.09 · 15.09).
+      reports.push({
+        href: "/crm/reports/seller-followup",
+        label: "Satışçı Takip Raporu",
+        iconKey: "weekly",
+        exact: true,
+      });
       reports.push({
         href: "/crm/reports/quotes",
         label: "Teklif Raporları",
@@ -502,30 +514,6 @@ export default function PanelShell({
         href: "/crm/reports/forecast",
         label: "Forecast Raporu",
         iconKey: "forecast",
-      });
-      // Canlı Ekran (Command Center) bu raporun bir sekmesidir (?tab=live);
-      // ayrı menü girdisi bilinçli olarak yok (Sinan, 04.09).
-      reports.push({
-        href: "/crm/reports/seller-followup",
-        label: "Satışçı Takip Raporu",
-        iconKey: "weekly",
-        exact: true,
-      });
-      reports.push({
-        href: "/crm/reports/entegrasyon-raporu",
-        label: "Entegrasyon Raporu",
-        iconKey: "weekly",
-        exact: true,
-      });
-      reports.push({
-        href: "/crm/reports/seller-summary",
-        label: "Satıcı Özeti",
-        iconKey: "weekly",
-      });
-      reports.push({
-        href: "/crm/reports/phase-report",
-        label: "Faz Raporu",
-        iconKey: "weekly",
       });
       reports.push({
         href: "/crm/reports/kasapos-summary",
@@ -538,19 +526,20 @@ export default function PanelShell({
         iconKey: "weekly",
       });
       reports.push({
+        href: "/crm/reports/seller-presentation",
+        label: "Satışçı Sunumu",
+        iconKey: "weekly",
+      });
+      reports.push({
         href: "/crm/reports/weekly-management-presentation",
         label: "Yönetim Sunumu",
         iconKey: "weekly",
       });
-      if (allowed('admin.users.manage') && allowed('screen.reports.user_activity.view')) reports.push({
-        href: "/crm/reports/user-activity-presentation",
-        label: "Kullanıcı Aktivite Sunumu",
-        iconKey: "weekly",
-      });
       reports.push({
-        href: "/crm/reports/seller-presentation",
-        label: "Satışçı Sunumu",
+        href: "/crm/reports/entegrasyon-raporu",
+        label: "Entegrasyon Raporu",
         iconKey: "weekly",
+        exact: true,
       });
     }
 

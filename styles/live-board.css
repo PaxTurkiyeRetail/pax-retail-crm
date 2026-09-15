@@ -170,9 +170,6 @@
 .lb-kpis.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .lb-kpis.five { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .lb-kpis.six { grid-template-columns: repeat(6, minmax(0, 1fr)); }
-.lb-kpis.tight { gap: 8px; }
-.lb-kpis.tight .lb-kpi { padding: 10px 12px; }
-.lb-kpis.tight .lb-kpi-label { white-space: normal; line-height: 1.2; overflow-wrap: anywhere; }
 .lb-kpi { position: relative; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--border); background: var(--surface); display: grid; gap: 3px; min-width: 0; }
 .lb-kpi-label { font-size: 11px; font-weight: 800; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lb-kpi-value { font-size: clamp(24px, 2.1vw, 34px); font-weight: 900; letter-spacing: -0.03em; line-height: 1.12; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -279,6 +276,12 @@
 .lb-alerts .lb-list .lb-item { height: var(--lb-alert-h, 82px); }
 /* Uyarı başlığı tek satır: uzun firma adı + sahip satırı kutuyu şişirmesin. */
 .lb-alerts .lb-item-title { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* 15.09 akşam: `tone-danger` kutularında içerik sabit yüksekliği 2 px aşıyordu (1366×768 ·
+   1440×900 · 1536×864 · 1600×900; harness "sessiz kırpma" olarak yakalıyordu — v3.1'den beri
+   vardı). Açıklama satırı da tek satıra indirildi ve satır aralığı sıkıldı; kutu yüksekliği ve
+   kapasite hesabı (`alertH`) DEĞİŞMEDİ, yani sayfa sayısı aynı kaldı. */
+.lb-alerts .lb-item-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.3; }
+.lb-alerts .lb-list .lb-item { padding-top: 7px; padding-bottom: 7px; }
 .lb-quote-table .lb-tr { height: var(--lb-quote-row-h, 62px); }
 .lb-owner-quotes .lb-tr { height: var(--lb-owner-quote-row-h, 48px); }
 .lb-owner-quotes .lb-tr.lb-th { height: 22px; }
@@ -288,69 +291,33 @@
 .lb-quotes > .lb-kpis, .lb-jira > .lb-kpis { height: var(--lb-kpi-row-h, 104px); }
 .lb-quotes > .lb-kpis .lb-kpi, .lb-jira > .lb-kpis .lb-kpi { min-height: 0; align-content: start; }
 
-/* --- Business Pulse ---------------------------------------------------- */
-.lb-pulse { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr) minmax(0, 1.2fr); grid-template-rows: auto minmax(0, 1fr); }
-.lb-pulse .lb-revenue { grid-column: 1 / 3; }
-.lb-pulse .lb-leader { grid-row: 1 / 3; grid-column: 3; }
-.lb-revenue-body { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 18px; align-items: center; }
-.lb-revenue .lb-kpi-label { white-space: nowrap; line-height: 1.15; font-size: 10.5px; }
-/* 3×3 KPI ızgarası (07.09: Cihaz + Entegrasyon eklendi) — ciro kartı 372 px bütçesinde kalsın. */
-.lb-revenue .lb-kpi { padding: 8px 12px; gap: 2px; }
-.lb-revenue .lb-kpi.small .lb-kpi-value { font-size: clamp(17px, 1.3vw, 22px); }
-.lb-revenue .lb-kpi-sub { -webkit-line-clamp: 1; font-size: 11px; }
-.lb-revenue .lb-kpis.three { gap: 8px; }
-.lb-revenue-body .lb-pace { grid-column: 1 / -1; }
-.lb-pace { display: grid; gap: 6px; padding-top: 6px; border-top: 1px dashed var(--border); }
-.lb-pace-row { display: grid; grid-template-columns: 150px minmax(0, 1fr) 54px; gap: 12px; align-items: center; font-size: 13px; }
-.lb-pace-row span { color: var(--text-2); font-weight: 700; }
-.lb-pace-row strong { text-align: right; font-weight: 900; color: var(--text); }
-.lb-pace-note { font-size: 12.5px; font-weight: 800; }
-.lb-pace-note.tone-neutral { color: var(--text-3); }
-.lb-activity-wrap { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; align-items: center; min-width: 0; }
+/* --- ÖZET (eski adı Business Pulse) -------------------------------------
+   v3.2 (Çağdaş Bey, 15.09): sağda "Kim hedefinde" listesi (değişmedi), solda kişi
+   kartlarının takım toplamı. Sol taraf 12 kolonun 8'i, iki satır: 1. sayfada dört
+   donut kartı 2×2, 2. sayfada Satış Çıktısı + Portföy Sağlığı. Kart yükseklikleri
+   ızgaradan gelir (`.lb-donut-card`'ın kişi slaydına ait sabit yüksekliği burada
+   kapatılır), halka çapı JS'te hem yüksekliğe hem genişliğe göre hesaplanır. */
+.lb-pulse { grid-template-columns: repeat(12, minmax(0, 1fr)); grid-template-rows: auto minmax(0, 1fr) minmax(0, 1fr); }
+.lb-pulse .lb-band { grid-column: 1 / 9; }
+.lb-pulse .lb-donut-card { grid-column: span 4; height: auto; }
+.lb-pulse .lb-pulse-output, .lb-pulse .lb-pulse-health { grid-column: 1 / 9; }
+.lb-pulse .lb-leader { grid-column: 9 / -1; grid-row: 1 / 4; }
 
-/* Kanal kırılımı */
-.lb-channels { display: grid; gap: 9px; }
-.lb-channels.compact { gap: 7px; }
+/* Kanal satırı artık yalnız Jira ekranında kullanılıyor. */
 .lb-channel { display: grid; grid-template-columns: 150px minmax(0, 1fr) 76px; align-items: center; gap: 10px; }
-.lb-channel.total { display: flex; align-items: baseline; gap: 10px; padding-top: 8px; border-top: 1px dashed var(--border); }
-.lb-channel.total .lb-channel-label { flex: 0 0 auto; }
-.lb-channel.total .lb-channel-note { flex: 0 1 auto; min-width: 0; margin-left: auto; margin-right: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.lb-channel.total .lb-channel-num { flex: 0 0 auto; }
 .lb-channel-label { font-size: 13px; font-weight: 800; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lb-channel-label small { display: block; font-size: 11px; font-weight: 700; color: var(--text-3); line-height: 1.2; letter-spacing: 0; text-transform: none; }
-.lb-channel.sum { padding-top: 8px; border-top: 1px dashed var(--border); }
-.lb-channel.sum .lb-channel-label { color: var(--text); }
 .lb-channel-num { text-align: right; font-weight: 900; color: var(--text); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .lb-channel-num small { color: var(--text-3); font-weight: 700; }
-
-/* Dönüşüm satırı */
-.lb-funnel { display: flex; align-items: stretch; gap: 6px; padding-top: 10px; border-top: 1px dashed var(--border); min-width: 0; }
-.lb-funnel-step { display: flex; align-items: center; gap: 4px; flex: 1 1 0; min-width: 0; }
-.lb-funnel-box { flex: 1 1 0; min-width: 0; display: grid; gap: 1px; padding: 8px 6px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); text-align: center; overflow: hidden; }
-.lb-funnel-box strong { font-size: 20px; font-weight: 900; letter-spacing: -0.02em; color: var(--text); line-height: 1.15; }
-.lb-funnel-box span { font-size: 10px; font-weight: 800; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.02em; line-height: 1.15; }
-.lb-funnel-box.zero strong { color: var(--text-3); }
-.lb-funnel-step i { color: var(--text-3); font-style: normal; font-weight: 900; font-size: 16px; }
-
-/* Pulse alt sıra: TV'de uzaktan okunacak büyüklük */
-.lb-pulse .lb-channels.compact { gap: 14px; }
-.lb-pulse .lb-channel { grid-template-columns: minmax(100px, 124px) minmax(56px, 1fr) minmax(58px, 76px); gap: 8px; }
-.lb-pulse .lb-channel-label { font-size: 16px; }
-.lb-pulse .lb-channel-num { font-size: 18px; }
-.lb-pulse .lb-channel .lb-bar { height: 10px; }
 .lb-channel-note { font-size: 12px; color: var(--text-3); font-weight: 700; }
 .lb-channel-note b { color: var(--text); font-weight: 900; }
-.lb-pulse .lb-funnel { padding-top: 0; border-top: none; gap: 8px; }
-.lb-pulse .lb-funnel-step i { display: none; }
-.lb-pulse .lb-funnel-box { padding: 10px 2px; }
-.lb-pulse .lb-funnel-box span { font-size: 9.5px; letter-spacing: 0; white-space: nowrap; }
-.lb-pulse .lb-funnel-box { padding: 12px 10px; }
-.lb-pulse .lb-funnel-box strong { font-size: 30px; }
-.lb-pulse .lb-funnel-box span { font-size: 11px; }
-.lb-pulse .lb-kpis.tight { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.lb-pulse .lb-kpis.tight .lb-kpi-value { font-size: clamp(26px, 2vw, 34px); }
-.lb-pulse .lb-kpis.tight .lb-kpi-label { font-size: 12px; }
-.lb-pulse .lb-kpis.tight .lb-kpi-sub { font-size: 12.5px; }
+
+/* Özet'te satır kutuları TV'de uzaktan okunacak büyüklükte (Çağdaş Bey: "puntolar büyük"). */
+.lb-pulse .lb-figure-value strong { font-size: clamp(30px, 2.7vw, 54px); }
+.lb-pulse .lb-figure-value em { font-size: clamp(14px, 1.15vw, 22px); }
+.lb-pulse .lb-figure > span { font-size: clamp(12px, 1vw, 18px); }
+.lb-pulse .lb-card-head h3 { font-size: clamp(15px, 1.2vw, 22px); }
+
 .lb-leader .lb-row.rich { padding: 10px 16px; }
 .lb-leader .lb-row-name { font-size: 17px; }
 .lb-leader .lb-row-name em { font-size: 13.5px; }
@@ -358,12 +325,6 @@
 .lb-leader .lb-row.rich .lb-row-num { font-size: 30px; }
 .lb-leader .lb-row .lb-bar { height: 10px; }
 .lb-leader .lb-board { gap: 12px; }
-
-/* Bölünmüş Pulse: her parça kendi iki kolonunu doldurur. */
-.lb-pulse.part-revenue { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
-.lb-pulse.part-revenue .lb-revenue { grid-column: 1; }
-.lb-pulse.part-revenue .lb-leader { grid-column: 2; grid-row: 1; }
-.lb-pulse.part-activity { grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); grid-template-rows: minmax(0, 1fr); }
 
 /* --- Portföy ------------------------------------------------------------ */
 .lb-portfolio { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); }
@@ -485,13 +446,15 @@
 .lb-status-donut circle { stroke-width: 17; }
 .lb-status-donut .lb-ring-center strong { font-size: clamp(28px, 2.3vw, 42px); }
 .lb-status-donut .lb-ring-center span { font-size: clamp(11px, 0.8vw, 14px); letter-spacing: 0.06em; }
+/* Dilim etiketi TEK SATIR (15.09 akşam): iki satırlık kutu komşu dilimlerin etiketiyle ve
+   merkezdeki toplamla çakışıyordu. Zemin tam opak — bandın rengi yazının arkasından geçmesin. */
 .lb-slice-label {
-  position: absolute; transform: translate(-50%, -50%); display: grid; justify-items: center; gap: 0;
-  padding: 2px 6px; border-radius: 8px; background: color-mix(in srgb, var(--surface-2) 88%, transparent);
-  pointer-events: none; white-space: nowrap; line-height: 1.15;
+  position: absolute; transform: translate(-50%, -50%); display: flex; align-items: baseline; gap: 5px;
+  padding: 2px 7px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--border);
+  pointer-events: none; white-space: nowrap; line-height: 1.25;
 }
-.lb-slice-label b { font-size: clamp(10px, 0.72vw, 13px); font-weight: 900; color: var(--text); letter-spacing: 0.02em; }
-.lb-slice-label em { font-style: normal; font-size: clamp(9.5px, 0.66vw, 12px); font-weight: 800; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.lb-slice-label b { font-size: clamp(9.5px, 0.68vw, 12.5px); font-weight: 900; color: var(--text); letter-spacing: 0.02em; }
+.lb-slice-label em { font-style: normal; font-size: clamp(9.5px, 0.64vw, 12px); font-weight: 800; color: var(--text-2); font-variant-numeric: tabular-nums; }
 
 /* --- Alt satır kartları --------------------------------------------------- */
 /* v3.1: model listesi kartla birlikte kalktı (Çağdaş Bey: "satış kalemini orada göstermek istemiyoruz,
@@ -625,8 +588,6 @@
 .lb-band-item span { font-size: 10.5px; }
 .lb-band-item strong { font-size: 21px; }
 .lb-band-item small { font-size: 11.5px; }
-.lb-funnel-box strong { font-size: 22px; }
-.lb-funnel-box span { font-size: 10.5px; }
 .lb-alert-chip strong { font-size: 27px; }
 .lb-alert-chip span { font-size: 11.5px; }
 .lb-row-name { font-size: 15px; }
@@ -654,7 +615,6 @@
 .lb[data-compact="1"] .lb-hot-title strong { font-size: 15px; }
 .lb[data-compact="1"] .lb-hot-models, .lb[data-compact="1"] .lb-hot-money, .lb[data-compact="1"] .lb-hot-foot { font-size: 12.5px; }
 .lb[data-compact="1"] .lb-band-item strong { font-size: 18px; }
-.lb[data-compact="1"] .lb-funnel-box strong { font-size: 19px; }
 .lb[data-compact="1"] .lb-alert-chip strong { font-size: 23px; }
 .lb[data-compact="1"] .lb-row-facts { font-size: 12px; }
 .lb[data-compact="1"] .lb-legend-row, .lb[data-compact="1"] .lb-hbar-label, .lb[data-compact="1"] .lb-channel-label { font-size: 13px; }
@@ -663,11 +623,6 @@
 .lb[data-compact="1"] .lb-hot-meta { gap: 6px; }
 .lb[data-compact="1"] .lb-hot-foot { line-height: 1.3; }
 .lb[data-compact="1"] .lb-channel { gap: 8px; }
-.lb[data-compact="1"] .lb-channels { gap: 7px; }
-/* Kompakt Pulse: dönüşüm kartı satırı 12 px taşıyordu → KPI kutuları sıkılaştı. */
-.lb[data-compact="1"] .lb-pulse .lb-kpis.tight { gap: 6px; }
-.lb[data-compact="1"] .lb-pulse .lb-kpis.tight .lb-kpi { padding: 7px 10px; }
-.lb[data-compact="1"] .lb-pulse .lb-funnel-box { padding: 8px 2px; }
 .lb[data-compact="1"] .lb-top { padding: 10px 20px; }
 .lb[data-compact="1"] .lb-body { padding: 12px 18px 10px; }
 .lb[data-compact="1"] .lb-strip { padding: 0 18px 10px; }
@@ -697,13 +652,13 @@
   .lb-pulse, .lb-portfolio, .lb-quotes, .lb-jira, .lb-owner, .lb-alert-groups { grid-template-columns: 1fr; grid-template-rows: none; }
   .lb-donut-card { height: auto; }
   .lb-owner-stats, .lb-owner-recent { grid-column: auto; }
-  .lb-pulse .lb-revenue, .lb-pulse .lb-leader, .lb-owner .lb-band, .lb-owner .lb-hot-col,
+  .lb-pulse .lb-band, .lb-pulse .lb-leader, .lb-pulse .lb-pulse-output, .lb-pulse .lb-pulse-health,
+  .lb-owner .lb-band, .lb-owner .lb-hot-col,
   .lb-quotes > .lb-kpis, .lb-quotes .lb-stack, .lb-jira > .lb-kpis, .lb-jira .lb-stack { grid-column: 1 / -1; grid-row: auto; }
   .lb-band { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .lb-band-item small { display: block; }
   .lb-alert-chips { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .lb-revenue-body, .lb-activity-wrap, .lb-donut-wrap { grid-template-columns: 1fr; justify-items: center; }
-  .lb-funnel { flex-wrap: wrap; }
+  .lb-donut-wrap { grid-template-columns: 1fr; justify-items: center; }
 }
 
 @media (max-width: 900px) {
@@ -714,10 +669,9 @@
   .lb-kpis, .lb-kpis.four, .lb-kpis.five, .lb-kpis.six { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .lb-pulse, .lb-portfolio, .lb-quotes, .lb-jira, .lb-owner, .lb-alert-groups { grid-template-columns: 1fr; }
   .lb-quotes .lb-stack, .lb-jira .lb-stack { grid-row: auto; grid-column: auto; }
-  .lb-revenue-body, .lb-activity-wrap, .lb-donut-wrap { grid-template-columns: 1fr; justify-items: center; }
+  .lb-donut-wrap { grid-template-columns: 1fr; justify-items: center; }
   .lb-band { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .lb-alert-chips { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .lb-funnel { flex-wrap: wrap; }
 }
 
 /* TAM EKRAN alt boşluk (v3.0, 14.09): v2.9'da yüzen şerit için 58 px ayrılıyordu; Çağdaş Bey

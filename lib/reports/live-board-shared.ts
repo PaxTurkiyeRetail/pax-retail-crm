@@ -6,7 +6,7 @@
 // Teklifler & Forecast → Uyarılar → (Jira) ve aralara kişi slaytları (Sales Performance).
 
 import type { WeeklyTargetCounters } from '@/lib/reports/weekly-targets-shared';
-import type { GoalPair } from '@/lib/reports/targets-shared';
+import { goalPair, type GoalPair } from '@/lib/reports/targets-shared';
 
 /* ------------------------------------------------------------------------ */
 /* Zamanlama                                                                 */
@@ -499,7 +499,8 @@ export type LiveSlide =
   | { type: 'owner'; index: number; page: number; pages: number };
 
 export const TEAM_SLIDE_TITLES: Record<TeamSlideKey, { title: string; sub: string }> = {
-  pulse: { title: 'Business Pulse', sub: 'ciro · hedef · forecast · aktivite' },
+  // "Business Pulse" adı 15.09'da "Özet" oldu (Çağdaş Bey); slayt anahtarı 'pulse' kaldı.
+  pulse: { title: 'Özet', sub: 'takım toplamı · kim hedefinde' },
   portfolio: { title: 'Portföy', sub: 'account yapısı · faz · sektör · künye' },
   hot: { title: 'Hot Pipeline', sub: 'sonuçlanmaya yakın fırsatlar' },
   poc: { title: 'POC · Pilot · Rollout', sub: 'canlıya ve satışa yakın projeler' },
@@ -658,7 +659,6 @@ export type Capacities = {
   portfolioRows: number; // Portföy ekranındaki bar/açıklama satırı
   jiraRows: number;      // Jira ekranı firma tablosu satırı
   /** Business Pulse tek ekrana sığmıyor: ciro+sıralama / aktivite+dönüşüm olarak ikiye böl. */
-  pulseSplit: boolean;
 };
 
 /** Gövde yüksekliğinden (CSS px, iç boşluklar düşülmüş) liste kapasiteleri. */
@@ -683,14 +683,11 @@ export function capacities(bodyHeight: number, bodyWidth = 1920): Capacities {
   // Portföy: 2×2 kart ızgarası; her kartın liste alanı yarım yükseklik.
   // Ölçülen: bar/açıklama satırı 24 px + 12 px aralık (kompakt 22 + 10); 26/24 güvenlik payı.
   const portfolioRows = rowsThatFit((H - m.gap) / 2 - m.cardChrome, m.compact ? 24 : 26, m.compact ? 10 : 12);
-  // Pulse iki satır ister: ciro kartı + (aktivite | dönüşüm). İkisi birlikte
-  // sığmıyorsa ekran ikiye bölünür (ölçülen eşik ~690 px).
-  const pulseSplit = H < 690;
   // Jira: KPI şeridi altında firma tablosu (kompakt satır) — 28: tablo başlığı.
   const jiraRows = rowsThatFit(H - m.kpiRowH - m.gap - m.cardChrome - 28, m.ownerQuoteRowH, 6);
   // v3.1 (15.09): model kırılımı kişi slaydından kalktı — cihaz kutularının arkasındaki
   // /crm/kirilim sayfasında listeleniyor, bu yüzden ayrı bir kapasite hesabı gerekmiyor.
-  return { hot, recent, leader, tableRows, openQuotes, closedQuotes: Math.max(1, closedQuotes), alertItems, alertGroups, portfolioRows, jiraRows, pulseSplit };
+  return { hot, recent, leader, tableRows, openQuotes, closedQuotes: Math.max(1, closedQuotes), alertItems, alertGroups, portfolioRows, jiraRows };
 }
 
 /**
@@ -766,8 +763,9 @@ export const ALERT_ORDER: AlertItem['kind'][] = ['overdue', 'poc_delay', 'stale'
  */
 export function buildPagePlan(payload: LiveBoardPayload, caps: Capacities): PagePlan {
   const team: PagePlan['team'] = {
-    // Bölünmüş Pulse'ta son sayfa aktivite + dönüşüm ekranıdır.
-    pulse: pageCount(payload.owners.length, caps.leader) + (caps.pulseSplit ? 1 : 0),
+    // Özet (v3.2): sol taraf iki sayfadır (donut'lar / Satış Çıktısı + Portföy Sağlığı),
+    // sağdaki sıralama listesi kendi sayfalarına bölünür — sayfa sayısı ikisinin büyüğü.
+    pulse: Math.max(2, pageCount(payload.owners.length, caps.leader)),
     portfolio: Math.max(
       pageCount(payload.portfolio.byOwner.length, caps.portfolioRows),
       pageCount(payload.portfolio.bySector.length, caps.portfolioRows),
@@ -799,14 +797,17 @@ export function slidePlan(
   ownerCount: number,
   options?: { jira?: boolean; pages?: PagePlan },
 ): LiveSlide[] {
-  // SABİT SIRA (Sinan, 09.09): Pulse → Portföy → kişiler (sabit satıcı sırası) →
-  // Teklifler → Uyarılar → Jira. Kişi slaytları artık takım ekranlarının arasına
-  // serpilmiyor, blok hâlinde akıyor. 'hot' ve 'poc' rotasyondan çıkarıldı
-  // (Hot Pipeline kişi slaytından da kalktı); bileşenleri duruyor, listeye
-  // eklenince yeniden yayına girerler.
-  const before: TeamSlideKey[] = ['pulse', 'portfolio'];
-  const after: TeamSlideKey[] = ['quotes', 'alerts'];
+  // SABİT SIRA (Çağdaş Bey, 15.09): Özet → kişiler (sabit satıcı sırası) → Teklifler →
+  // Uyarı → Portföy → [Faz] → Jira → Hot Pipeline → POC. Kişi slaytları takım ekranlarının
+  // arasına serpilmiyor, blok hâlinde akıyor. 'hot' ve 'poc' 09.09'da rotasyondan çıkmıştı,
+  // 15.09'da SONA eklenerek geri geldi (Sinan: "Kalsınlar, sona eklensin").
+  // Faz slaydı henüz yok — veri kaynağı kararı bekliyor (Takip Listesi sunumları CRM'e mi
+  // girilecek, yoksa mevcut fırsat + aktivite kayıtlarından mı türetilecek); karar gelince
+  // 'portfolio' ile 'jira' arasına eklenecek.
+  const before: TeamSlideKey[] = ['pulse'];
+  const after: TeamSlideKey[] = ['quotes', 'alerts', 'portfolio'];
   if (options?.jira) after.push('jira');
+  after.push('hot', 'poc');
   const teamPages = (key: TeamSlideKey) => Math.max(1, options?.pages?.team[key] ?? 1);
   const ownerPages = (index: number) => Math.max(1, options?.pages?.owners[index] ?? 1);
 
@@ -958,4 +959,118 @@ export function conversionPct(sale: number, cancelled: number, lost: number): nu
 export function conversionTone(pct: number | null): Tone {
   if (pct == null) return 'neutral';
   return pct >= 50 ? 'ok' : pct >= 25 ? 'warn' : 'danger';
+}
+
+
+/* ------------------------------------------------------------------------ */
+/* ÖZET slaydı — takım toplamı (v3.2, Çağdaş Bey 15.09.2026)                 */
+/* ------------------------------------------------------------------------ */
+
+/**
+ * "Business Pulse" 15.09'da **Özet** oldu: sağ tarafta "Kim hedefinde, kim geride?"
+ * aynen kalır, sol tarafa kişi kartlarının **toplamı** gelir — Aktivite, Yıllık Bütçe,
+ * Entegrasyon, Müşteri Takip Statüsü, Satış Çıktısı, Portföy Sağlığı (Son Hareketler hariç).
+ *
+ * Toplama kuralları (ikinci bir tanım üretmemek için hepsi kişi slaydının verisinden):
+ *   * Sayılar ve tutarlar toplanır; **oranlar toplanmaz, yeniden hesaplanır**.
+ *   * Hedefi girilmemiş kişi toplam hedefi düşürmez: hedefler yalnız dolu olanlardan toplanır,
+ *     hiç yoksa hedef `null` ("hedef yok") — uydurma hedef yazılmaz (altın kural 34).
+ *   * "Ortalama temas / firma" toplanamaz: toplam görüşme / toplam kapsanan firma olarak
+ *     yeniden bölünür. Hedefi ORTAK hedeftir (migration 033), kişilerde aynı değerdir —
+ *     bu yüzden en büyüğü alınır, toplanmaz.
+ *   * Entegrasyon gerçekleşeni hâlâ bekliyorsa (Furkan'ın fatura verisi) toplam da bekler.
+ */
+export type TeamRollup = {
+  owners: number;
+  /** Kişilerin ortak çeyreği (hepsinde aynı); kişi yoksa null. */
+  quarter: { label: string; months: string; elapsedPct: number } | null;
+  visitsQuarter: GoalPair;
+  visitsYear: GoalPair;
+  budgetQuarter: GoalPair;
+  integration: GoalPair;
+  integrationQuarter: GoalPair;
+  integrationPending: boolean;
+  hunterToFarmer: GoalPair;
+  leadToHunter: GoalPair;
+  /** Müşteri Listesi (H/F/L/K) toplamı; hiç kimsede liste yoksa null. */
+  list: CustomerListSplit | null;
+  quoteBox: OwnerQuoteBox;
+  devices: { total: number; sold: number; rental: number };
+  poc: number;
+  invoices: number;
+  coverage: OwnerCoverage;
+  inactive: OwnerInactive;
+  portfolio: { total: number; active: number };
+};
+
+/** Hedefleri olan kişilerin hedef toplamı; hiç hedef yoksa null (0 değil). */
+function sumGoal(rows: GoalPair[]): GoalPair {
+  const actual = rows.reduce((total, row) => total + (Number(row.actual) || 0), 0);
+  const withTarget = rows.filter((row) => row.target != null);
+  const target = withTarget.length
+    ? withTarget.reduce((total, row) => total + (row.target ?? 0), 0)
+    : null;
+  return goalPair(actual, target);
+}
+
+const sumBy = <T>(rows: T[], pick: (row: T) => number) =>
+  rows.reduce((total, row) => total + (Number(pick(row)) || 0), 0);
+
+export function teamRollup(owners: LiveOwner[]): TeamRollup {
+  const goals = owners.map((owner) => owner.goals);
+  const lists = owners.map((owner) => owner.list).filter((list): list is CustomerListSplit => list != null);
+  const coveredActual = sumBy(owners, (owner) => owner.coverage.covered.actual);
+  const activitiesYear = sumBy(owners, (owner) => owner.coverage.activitiesYear);
+  // Ortak hedef (033): kişilerde aynı değer durur — toplanmaz, en büyüğü alınır.
+  const contactsTargets = owners.map((owner) => owner.coverage.contactsPer.target).filter((value): value is number => value != null);
+  const contactsTarget = contactsTargets.length ? Math.max(...contactsTargets) : null;
+  const contactsActual = coveredActual > 0 ? Math.round((activitiesYear / coveredActual) * 10) / 10 : 0;
+
+  return {
+    owners: owners.length,
+    quarter: goals[0]?.quarter ?? null,
+    visitsQuarter: sumGoal(goals.map((goal) => goal.visitsQuarter)),
+    visitsYear: sumGoal(goals.map((goal) => goal.visitsYear)),
+    budgetQuarter: sumGoal(goals.map((goal) => goal.budgetQuarter)),
+    integration: sumGoal(goals.map((goal) => goal.integration)),
+    integrationQuarter: sumGoal(goals.map((goal) => goal.integrationQuarter)),
+    integrationPending: goals.some((goal) => goal.integrationPending),
+    hunterToFarmer: sumGoal(goals.map((goal) => goal.hunterToFarmer)),
+    leadToHunter: sumGoal(goals.map((goal) => goal.leadToHunter)),
+    list: lists.length
+      ? {
+          hunter: sumBy(lists, (list) => list.hunter),
+          farmer: sumBy(lists, (list) => list.farmer),
+          lead: sumBy(lists, (list) => list.lead),
+          kasa: sumBy(lists, (list) => list.kasa),
+          total: sumBy(lists, (list) => list.total),
+        }
+      : null,
+    quoteBox: {
+      open: { count: sumBy(owners, (o) => o.quoteBox.open.count), amount: sumBy(owners, (o) => o.quoteBox.open.amount) },
+      won: { count: sumBy(owners, (o) => o.quoteBox.won.count), amount: sumBy(owners, (o) => o.quoteBox.won.amount) },
+      lost: { count: sumBy(owners, (o) => o.quoteBox.lost.count), amount: sumBy(owners, (o) => o.quoteBox.lost.amount) },
+    },
+    devices: {
+      total: sumBy(owners, (o) => o.devices.total),
+      sold: sumBy(owners, (o) => o.devices.sold),
+      rental: sumBy(owners, (o) => o.devices.rental),
+    },
+    poc: sumBy(owners, (o) => o.pipeline.poc),
+    invoices: sumBy(owners, (o) => o.invoices),
+    coverage: {
+      covered: sumGoal(owners.map((o) => o.coverage.covered)),
+      contactsPer: goalPair(contactsActual, contactsTarget),
+      activitiesYear,
+    },
+    inactive: {
+      count: sumBy(owners, (o) => o.inactive.count),
+      days: owners[0]?.inactive.days ?? LIVE_BOARD_RULES.inactiveOwnerDays,
+      unmatched: sumBy(owners, (o) => o.inactive.unmatched),
+    },
+    portfolio: {
+      total: sumBy(owners, (o) => o.portfolio.total),
+      active: sumBy(owners, (o) => o.portfolio.active),
+    },
+  };
 }

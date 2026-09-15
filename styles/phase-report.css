@@ -9,6 +9,11 @@
   padding-bottom: 48px;
 }
 
+/* Satışçı Takip Raporu'nun "Faz" sekmesinde gömülü çalışır (15.09): sayfa alt boşluğu
+   sekme kabına bırakılır (sayfanın kendi boşluğu zaten var). Başlık çubuğu durur —
+   satıcı seçimi ve arama oradadır. */
+.ph-page.embedded { padding-bottom: 0; }
+
 /* ── TOPBAR ── */
 .ph-topbar {
   display: flex;
