@@ -5,7 +5,7 @@
 // dosya üreten betikler/testler aynı kodu çalıştırabilir (altın kural 11 ve 17).
 
 import JSZip from 'jszip';
-import { duplicateSlideAfter, removeSlide, sanitizePresentationPackage } from '@/lib/pptx/ooxml';
+import { duplicateSlideAfter, pruneOrphanParts, removeSlide, sanitizePresentationPackage } from '@/lib/pptx/ooxml';
 import { buildFollowupSlideXml } from '@/lib/reports/seller-followup-pptx-draw';
 import type { FollowupSlideSpec } from '@/lib/reports/seller-followup-pptx-shared';
 
@@ -55,5 +55,9 @@ export async function assembleFollowupDeck(
   for (const slideNo of originalSlideNos) await removeSlide(zip, slideNo);
 
   await sanitizePresentationPackage(zip);
+  // Şablonun 18 slaydı silindiği için onlara ait grafik/SVG'ler ve notesMaster'ın teması
+  // pakette öksüz kalıyordu; PowerPoint bunu reddediyor ("biçimini okuyamaz"). Temizlik
+  // sanitize'dan SONRA yapılır: önce ölü ilişkiler gider, sonra erişilemez parçalar.
+  await pruneOrphanParts(zip);
   return zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
 }

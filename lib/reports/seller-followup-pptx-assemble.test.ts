@@ -113,6 +113,67 @@ describe('Takip Listesi sunumu — paket kurgusu (16.09)', () => {
     expect(xml).toContain('Bu portföyde açık takip kaydı bulunmuyor.');
   }, 60_000);
 
+  // 16.09: PowerPoint "biçimini okuyamaz" dedi, LibreOffice ve python-pptx açıyordu.
+  // Sebep: silinen şablon slaytlarının grafikleri/SVG'leri ve notesMaster'ın teması pakette
+  // ÖKSÜZ kalıyordu ([Content_Types].xml'de tanımlı ama hiçbir ilişki göstermiyor).
+  // Bu test paketi kökten gezip erişilemeyen parça kalmadığını doğrular.
+  it('pakette öksüz parça kalmaz — PowerPoint OPC doğrulaması bunu reddediyor', async () => {
+    const specs = buildFollowupSlideSpecs([{ owner: 'Furkan Kızılkurt', summary, rows: rows(3) }]);
+    const buffer = await assembleFollowupDeck(await loadTemplate(), specs, new Date(2026, 8, 16));
+    const zip = await JSZip.loadAsync(buffer);
+
+    const names = new Set(Object.keys(zip.files).filter((name) => !zip.files[name].dir));
+    const relsPathFor = (part: string) => {
+      const index = part.lastIndexOf('/');
+      const dir = index < 0 ? '' : part.slice(0, index);
+      const base = index < 0 ? part : part.slice(index + 1);
+      return dir ? `${dir}/_rels/${base}.rels` : `_rels/${base}.rels`;
+    };
+    const resolve = (base: string, target: string) => {
+      const parts = (base ? `${base}/${target}` : target).split('/');
+      const out: string[] = [];
+      for (const piece of parts) {
+        if (piece === '.' || piece === '') continue;
+        if (piece === '..') out.pop();
+        else out.push(piece);
+      }
+      return out.join('/');
+    };
+
+    const reachable = new Set<string>();
+    const queue: string[] = [];
+    const walk = async (relsPath: string, base: string) => {
+      if (!names.has(relsPath)) return;
+      const xml = await zip.file(relsPath)!.async('string');
+      for (const match of xml.matchAll(/<Relationship\b[^>]*\/>/g)) {
+        const tag = match[0];
+        if (/TargetMode="External"/.test(tag)) continue;
+        const target = tag.match(/\bTarget="([^"]+)"/)?.[1];
+        if (!target || /^(https?:|mailto:)/i.test(target)) continue;
+        const resolved = resolve(base, target);
+        if (!names.has(resolved) || reachable.has(resolved)) continue;
+        reachable.add(resolved);
+        queue.push(resolved);
+      }
+    };
+    await walk('_rels/.rels', '');
+    while (queue.length) {
+      const part = queue.pop()!;
+      const index = part.lastIndexOf('/');
+      await walk(relsPathFor(part), index < 0 ? '' : part.slice(0, index));
+    }
+
+    const orphans = Array.from(names).filter(
+      (name) => name !== '[Content_Types].xml' && !name.endsWith('.rels') && !reachable.has(name),
+    );
+    expect(orphans).toEqual([]);
+
+    // Ters yön: [Content_Types].xml'de tanımlı olup pakette bulunmayan parça da olmamalı.
+    const contentTypes = await zip.file('[Content_Types].xml')!.async('string');
+    const declared = Array.from(contentTypes.matchAll(/PartName="([^"]+)"/g)).map((m) => m[1].replace(/^\//, ''));
+    expect(declared.filter((part) => !names.has(part))).toEqual([]);
+  }, 60_000);
+
   it('slayt boş listeyle çağrılamaz', async () => {
     await expect(assembleFollowupDeck(await loadTemplate(), [], new Date())).rejects.toThrow();
   }, 60_000);

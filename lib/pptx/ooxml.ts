@@ -491,3 +491,74 @@ export function makeTextBox(
   const line = options?.line ? `<a:ln w="9525"><a:solidFill><a:srgbClr val="${options.line}"/></a:solidFill></a:ln>` : '<a:ln><a:noFill/></a:ln>';
   return `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="${escapeXml(name)}"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="${x}" y="${y}"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom>${fill}${line}</p:spPr><p:txBody><a:bodyPr wrap="square" lIns="${options?.marginLeft ?? 60000}" rIns="${options?.marginRight ?? 60000}" tIns="20000" bIns="20000" anchor="ctr"/><a:lstStyle/><a:p><a:pPr algn="${options?.align ?? 'l'}"/>${xmlTextRun(text, fontSize, options?.bold, color)}<a:endParaRPr lang="tr-TR" sz="${fontSize}"/></a:p></p:txBody></p:sp>`;
 }
+
+/**
+ * ÖKSÜZ PARÇA TEMİZLİĞİ — OPC ilişki grafiğinden erişilemeyen parçaları paketten siler.
+ *
+ * NEDEN (16.09.2026, Sinan: "PowerPoint biçimini okuyamaz"): Takip Listesi sunumu şablonun
+ * 18 slaydını silip kendi slaytlarını üretiyor. Slaytlar gidince onlara ait `ppt/charts/*`
+ * ve SVG'ler, `removePowerPointAuxiliaryParts` notesMaster'ı silince de onun teması
+ * (`ppt/theme/theme2.xml`) pakette ÖKSÜZ kaldı: `[Content_Types].xml`'de tanımlılar ama
+ * hiçbir ilişki onlara işaret etmiyor. PowerPoint OPC paketini doğrularken bunu reddediyor
+ * ("biçimini okuyamaz"); LibreOffice ve python-pptx umursamıyor — bu yüzden ilk doğrulama
+ * turu hatayı kaçırdı. Şablonun kendisinde öksüz parça 0'dır.
+ *
+ * `sanitizePresentationPackage` var olmayan parçayı gösteren İLİŞKİLERİ siler; bu fonksiyon
+ * ise tersini yapar — hiçbir ilişkinin göstermediği PARÇALARI siler. İkisi tamamlayıcıdır.
+ *
+ * Erişilebilirlik kökten (`_rels/.rels`) tüm ilişki grafiği gezilerek hesaplandığı için tek
+ * geçiş yeterlidir: bir öksüzün zincirindeki her şey zaten erişilemez sayılır.
+ *
+ * @returns silinen parça yolları (boş dizi = paket zaten temizdi)
+ */
+export async function pruneOrphanParts(zip: JSZip): Promise<string[]> {
+  const names = new Set(Object.keys(zip.files).filter((name) => !zip.files[name].dir));
+  const relsPathFor = (part: string) =>
+    part ? path.posix.join(path.posix.dirname(part), '_rels', `${path.posix.basename(part)}.rels`) : '_rels/.rels';
+
+  const reachable = new Set<string>();
+  const queue: string[] = [];
+
+  const walk = async (relsPath: string, base: string) => {
+    if (!names.has(relsPath)) return;
+    const xml = await zip.file(relsPath)!.async('string');
+    for (const match of xml.matchAll(/<Relationship\b[^>]*\/>/g)) {
+      const tag = match[0];
+      if (/TargetMode="External"/.test(tag)) continue;
+      const target = tag.match(/\bTarget="([^"]+)"/)?.[1];
+      if (!target || /^(https?:|mailto:)/i.test(target)) continue;
+      const resolved = path.posix.normalize(path.posix.join(base, target));
+      if (!names.has(resolved) || reachable.has(resolved)) continue;
+      reachable.add(resolved);
+      queue.push(resolved);
+    }
+  };
+
+  await walk('_rels/.rels', '');
+  while (queue.length) {
+    const part = queue.pop()!;
+    await walk(relsPathFor(part), path.posix.dirname(part));
+  }
+
+  const orphans = Array.from(names).filter(
+    (name) => name !== '[Content_Types].xml' && !name.endsWith('.rels') && !reachable.has(name),
+  );
+  if (!orphans.length) return [];
+
+  for (const orphan of orphans) {
+    zip.remove(orphan);
+    const rels = relsPathFor(orphan);
+    if (names.has(rels)) zip.remove(rels);
+  }
+
+  const ctFile = zip.file('[Content_Types].xml');
+  if (ctFile) {
+    const drop = new Set(orphans.map((name) => `/${name}`));
+    const ctXml = (await ctFile.async('string')).replace(/<Override\b[^>]*\/>/g, (tag) => {
+      const partName = tag.match(/\bPartName="([^"]+)"/)?.[1] ?? '';
+      return drop.has(partName) ? '' : tag;
+    });
+    zip.file('[Content_Types].xml', ctXml);
+  }
+  return orphans;
+}
