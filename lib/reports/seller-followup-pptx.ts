@@ -38,7 +38,11 @@ export async function generateSellerFollowupPptx(options?: { owner?: string; tod
   }
 
   const specs = buildFollowupSlideSpecs(decks);
-  const templatePath = path.join(process.cwd(), 'templates', 'weekly-management-template.pptx');
+  // Kendi şablonu: TEK boş slayt, grafik/not/medya yok (28 KB). Yönetim sunumunun 1,9 MB'lık
+  // şablonu kullanılmıyordu artık — onun 18 slaydını silmek, silinen slaytlara ait grafik/SVG
+  // ve notesMaster teması gibi parçaları pakette öksüz bırakıyor, PowerPoint de paketi
+  // reddediyordu (16.09). Silinecek bir şey olmayan şablonla bu hata sınıfı tamamen kalkıyor.
+  const templatePath = path.join(process.cwd(), 'templates', 'takip-listesi-template.pptx');
   const templateBuffer = await fs.readFile(templatePath);
   const buffer = await assembleFollowupDeck(templateBuffer, specs, today);
   return { buffer, slideCount: specs.length, owners };

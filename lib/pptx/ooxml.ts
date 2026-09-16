@@ -471,7 +471,23 @@ export async function sanitizePresentationPackage(zip: JSZip) {
   await sanitizeXmlParts(zip);
 }
 
+/**
+ * DrawingML `sz` (ST_TextFontSize) yüzde bir punto birimindedir ve şema aralığı
+ * **100–400000**'dir (1pt–4000pt). Aralık dışı değer dosyayı PowerPoint'e açtırmaz
+ * ("biçimini okuyamaz"), ama LibreOffice/python-pptx/XML doğrulayıcılar kabul eder.
+ *
+ * Yalnız dolgu için kullanılan görünmez kutularda `fontSize: 1` yazılıyordu → `sz="1"`,
+ * yani şema dışı. Metin taşımadıkları için 1pt'ye yuvarlamak görünümü değiştirmez.
+ * (16.09.2026, Sinan'ın PowerPoint'inde ikili aramayla bulundu.)
+ */
+export function clampFontSize(fontSize: number) {
+  const value = Math.round(Number(fontSize));
+  if (!Number.isFinite(value)) return 1100;
+  return Math.min(400000, Math.max(100, value));
+}
+
 export function xmlTextRun(text: string, fontSize = 1100, bold = false, color = '1F2937') {
+  fontSize = clampFontSize(fontSize);
   return `<a:r><a:rPr lang="tr-TR" sz="${fontSize}"${bold ? ' b="1"' : ''}><a:solidFill><a:srgbClr val="${color}"/></a:solidFill><a:latin typeface="Aptos"/><a:cs typeface="Aptos"/></a:rPr><a:t>${escapeXml(text)}</a:t></a:r>`;
 }
 
@@ -485,11 +501,19 @@ export function makeTextBox(
   text: string,
   options?: { fontSize?: number; bold?: boolean; color?: string; align?: 'l' | 'ctr' | 'r'; fill?: string; line?: string; marginLeft?: number; marginRight?: number },
 ) {
-  const fontSize = options?.fontSize ?? 1100;
+  const fontSize = clampFontSize(options?.fontSize ?? 1100);
   const color = options?.color ?? '1F2937';
   const fill = options?.fill ? `<a:solidFill><a:srgbClr val="${options.fill}"/></a:solidFill>` : '<a:noFill/>';
   const line = options?.line ? `<a:ln w="9525"><a:solidFill><a:srgbClr val="${options.line}"/></a:solidFill></a:ln>` : '<a:ln><a:noFill/></a:ln>';
-  return `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="${escapeXml(name)}"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="${x}" y="${y}"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom>${fill}${line}</p:spPr><p:txBody><a:bodyPr wrap="square" lIns="${options?.marginLeft ?? 60000}" rIns="${options?.marginRight ?? 60000}" tIns="20000" bIns="20000" anchor="ctr"/><a:lstStyle/><a:p><a:pPr algn="${options?.align ?? 'l'}"/>${xmlTextRun(text, fontSize, options?.bold, color)}<a:endParaRPr lang="tr-TR" sz="${fontSize}"/></a:p></p:txBody></p:sp>`;
+  // BOŞ METİNDE RUN ÜRETİLMEZ (16.09.2026 — Sinan: "PowerPoint biçimini okuyamaz").
+  // Metin boşken `<a:r><a:t></a:t></a:r>` yani İÇİ BOŞ bir run çıkıyordu; PowerPoint bunu
+  // reddediyor (LibreOffice, python-pptx ve XML doğrulayıcılar kabul ediyor — bu yüzden
+  // hata ancak gerçek PowerPoint'te görüldü). Boş kutu doğru biçimde yalnız `<a:endParaRPr>`
+  // taşır. Sadece dolgu/çerçeve için kullanılan kutular (zemin kapatma, renk bandı, kart
+  // arka planı) hep boş metinlidir; Yönetim Sunumu'ndaki iki "Canvas" kutusu da öyleydi.
+  // İkili arama ile bulundu: metinli kutu açılıyor, boş metinli kutu dosyayı bozuyor.
+  const runXml = String(text ?? '').length ? xmlTextRun(text, fontSize, options?.bold, color) : '';
+  return `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="${escapeXml(name)}"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="${x}" y="${y}"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom>${fill}${line}</p:spPr><p:txBody><a:bodyPr wrap="square" lIns="${options?.marginLeft ?? 60000}" rIns="${options?.marginRight ?? 60000}" tIns="20000" bIns="20000" anchor="ctr"/><a:lstStyle/><a:p><a:pPr algn="${options?.align ?? 'l'}"/>${runXml}<a:endParaRPr lang="tr-TR" sz="${fontSize}"/></a:p></p:txBody></p:sp>`;
 }
 
 /**

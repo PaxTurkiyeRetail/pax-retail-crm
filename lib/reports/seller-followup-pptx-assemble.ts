@@ -44,8 +44,10 @@ export async function assembleFollowupDeck(
     // Şablon slaydının KENDİ şekilleri silinir (üstünü örtmek yetmiyordu: metin dosyada
     // kalıyor, arama/erişilebilirlikte görünüyordu). Grup özellikleri korunur, gerisi bizim.
     const original = await file.async('string');
+    // `<p:grpSpPr>` hem kapanış etiketli hem kendinden kapanan (`<p:grpSpPr/>`) gelebilir —
+    // ikisi de karşılandı; boş şablon slaydı kendinden kapanan biçimi kullanıyor.
     const xml = original.replace(
-      /(<p:spTree>[\s\S]*?<\/p:grpSpPr>)[\s\S]*?(<\/p:spTree>)/,
+      /(<p:spTree>[\s\S]*?(?:<p:grpSpPr\s*\/>|<\/p:grpSpPr>))[\s\S]*?(<\/p:spTree>)/,
       (_match, head: string, tail: string) => `${head}${drawn.xml}${tail}`,
     );
     if (xml === original) throw new Error('PPTX slayt gövdesi (spTree) bulunamadı.');

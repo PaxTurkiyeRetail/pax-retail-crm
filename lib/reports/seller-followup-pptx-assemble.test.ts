@@ -27,7 +27,7 @@ function rows(count: number, prefix = 'Firma'): FollowupSlideRow[] {
 }
 
 async function loadTemplate() {
-  return fs.readFile(path.join(process.cwd(), 'templates', 'weekly-management-template.pptx'));
+  return fs.readFile(path.join(process.cwd(), 'templates', 'takip-listesi-template.pptx'));
 }
 
 describe('Takip Listesi sunumu — paket kurgusu (16.09)', () => {
@@ -102,6 +102,7 @@ describe('Takip Listesi sunumu — paket kurgusu (16.09)', () => {
     const slideName = Object.keys(zip.files).find((name) => /^ppt\/slides\/slide\d+\.xml$/.test(name))!;
     const xml = await zip.file(slideName)!.async('string');
     expect(xml).not.toContain('Haftalık Yönetim Güncellemesi');
+    // Şablon tek boş slayt olduğu için artık silinecek şablon metni de yok.
   }, 60_000);
 
   it('kaydı olmayan kişinin slaydında "kayıt bulunmuyor" yazar', async () => {
@@ -172,6 +173,72 @@ describe('Takip Listesi sunumu — paket kurgusu (16.09)', () => {
     const contentTypes = await zip.file('[Content_Types].xml')!.async('string');
     const declared = Array.from(contentTypes.matchAll(/PartName="([^"]+)"/g)).map((m) => m[1].replace(/^\//, ''));
     expect(declared.filter((part) => !names.has(part))).toEqual([]);
+  }, 60_000);
+
+  // 16.09, ASIL KÖK NEDEN: boş metinli kutular `<a:r><a:t></a:t></a:r>` yani içi boş run
+  // üretiyordu; PowerPoint dosyayı açmayı reddediyordu. LibreOffice, python-pptx ve XML
+  // doğrulayıcıları bunu kabul ettiği için ancak Sinan'ın PowerPoint'inde görüldü ve
+  // ikili aramayla bulundu (metinli kutu açılıyor, boş metinli kutu bozuyor).
+  // Zemin kapatma, lacivert bant ve KPI kartı arka planları hep boş metinlidir.
+  it('boş metinli kutular içi boş run üretmez — PowerPoint bunu reddediyor', async () => {
+    const specs = buildFollowupSlideSpecs([
+      { owner: 'Furkan Kızılkurt', summary, rows: rows(4) },
+      { owner: 'Cem Koç', summary: { ...summary, openFollowupCount: 0 }, rows: [] },
+    ]);
+    const buffer = await assembleFollowupDeck(await loadTemplate(), specs, new Date(2026, 8, 16));
+    const zip = await JSZip.loadAsync(buffer);
+    const slideNames = Object.keys(zip.files).filter((name) => /^ppt\/slides\/slide\d+\.xml$/.test(name));
+    expect(slideNames.length).toBeGreaterThan(0);
+    for (const name of slideNames) {
+      const xml = await zip.file(name)!.async('string');
+      expect(xml).not.toMatch(/<a:t><\/a:t>/);
+      expect(xml).not.toMatch(/<a:t\/>/);
+      // Dolgu kutuları hâlâ çizilmeli: paragraf var ama run yok.
+      expect(xml).toContain('<a:endParaRPr');
+    }
+  }, 60_000);
+
+  // 16.09 — ASIL KÖK NEDEN ve alınan ders.
+  // "PowerPoint biçimini okuyamaz" hatasının sebebi DrawingML ŞEMA ARALIĞI ihlaliydi:
+  // yalnız dolgu için kullanılan görünmez kutularda `fontSize: 1` yazıyordu → `sz="1"`.
+  // `sz` (ST_TextFontSize) yüzde bir punto birimindedir, geçerli aralık 100–400000'dir.
+  // LibreOffice, python-pptx ve XML doğrulayıcıları aralığı denetlemediği için hata yalnız
+  // gerçek PowerPoint'te görünüyordu; iki yanlış hipotezden (öksüz parça, boş run) sonra
+  // ikili aramayla bulundu. Bu test tek bir değeri değil, ARALIK İHLALİ SINIFINI kapatır.
+  it('DrawingML şema aralıkları ve şekil id benzersizliği bozulmaz', async () => {
+    const specs = buildFollowupSlideSpecs([
+      { owner: 'Furkan Kızılkurt', summary, rows: rows(25) },
+      { owner: 'Cem Koç', summary: { ...summary, openFollowupCount: 0 }, rows: [] },
+    ]);
+    const buffer = await assembleFollowupDeck(await loadTemplate(), specs, new Date(2026, 8, 16));
+    const zip = await JSZip.loadAsync(buffer);
+
+    const ranges: Array<[string, number, number]> = [
+      ['sz', 100, 400000],           // yazı boyutu — bu oturumda dosyayı bozan alan
+      ['w', 0, 20116800],            // a:ln çizgi kalınlığı
+      ['cx', 0, 27273042329600],     // a:ext genişlik
+      ['cy', 0, 27273042329600],     // a:ext yükseklik
+      ['lIns', 0, 51206400], ['rIns', 0, 51206400],
+      ['tIns', 0, 51206400], ['bIns', 0, 51206400],
+    ];
+
+    const slideNames = Object.keys(zip.files).filter((name) => /^ppt\/slides\/slide\d+\.xml$/.test(name));
+    expect(slideNames.length).toBeGreaterThan(0);
+    const violations: string[] = [];
+    for (const name of slideNames) {
+      const xml = await zip.file(name)!.async('string');
+      for (const [attr, min, max] of ranges) {
+        for (const match of xml.matchAll(new RegExp(`\\b${attr}="(-?\\d+)"`, 'g'))) {
+          const value = Number(match[1]);
+          if (value < min || value > max) violations.push(`${name}: ${attr}="${value}" (geçerli ${min}..${max})`);
+        }
+      }
+      const ids = Array.from(xml.matchAll(/<p:cNvPr id="(\d+)"/g)).map((m) => Number(m[1]));
+      const duplicates = ids.filter((id, index) => ids.indexOf(id) !== index);
+      if (duplicates.length) violations.push(`${name}: tekrar eden şekil id ${[...new Set(duplicates)].join(', ')}`);
+      if (ids.some((id) => id < 1)) violations.push(`${name}: şekil id < 1`);
+    }
+    expect(violations).toEqual([]);
   }, 60_000);
 
   it('slayt boş listeyle çağrılamaz', async () => {
