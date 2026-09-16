@@ -3,9 +3,12 @@ import { db } from '@/lib/db';
 
 // Entegrasyon Raporu — entegrasyon yeteneği açık tüm firmaların (müşteri veya
 // iş ortağı) hangi fazda olduğunu ve son aktivite notunu tek ekranda gösterir.
-// Kaynak: musteriler.integration_enabled + bağlamsal pipeline
-// (aktif_faz_no) + is_ortagi_faz_tanimlari (14 fazlı entegrasyon akışı) +
-// pipeline_eventleri (en son not).
+// Kaynak: `crm_entegrasyon_durumu` görünümü (migration 037) — Canlı Ekran'ın entegrasyon
+// sayacıyla AYNI tanım (altın kural 17): iş ortağı → iş ortağı fazı, son müşteri → müşteri
+// fazı; "tamamlandı" eşiği de oradan (iş ortağı >=10, müşteri >=24). Son not, firmanın KENDİ
+// bağlamındaki (`entegrasyon_modeli`ne göre) en son pipeline olayından — 16.09 öncesi bu satır
+// her firma için sabit `business_partner` bağlamına bakıyordu; son müşterilerin notu hiç
+// gelmiyordu (aynı kök sebep, aynı düzeltme).
 
 export type EntegrasyonRaporuRow = {
   customerId: string;
@@ -14,6 +17,7 @@ export type EntegrasyonRaporuRow = {
   entegrasyonModeli: string;
   aktifFazNo: number | null;
   aktifFazAdi: string | null;
+  entegrasyonTamamlandi: boolean;
   sonNot: string | null;
   sonEventTarihi: string | null;
 };
@@ -36,27 +40,24 @@ export async function buildEntegrasyonRaporu(options?: { isKolu?: string }): Pro
   const result = await db.query(
     `
       select
-        m.id::text as customer_id,
-        m.musteri,
-        m.is_kolu,
-        case when r.customer_id is not null then 'İş Ortağı' else 'Müşteri (Kendi Entegrasyonu)' end as entegrasyon_modeli,
-        mp.active_phase_no as aktif_faz_no,
-        ft.asama_adi as aktif_faz_adi,
+        d.customer_id::text as customer_id,
+        d.musteri,
+        d.is_kolu,
+        case when d.is_ortagi_rolu then 'İş Ortağı' else 'Müşteri (Kendi Entegrasyonu)' end as entegrasyon_modeli,
+        d.aktif_faz_no,
+        d.aktif_faz_adi,
+        d.entegrasyon_tamamlandi,
         pe.notlar as son_not,
         pe.created_at as son_event_tarihi
-      from public.musteriler m
-      left join public.organization_roles r on r.customer_id=m.id and r.role_key='business_partner' and r.is_active=true
-      left join public.organization_pipeline_states mp on mp.customer_id = m.id and mp.context_key='business_partner'
-      left join public.is_ortagi_faz_tanimlari ft on ft.faz_no = mp.active_phase_no
+      from public.crm_entegrasyon_durumu d
       left join lateral (
         select pe_1.notlar, pe_1.created_at
         from public.pipeline_eventleri pe_1
-        where pe_1.musteri_id = m.id and pe_1.activity_context='business_partner'
+        where pe_1.musteri_id = d.customer_id and pe_1.activity_context = d.aktif_baglam
         order by pe_1.created_at desc
         limit 1
       ) pe on true
-      where m.integration_enabled = true
-      order by m.musteri asc
+      order by d.musteri asc
     `,
   );
 
@@ -74,6 +75,7 @@ export async function buildEntegrasyonRaporu(options?: { isKolu?: string }): Pro
       entegrasyonModeli: String(row.entegrasyon_modeli),
       aktifFazNo: row.aktif_faz_no != null ? Number(row.aktif_faz_no) : null,
       aktifFazAdi: cleanText(row.aktif_faz_adi),
+      entegrasyonTamamlandi: row.entegrasyon_tamamlandi === true,
       sonNot: cleanText(row.son_not),
       sonEventTarihi: row.son_event_tarihi ? new Date(row.son_event_tarihi).toISOString() : null,
     }));

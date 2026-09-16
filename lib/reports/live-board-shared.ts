@@ -79,8 +79,9 @@ export const LIVE_BOARD_RULES = {
   hotPhases: [10, 11, 12, 13, 14, 24] as readonly number[],
   /** TV'de listelenen maksimum fırsat sayısı. */
   hotTeamLimit: 20,
-  /** Entegrasyon firması bu fazdan itibaren "entegre" sayılır (Entegrasyon Raporu yeşil eşiği). */
-  integrationDonePhase: 9,
+  // integrationDonePhase kaldırıldı (16.09, migration 037): eşik artık `crm_entegrasyon_durumu`
+  // görünümünde firmanın KENDİ hattına göre (iş ortağı >=10 / son müşteri >=24) hesaplanıyor —
+  // tek sabit eşik yanlıştı (bkz. Q_INTEGRATIONS ve entegrasyon-raporu.ts).
   /** Açık teklif bu kadar gün dokunulmadıysa "pasif" sayılır (Çağdaş Bey, 07.09: 30 gün cevap yoksa). */
   quotePassiveDays: 30,
   /** Bir sorumlunun üzerinde bu kadar ve fazla firma varsa "portföy yükü" uyarısı (Çağdaş Bey, 07.09: 50–60'ı geçmesin). */

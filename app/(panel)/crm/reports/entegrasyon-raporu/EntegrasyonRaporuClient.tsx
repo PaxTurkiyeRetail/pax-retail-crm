@@ -11,6 +11,7 @@ type Row = {
   entegrasyonModeli: string;
   aktifFazNo: number | null;
   aktifFazAdi: string | null;
+  entegrasyonTamamlandi: boolean;
   sonNot: string | null;
   sonEventTarihi: string | null;
 };
@@ -196,7 +197,10 @@ export default function EntegrasyonRaporuClient() {
             ) : sortedRows.length === 0 ? (
               <tr><td colSpan={5} style={{ padding: 20, textAlign: 'center', color: 'var(--text-3)' }}>Kayıt yok.</td></tr>
             ) : sortedRows.map((row) => {
-              const done = row.aktifFazNo != null && row.aktifFazNo >= 9;
+              // 16.09: eşik artık sunucuda hesaplanıyor (crm_entegrasyon_durumu, migration 037) —
+              // iş ortağı vs son müşteri farklı fazlarda "tamamlandı" sayılıyor, tek sabit sayı
+              // (eskiden burada sabit >=9 idi) ikisine birden uymuyordu.
+              const done = row.entegrasyonTamamlandi;
               return (
                 <tr
                   key={row.customerId}

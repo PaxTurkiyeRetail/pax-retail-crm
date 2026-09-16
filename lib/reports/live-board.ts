@@ -406,15 +406,15 @@ const Q_SALE_NO_ITEMS = `
   group by 1, 2
 `;
 
-// KasaPOS entegrasyonu: entegrasyon süreci açık tüm firmalar; faz ≥ 9 =
-// entegrasyon tamamlandı (Entegrasyon Raporu'nun yeşil eşiği). Sorumlu bazında.
+// KasaPOS entegrasyonu: entegrasyon süreci açık tüm firmalar, sorumlu bazında.
+// "Tamamlandı" tanımı `crm_entegrasyon_durumu` görünümünden gelir (migration 037) —
+// iş ortağı: faz>=10 "Entegrasyon Süreci Tamamlandı", son müşteri: faz>=24 "Rollout".
+// Entegrasyon Raporu ile AYNI görünüm kullanılır (altın kural 17 — ikinci tanım yazılmaz).
 const Q_INTEGRATIONS = `
-  select coalesce(nullif(trim(m.sorumlu), ''), 'Havuz Account') as owner,
+  select coalesce(nullif(trim(sorumlu), ''), 'Havuz Account') as owner,
          count(*)::int as total,
-         count(*) filter (where mp.active_phase_no >= $1::int)::int as done
-  from public.musteriler m
-  left join public.organization_pipeline_states mp on mp.customer_id = m.id and mp.context_key='business_partner'
-  where m.integration_enabled = true
+         count(*) filter (where entegrasyon_tamamlandi)::int as done
+  from public.crm_entegrasyon_durumu
   group by 1
 `;
 
@@ -498,7 +498,7 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
     db.query(Q_TARGETS, [todayKey]),
     db.query(Q_FORECAST_MONTHS, [year]),
     db.query(Q_FORECAST_OWNERS, [year]),
-    db.query(Q_INTEGRATIONS, [R.integrationDonePhase]),
+    db.query(Q_INTEGRATIONS),
     // Müşteri Listesi (H/F/L/K) — tablo yoksa boş harita (pano çökmez).
     loadCustomerListCounts(),
     // H→F / L→H çevirme sayıları (hareket günlüğü, migration 026) — tablo yoksa boş.
@@ -1181,14 +1181,16 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
           budgetQuarterAssumed: budgetQ.assumed,
           /**
            * GERÇEKLEŞEN ENTEGRASYON — 15.09 akşam bağlandı (Sinan: "entegrasyonlar girili
-           * ama canlı ekran çekemiyor"). 11.09'daki "boş bırak" kararı, ortada hiç sayaç
-           * yokken verilmişti; artık **Entegrasyon Raporu ile aynı tanım** kullanılıyor
-           * (altın kural 17 — ikinci bir tanım üretilmez):
-           *   entegrasyon süreci açık firma (`musteriler.integration_enabled`) +
-           *   iş ortağı hattındaki aktif faz ≥ 9 (`LIVE_BOARD_RULES.integrationDonePhase`).
+           * ama canlı ekran çekemiyor"). 16.09'da tanım düzeltildi (Sinan: "Furkan'a bir sürü
+           * entegrasyon girdik, görünmüyor" — takım 35, Furkan'ın kartı 1): tek sabit eşik
+           * (`>= 9`) `business_partner` bağlamındaki İKİ FARKLI numaralandırmayı (14 fazlık iş
+           * ortağı vs 25 fazlık müşteri) ayırt etmiyordu. Artık **Entegrasyon Raporu ile aynı
+           * görünüm** kullanılıyor (altın kural 17 — ikinci bir tanım üretilmez):
+           *   `crm_entegrasyon_durumu` (migration 037) — iş ortağı: faz ≥ 10 "Entegrasyon
+           *   Süreci Tamamlandı", son müşteri: faz ≥ 24 "Rollout" (kendi hattına bakar).
            * Sorgu `Q_INTEGRATIONS`, sonuç `integrationByOwner`.
            *
-           * ÇEYREK hâlâ bekliyor: fazın NE ZAMAN ≥ 9'a geçtiği `organization_pipeline_states`'te
+           * ÇEYREK hâlâ bekliyor: fazın NE ZAMAN eşiği geçtiği `organization_pipeline_states`'te
            * tutulmuyor (`updated_at` her düzenlemede değişiyor), o yüzden çeyreğe bölünemiyor —
            * küçük halka hedefi gösterir, gerçekleşeni "veri bekleniyor" kalır. Uydurma sayı
            * yazılmaz (altın kural 34).
