@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import LiveBoard from '@/components/reports/LiveBoard';
 import PhaseReport from '@/app/(panel)/crm/reports/phase-report/PhaseReportClient';
+import { appToast } from '@/lib/app-toast';
+import { followupPptxFileName } from '@/lib/reports/seller-followup-pptx-shared';
 import '@/styles/seller-followup.css';
 
 // DASHBOARD (15.09 akşam'a kadar "Satışçı Takip Raporu")
@@ -142,6 +144,7 @@ export default function SellerFollowupClient() {
   }, []);
   const [owner, setOwner] = useState('');
   const [payload, setPayload] = useState<FollowupPayload>(EMPTY_FOLLOWUP);
+  const [downloadingPptx, setDownloadingPptx] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
@@ -234,6 +237,37 @@ export default function SellerFollowupClient() {
     },
   }), [contact]);
 
+  // Takip Listesi sunumu (16.09): kişi seçiliyse tek portföy, seçili değilse HERKES tek dosyada
+  // (her satışçı kendi slaydında). Veri ekrandakiyle aynı kaynaktan üretilir.
+  const downloadFollowupPptx = async () => {
+    if (downloadingPptx) return;
+    setDownloadingPptx(true);
+    try {
+      const params = new URLSearchParams();
+      if (owner) params.set('owner', owner);
+      const query = params.toString();
+      const res = await fetch(`/api/reports/seller-followup/pptx${query ? `?${query}` : ''}`, { cache: 'no-store' });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        const errorMessage = json?.message || 'PPTX oluşturulamadı';
+        appToast.error('Sunum indirilemedi', errorMessage);
+        return;
+      }
+      const blob = await res.blob();
+      const href = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = href;
+      link.download = followupPptxFileName(owner);
+      link.click();
+      URL.revokeObjectURL(href);
+      appToast.success('Sunum hazır', owner ? `${owner} portföyü indiriliyor.` : 'Tüm satıcılar tek dosyada indiriliyor.');
+    } catch (downloadError) {
+      appToast.error('Sunum indirilemedi', downloadError instanceof Error ? downloadError.message : 'PPTX oluşturulamadı');
+    } finally {
+      setDownloadingPptx(false);
+    }
+  };
+
   const heroTitle = owner ? `Takip Listesi — ${owner} Portföyü` : 'Takip Listesi — Tüm Portföy';
   const nearTermHint = payload.summary.nearTermCustomers.length
     ? `${payload.summary.nearTermLabel}: ${payload.summary.nearTermCustomers.slice(0, 6).join(', ')}${payload.summary.nearTermCustomers.length > 6 ? '…' : ''}`
@@ -257,6 +291,15 @@ export default function SellerFollowupClient() {
           </select>
           <button type="button" className="sfu-btn light" onClick={() => void loadFollowup(owner)} disabled={loading}>
             {loading ? 'Yükleniyor…' : 'Yenile'}
+          </button>
+          <button
+            type="button"
+            className="sfu-btn"
+            onClick={() => void downloadFollowupPptx()}
+            disabled={downloadingPptx || loading}
+            title={owner ? `${owner} portföyünü PPTX indir` : 'Tüm satıcıları tek PPTX dosyasında indir'}
+          >
+            {downloadingPptx ? 'Hazırlanıyor…' : owner ? 'Sunum indir' : 'Sunum indir (hepsi)'}
           </button>
         </div>
       </section>
