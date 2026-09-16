@@ -44,3 +44,21 @@ export function activityScopeForChannel(channel: string | null | undefined): 'te
 export function affectsPhaseForChannel(channel: string | null | undefined): boolean {
   return activityScopeForChannel(channel) === 'account';
 }
+
+/**
+ * Salt İş Ortağı firma: organization_roles'ta 'business_partner' rolü aktif ama
+ * 'customer' rolü yok. Bu firmalarda "müşteri" bağlamında hiç satış süreci
+ * olmadığı için, Aktivite Tipi ne olursa olsun (Entegrasyon Süreci seçilmese
+ * bile) aktivite İş Ortağı faz listesini/bağlamını kullanmalı (Sinan, 16.09).
+ * Çift rollü (hem customer hem business_partner) firmalarda bu fonksiyon
+ * false döner — hangi bağlamda işlem yapıldığı yine Aktivite Tipi ile seçilir,
+ * aksi halde bir firmanın müşteri ve iş ortağı fazları birbirine karışır.
+ * Tek tanım: hem QuickActivityClient.tsx (hangi faz listesi gösterilecek) hem
+ * de activities/create route'u (activity_context neye yazılacak) burayı kullanır.
+ */
+export function isPureBusinessPartnerRelationship(roles: {
+  hasCustomerRole?: boolean | null;
+  hasBusinessPartnerRole?: boolean | null;
+}): boolean {
+  return Boolean(roles.hasBusinessPartnerRole) && !roles.hasCustomerRole;
+}

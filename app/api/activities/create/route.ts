@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { assertOwnedResourceAccess, requireActivityCreateOrThrow, userHasPermission } from '@/lib/authz';
 import { createPgAdminClient } from '@/lib/pg/admin';
 import { completeActivitiesForSamePhase, completePreviousOpenActivities } from '@/lib/activity-phase-completion';
-import { activityScopeForChannel, affectsPhaseForChannel, isBusinessPartnerActivity, isTechnicalChannel, normalizeChannel } from '@/lib/activity-channels';
+import { activityScopeForChannel, affectsPhaseForChannel, isBusinessPartnerActivity, isPureBusinessPartnerRelationship, isTechnicalChannel, normalizeChannel } from '@/lib/activity-channels';
 import { assertActiveParameterValue } from '@/lib/system-parameters';
 import { validateActivityDate } from '@/lib/activities/activity-date';
 
@@ -208,7 +208,17 @@ export async function POST(req: Request) {
     .select('role_key,is_active').eq('customer_id', musteri_id).eq('is_active', true);
   if (relationshipError) return NextResponse.json({ message: 'Firma ilişkileri kontrol edilemedi.' }, { status: 503 });
   const relationshipKeys = new Set((relationships ?? []).map((row: any) => String(row.role_key)));
-  const activity_context: 'customer' | 'business_partner' = partnerActivity ? 'business_partner' : 'customer';
+  // Salt İş Ortağı firma (business_partner rolü var, customer rolü yok): bu firmada "müşteri"
+  // bağlamında satış süreci yok, o yüzden Aktivite Tipi ne olursa olsun (Entegrasyon Süreci
+  // olmasa bile) kayıt İş Ortağı fazına yazılır — frontend'in faz listesi seçimiyle birebir
+  // aynı kural (bkz. QuickActivityClient.tsx). partnerActivity (kanal='Entegrasyon Süreci')
+  // ayrı tutulur: yetki/entegrasyon-süreci kontrolleri SADECE o kanala özel kalmaya devam eder.
+  const isPureBusinessPartnerCustomer = isPureBusinessPartnerRelationship({
+    hasCustomerRole: relationshipKeys.has('customer'),
+    hasBusinessPartnerRole: relationshipKeys.has('business_partner'),
+  });
+  const activity_context: 'customer' | 'business_partner' =
+    partnerActivity || isPureBusinessPartnerCustomer ? 'business_partner' : 'customer';
   const canUseIntegrationProcess = Boolean(customer.integration_enabled) || (Boolean(activity_id) && existingActivityContext === 'business_partner');
   if (partnerActivity && !canUseIntegrationProcess) {
     return NextResponse.json({ message: 'Bu firma için Entegrasyon Süreci yeteneği açık değil.' }, { status: 400 });

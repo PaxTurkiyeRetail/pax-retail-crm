@@ -5,6 +5,7 @@ import { ACTIVITY_BACKDATE_DAYS, ACTIVITY_DATE_PICKER_ENABLED, activityDateBound
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import TechnicalContactSelect from './TechnicalContactSelect';
+import { isPureBusinessPartnerRelationship } from '@/lib/activity-channels';
 
 type Customer = {
   musteri_id: string;
@@ -257,18 +258,28 @@ export default function QuickActivityClient() {
     }
   }, [isTechnicalActivity, selectedCustomer]);
 
-  const usesBusinessPartnerContext = isPartnerActivityType;
+  // Salt İş Ortağı firma (organization_roles'ta business_partner rolü var, customer rolü yok):
+  // bu firmanın "müşteri" bağlamında bir satış süreci yok, tüm aktiviteler İş Ortağı faz
+  // listesini kullanmalı — Aktivite Tipi "Entegrasyon Süreci" olsun olmasın (Sinan, 16.09).
+  // Çift rollü firmalarda (hem customer hem business_partner) davranış DEĞİŞMEDİ: hangi
+  // bağlamda işlem yapıldığı yine Aktivite Tipi ile seçilir (aksi halde bir firmanın hem
+  // müşteri hem iş ortağı fazı birbirine karışır).
+  const isPureBusinessPartnerCustomer = isPureBusinessPartnerRelationship({
+    hasCustomerRole: selectedCustomer?.has_customer_role,
+    hasBusinessPartnerRole: selectedCustomer?.has_business_partner_role || selectedCustomer?.is_business_partner,
+  });
+  const usesBusinessPartnerContext = isPartnerActivityType || isPureBusinessPartnerCustomer;
   const phaseOptionalCustomer = !isPartnerActivityType && isPhaseOptionalCustomer(selectedCustomer);
   const phaseOptions = usesBusinessPartnerContext ? partnerFazlar : fazlar;
   const phaseOptionalTechnicalCustomer = isTechnicalActivity && phaseOptionalCustomer;
 
   useEffect(() => {
-    if (isPartnerActivityType) {
+    if (usesBusinessPartnerContext) {
       const partnerPhase = selectedCustomer?.partner_faz_no ?? null;
       setFazNo(partnerPhase != null ? Number(partnerPhase) : null);
       setSonrakiAksiyonVar(false);
     }
-  }, [isPartnerActivityType, selectedCustomer]);
+  }, [usesBusinessPartnerContext, selectedCustomer]);
 
   useEffect(() => {
     if (!musteriId || fazNo == null) return;
