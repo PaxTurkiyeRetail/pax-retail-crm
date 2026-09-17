@@ -38,6 +38,7 @@ import {
   type LiveBoardPayload,
   type LiveBoardSpeed,
   type LiveOwner,
+  type OwnerGoals,
   type CustomerListSplit,
   type LiveSlide,
   type PocItem,
@@ -114,7 +115,7 @@ function readSpeed(): LiveBoardSpeed {
   } catch {}
   return 'normal';
 }
-const SHORT_LABELS: Record<string, string> = { pulse: 'ÖZET', portfolio: 'PORTFÖY', hot: 'HOT', poc: 'POC', quotes: 'TEKLİF', alerts: 'UYARI', jira: 'JIRA' };
+const SHORT_LABELS: Record<string, string> = { pulse: 'ÖZET', portfolio: 'PORTFÖY', pools: 'HAVUZ', hot: 'HOT', poc: 'POC', quotes: 'TEKLİF', alerts: 'UYARI', jira: 'JIRA' };
 
 /* --- Küçük parçalar ----------------------------------------------------- */
 
@@ -347,20 +348,13 @@ function PulseSlide({ data, caps, page, rollup, ringSize }: {
             />
           </DonutCard>
 
-          {/* Gerçekleşen entegrasyon sayacı Furkan'ın fatura verisine bağlanana kadar
-              "veri bekleniyor" kalır (altın kural 34) — takım toplamında da uydurulmaz. */}
+          {/* Entegrasyon = CİHAZ ADEDİ, hizmet faturası kalemlerinden (17.09). Büyük simit içinde
+              bulunulan ay; sağ üstte yıl toplamı (YTD), altında çeyrek. Kişilerin toplamıdır. */}
           <DonutCard
             title="Entegrasyon Hedefi · Takım"
-            aside={<MiniRing pair={g.integrationQuarter} label={`${q} entegrasyon`} tone="neutral" size={mini} pending={g.integrationQuarterPending} />}
+            aside={<IntegrationAside g={g} year={r.year} q={q} size={mini} yearElapsedPct={r.yearElapsedPct} />}
           >
-            <Ring
-              pct={g.integrationPending ? null : g.integration.pct}
-              tone={g.integrationPending ? 'neutral' : goalTone(g.integration, r.yearElapsedPct)}
-              big={g.integration.target == null ? '—' : `%${g.integration.pct ?? 0}`}
-              sub={g.integration.target == null ? 'hedef yok' : `${g.integrationPending ? '—' : fmt(g.integration.actual)} / ${fmt(g.integration.target)}`}
-              size={ringSize}
-              stroke={12}
-            />
+            <IntegrationMonthRing g={g} size={ringSize} />
           </DonutCard>
 
           <DonutCard
@@ -540,6 +534,73 @@ function PortfolioSlide({ data, caps, page }: { data: LiveBoardPayload; caps: Ca
         <div className="lb-card-head"><h3>Künye Durumu</h3><span>veri kalitesi</span></div>
         <Donut rows={portfolio.kunye} colors={kunyeColors} center={`%${portfolio.total ? Math.round((kunyeDone / portfolio.total) * 100) : 0}`} centerLabel="künye tamam" size={250} />
       </div>
+    </div>
+  );
+}
+
+/**
+ * YEMEK KARTLARI & HAVUZ — 17.09 (Sinan): "yemek kartı ve havuz için ayrı bir slayt; 670 ile 307
+ * firma farkının nedeni bu." Üst şerit toplam firmanın nereye dağıldığını söyler (satıcı portföyü ·
+ * iş ortakları · havuz · yemek kartları); altta iki blok yan yana: sayılar, sektör, en güncel firmalar.
+ * Firma listesi bir örneklemdir ("en güncel N") — tam liste değil; sayfalama yerine sınır bilinçli.
+ */
+function PoolStat({ label, value, tone = 'neutral', note }: { label: string; value: number; tone?: Tone; note?: string }) {
+  return (
+    <div className={`lb-pool-stat tone-${tone}`}>
+      <strong>{fmt(value)}{note ? <em>{note}</em> : null}</strong>
+      <span>{label}</span>
+    </div>
+  );
+}
+
+function PoolsSlide({ data, caps }: { data: LiveBoardPayload; caps: Capacities }) {
+  const { pools } = data;
+  const cap = caps.portfolioRows;
+  // Firma listesi ekrana sığdığı kadar (yükseklikten ölçülür); başlıkta kaçının göründüğü yazar.
+  const firmCap = Math.max(1, caps.poolFirms);
+  return (
+    <div className="lb-slide lb-pools" key="pools">
+      <div className="lb-card lb-pools-strip">
+        <div className="lb-card-head">
+          <h3>Toplam {fmt(pools.total)} firma nereye dağılıyor?</h3>
+          <span>Portföy yalnız satıcı portföyünü sayar; kalanı aşağıda</span>
+        </div>
+        <HBars rows={pools.breakdown} total={pools.total} maxRows={pools.breakdown.length || 1} />
+      </div>
+      {pools.blocks.map((block) => (
+        <div className="lb-card lb-pool-block" key={block.label}>
+          <div className="lb-card-head">
+            <h3>{block.label}</h3>
+            <span>{fmt(block.total)} firma · en güncel {Math.min(firmCap, block.firms.length)} listede</span>
+          </div>
+          {/* Kompakt sayı kutuları: kişi slaydının büyük Figure'ü bu blokta 119 px yer alıyordu (ölçüldü). */}
+          <div className="lb-pool-figures">
+            <PoolStat label="Entegrasyon" value={block.integrationOpen} tone={block.integrationOpen ? 'info' : 'neutral'} />
+            <PoolStat label="30 gün hareket" value={block.touched30} tone={block.touched30 ? 'ok' : 'neutral'} />
+            <PoolStat label="90+ gün sessiz" value={block.inactive90} tone={block.inactive90 ? 'warn' : 'neutral'} note={block.total ? `%${Math.round((block.inactive90 / block.total) * 100)}` : undefined} />
+            <PoolStat label="Fazı girilmiş" value={block.withPhase} />
+          </div>
+          {block.bySector.length ? (
+            <div className="lb-pool-sectors">
+              <div className="lb-card-head"><h3>Sektör</h3><span>en büyük 3 · kalanı Diğer</span></div>
+              <HBars rows={block.bySector} total={block.total} maxRows={Math.min(cap, 3)} />
+            </div>
+          ) : null}
+          {block.firms.length ? (
+            <div className="lb-table lb-pool-table">
+              <div className="lb-tr lb-th"><span>Firma</span><span>Sektör</span><span>Faz</span><span>Son hareket</span></div>
+              {block.firms.slice(0, firmCap).map((firm) => (
+                <div className="lb-tr" key={firm.customerId}>
+                  <span className="lb-td-title"><strong>{firm.musteri}</strong></span>
+                  <span>{firm.sektor ?? <i className="lb-muted">—</i>}</span>
+                  <span><PhaseChip no={firm.phaseNo} name={firm.phaseName} /></span>
+                  <span className={`lb-td-ago tone-${staleTone(firm.daysSinceActivity)}`}>{agoLabel(firm.daysSinceActivity)}{firm.lastActivityLabel ? <small>{firm.lastActivityLabel}</small> : null}</span>
+                </div>
+              ))}
+            </div>
+          ) : <div className="lb-muted">Bu sahipte firma yok.</div>}
+        </div>
+      ))}
     </div>
   );
 }
@@ -970,6 +1031,50 @@ function MiniRing({ pair, label, tone, size, money = false, pending = false }: {
   );
 }
 
+/**
+ * Entegrasyon Hedefi kartı — 17.09 (Sinan): "büyük simit için aylık sayı gelmeli, sağ üst köşesine
+ * year-to-date toplam". Birim cihaz adedi (hizmet faturası kalemleri, bkz. live-board.ts
+ * Q_INTEGRATION_DEVICES). Kişi ve takım kartı aynı bileşeni kullanır (altın kural 17).
+ *
+ *   * Büyük simit : içinde bulunulan ayın adedi / aylık hedef (çeyrek ÷ 3, yoksa yıl ÷ 12).
+ *                   Ton ayın geçen süresine göre (ayın 17'sinde %55 dolu olması normaldir).
+ *                   Hedef yoksa yüzde yerine adet BÜYÜK yazılır, alt satır ay adı.
+ *   * Sağ üst     : yıl toplamı (YTD) / yıllık hedef — küçük halka, ton yılın hızına göre.
+ *   * Sağ alt     : çeyrek adedi / çeyrek hedefi.
+ * `integrationPending` bir gün yeniden true olursa (kaynak koparsa) üçü de "veri bekleniyor" der.
+ */
+type IntegrationGoals = Pick<OwnerGoals, 'integration' | 'integrationQuarter' | 'integrationMonth' | 'integrationMonthLabel' | 'integrationMonthElapsedPct' | 'integrationPending' | 'integrationQuarterPending'>;
+
+function IntegrationMonthRing({ g, size }: { g: IntegrationGoals; size: number }) {
+  const pair = g.integrationMonth;
+  const label = g.integrationMonthLabel || 'Bu ay';
+  if (g.integrationPending) {
+    return <Ring pct={null} tone="neutral" big="—" sub={`${label} · veri bekleniyor`} size={size} stroke={12} />;
+  }
+  if (pair.target == null) {
+    return <Ring pct={null} tone="neutral" big={fmt(pair.actual)} sub={`${label} · cihaz · hedef yok`} size={size} stroke={12} />;
+  }
+  return (
+    <Ring
+      pct={pair.pct}
+      tone={goalTone(pair, g.integrationMonthElapsedPct)}
+      big={`%${pair.pct ?? 0}`}
+      sub={`${label} · ${fmt(pair.actual)} / ${fmt(pair.target)}`}
+      size={size}
+      stroke={12}
+    />
+  );
+}
+
+function IntegrationAside({ g, year, q, size, yearElapsedPct }: { g: IntegrationGoals; year: number; q: string; size: number; yearElapsedPct: number }) {
+  return (
+    <>
+      <MiniRing pair={g.integration} label={`${year} toplam`} tone={g.integrationPending ? 'neutral' : goalTone(g.integration, yearElapsedPct)} size={size} pending={g.integrationPending} />
+      <MiniRing pair={g.integrationQuarter} label={`${q} toplam`} tone="neutral" size={size} pending={g.integrationQuarterPending} />
+    </>
+  );
+}
+
 /** Hedefe göre ton: hız (zamanın önünde/gerisinde) verilmişse o, yoksa düz yüzde eşiği. */
 function goalTone(pair: GoalPair, elapsedPct?: number): Tone {
   if (pair.target == null) return 'neutral';
@@ -1124,19 +1229,13 @@ function OwnerSlide({ owner, todayKey, caps, ringSize }: { owner: LiveOwner; tod
       </DonutCard>
 
       {/* Entegrasyon: büyükte yüzde, altında adet (Çağdaş Bey: "burası yüzde olsun, altında adet
-          yazsın"). Gerçekleşen sayaç Furkan'ın fatura verisine bağlanana kadar 0 / hedef görünür. */}
+          yazsın"). 17.09 (Sinan): birim CİHAZ ADEDİ (hizmet faturası kalemleri); büyük simit
+          içinde bulunulan AY, sağ üstte yıl toplamı (YTD), altında çeyrek. */}
       <DonutCard
         title="Entegrasyon Hedefi"
-        aside={<MiniRing pair={g.integrationQuarter} label={`${q} entegrasyon`} tone="neutral" size={mini} pending={g.integrationQuarterPending} />}
+        aside={<IntegrationAside g={g} year={r.year} q={q} size={mini} yearElapsedPct={r.yearElapsedPct} />}
       >
-        <Ring
-          pct={g.integrationPending ? null : g.integration.pct}
-          tone={g.integrationPending ? 'neutral' : goalTone(g.integration, r.yearElapsedPct)}
-          big={g.integration.target == null ? '—' : `%${g.integration.pct ?? 0}`}
-          sub={g.integration.target == null ? 'hedef yok' : `${g.integrationPending ? '—' : fmt(g.integration.actual)} / ${fmt(g.integration.target)}`}
-          size={ring}
-          stroke={12}
-        />
+        <IntegrationMonthRing g={g} size={ring} />
       </DonutCard>
 
       <DonutCard
@@ -1497,6 +1596,7 @@ export default function LiveBoard({ active }: { active: boolean }) {
     switch (current.key) {
       case 'pulse': return <PulseSlide data={data} caps={caps} page={page} rollup={rollup} ringSize={pulseRing} />;
       case 'portfolio': return <PortfolioSlide data={data} caps={caps} page={page} />;
+      case 'pools': return <PoolsSlide data={data} caps={caps} />;
       case 'hot': return <HotSlide data={data} caps={caps} page={page} />;
       case 'poc': return <PocSlide data={data} caps={caps} page={page} />;
       case 'quotes': return <QuotesSlide data={data} caps={caps} page={page} />;

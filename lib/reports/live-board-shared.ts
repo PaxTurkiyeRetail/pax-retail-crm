@@ -309,7 +309,13 @@ export type LiveOwner = {
  *   * visitsQuarter / visitsYear : fiziki + online satış görüşmesi (aktiviteyi giren kişi)
  *   * budgetQuarter              : çeyrek ciro (crm_sales, satış tarihi çeyrekte) — çeyrek hedefi
  *                                  girilmemişse yıllık / 4 varsayılır (`budgetQuarterAssumed`)
- *   * integration                : faz ≥ 9 entegrasyon firması (integration_count)
+ *   * integration / integrationQuarter / integrationMonth : YENİ ENTEGRE CİHAZ adedi — hizmet
+ *                                  faturası kalemlerinden, firma bazında ayın adedi ile önceki faturalı
+ *                                  ayı arasındaki artış (ilk fatura tamamen yeni; azalış 0). Firmanın
+ *                                  KÜNYE sorumlusuna yazılır. Yıl (YTD) · çeyrek · ay. 17.09'a kadar
+ *                                  faz ≥ 9/10 FİRMA sayısıydı; Sinan: "2.000 hedefe uyan birim cihaz
+ *                                  adedi" — Çağdaş Bey'in 11.09'daki "fatura kalemlerinden" isteği de bu.
+ *                                  Kural ve rakamlar: live-board.ts → Q_INTEGRATION_DEVICES.
  *   * hunterToFarmer / leadToHunter : Müşteri Listesi taşımaları (crm_musteri_listesi_hareket, yıl içi)
  *   * wonQuotes                  : yıl içi kazanılan teklif adedi (quotes_won_count)
  *   * openAll / draft            : açık teklif = gönderilmiş + taslak (Çağdaş Bey: "Ömer'in açık teklifi
@@ -323,20 +329,23 @@ export type OwnerGoals = {
   visitsQuarterAssumed: boolean;
   budgetQuarter: GoalPair;
   budgetQuarterAssumed: boolean;
+  /** Yıl (YTD) cihaz adedi / yıllık hedef — kartın sağ üst küçük halkası. */
   integration: GoalPair;
-  /** Çeyrek entegrasyon hedefi (Çağdaş Bey, 11.09: "entegrasyon da çeyreklere bölünecek"). */
+  /** Çeyrek cihaz adedi / çeyrek hedefi (Çağdaş Bey, 11.09: "entegrasyon da çeyreklere bölünecek"). */
   integrationQuarter: GoalPair;
   integrationQuarterAssumed: boolean;
+  /** İçinde bulunulan ayın cihaz adedi / aylık hedef (çeyrek ÷ 3, yoksa yıl ÷ 12) — BÜYÜK simit (17.09). */
+  integrationMonth: GoalPair;
+  integrationMonthAssumed: boolean;
+  /** Ay adı ('Eylül') ve ayın geçen süre oranı (hız tonu için). */
+  integrationMonthLabel: string;
+  integrationMonthElapsedPct: number;
   /**
-   * YILLIK gerçekleşen entegrasyon sayacı bağlı mı? 15.09 akşam bağlandı (Entegrasyon
-   * Raporu ile aynı tanım: entegrasyon süreci açık + faz ≥ 9) → artık `false`.
-   * Alan duruyor ki sayaç bir gün kopmak zorunda kalırsa ekran yine "veri bekleniyor" desin.
+   * Gerçekleşen sayaç bağlı mı? 17.09'dan itibaren üçü de fatura kalemlerinden geliyor → `false`.
+   * Alanlar duruyor ki sayaç bir gün kopmak zorunda kalırsa ekran yine "veri bekleniyor" desin
+   * (uydurma sayı yerine — altın kural 34).
    */
   integrationPending: boolean;
-  /**
-   * ÇEYREK gerçekleşeni hâlâ bekliyor: fazın ne zaman ≥ 9'a geçtiği tutulmuyor, çeyreğe
-   * bölünemiyor. Küçük halka hedefi gösterir, gerçekleşen yerine not çıkar (altın kural 34).
-   */
   integrationQuarterPending: boolean;
   hunterToFarmer: GoalPair;
   leadToHunter: GoalPair;
@@ -469,6 +478,18 @@ export type LiveBoardPayload = {
     bySector: Distribution;
     kunye: Distribution;
   };
+  /**
+   * YEMEK KARTLARI & HAVUZ slaydı (Sinan, 17.09): "670 ile 307 firma farkının nedeni bu".
+   * Portföy/Müşteri Takip Statüsü yalnız satıcıya atanmış firmaları sayar; `sorumlu` alanı
+   * 'Yemek Kartları' ya da 'Havuz Account' olan firmalar (kullanıcı değil, sözde-sahip) burada.
+   *   * breakdown : toplam firmanın dağılımı — satıcılar (kişi kişi) · Havuz · Yemek Kartları · İş Ortakları
+   *   * blocks    : iki blok (Yemek Kartları, Havuz Account) — sayılar, sektör, en güncel firmalar
+   */
+  pools: {
+    total: number;
+    breakdown: Distribution;
+    blocks: PoolBlock[];
+  };
   quotes: {
     open: QuoteRow[];
     recentClosed: QuoteRow[];
@@ -499,7 +520,26 @@ export type LiveBoardPayload = {
   owners: LiveOwner[];
 };
 
-export type TeamSlideKey = 'pulse' | 'portfolio' | 'hot' | 'poc' | 'quotes' | 'alerts' | 'jira';
+/** Yemek Kartları & Havuz slaydının bir bloğu (bkz. LiveBoardPayload.pools). */
+export type PoolBlock = {
+  /** 'Yemek Kartları' | 'Havuz Account' — musteriler.sorumlu değeri. */
+  label: string;
+  total: number;
+  /** Entegrasyon süreci açık (musteriler.integration_enabled). */
+  integrationOpen: number;
+  /** Son 30 günde gerçek hareket olan firma. */
+  touched30: number;
+  /** 90+ gündür hareketsiz ya da hiç hareketi olmayan firma. */
+  inactive90: number;
+  /** Fazı girilmiş firma. */
+  withPhase: number;
+  bySector: Distribution;
+  /** En güncel hareketi olan firmalar (en yeni önce; hareketsizler sonda), en fazla `firmLimit`. */
+  firms: Array<{ customerId: string; musteri: string; sektor: string | null; phaseNo: number | null; phaseName: string | null; daysSinceActivity: number | null; lastActivityLabel: string | null }>;
+  firmLimit: number;
+};
+
+export type TeamSlideKey = 'pulse' | 'portfolio' | 'pools' | 'hot' | 'poc' | 'quotes' | 'alerts' | 'jira';
 /** Bir ekranın sığmayan devamı ayrı slayt olur: `page` 0'dan başlar, `pages` toplam. */
 export type LiveSlide =
   | { type: 'team'; key: TeamSlideKey; page: number; pages: number }
@@ -509,6 +549,8 @@ export const TEAM_SLIDE_TITLES: Record<TeamSlideKey, { title: string; sub: strin
   // "Business Pulse" adı 15.09'da "Özet" oldu (Çağdaş Bey); slayt anahtarı 'pulse' kaldı.
   pulse: { title: 'Özet', sub: 'takım toplamı · kim hedefinde' },
   portfolio: { title: 'Portföy', sub: 'account yapısı · faz · sektör · künye' },
+  // 17.09 (Sinan): "yemek kartı ve havuz için ayrı bir slayt — 670 ile 307 firma farkının nedeni bu".
+  pools: { title: 'Yemek Kartları & Havuz', sub: 'satıcıya atanmamış portföy · toplam firmanın kalanı' },
   hot: { title: 'Hot Pipeline', sub: 'sonuçlanmaya yakın fırsatlar' },
   poc: { title: 'POC · Pilot · Rollout', sub: 'canlıya ve satışa yakın projeler' },
   quotes: { title: 'Teklifler & Forecast', sub: 'açık · satışa dönen · kaybedilen · dönüşüm' },
@@ -665,6 +707,7 @@ export type Capacities = {
   alertGroups: number; // sayfa başına uyarı paneli (kolon)
   portfolioRows: number; // Portföy ekranındaki bar/açıklama satırı
   jiraRows: number;      // Jira ekranı firma tablosu satırı
+  poolFirms: number;     // Yemek Kartları & Havuz: blok başına firma satırı (17.09)
   /** Business Pulse tek ekrana sığmıyor: ciro+sıralama / aktivite+dönüşüm olarak ikiye böl. */
 };
 
@@ -694,7 +737,18 @@ export function capacities(bodyHeight: number, bodyWidth = 1920): Capacities {
   const jiraRows = rowsThatFit(H - m.kpiRowH - m.gap - m.cardChrome - 28, m.ownerQuoteRowH, 6);
   // v3.1 (15.09): model kırılımı kişi slaydından kalktı — cihaz kutularının arkasındaki
   // /crm/kirilim sayfasında listeleniyor, bu yüzden ayrı bir kapasite hesabı gerekmiyor.
-  return { hot, recent, leader, tableRows, openQuotes, closedQuotes: Math.max(1, closedQuotes), alertItems, alertGroups, portfolioRows, jiraRows };
+  // Yemek Kartları & Havuz (17.09): üstte dağılım şeridi (kart başlığı + en fazla 4 bar ≈ 160),
+  // altında blok: kart başlığı + 4 sayı kutusu + sektör kartı (başlık + 4 bar) + tablo başlığı + aralıklar
+  // ≈ 300 px sabit yük (1600×900'de ölçüldü: 445 px'lik blok 420 px'lik hatta 23 px taşıyordu, bu yüzden
+  // pay bırakıldı). Kalan yükseklik firma satırlarına; en az 1, en fazla 10.
+  // Ölçüm (1600×900, gövde 603): şerit ≈ 133 (iç boşluk 27 + başlık 20 + 4 bar × 22 + 3 × 6) · blok
+  // sabit yükü ≈ 262 (iç boşluk 27 + başlık 20 + 4 kompakt sayı 59 + sektör 98 + tablo başlığı 22 +
+  // aralıklar 30) · firma satırı 48 + 6. Sığmayan slayt gövdeyi büyütüp ölçümü, ölçüm de planı
+  // değiştiriyor (döngü) — bu yüzden pay bırakılır: 140 / 270.
+  const poolStripH = 140;
+  const poolBlockH = H - poolStripH - m.gap;
+  const poolFirms = Math.min(10, rowsThatFit(poolBlockH - 270, 48, 6));
+  return { hot, recent, leader, tableRows, openQuotes, closedQuotes: Math.max(1, closedQuotes), alertItems, alertGroups, portfolioRows, jiraRows, poolFirms };
 }
 
 /**
@@ -812,7 +866,9 @@ export function slidePlan(
   // girilecek, yoksa mevcut fırsat + aktivite kayıtlarından mı türetilecek); karar gelince
   // 'portfolio' ile 'jira' arasına eklenecek.
   const before: TeamSlideKey[] = ['pulse'];
-  const after: TeamSlideKey[] = ['quotes', 'alerts', 'portfolio'];
+  // 'pools' (Yemek Kartları & Havuz, 17.09) Portföy'ün hemen ardında: Portföy 'satıcı portföyü'nü,
+  // bu slayt kalan firmaları anlatır — ikisi art arda okunur.
+  const after: TeamSlideKey[] = ['quotes', 'alerts', 'portfolio', 'pools'];
   if (options?.jira) after.push('jira');
   after.push('hot', 'poc');
   const teamPages = (key: TeamSlideKey) => Math.max(1, options?.pages?.team[key] ?? 1);
@@ -996,11 +1052,14 @@ export type TeamRollup = {
   budgetQuarter: GoalPair;
   integration: GoalPair;
   integrationQuarter: GoalPair;
+  integrationMonth: GoalPair;
+  integrationMonthLabel: string;
+  integrationMonthElapsedPct: number;
   integrationPending: boolean;
   integrationQuarterPending: boolean;
   hunterToFarmer: GoalPair;
   leadToHunter: GoalPair;
-  /** Müşteri Listesi (H/F/L/K) toplamı; hiç kimsede liste yoksa null. */
+  /** Account Atama (H/F/L/K) toplamı; hiç kimsede liste yoksa null. */
   list: CustomerListSplit | null;
   quoteBox: OwnerQuoteBox;
   devices: { total: number; sold: number; rental: number };
@@ -1042,6 +1101,9 @@ export function teamRollup(owners: LiveOwner[]): TeamRollup {
     budgetQuarter: sumGoal(goals.map((goal) => goal.budgetQuarter)),
     integration: sumGoal(goals.map((goal) => goal.integration)),
     integrationQuarter: sumGoal(goals.map((goal) => goal.integrationQuarter)),
+    integrationMonth: sumGoal(goals.map((goal) => goal.integrationMonth)),
+    integrationMonthLabel: goals[0]?.integrationMonthLabel ?? '',
+    integrationMonthElapsedPct: goals[0]?.integrationMonthElapsedPct ?? 0,
     integrationPending: goals.some((goal) => goal.integrationPending),
     integrationQuarterPending: goals.some((goal) => goal.integrationQuarterPending),
     hunterToFarmer: sumGoal(goals.map((goal) => goal.hunterToFarmer)),

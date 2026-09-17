@@ -12,6 +12,9 @@ import {
   quarterRange,
   splitYearlyToQuarters,
   targetYearOf,
+  monthElapsedPct,
+  monthOf,
+  monthlyTargetOf,
 } from './targets-shared';
 import { msUntilIstanbulTime } from './live-board-shared';
 
@@ -137,5 +140,29 @@ describe('Canlı Ekran — günlük 08:00 yenileme zamanlayıcısı', () => {
   it('tam 08:00 → yarın; asla 1 dk altına düşmez', () => {
     expect(msUntilIstanbulTime(new Date('2026-09-10T05:00:00Z'), 8, 0)).toBe(24 * 60 * 60_000);
     expect(msUntilIstanbulTime(new Date('2026-09-10T04:59:30Z'), 8, 0)).toBeGreaterThanOrEqual(60_000);
+  });
+});
+
+// 17.09 — Entegrasyon simidi ay bazına indi (Sinan: "büyük simit için aylık sayı gelmeli").
+describe('hedefler — ay yardımcıları (entegrasyon simidi, 17.09)', () => {
+  it('monthOf: anahtar ayın ilk günü, ad Türkçe', () => {
+    expect(monthOf('2026-09-17')).toEqual({ key: '2026-09-01', label: 'Eylül', year: 2026, month: 9 });
+    expect(monthOf('2026-01-03').label).toBe('Ocak');
+    expect(monthOf('2026-12-31').key).toBe('2026-12-01');
+  });
+
+  it('monthElapsedPct: ayın günü / ay uzunluğu; Şubat 28, artık yıl 29', () => {
+    expect(monthElapsedPct('2026-09-01')).toBe(3);   // 1/30
+    expect(monthElapsedPct('2026-09-15')).toBe(50);  // 15/30
+    expect(monthElapsedPct('2026-09-30')).toBe(100);
+    expect(monthElapsedPct('2026-02-14')).toBe(50);  // 14/28
+    expect(monthElapsedPct('2028-02-29')).toBe(100); // artık yıl
+  });
+
+  it('monthlyTargetOf: çeyrek ÷ 3 önce; yoksa yıl ÷ 12; ikisi de yoksa null', () => {
+    expect(monthlyTargetOf(500, 2000)).toEqual({ target: 167, assumed: false });
+    expect(monthlyTargetOf(null, 2000)).toEqual({ target: 167, assumed: true });
+    expect(monthlyTargetOf(null, 100)).toEqual({ target: 8, assumed: true });
+    expect(monthlyTargetOf(null, null)).toEqual({ target: null, assumed: false });
   });
 });

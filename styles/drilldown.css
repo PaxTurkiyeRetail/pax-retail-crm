@@ -43,3 +43,13 @@
   .dd-shell .dd-tr { grid-template-columns: minmax(0, 1fr) auto; gap: 10px; }
   .dd-shell .dd-tr > span:nth-child(n+3) { display: none; }
 }
+
+/* 17.09 — filtre çubuğu (JS'siz GET formu), satır no, başlıkta toplam. */
+.dd-shell .dd-hero h1 .dd-count { display: inline-block; margin-left: 10px; padding: 3px 10px; border-radius: 999px; background: rgba(255, 255, 255, 0.16); font-size: 13px; font-weight: 900; letter-spacing: 0.02em; vertical-align: middle; }
+.dd-shell .dd-filter { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px 16px; padding: 14px 18px; border: 1px solid var(--border); border-radius: 16px; background: var(--surface); }
+.dd-shell .dd-filter label { display: grid; gap: 4px; min-width: 150px; }
+.dd-shell .dd-filter label span { font-size: 11px; font-weight: 900; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-3); }
+.dd-shell .dd-filter select { height: 38px; padding: 0 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); color: var(--text); font: inherit; font-size: 13.5px; font-weight: 700; }
+.dd-shell .dd-filter button { height: 38px; padding: 0 18px; border: none; border-radius: 10px; background: var(--accent); color: #fff; font: inherit; font-size: 13.5px; font-weight: 900; cursor: pointer; }
+.dd-shell .dd-filter .dd-filter-note { flex-basis: 100%; font-size: 12.5px; color: var(--text-2); }
+.dd-shell .dd-tr .dd-no { color: var(--text-3); font-variant-numeric: tabular-nums; }

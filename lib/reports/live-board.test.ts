@@ -102,16 +102,16 @@ describe('slidePlan', () => {
   const show = (plan: ReturnType<typeof slidePlan>) => plan
     .map((s) => (s.type === 'team' ? s.key : `#${s.index}`) + (s.pages > 1 ? `(${s.page + 1}/${s.pages})` : ''))
     .join(' ');
-  it('keeps the fixed order: Özet, everybody, quotes, alerts, portfolio, Jira, hot, POC', () => {
+  it('keeps the fixed order: Özet, everybody, quotes, alerts, portfolio, pools (Yemek Kartları & Havuz, 17.09), Jira, hot, POC', () => {
     // Çağdaş Bey, 15.09: Özet → Kişiler → Teklifler → Uyarı → Portföy → [Faz] → Jira →
     // Hot Pipeline → POC. Hot ve POC 09.09'da rotasyondan çıkmıştı, sona eklenerek döndü.
-    expect(show(slidePlan(5))).toBe('pulse #0 #1 #2 #3 #4 quotes alerts portfolio hot poc');
+    expect(show(slidePlan(5))).toBe('pulse #0 #1 #2 #3 #4 quotes alerts portfolio pools hot poc');
   });
   it('shows only the team screens when there is nobody to show', () => {
-    expect(show(slidePlan(0))).toBe('pulse quotes alerts portfolio hot poc');
+    expect(show(slidePlan(0))).toBe('pulse quotes alerts portfolio pools hot poc');
   });
   it('puts Hot Pipeline and POC at the very end, after Jira', () => {
-    expect(show(slidePlan(3, { jira: true }))).toBe('pulse #0 #1 #2 quotes alerts portfolio jira hot poc');
+    expect(show(slidePlan(3, { jira: true }))).toBe('pulse #0 #1 #2 quotes alerts portfolio pools jira hot poc');
   });
   it('adds the Jira screen only when the integration is on', () => {
     expect(show(slidePlan(0, { jira: true }))).toContain('jira');
@@ -119,7 +119,7 @@ describe('slidePlan', () => {
   });
   it('expands a screen that needs more than one page into consecutive slides', () => {
     const plan = slidePlan(2, { pages: { team: { portfolio: 2, quotes: 3 }, owners: [2, 1] } });
-    expect(show(plan)).toBe('pulse #0(1/2) #0(2/2) #1 quotes(1/3) quotes(2/3) quotes(3/3) alerts portfolio(1/2) portfolio(2/2) hot poc');
+    expect(show(plan)).toBe('pulse #0(1/2) #0(2/2) #1 quotes(1/3) quotes(2/3) quotes(3/3) alerts portfolio(1/2) portfolio(2/2) pools hot poc');
   });
   it('gives team screens more time than a person slide and scales with speed', () => {
     expect(slideDurationMs({ type: 'team', key: 'pulse', page: 0, pages: 1 })).toBe(LIVE_BOARD_TIMING.teamMs);
@@ -315,6 +315,7 @@ describe('teamRollup — Özet slaydının sol tarafı', () => {
     visits?: [number, number | null];
     budget?: [number, number | null];
     integration?: [number, number | null];
+    month?: [number, number | null];
     pending?: boolean;
     list?: { hunter: number; farmer: number; lead: number; kasa: number } | null;
     open?: [number, number];
@@ -334,6 +335,9 @@ describe('teamRollup — Özet slaydının sol tarafı', () => {
       budgetQuarter: pair(...(over.budget ?? [0, null] as [number, number | null])),
       integration: pair(...(over.integration ?? [0, null] as [number, number | null])),
       integrationQuarter: pair(0, null),
+      integrationMonth: pair(...(over.month ?? [0, null] as [number, number | null])),
+      integrationMonthLabel: 'Eylül',
+      integrationMonthElapsedPct: 57,
       integrationPending: over.pending ?? false,
       hunterToFarmer: pair(0, null),
       leadToHunter: pair(0, null),

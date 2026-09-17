@@ -5,7 +5,8 @@ import {
   INACTIVE_SORT_DEFAULT_DIR, isInactiveSort, sortInactiveRows,
   type InactiveSort, type InactiveSortDir,
 } from '@/lib/reports/inactive-customers-shared';
-import { LIVE_BOARD_RULES, normalizeName, ownerOrderCompare } from '@/lib/reports/live-board-shared';
+import { LIVE_BOARD_RULES, OWNER_ORDER, normalizeName, ownerOrderCompare } from '@/lib/reports/live-board-shared';
+import { GhostFilterBar, ownerOptions } from '@/components/reports/GhostFilterBar';
 import '@/styles/inactive.css';
 
 // HAREKETSİZ FİRMALAR — Çağdaş Bey, 11.09.2026:
@@ -19,6 +20,9 @@ import '@/styles/inactive.css';
 //
 // Kapı: Müşteriler ekranıyla aynı (customer.read + screen.crm.customers.view) — liste
 // firma adı ve son hareket tarihinden ibaret, künye verisi taşımaz.
+//
+// 17.09 (Sinan, "hayalet ekranlara linkten gidince filtre ve sayı gelsin"): üstte filtre çubuğu
+// (satıcı · gün eşiği — GET formu, JS'siz; sıralama korunur), başlıkta toplam firma, tabloda # kolonu.
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -71,12 +75,22 @@ export default async function InactiveCustomersPage({
     <div className="iv-shell">
       <section className="iv-hero">
         <span className="iv-eyebrow">Operasyon · Hareketsiz Firmalar</span>
-        <h1>{ownerFilter || 'Tüm satış ekibi'}</h1>
+        <h1>{ownerFilter || 'Tüm satış ekibi'} <small className="iv-count">{rows.length.toLocaleString('tr-TR')} firma</small></h1>
         <p>
-          Müşteri Listesi’nde <b>Hunter</b> ya da <b>Farmer</b> olup <b>{days} gündür</b> üzerinde işlem
+          Account Atama’da <b>Hunter</b> ya da <b>Farmer</b> olup <b>{days} gündür</b> üzerinde işlem
           olmayan firmalar. Planlanan (henüz yapılmamış) aksiyonlar hareket sayılmaz.
         </p>
       </section>
+
+      <GhostFilterBar
+        action="/crm/hareketsiz"
+        className="iv-filter"
+        fields={[
+          { name: 'satici', label: 'Satıcı', value: ownerFilter, options: ownerOptions(OWNER_ORDER.filter((name) => !['İş Ortakları', 'Havuz Account', 'Yemek Kartları'].includes(name)), ownerFilter || null) },
+          { name: 'gun', label: 'Hareketsizlik eşiği', value: String(days), options: Array.from(new Set([7, 15, 30, 60, 90, days])).sort((a, b) => a - b).map((value) => ({ value: String(value), label: `${value} gün` })) },
+        ]}
+        hidden={{ sirala: sort, yon: dir }}
+      />
 
       <div className="iv-summary">
         <div><strong>{rows.length}</strong><span>hareketsiz firma</span></div>
@@ -89,6 +103,7 @@ export default async function InactiveCustomersPage({
       ) : (
         <div className="iv-table" role="table">
           <div className="iv-tr iv-th" role="row">
+            <span role="columnheader" className="iv-no">#</span>
             {([
               ['firma', 'Firma'], ['kisi', 'Kişi'], ['kategori', 'Kategori'],
               ['tarih', 'Son hareket'], ['gun', 'Gün'],
@@ -100,8 +115,9 @@ export default async function InactiveCustomersPage({
               </span>
             ))}
           </div>
-          {rows.map((row) => (
+          {rows.map((row, rowIndex) => (
             <div className="iv-tr" role="row" key={`${row.owner}-${row.category}-${row.firma}`}>
+              <span role="cell" className="iv-no">{rowIndex + 1}</span>
               <span role="cell">
                 {row.customerId
                   ? <Link href={`/crm/${row.customerId}`} target="_blank">{row.musteri ?? row.firma}</Link>

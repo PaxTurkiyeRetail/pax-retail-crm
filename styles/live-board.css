@@ -338,6 +338,29 @@
 
 /* --- Tablo benzeri listeler (Hot Pipeline, POC, Teklifler) -------------- */
 .lb-single { grid-template-columns: 1fr; }
+
+/* Yemek Kartları & Havuz (17.09): üstte tam genişlik dağılım şeridi, altta iki blok yan yana. */
+.lb-pools { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: auto minmax(0, 1fr); }
+.lb-pools .lb-pools-strip { grid-column: 1 / -1; align-content: start; overflow: hidden; }
+.lb-pools .lb-hbars { gap: 6px; }
+.lb-pools .lb-hbar { grid-template-columns: 200px minmax(0, 1fr) 56px 50px; }
+.lb-pools .lb-hbar-label, .lb-pools .lb-hbar strong, .lb-pools .lb-hbar em { font-size: 13px; line-height: 1.25; }
+.lb-pools .lb-bar { height: 8px; }
+.lb-pools .lb-pool-block { display: grid; grid-template-rows: auto auto auto minmax(0, 1fr); gap: 10px; align-content: start; min-height: 0; overflow: hidden; }
+.lb-pools .lb-pool-figures { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.lb-pools .lb-pool-stat { display: grid; gap: 2px; padding: 8px 10px; border-radius: 10px; background: var(--lb-track); min-width: 0; }
+.lb-pools .lb-pool-stat strong { font-size: clamp(18px, 1.5vw, 26px); line-height: 1.05; font-weight: 900; display: flex; align-items: baseline; gap: 6px; }
+.lb-pools .lb-pool-stat strong em { font-size: 12px; font-style: normal; font-weight: 700; opacity: .75; }
+.lb-pools .lb-pool-stat span { font-size: 10.5px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lb-pools .lb-pool-table { --lb-row-h: 48px; }
+.lb-pools .lb-pool-table .lb-tr:not(.lb-th) { padding: 6px 12px; }
+.lb-pools .lb-pool-table .lb-td-title strong { font-size: 14px; }
+.lb-pools .lb-pools-strip .lb-card-head { margin-bottom: 6px; }
+.lb-pools .lb-pool-sectors .lb-card-head { margin-bottom: 4px; }
+.lb-pools .lb-pool-sectors .lb-card-head h3 { font-size: clamp(12px, 1vw, 16px); }
+.lb-pools .lb-pool-sectors .lb-hbar { grid-template-columns: 210px minmax(0, 1fr) 48px 44px; }
+.lb-pools .lb-pool-table { min-height: 0; overflow: hidden; }
+.lb-pools .lb-pool-table .lb-tr { grid-template-columns: minmax(160px, 1.4fr) minmax(120px, 1fr) minmax(120px, 1fr) minmax(110px, 0.8fr); }
 .lb-table { display: grid; gap: 6px; align-content: start; min-height: 0; overflow: hidden; }
 .lb-tr { display: grid; gap: 12px; align-items: center; padding: 9px 12px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); border-left-width: 4px; min-width: 0; height: var(--lb-row-h, 66px); overflow: hidden; }
 .lb-tr.lb-th { background: transparent; border: none; padding: 0 12px 0 16px; height: 22px; }

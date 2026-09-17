@@ -26,7 +26,7 @@ type AllowedUser = {
   annual_revenue_target: number;
   /** Yıllık cihaz hedefi (adet) — crm_target_values · device_count. 0 = hedef yok. */
   annual_device_target: number;
-  /** Yıllık KasaPOS entegrasyon hedefi (adet) — crm_target_values · integration_count. 0 = hedef yok. */
+  /** Yıllık KasaPOS entegrasyon hedefi (CİHAZ adedi; gerçekleşen hizmet faturası kalemlerinden, 17.09) — crm_target_values · integration_count. 0 = hedef yok. */
   annual_integration_target: number;
 };
 

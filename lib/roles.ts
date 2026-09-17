@@ -57,7 +57,6 @@ export type Permission =
   | 'screen.crm.quotes.view'
   | 'screen.crm.forecast.view'
   | 'screen.crm.blocker_impact.view'
-  | 'screen.crm.sales_radar.view'
   | 'screen.reports.view'
   | 'screen.requests.view'
   | 'screen.admin.users.view'
@@ -124,7 +123,6 @@ export const ALL_PERMISSIONS: readonly Permission[] = [
   'screen.crm.quotes.view',
   'screen.crm.forecast.view',
   'screen.crm.blocker_impact.view',
-  'screen.crm.sales_radar.view',
   'screen.reports.view',
   'screen.requests.view',
   'screen.admin.users.view',
@@ -177,7 +175,6 @@ const ROLE_PERMISSIONS: Readonly<Record<AllowedRole, ReadonlySet<Permission>>> =
     'screen.crm.quotes.view',
     'screen.crm.forecast.view',
     'screen.crm.blocker_impact.view',
-    'screen.crm.sales_radar.view',
     'screen.reports.view',
     'screen.requests.view',
     'screen.crm.nova_core.view',

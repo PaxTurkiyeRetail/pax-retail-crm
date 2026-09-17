@@ -61,10 +61,10 @@ export const TARGET_DEFINITIONS: readonly TargetDefinition[] = [
   // --- Kişi bazlı hedefler --------------------------------------------------
   { code: 'sales_revenue', label: 'Bütçe (ciro, USD)', hint: 'Satış kaydına dönen tekliflerin tutarı (crm_sales)', unit: 'money', periods: ['year', 'quarter'], scope: 'user' },
   { code: 'visit_count', label: 'Ziyaret', hint: 'Fiziki + online satış görüşmesi sayısı', unit: 'count', periods: ['year', 'quarter'], scope: 'user' },
-  { code: 'integration_count', label: 'Entegrasyon', hint: 'KasaPOS entegrasyonu tamamlanan firma (gerçekleşen sayaç fatura verisi bağlanınca açılır)', unit: 'count', periods: ['year', 'quarter'], scope: 'user' },
+  { code: 'integration_count', label: 'Entegrasyon (cihaz)', hint: 'KasaPOS entegrasyonu faturalanan cihaz adedi — hizmet faturası kalemlerinden, firmanın künye sorumlusuna (17.09)', unit: 'count', periods: ['year', 'quarter'], scope: 'user' },
   { code: 'device_count', label: 'Cihaz', hint: 'Satışa dönen cihaz adedi', unit: 'count', periods: ['year'], scope: 'user' },
-  { code: 'hunter_to_farmer', label: 'Hunter → Farmer', hint: 'Müşteri Listesi’nde H’den F’ye taşınan firma', unit: 'count', periods: ['year'], scope: 'user' },
-  { code: 'lead_to_hunter', label: 'Lead → Hunter', hint: 'Müşteri Listesi’nde L’den H’ye taşınan firma', unit: 'count', periods: ['year'], scope: 'user' },
+  { code: 'hunter_to_farmer', label: 'Hunter → Farmer', hint: 'Account Atama’da H’den F’ye taşınan firma', unit: 'count', periods: ['year'], scope: 'user' },
+  { code: 'lead_to_hunter', label: 'Lead → Hunter', hint: 'Account Atama’da L’den H’ye taşınan firma', unit: 'count', periods: ['year'], scope: 'user' },
   // KALKANLAR (tanım tabloda `is_active = false`, girilmiş değerler tarihçe olarak durur):
   //   * quotes_won_count — 15.09 sabah, migration 033 (Çağdaş Bey: "hedefte kazanılan teklife gerek yok")
   //   * covered_customers — 15.09 akşam, migration 034 (Sinan: "kapsanan firmayı kaldıralım")
@@ -131,6 +131,36 @@ export function quarterElapsedPct(dayKey: string): number {
   const total = (end - start) / 86_400_000 + 1;
   const elapsed = (today - start) / 86_400_000 + 1;
   return Math.max(0, Math.min(100, Math.round((elapsed / total) * 100)));
+}
+
+/* --- Ay (Entegrasyon simidi, 17.09) ---------------------------------------- */
+
+const MONTH_NAMES_TR = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'] as const;
+
+/** Gün anahtarının ayı: 'YYYY-MM-01' anahtarı + Türkçe adı ('Eylül'). */
+export function monthOf(dayKey: string): { key: string; label: string; year: number; month: number } {
+  const year = Number(dayKey.slice(0, 4));
+  const month = Math.min(12, Math.max(1, Number(dayKey.slice(5, 7)) || 1));
+  return { key: `${year}-${pad2(month)}-01`, label: MONTH_NAMES_TR[month - 1], year, month };
+}
+
+/** Ayın geçen süre oranı (0–100); aylık simidin hız yorumunda kullanılır. */
+export function monthElapsedPct(dayKey: string): number {
+  const { year, month } = monthOf(dayKey);
+  const days = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  const day = Math.min(days, Math.max(1, Number(dayKey.slice(8, 10)) || 1));
+  return Math.max(0, Math.min(100, Math.round((day / days) * 100)));
+}
+
+/**
+ * Aylık hedef (Sinan, 17.09: "büyük simit için aylık sayı gelmeli"): çeyrek hedefi girilmişse
+ * çeyrek / 3, yoksa yıllık / 12; hiçbiri yoksa null. `assumed` = türetildi (girilmiş bir aylık
+ * hedef alanı yok, ikisi de türetmedir; bayrak çeyrek hedefinin de varsayılan olduğunu söyler).
+ */
+export function monthlyTargetOf(quarterTarget: number | null, yearTarget: number | null): { target: number | null; assumed: boolean } {
+  if (quarterTarget != null) return { target: Math.round(quarterTarget / 3), assumed: false };
+  if (yearTarget != null) return { target: Math.round(yearTarget / 12), assumed: true };
+  return { target: null, assumed: false };
 }
 
 /* --- Hedef / gerçekleşme çifti ------------------------------------------- */

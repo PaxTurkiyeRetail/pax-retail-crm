@@ -5,7 +5,7 @@ import { buildSellerFollowupReport, type SellerFollowupRow } from '@/lib/reports
 import { buildWeeklyTargets } from '@/lib/reports/weekly-targets';
 import { loadConversionCounts, loadCustomerListCounts } from '@/lib/reports/customer-list';
 import { inactiveCountsByOwner, loadHunterFarmerActivity } from '@/lib/reports/inactive-customers';
-import { goalPair, quarterElapsedPct, quarterOf, type TargetCode } from '@/lib/reports/targets-shared';
+import { goalPair, monthElapsedPct, monthOf, monthlyTargetOf, quarterElapsedPct, quarterOf, type TargetCode } from '@/lib/reports/targets-shared';
 import {
   achievementPct,
   activityTargetKind,
@@ -81,6 +81,7 @@ type CustomerRow = {
   owner_user_id: string | null;
   sektor: string | null;
   customer_type: string | null;
+  integration_enabled: boolean | null;
   aktif_faz_no: number | null;
   faz_adi: string | null;
   faz_durum: string | null;
@@ -234,6 +235,7 @@ const Q_OWNERS = `
 // hedef tarihli) kayıtlar "hareket" sayılmaz; onlar next action'dır.
 const Q_CUSTOMERS = `
   select m.id::text as id, m.musteri, m.sorumlu, m.owner_user_id::text as owner_user_id, m.sektor, m.customer_type,
+         m.integration_enabled,
          mp.aktif_faz_no, ft.asama_adi as faz_adi, mp.durum::text as faz_durum,
          mp.baslangic_tarihi::text as baslangic, fs.started::text as faz_baslangic, mp.hedef_tarihi::text as pipeline_hedef,
          la.activity_date::text as last_activity_at, la.aksiyon as last_aksiyon, la.durum::text as last_durum,
@@ -418,6 +420,46 @@ const Q_INTEGRATIONS = `
   group by 1
 `;
 
+// ENTEGRASYON CİHAZ ADEDİ — Entegrasyon Hedefi kartının GERÇEKLEŞENİ (Sinan, 17.09):
+//   "büyük simit için aylık sayı gelmeli, sağ üst köşesine year-to-date toplam; 10 sayısı doğru değil,
+//    Excel'deki eski verileri de girelim." Excel = Nebim hizmet fatura takibi, ADET sütunu — 16.09'da
+//   crm_service_invoices/-items'a aktarıldı (nebim-import-2026). Çağdaş Bey 11.09'da da "entegrasyon
+//   adedi Furkan'ın fatura kalemlerinden sayılsın" demişti; 2.000/yıl · Q3 500 hedefine uyan birim bu.
+//
+//   SAYMA KURALI — YENİ ENTEGRE CİHAZ (Sinan, 17.09, seçenekler rakamla gösterildi): hizmet faturası
+//   her ay AYNI cihazları yeniden faturalar (Kiğılı her ay 302). Aylık toplamı olduğu gibi toplamak
+//   aynı cihazı 9 kez sayardı (YTD 5.600 / hedef 2.000 = %280 — anlamsız). Bu yüzden firma bazında
+//   ayın adedi ile o firmanın ÖNCEKİ faturalı ayı arasındaki ARTIŞ sayılır; ilk faturasındaki adet
+//   tamamen "yeni"dir; azalış 0 sayılır (çıkan cihaz "yeni entegre"yi eksiltmez). YTD toplamı böylece
+//   aktif tabana eşit çıkar (1.353), Eylül 270 (Suwen +134, Mad Parfüm +72, Çift Geyik +26, İpekyol +20,
+//   Yargıcı +18). Önceki ay için yıl sınırı konmaz — Ocak, önceki yılın Aralık'ına bakabilsin.
+//
+//   Birim: kalem `quantity`si (cihaz). Sahiplik: firmanın KÜNYE sorumlusu (16.09 kararı — faturayı
+//   giren değil). Dönem: faturanın `period_month`u. Yalnız aktif faturalar. Ay bazında döner,
+//   JS tarafında yıl / çeyrek / ay toplanır.
+const Q_INTEGRATION_DEVICES = `
+  with aylik as (
+    select s.customer_id, date_trunc('month', s.period_month)::date as month, sum(i.quantity)::int as adet
+    from public.crm_service_invoices s
+    join public.crm_service_invoice_items i on i.invoice_id = s.id
+    where s.status = 'active' and s.period_month <= $2::date
+    group by 1, 2
+  ),
+  artis as (
+    select customer_id, month, adet,
+           greatest(adet - coalesce(lag(adet) over (partition by customer_id order by month), 0), 0) as yeni
+    from aylik
+  )
+  select coalesce(nullif(trim(m.sorumlu), ''), 'Havuz Account') as owner,
+         to_char(a.month, 'YYYY-MM-01') as month,
+         sum(a.yeni)::int as adet,
+         count(*) filter (where a.yeni > 0)::int as firmalar
+  from artis a
+  join public.musteriler m on m.id = a.customer_id
+  where a.month >= make_date($1::int, 1, 1)
+  group by 1, 2
+`;
+
 const Q_FORECAST_MONTHS = `
   select f.forecast_month as month, sum(f.quantity)::int as quantity, sum(f.quantity * f.probability / 100.0)::float8 as weighted
   from public.crm_forecasts f
@@ -490,7 +532,7 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
   const { from, to } = targets.range;
 
   const quarter = quarterOf(todayKey);
-  const [ownerResult, customerResult, eventResult, quoteResult, targetResult, forecastMonthResult, forecastOwnerResult, integrationResult, customerListCounts, conversionCounts, yearActivityResult, directSaleResult, saleItemResult, saleNoItemResult, hunterFarmerRows] = await Promise.all([
+  const [ownerResult, customerResult, eventResult, quoteResult, targetResult, forecastMonthResult, forecastOwnerResult, integrationResult, customerListCounts, conversionCounts, yearActivityResult, directSaleResult, saleItemResult, saleNoItemResult, hunterFarmerRows, integrationDeviceResult] = await Promise.all([
     db.query(Q_OWNERS),
     db.query(Q_CUSTOMERS),
     db.query(Q_WEEK_EVENTS, [from, to]),
@@ -510,6 +552,8 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
     db.query(Q_SALE_NO_ITEMS, [year, todayKey]).catch((error) => { if (isMissingRelation(error)) return { rows: [] as any[] }; throw error; }),
     // Hareketsiz firma sayacı: Müşteri Listesi Hunter/Farmer satırları + son hareket (11.09).
     loadHunterFarmerActivity(today),
+    // Hizmet faturası kalemleri (032) — Entegrasyon Hedefi kartı; tablo yoksa pano çökmez.
+    db.query(Q_INTEGRATION_DEVICES, [year, todayKey]).catch((error) => { if (isMissingRelation(error)) return { rows: [] as any[] }; throw error; }),
   ]);
   // Liste hiç doldurulmamışsa kişi slaytında donut yerine not gösterilir (null); doluysa
   // listede adı geçmeyen kişi 0 ile görünür.
@@ -522,6 +566,21 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
     (integrationResult.rows as any[]).map((row) => [String(row.owner), { total: num(row.total), done: num(row.done) }]),
   );
   const integrationTeam = Array.from(integrationByOwner.values()).reduce((acc, row) => ({ total: acc.total + row.total, done: acc.done + row.done }), { total: 0, done: 0 });
+  // Cihaz adedi: yıl (YTD) · içinde bulunulan çeyrek · içinde bulunulan ay — hepsi aynı satırlardan.
+  const month = monthOf(todayKey);
+  type DeviceTally = { year: number; quarter: number; month: number; firms: number };
+  const integrationDevicesByOwner = new Map<string, DeviceTally>();
+  for (const row of integrationDeviceResult.rows as any[]) {
+    const owner = String(row.owner);
+    const key = String(row.month ?? '');
+    const adet = num(row.adet);
+    const cur = integrationDevicesByOwner.get(owner) ?? { year: 0, quarter: 0, month: 0, firms: 0 };
+    cur.year += adet;
+    if (key >= quarter.start && key <= quarter.end) cur.quarter += adet;
+    if (key === month.key) { cur.month += adet; cur.firms += num(row.firmalar); }
+    integrationDevicesByOwner.set(owner, cur);
+  }
+  const monthElapsed = monthElapsedPct(todayKey);
 
   const ownerRows = ownerResult.rows as OwnerRow[];
   const ownerNames = ownerRows.map((row) => row.name);
@@ -1172,6 +1231,8 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
         const visitQ = quarterTargetOf(userTargets, 'visit_count');
         const budgetQ = quarterTargetOf(userTargets, 'sales_revenue');
         const integrationQ = quarterTargetOf(userTargets, 'integration_count');
+        const integrationM = monthlyTargetOf(integrationQ.target, userTargets.year.integration_count ?? null);
+        const ownerDevices = integrationDevicesByOwner.get(owner) ?? { year: 0, quarter: 0, month: 0, firms: 0 };
         return {
           quarter: { label: quarter.label, months: quarter.months, elapsedPct: quarterElapsed },
           visitsQuarter: goalPair(visits.quarter, visitQ.target),
@@ -1180,26 +1241,26 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
           budgetQuarter: goalPair(agg.saleQuarterAmount + (directByOwner.get(owner)?.quarterAmount ?? 0), budgetQ.target),
           budgetQuarterAssumed: budgetQ.assumed,
           /**
-           * GERÇEKLEŞEN ENTEGRASYON — 15.09 akşam bağlandı (Sinan: "entegrasyonlar girili
-           * ama canlı ekran çekemiyor"). 16.09'da tanım düzeltildi (Sinan: "Furkan'a bir sürü
-           * entegrasyon girdik, görünmüyor" — takım 35, Furkan'ın kartı 1): tek sabit eşik
-           * (`>= 9`) `business_partner` bağlamındaki İKİ FARKLI numaralandırmayı (14 fazlık iş
-           * ortağı vs 25 fazlık müşteri) ayırt etmiyordu. Artık **Entegrasyon Raporu ile aynı
-           * görünüm** kullanılıyor (altın kural 17 — ikinci bir tanım üretilmez):
-           *   `crm_entegrasyon_durumu` (migration 037) — iş ortağı: faz ≥ 10 "Entegrasyon
-           *   Süreci Tamamlandı", son müşteri: faz ≥ 24 "Rollout" (kendi hattına bakar).
-           * Sorgu `Q_INTEGRATIONS`, sonuç `integrationByOwner`.
-           *
-           * ÇEYREK hâlâ bekliyor: fazın NE ZAMAN eşiği geçtiği `organization_pipeline_states`'te
-           * tutulmuyor (`updated_at` her düzenlemede değişiyor), o yüzden çeyreğe bölünemiyor —
-           * küçük halka hedefi gösterir, gerçekleşeni "veri bekleniyor" kalır. Uydurma sayı
-           * yazılmaz (altın kural 34).
+           * ENTEGRASYON HEDEFİ KARTI — 17.09 (Sinan): gerçekleşen artık CİHAZ ADEDİ, hizmet
+           * faturası kalemlerinden (`Q_INTEGRATION_DEVICES`, `integrationDevicesByOwner`):
+           *   * integrationMonth   → BÜYÜK simit: bu ayın adedi / (çeyrek hedefi ÷ 3, yoksa yıl ÷ 12)
+           *   * integration        → sağ üst küçük halka: yıl (YTD) adedi / yıllık hedef
+           *   * integrationQuarter → küçük halka: çeyrek adedi / çeyrek hedefi
+           * Tarih = faturanın dönemi (period_month); bu yüzden çeyrek ve ay artık bölünebiliyor
+           * (11.09'daki "veri bekleniyor" notu kapandı). Firma bazlı FAZ sayacı
+           * (`crm_entegrasyon_durumu`, migration 037) Entegrasyon Raporu'nda ve `integrationByOwner`'da
+           * duruyor — o "kaç firma Rollout/Entegrasyon tamamlandı", bu "kaç cihaz faturalandı";
+           * iki farklı ölçüt, ikisi de tek yerden okunur (altın kural 17).
            */
-          integration: goalPair(ownerIntegration.done, userTargets.year.integration_count ?? null),
-          integrationQuarter: goalPair(0, integrationQ.target),
+          integration: goalPair(ownerDevices.year, userTargets.year.integration_count ?? null),
+          integrationQuarter: goalPair(ownerDevices.quarter, integrationQ.target),
           integrationQuarterAssumed: integrationQ.assumed,
+          integrationMonth: goalPair(ownerDevices.month, integrationM.target),
+          integrationMonthAssumed: integrationM.assumed,
+          integrationMonthLabel: month.label,
+          integrationMonthElapsedPct: monthElapsed,
           integrationPending: false,
-          integrationQuarterPending: true,
+          integrationQuarterPending: false,
           hunterToFarmer: goalPair(conv.hunterToFarmer, userTargets.year.hunter_to_farmer ?? null),
           leadToHunter: goalPair(conv.leadToHunter, userTargets.year.lead_to_hunter ?? null),
           wonQuotes: goalPair(agg.wonYtd, userTargets.year.quotes_won_count ?? null),
@@ -1403,6 +1464,60 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
     }))
     .sort((a, b) => ownerOrderCompare(a.label, b.label));
 
+  /* --- Yemek Kartları & Havuz (17.09) --------------------------------------
+   * Sinan: "yemek kartı ve havuz için ayrı bir slayt — 670 ile 307 firma farkının nedeni bu."
+   * `sorumlu` alanı kullanıcı olmayan iki sözde-sahibi de tutar; Portföy ve Müşteri Takip Statüsü
+   * yalnız satıcıları sayar. Bu blok kalanı anlatır. Sayılar aynı `customers` dizisinden — ayrı
+   * sorgu yok (altın kural 17). Firma listesi "en güncel hareket" sırasıyla ve sınırlı: bu bir
+   * örneklem, tam liste değil (başlıkta "en güncel N" yazar; kırpma sayılmaz).
+   */
+  const POOL_LABELS = ['Yemek Kartları', 'Havuz Account'] as const;
+  const POOL_FIRM_LIMIT = 10;
+  const poolBlocks = POOL_LABELS.map((label) => {
+    const rows = customers.filter((row) => (text(row.sorumlu) ?? 'Havuz Account') === label);
+    const sectors = new Map<string, number>();
+    for (const row of rows) {
+      const sector = text(row.sektor) && row.sektor !== '-' ? String(row.sektor).trim() : 'Sektör girilmemiş';
+      sectors.set(sector, (sectors.get(sector) ?? 0) + 1);
+    }
+    const firms = rows
+      .map((row) => ({ row, days: daysSince(row) }))
+      // En yeni hareket önce; hiç hareketi olmayanlar (null) en sona.
+      .sort((a, b) => (a.days ?? Number.MAX_SAFE_INTEGER) - (b.days ?? Number.MAX_SAFE_INTEGER) || a.row.musteri.localeCompare(b.row.musteri, 'tr'))
+      .slice(0, POOL_FIRM_LIMIT)
+      .map(({ row, days }) => ({
+        customerId: row.id,
+        musteri: row.musteri,
+        sektor: text(row.sektor) && row.sektor !== '-' ? String(row.sektor).trim() : null,
+        phaseNo: row.aktif_faz_no,
+        phaseName: text(row.faz_adi),
+        daysSinceActivity: days,
+        lastActivityLabel: stripAksiyon(row.last_aksiyon),
+      }));
+    return {
+      label,
+      total: rows.length,
+      integrationOpen: rows.filter((row) => row.integration_enabled === true).length,
+      touched30: rows.filter((row) => { const d = daysSince(row); return d != null && d <= 30; }).length,
+      inactive90: rows.filter((row) => { const d = daysSince(row); return d == null || d > 90; }).length,
+      withPhase: rows.filter((row) => row.aktif_faz_no != null).length,
+      // En fazla 3 bar: kalan sektörler 'Diğer'e katlanır (blokta firma tablosu için yer kalmalı).
+      bySector: orderDistribution(toDistribution(sectors, 3), SECTOR_ORDER),
+      firms,
+      firmLimit: POOL_FIRM_LIMIT,
+    };
+  });
+  // Toplam firmanın dağılımı: satıcılar tek kalemde ("Satıcı portföyü"), sözde-sahipler ayrı ayrı.
+  // Satıcı = aktif account_manager kullanıcı YA DA OWNER_ORDER'daki satış ekibi adı (Seda/Cem henüz
+  // kullanıcı olmasa da satıcıdır; 17.09 lokal denemede ayrı kalem çıkmışlardı). Sözde-sahipler hariç.
+  const ownerNameSet = new Set([...ownerNames, ...OWNER_ORDER.filter((name) => !POOL_LABELS.includes(name as typeof POOL_LABELS[number]) && name !== 'İş Ortakları')].map(normalizeName));
+  const poolBreakdownMap = new Map<string, number>();
+  for (const [label, value] of portfolioByOwnerLabel) {
+    const key = ownerNameSet.has(normalizeName(label)) ? 'Satıcı portföyü' : label;
+    poolBreakdownMap.set(key, (poolBreakdownMap.get(key) ?? 0) + value);
+  }
+  const poolBreakdown = orderDistribution(toDistribution(poolBreakdownMap), ['Satıcı portföyü', 'İş Ortakları', 'Havuz Account', 'Yemek Kartları']);
+
   return {
     generatedAt: new Date().toISOString(),
     range: { from, to, label: weekRangeLabel(from, to), today: todayKey, year },
@@ -1447,6 +1562,7 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
         { label: 'Yok', value: kunyeCounts.get('Yok') ?? 0, tone: 'neutral' },
       ],
     },
+    pools: { total: customers.length, breakdown: poolBreakdown, blocks: poolBlocks },
     quotes: {
       open: openQuotesShown.slice(0, R.openQuotesLimit),
       recentClosed: closedQuotesShown.slice(0, R.closedQuotesLimit),

@@ -290,8 +290,8 @@ export default function CustomerListClient() {
     >
       <section className="cl-hero">
         <div className="cl-hero-copy">
-          <span className="cl-eyebrow">Operasyon · Müşteri Listesi</span>
-          <h1>Müşteri Listesi (H/F/L/K)</h1>
+          <span className="cl-eyebrow">Operasyon · Account Atama</span>
+          <h1>Account Atama <small>H · F · L · K</small></h1>
           <p>
             Satış yönetiminin kişi bazlı firma dağılımı — kolon kişi, tablo kategori.
             <b> H</b> Hunter · <b>F</b> Farmer · <b>L</b> Lead · <b>K</b> Kasa Firması.

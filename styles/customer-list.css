@@ -45,6 +45,8 @@
   font-size: 12px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase;
 }
 .cl-shell .cl-hero h1 { margin: 16px 0 8px; font-size: clamp(26px, 2.6vw, 38px); line-height: 1.1; letter-spacing: -0.03em; color: #fff; }
+/* 17.09: sayfa adı 'Account Atama' (Sinan); H/F/L/K kısaltması başlığın yanında küçük rozet. */
+.cl-shell .cl-hero h1 small { display: inline-block; margin-left: 10px; padding: 3px 10px; border-radius: 999px; background: rgba(255, 255, 255, 0.16); font-size: 13px; font-weight: 900; letter-spacing: 0.08em; vertical-align: middle; }
 .cl-shell .cl-hero p { margin: 0; color: rgba(255, 255, 255, 0.86); font-size: 14px; line-height: 1.65; }
 .cl-shell .cl-hero p b { color: #fff; }
 .cl-shell .cl-hero-actions { position: relative; z-index: 1; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }

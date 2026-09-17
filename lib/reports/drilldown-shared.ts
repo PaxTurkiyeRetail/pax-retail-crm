@@ -61,7 +61,7 @@ export type DrilldownPayload = {
   note: string | null;
 };
 
-const KIND_TITLE: Record<DrilldownKind, string> = {
+export const KIND_TITLE: Record<DrilldownKind, string> = {
   cihaz: 'Cihaz Kırılımı',
   teklif: 'Teklifler',
   kapsama: 'Kapsanan Firmalar',
@@ -70,13 +70,13 @@ const KIND_TITLE: Record<DrilldownKind, string> = {
   fatura: 'Kesilen Faturalar',
 };
 
-const QUOTE_STATE_LABEL: Record<QuoteState, string> = {
+export const QUOTE_STATE_LABEL: Record<QuoteState, string> = {
   acik: 'Açık teklifler',
   kazanilan: 'Kazanılan teklifler',
   kaybedilen: 'Kaybedilen teklifler',
 };
 
-const DEVICE_MODE_LABEL: Record<DeviceMode, string> = { sale: 'Satılan', rental: 'Kiralanan' };
+export const DEVICE_MODE_LABEL: Record<DeviceMode, string> = { sale: 'Satılan', rental: 'Kiralanan' };
 
 /** Sayfa başlığı: "Cihaz Kırılımı · Satılan · A80" gibi. */
 export function drilldownTitle(params: DrilldownParams): string {

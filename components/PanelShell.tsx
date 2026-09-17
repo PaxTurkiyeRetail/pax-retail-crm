@@ -256,7 +256,7 @@ function routeMeta(pathname: string) {
     ["/crm/forecast", "Operasyon", "Forecast"],
     ["/crm/blocker-impact", "Operasyon", "Engel & Etki"],
     ["/crm/customers", "Operasyon", "Müşteriler"],
-    ["/crm/sales-radar", "Operasyon", "Satış Radarı"],
+    ["/crm/customer-list", "Operasyon", "Account Atama"],
     ["/crm/customer-status-guide", "Operasyon", "Müşteri Durum Rehberi"],
     // Menüde yoktur: Canlı Ekran kişi slaydındaki "Hareketsiz Firma" sayacından yeni sekmede açılır.
     ["/crm/hareketsiz", "Operasyon", "Hareketsiz Firmalar"],
@@ -441,7 +441,7 @@ export default function PanelShell({
     if (allowed('customer.read') && allowed('screen.crm.customers.view'))
       operations.push({
         href: "/crm/customer-list",
-        label: "Müşteri Listesi (H/F/L/K)",
+        label: "Account Atama",
         iconKey: "customers",
       });
     // Hedefler (Çağdaş Bey, 10.09): kişi bazlı hedef girişi; yalnız admin.targets.manage
@@ -483,12 +483,8 @@ export default function PanelShell({
         label: "Engel & Etki",
         iconKey: "blocker",
       });
-    if (allowed('report.read.all') && allowed('screen.crm.sales_radar.view'))
-      operations.push({
-        href: "/crm/sales-radar",
-        label: "Satış Radarı",
-        iconKey: "weekly",
-      });
+    // Satış Radarı KALDIRILDI (Sinan, 17.09.2026: "Satış radarını kaldırıyoruz") — sayfa, bileşen ve
+    // CSS silindi; `screen.crm.sales_radar.view` izni koddan çıkarıldı (DB'deki izin satırı zararsız durur).
     // RAPORLAR MENÜ SIRASI — Çağdaş Bey, 15.09.2026. Sıra bilinçlidir, alfabetik
     // ya da ekleme sırası değildir; yeni rapor eklerken bu listeye yerini sorarak koy.
     //   1 Dashboard (eski adı "Satışçı Takip Raporu"; Faz Raporu ve Canlı Ekran onun sekmeleri)
