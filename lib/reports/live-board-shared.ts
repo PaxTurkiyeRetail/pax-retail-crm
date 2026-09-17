@@ -479,6 +479,21 @@ export type LiveBoardPayload = {
     kunye: Distribution;
   };
   /**
+   * ACCOUNT ATAMA (H/F/L/K) TAKIM TOPLAMI — `crm_musteri_listesi`'ndeki TÜM aktif satırlar (17.09).
+   * Daha önce Müşteri Takip Statüsü donut'u kişi slaytlarının toplamıydı; kişi slaytları yalnız
+   * `allowed_users`'ta `account_manager` rolü olanlar için üretildiğinden **Cem Koç ve Seda
+   * Kesikoğlu'nun satırları sessizce düşüyordu** (ikisinin de kullanıcı hesabı yok — backlog 25),
+   * havuz / iş ortakları / yemek kartları kolonları da hiç sayılmıyordu. Sinan (17.09): "buradaki
+   * 301 neden hâlâ güncellenmemiş, 301 firma sayısını nereden buldun?" Artık liste ne diyorsa o.
+   *
+   * `total` = CRM künyesindeki firma sayısı, yani Genel Bakış'taki "Toplam Müşteri" ile BİREBİR aynı
+   * (Sinan, 17.09: "iki farklı sonuç istemiyoruz"). Account Atama elle kürate edilir; listede karşılığı
+   * olmayan firmalar `unlisted` dilimine ("Listede yok") düşer — fark gizlenmez, ekranda kendini söyler.
+   * `unmatchedRows` = listede olup künyede karşılığı bulunamayan satır (ad farklı / firma kartı yok);
+   * kartın altında not olarak çıkar. Eşleştirme `crm_firma_key()` ile (bkz. Q_CUSTOMER_LIST_STATUS).
+   */
+  customerList: (CustomerListSplit & { unlisted: number; unmatchedRows: number }) | null;
+  /**
    * YEMEK KARTLARI & HAVUZ slaydı (Sinan, 17.09): "670 ile 307 firma farkının nedeni bu".
    * Portföy/Müşteri Takip Statüsü yalnız satıcıya atanmış firmaları sayar; `sorumlu` alanı
    * 'Yemek Kartları' ya da 'Havuz Account' olan firmalar (kullanıcı değil, sözde-sahip) burada.
@@ -584,6 +599,16 @@ export const OWNER_ORDER: readonly string[] = [
   'Cem Koç', 'Ömer Canatar', 'Furkan Kızılkurt', 'Erdi Toraman', 'Seda Kesikoğlu',
   'İş Ortakları', 'Havuz Account', 'Yemek Kartları',
 ];
+/** Kullanıcı olmayan "sahip" adları: firma sahipliği için kullanılır, kişi listesi değildir. */
+export const PSEUDO_OWNERS: readonly string[] = ['İş Ortakları', 'Havuz Account', 'Yemek Kartları'];
+/**
+ * SATIŞ EKİBİ — ekranlardaki kişi seçicilerinin tek kaynağı (17.09). `allowed_users`'taki
+ * `account_manager` rolüne bakmak YETMİYOR: Seda Kesikoğlu ve Cem Koç'un henüz kullanıcı hesabı yok
+ * (backlog 25), o yüzden rol sorgusuna düşmüyorlar ve seçicilerden kayboluyorlardı
+ * (Sinan, 17.09: "buraya Seda'yı da ekleyelim, bir de Erdi'yi de"). Yeni satışçı gelince
+ * OWNER_ORDER'a eklenir; Canlı Ekran sırası, hedef sahipliği ve seçiciler aynı listeyi okur.
+ */
+export const SALES_TEAM: readonly string[] = OWNER_ORDER.filter((name) => !PSEUDO_OWNERS.includes(name));
 /** Sektör dağılımında öne alınan sektörler; kalanlar adede göre. */
 export const SECTOR_ORDER: readonly string[] = ['Hazır Giyim', 'Gıda Perakendesi', 'Ev & Yaşam / Yapı Market'];
 

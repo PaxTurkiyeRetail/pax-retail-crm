@@ -357,14 +357,25 @@ function PulseSlide({ data, caps, page, rollup, ringSize }: {
             <IntegrationMonthRing g={g} size={ringSize} />
           </DonutCard>
 
+          {/* 17.09 (Sinan: "301 firma sayısını nereden buldun, Genel Bakış'takiyle neden farklı? iki farklı
+              sonuç istemiyoruz, fark neyse orada küçük yazıyla belirtilsin"): donut'un toplamı artık
+              **CRM firma sayısı** — Genel Bakış'taki "Toplam Müşteri" ile birebir. Account Atama'da
+              karşılığı olmayan firmalar gri "Listede yok" dilimine düşer; eşleşmeyen liste satırı varsa
+              kart başlığında not çıkar. Eskiden burası kişi slaytlarının toplamıydı, o yüzden kullanıcı
+              hesabı olmayan Cem Koç + Seda Kesikoğlu ile havuz/iş ortakları/yemek kartları düşüyordu. */}
           <DonutCard
             title="Müşteri Takip Statüsü · Takım"
+            sub={data.customerList?.unmatchedRows
+              ? `Account Atama · ${fmt(data.customerList.unmatchedRows)} liste satırı künyeyle eşleşmedi`
+              : 'Account Atama · tüm portföy'}
             aside={<>
               <MiniRing pair={g.hunterToFarmer} label="H → F çevirme" tone={goalTone(g.hunterToFarmer)} size={mini} />
               <MiniRing pair={g.leadToHunter} label="L → H çevirme" tone={goalTone(g.leadToHunter)} size={mini} />
             </>}
           >
-            {g.list ? <StatusDonut list={g.list} size={ringSize} /> : <Ring pct={null} tone="neutral" big="—" sub="liste yok" size={ringSize} stroke={12} />}
+            {data.customerList
+              ? <StatusDonut list={data.customerList} size={ringSize} />
+              : <Ring pct={null} tone="neutral" big="—" sub="liste yok" size={ringSize} stroke={12} />}
           </DonutCard>
         </>
       ) : (
@@ -922,6 +933,9 @@ const STATUS_SEGMENTS = [
   { key: 'farmer', label: 'Farmer', short: 'F', color: 'var(--lb-farmer)' },
   { key: 'lead', label: 'Lead', short: 'L', color: 'var(--lb-warn)' },
   { key: 'kasa', label: 'Kasa', short: 'K', color: 'var(--lb-violet)' },
+  // 17.09: takım donut'u tüm portföyü sayar; Account Atama'da karşılığı olmayan firmalar burada
+  // görünür (gri). Kişi slaytlarında bu alan yoktur, dilim de çıkmaz (değer 0 → filtrelenir).
+  { key: 'unlisted', label: 'Listede yok', short: '—', color: '#94a3b8' },
 ] as const;
 
 /**
@@ -938,11 +952,12 @@ const STATUS_SEGMENTS = [
  *
  * Renkler: Hunter açık mavi · Farmer açık yeşil (Çağdaş Bey'in seçimi), Lead sarı, Kasa mor.
  */
-function StatusDonut({ list, size }: { list: CustomerListSplit; size: number }) {
-  const total = list.hunter + list.farmer + list.lead + list.kasa;
+function StatusDonut({ list, size }: { list: CustomerListSplit & { unlisted?: number }; size: number }) {
+  const value = (key: (typeof STATUS_SEGMENTS)[number]['key']) => (key === 'unlisted' ? list.unlisted ?? 0 : list[key]);
+  const total = list.hunter + list.farmer + list.lead + list.kasa + (list.unlisted ?? 0);
   const radius = 40;
   const circumference = 2 * Math.PI * radius;
-  const shown = STATUS_SEGMENTS.map((segment) => ({ ...segment, value: list[segment.key] })).filter((segment) => segment.value > 0);
+  const shown = STATUS_SEGMENTS.map((segment) => ({ ...segment, value: value(segment.key) })).filter((segment) => segment.value > 0);
   const gap = shown.length > 1 ? 2.2 : 0;
   let offset = 0;
   const arcs = shown.map((segment) => {
@@ -952,13 +967,15 @@ function StatusDonut({ list, size }: { list: CustomerListSplit; size: number }) 
     offset += share * circumference;
     return arc;
   });
-  // Künye **tek kolon, dört satır**: iki kolona sıkıştırıldığında "Hunter" → "Hu…" diye
-  // kısalıyordu (kart dar). Halka künye kadar küçülür, kart yüksekliği değişmez.
-  const ring = Math.max(96, size - 96);
+  // Künye **tek kolon**: iki kolona sıkıştırıldığında "Hunter" → "Hu…" diye kısalıyordu (kart dar).
+  // Halka künye kadar küçülür, kart yüksekliği değişmez. 17.09: takım donut'unda 5. satır ("Listede
+  // yok") çıkabiliyor — halka bir satır daha (≈22 px) küçülür ki kart taşmasın (sığmayan slayt
+  // ölçüm/plan döngüsüne yol açıyor, bkz. Yemek Kartları & Havuz dersi).
+  const ring = Math.max(96, size - 96 - Math.max(0, shown.length - 4) * 22);
   return (
     <div className="lb-status-wrap">
       <div className="lb-donut lb-status-donut" style={{ width: ring, height: ring }} role="img"
-        aria-label={STATUS_SEGMENTS.map((segment) => `${segment.label} ${list[segment.key]}`).join(' · ')}>
+        aria-label={shown.map((segment) => `${segment.label} ${segment.value}`).join(' · ')}>
         <svg viewBox="0 0 100 100">
           <circle className="track" cx="50" cy="50" r={radius} />
           {arcs.map((arc) => (
@@ -993,10 +1010,10 @@ function StatusDonut({ list, size }: { list: CustomerListSplit; size: number }) 
  * İÇİNDE ("hafta hedefi büyük simidin içine yazsın… altta hint bir yazsın"). Kazanılan yer
  * halkalara verilir; ekran rahatlar, puntolar büyür.
  */
-function DonutCard({ title, children, aside }: { title: string; children: ReactNode; aside?: ReactNode }) {
+function DonutCard({ title, sub, children, aside }: { title: string; sub?: ReactNode; children: ReactNode; aside?: ReactNode }) {
   return (
     <div className="lb-card lb-donut-card">
-      <div className="lb-card-head"><h3>{title}</h3></div>
+      <div className="lb-card-head"><h3>{title}</h3>{sub ? <span>{sub}</span> : null}</div>
       <div className={`lb-donut-card-body ${aside ? 'with-aside' : ''}`}>
         <div className="lb-donut-main">{children}</div>
         {aside ? <div className="lb-donut-aside">{aside}</div> : null}

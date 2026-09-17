@@ -690,7 +690,9 @@ export const DEFAULT_CRM_MASTER_DATA_OPTIONS: Record<string, ParameterOption[]> 
     "Hazır Giyim",
     "Lojistik & Kargo",
     "Yeme-İçme",
-    "BANKA",
+    // 17.09 (Sinan): "sektör kısmına Banka/Finans ekler misin" — DB tarafı migration 039.
+    // Eski "BANKA" seçeneği migration'da, kullanan firma yoksa pasife çekiliyor.
+    "Banka / Finans",
     "VERTICAL",
     "İŞ ORTAĞI",
   ].map((value, index) => ({ label: value, value, sortOrder: (index + 1) * 10 })),

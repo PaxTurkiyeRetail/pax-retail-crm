@@ -460,6 +460,37 @@ const Q_INTEGRATION_DEVICES = `
   group by 1, 2
 `;
 
+// MÜŞTERİ TAKİP STATÜSÜ · TAKIM — donut'un TEK sayısı (Sinan, 17.09: "iki farklı sonuç istemiyoruz;
+// fark neyse orada küçük yazıyla belirtilsin"). Toplam artık **CRM künyesindeki firma sayısı**, yani
+// Genel Bakış'taki "Toplam Müşteri" ile BİREBİR aynı. Dilimler Account Atama (`crm_musteri_listesi`)
+// kategorisinden gelir; listede karşılığı olmayan firma "Listede yok" dilimine düşer — böylece hiçbir
+// firma sayının dışında kalmaz ve fark ekranda kendini söyler.
+//
+// Eşleştirme `crm_firma_key()` ile (migration 035; Nebim fatura içe aktarımıyla AYNI normalizasyon —
+// altın kural 17). Liste satırı ile firma kartı arasında kimlik bağı hâlâ yok (backlog 39), bu yüzden
+// ad anahtarı kullanılır; eşleşmeyen liste satırları ayrıca sayılır ve kartın altında not düşülür
+// (sessizce yutulmaz). Aynı firmanın listede birden fazla satırı varsa kategorisi tek sayılır.
+const Q_CUSTOMER_LIST_STATUS = `
+  with liste as (
+    select public.crm_firma_key(l.firma) as key, min(l.kategori) as kategori
+    from public.crm_musteri_listesi l
+    where l.is_active
+    group by 1
+  ),
+  kunye as (
+    select public.crm_firma_key(m.musteri) as key from public.musteriler m
+  )
+  select count(*) filter (where li.kategori = 'H')::int as hunter,
+         count(*) filter (where li.kategori = 'F')::int as farmer,
+         count(*) filter (where li.kategori = 'L')::int as lead,
+         count(*) filter (where li.kategori = 'K')::int as kasa,
+         count(*) filter (where li.kategori is null)::int as unlisted,
+         count(*)::int as total,
+         (select count(*) from liste l2 where not exists (select 1 from kunye k2 where k2.key = l2.key))::int as unmatched_rows
+  from kunye k
+  left join liste li on li.key = k.key
+`;
+
 const Q_FORECAST_MONTHS = `
   select f.forecast_month as month, sum(f.quantity)::int as quantity, sum(f.quantity * f.probability / 100.0)::float8 as weighted
   from public.crm_forecasts f
@@ -532,7 +563,7 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
   const { from, to } = targets.range;
 
   const quarter = quarterOf(todayKey);
-  const [ownerResult, customerResult, eventResult, quoteResult, targetResult, forecastMonthResult, forecastOwnerResult, integrationResult, customerListCounts, conversionCounts, yearActivityResult, directSaleResult, saleItemResult, saleNoItemResult, hunterFarmerRows, integrationDeviceResult] = await Promise.all([
+  const [ownerResult, customerResult, eventResult, quoteResult, targetResult, forecastMonthResult, forecastOwnerResult, integrationResult, customerListCounts, conversionCounts, yearActivityResult, directSaleResult, saleItemResult, saleNoItemResult, hunterFarmerRows, integrationDeviceResult, customerListStatusResult] = await Promise.all([
     db.query(Q_OWNERS),
     db.query(Q_CUSTOMERS),
     db.query(Q_WEEK_EVENTS, [from, to]),
@@ -554,6 +585,8 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
     loadHunterFarmerActivity(today),
     // Hizmet faturası kalemleri (032) — Entegrasyon Hedefi kartı; tablo yoksa pano çökmez.
     db.query(Q_INTEGRATION_DEVICES, [year, todayKey]).catch((error) => { if (isMissingRelation(error)) return { rows: [] as any[] }; throw error; }),
+    // Account Atama (025) + crm_firma_key (035) — biri yoksa donut eski davranışına döner (pano çökmez).
+    db.query(Q_CUSTOMER_LIST_STATUS).catch((error) => { if (isMissingRelation(error)) return { rows: [] as any[] }; throw error; }),
   ]);
   // Liste hiç doldurulmamışsa kişi slaytında donut yerine not gösterilir (null); doluysa
   // listede adı geçmeyen kişi 0 ile görünür.
@@ -1464,6 +1497,24 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
     }))
     .sort((a, b) => ownerOrderCompare(a.label, b.label));
 
+  // MÜŞTERİ TAKİP STATÜSÜ · TAKIM (17.09) — TEK sayı: toplam = CRM firma sayısı (Genel Bakış ile aynı).
+  // 17.09 öncesi bu donut kişi slaytlarının toplamıydı; kişi slaytları yalnız `account_manager` rollü
+  // KULLANICILAR için üretildiğinden Cem Koç ile Seda Kesikoğlu'nun (hesapları yok — backlog 25) ve
+  // havuz / iş ortakları / yemek kartları kolonlarının satırları sessizce düşüyordu: ekranda 301,
+  // Genel Bakış'ta 671 görünüyordu (Sinan: "iki farklı sonuç istemiyoruz").
+  const listStatusRow = (customerListStatusResult.rows as any[])[0];
+  const customerListTeam = listStatusRow
+    ? {
+        hunter: num(listStatusRow.hunter),
+        farmer: num(listStatusRow.farmer),
+        lead: num(listStatusRow.lead),
+        kasa: num(listStatusRow.kasa),
+        unlisted: num(listStatusRow.unlisted),
+        unmatchedRows: num(listStatusRow.unmatched_rows),
+        total: num(listStatusRow.total),
+      }
+    : null;
+
   /* --- Yemek Kartları & Havuz (17.09) --------------------------------------
    * Sinan: "yemek kartı ve havuz için ayrı bir slayt — 670 ile 307 firma farkının nedeni bu."
    * `sorumlu` alanı kullanıcı olmayan iki sözde-sahibi de tutar; Portföy ve Müşteri Takip Statüsü
@@ -1562,6 +1613,7 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
         { label: 'Yok', value: kunyeCounts.get('Yok') ?? 0, tone: 'neutral' },
       ],
     },
+    customerList: customerListTeam,
     pools: { total: customers.length, breakdown: poolBreakdown, blocks: poolBlocks },
     quotes: {
       open: openQuotesShown.slice(0, R.openQuotesLimit),

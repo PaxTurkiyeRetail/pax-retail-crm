@@ -1,5 +1,6 @@
 import 'server-only';
 import { db } from '@/lib/db';
+import { SALES_TEAM, normalizeName, ownerOrderCompare } from '@/lib/reports/live-board-shared';
 import {
   NEAR_TERM_MONTH_WINDOW,
   SELLER_FOLLOWUP_PAGE_SIZE,
@@ -148,9 +149,16 @@ export async function buildSellerFollowupReport(options?: {
   );
 
   const allRows = result.rows as any[];
-  const ownerOptions = Array.from(
-    new Set(allRows.map((row) => String(row.sorumlu ?? '').trim()).filter(Boolean)),
-  ).sort((a, b) => a.localeCompare(b, 'tr'));
+  // SATICI SEÇİCİSİ (17.09, Sinan: "buraya Seda'yı da ekleyelim, bir de Erdi'yi de"): liste artık
+  // SATIŞ EKİBİNİN TAMAMI. Eskiden yalnız o an AÇIK ENGELİ olan firmaların `sorumlu` değerlerinden
+  // türetiliyordu; engeli olmayan satışçı seçicide hiç görünmüyordu (Seda ve Erdi böyle kaybolmuştu)
+  // ve "bu kişinin takip listesi boş mu, yoksa kişi mi yok?" ayırt edilemiyordu. Tek kaynak
+  // `SALES_TEAM` (Canlı Ekran sırası); veride olup listede olmayan ad varsa o da eklenir, kaybolmasın.
+  const ownerOptions = [
+    ...SALES_TEAM,
+    ...Array.from(new Set(allRows.map((row) => String(row.sorumlu ?? '').trim()).filter(Boolean)))
+      .filter((name) => !SALES_TEAM.some((known) => normalizeName(known) === normalizeName(name))),
+  ].sort(ownerOrderCompare);
 
   const rows: SellerFollowupRow[] = allRows
     .filter((row) => !owner || String(row.sorumlu ?? '').trim() === owner)
