@@ -1181,9 +1181,11 @@ function IntegrationFoot({ g }: { g: IntegrationGoals }) {
   return (
     <>
       <span>{label} <b>+{fmt(g.integrationMonthDevices)}</b> cihaz</span>
-      <span title="Hizmet faturaları (KasaPOS entegrasyonu, TMS…) — künye sorumlusuna göre">
+      {/* 21.09 (Çağdaş Bey: "basınca satışlara gitsin"): Hizmet Faturaları sekmesi, yeni sekmede
+          (11.09 kuralı). Sekmenin URL'de kişi filtresi yok — tüm liste açılır, kişiye göre süzme uydurulmadı. */}
+      <a className="lb-donut-foot-link" href="/crm/sales?tab=hizmet" target="_blank" rel="noreferrer" title="Hizmet faturaları (KasaPOS entegrasyonu, TMS…) — künye sorumlusuna göre · Satışlar › Hizmet Faturaları sekmesini açar">
         Kazanılan <b>{fmtMoney(rev.usdMonth)}</b> · yıl <b>{fmtMoney(rev.usdYear)}</b>{other}
-      </span>
+      </a>
     </>
   );
 }
