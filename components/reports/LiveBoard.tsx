@@ -70,7 +70,16 @@ import {
 //   (< COMPACT_BODY_HEIGHT) kompakt ölçüler devreye girer; büyük pencerede punto büyür.
 
 const SPEED_KEY = 'pax-live-board-speed';
-const CONTROLS_HIDE_MS = 3000;
+/**
+ * TV modunda üst/alt şerit (21.09 toplantısı — Çağdaş Bey: "bu ekranı kapladığı için kullanamıyorum";
+ * Sinan: "sadece mouse üstü ya da alta getirdiğimiz zaman gelsin, yoksa gelmesin"). Eski kural her fare
+ * hareketinde 3 sn görünür kılıyordu ve DURAKLATILDIĞINDA hep açık kalıyordu — toplantıda ekranı
+ * incelemek için duraklatınca şeritler slaytın üstüne oturdu. Yeni kural: şeritler yalnız fare ekranın
+ * üst ya da alt `CONTROLS_EDGE_PX` bandındayken görünür; banttan çıkınca kısa gecikmeyle kayar.
+ * Duraklama artık şeridi açık tutmaz; ince başlık çubuğunda "❚❚ duraklatıldı" rozeti çıkar.
+ */
+const CONTROLS_EDGE_PX = 72;
+const CONTROLS_HIDE_MS = 450;
 const TZ = 'Europe/Istanbul';
 
 function fmt(value: number | null | undefined) {
@@ -975,8 +984,11 @@ function JiraSlide({ data, caps, page }: { data: LiveBoardPayload; caps: Capacit
 const STATUS_SEGMENTS = [
   { key: 'hunter', label: 'Hunter', short: 'H', color: 'var(--lb-hunter)' },
   { key: 'farmer', label: 'Farmer', short: 'F', color: 'var(--lb-farmer)' },
-  { key: 'lead', label: 'Lead', short: 'L', color: 'var(--lb-warn)' },
-  { key: 'kasa', label: 'Kasa', short: 'K', color: 'var(--lb-violet)' },
+  // 21.09 toplantısı (Furkan: "farklı bir renkte, SARI, kasa firması yazsın"; Çağdaş Bey: "iş ortağı =
+  // kasa"): Kasa SARI oldu. Lead eskiden `--lb-warn` (koyu temada o da sarı) kullanıyordu; iki sarı
+  // birbirine karışmasın diye Lead kendi TURUNCU jetonuna alındı (`--lb-lead`).
+  { key: 'lead', label: 'Lead', short: 'L', color: 'var(--lb-lead)' },
+  { key: 'kasa', label: 'Kasa', short: 'K', color: 'var(--lb-kasa)' },
   // 17.09: takım donut'u tüm portföyü sayar; Account Atama'da karşılığı olmayan firmalar burada
   // görünür (gri). Kişi slaytlarında bu alan yoktur, dilim de çıkmaz (değer 0 → filtrelenir).
   { key: 'unlisted', label: 'Listede yok', short: '—', color: '#94a3b8' },
@@ -994,7 +1006,7 @@ const STATUS_SEGMENTS = [
  * satırında — renk kutusu + ad + adet · yüzde. Hiçbir çapta çakışma kalmıyor, punto da
  * küçülmüyor. Halka çapı künye satırı kadar küçülür (kart yüksekliği aynı kalsın diye).
  *
- * Renkler: Hunter açık mavi · Farmer açık yeşil (Çağdaş Bey'in seçimi), Lead sarı, Kasa mor.
+ * Renkler: Hunter açık mavi · Farmer açık yeşil (Çağdaş Bey'in seçimi), Lead turuncu, Kasa SARI (21.09).
  */
 function StatusDonut({ list, size }: { list: CustomerListSplit & { unlisted?: number }; size: number }) {
   const value = (key: (typeof STATUS_SEGMENTS)[number]['key']) => (key === 'unlisted' ? list.unlisted ?? 0 : list[key]);
@@ -1652,13 +1664,22 @@ export default function LiveBoard({ active }: { active: boolean }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [active, step, toggleFullscreen, hardRefresh]);
 
-  const poke = useCallback(() => {
-    setControlsVisible(true);
+  const poke = useCallback((event: { clientY: number }) => {
+    // Kenar bandı: pencere yüksekliğine göre üst/alt CONTROLS_EDGE_PX. Tam ekran dışında şeritler
+    // akışta zaten yer tutar (controlsHidden false), bu hesap yalnız TV modunda anlam taşır.
+    const height = window.innerHeight || 0;
+    const nearEdge = event.clientY <= CONTROLS_EDGE_PX || event.clientY >= height - CONTROLS_EDGE_PX;
     if (hideTimer.current) window.clearTimeout(hideTimer.current);
+    if (nearEdge) {
+      setControlsVisible(true);
+      return;
+    }
     hideTimer.current = window.setTimeout(() => setControlsVisible(false), CONTROLS_HIDE_MS);
   }, []);
   useEffect(() => () => { if (hideTimer.current) window.clearTimeout(hideTimer.current); }, []);
-  const controlsHidden = fullscreen && !controlsVisible && !paused;
+  // Tam ekrana geçişte şeritler kapalı başlar; fare kenara gelince açılır.
+  useEffect(() => { if (fullscreen) setControlsVisible(false); }, [fullscreen]);
+  const controlsHidden = fullscreen && !controlsVisible;
 
   const pageSuffix = current.pages > 1 ? ` ${current.page + 1}/${current.pages}` : '';
   const title = current.type === 'team'
@@ -1777,7 +1798,10 @@ export default function LiveBoard({ active }: { active: boolean }) {
         <div className="lb-fs-title" aria-hidden="true">
           <span className="lb-fs-eyebrow">PAX Retail Command Center</span>
           <div className="lb-title">{title.main}<small>{title.sub}</small></div>
-          <span className="lb-fs-clock">{fmtClock(now)}</span>
+          <span className="lb-fs-clock">
+            {paused ? <b className="lb-fs-paused" title="Boşluk ile devam">❚❚ duraklatıldı</b> : null}
+            {fmtClock(now)}
+          </span>
         </div>
       ) : null}
 

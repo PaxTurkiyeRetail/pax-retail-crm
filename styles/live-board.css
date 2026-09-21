@@ -22,8 +22,12 @@
   --lb-danger: #b91c1c;
   --lb-info: #1d4ed8;
   --lb-neutral: #64748b;
-  /* Müşteri Takip Statüsü donut'unun 4. dilimi (Kasa Firması) — H/F/L ile karışmayan mor. */
+  /* Kiralama modeli çubuğu (lb-model-bar .rental) — mor. */
   --lb-violet: #6d28d9;
+  /* Müşteri Takip Statüsü dilimleri (21.09 toplantısı): Lead TURUNCU, Kasa Firması SARI (Furkan'ın isteği;
+     Çağdaş Bey: "iş ortağı = kasa"). Yalnız dolgu; yazı bu renklerle yazılmaz. */
+  --lb-lead: #ea580c;
+  --lb-kasa: #eab308;
   /* Müşteri Takip Statüsü dilim renkleri (Çağdaş Bey, 15.09): Hunter AÇIK MAVİ, Farmer AÇIK YEŞİL.
      Yalnız dolgu olarak kullanılır (yazı değil), bu yüzden açık tonlar kontrast denetimine girmez. */
   --lb-hunter: #3b82f6;
@@ -57,6 +61,8 @@
   --lb-info: #93b4fd;
   --lb-neutral: #94a3b8;
   --lb-violet: #c4b5fd;
+  --lb-lead: #fb923c;
+  --lb-kasa: #facc15;
   --lb-hunter: #60a5fa;
   --lb-farmer: #4ade80;
   --lb-ok-soft: rgba(74, 222, 128, 0.12);
@@ -97,7 +103,9 @@
 .lb-fs-title .lb-title { display: flex; align-items: baseline; gap: 10px; font-size: clamp(15px, 1.15vw, 19px); }
 .lb-fs-title .lb-title small { display: inline; font-size: 11px; }
 .lb-fs-eyebrow { font-size: 10.5px; font-weight: 900; letter-spacing: 0.12em; text-transform: uppercase; color: var(--lb-accent); }
-.lb-fs-clock { text-align: right; font-size: clamp(15px, 1.15vw, 19px); font-weight: 900; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; line-height: 1; }
+.lb-fs-clock { display: flex; justify-content: flex-end; align-items: center; gap: 12px; text-align: right; font-size: clamp(15px, 1.15vw, 19px); font-weight: 900; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; line-height: 1; }
+/* 21.09: şeritler duraklamada da gizli; duraklama bilgisi ince başlık çubuğunda kalır. */
+.lb-fs-paused { font-size: 11px; font-weight: 900; letter-spacing: 0.06em; text-transform: uppercase; color: var(--lb-warn); padding: 3px 8px; border-radius: 999px; background: var(--lb-warn-soft); }
 .lb-strip.lb-strip-fs { position: absolute; left: 0; right: 0; bottom: 0; z-index: 6; background: var(--surface); border-top: 1px solid var(--border); padding: 8px 22px !important; transition: transform .3s ease, opacity .3s ease; }
 .lb-strip.lb-strip-fs.hidden { transform: translateY(100%); opacity: 0; pointer-events: none; }
 .lb-new-version { color: var(--lb-warn); font-weight: 900; }
