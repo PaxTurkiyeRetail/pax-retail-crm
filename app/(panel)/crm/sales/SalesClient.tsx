@@ -13,6 +13,7 @@
 
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import Link from 'next/link';
+import SalesReportDownload from '@/components/sales/SalesReportDownload';
 
 type SaleRow = {
   id: string;
@@ -254,6 +255,8 @@ export default function SalesClient() {
           {canCreate ? <button type="button" onClick={() => void openCreate()} style={{ ...ghostLink, border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 14 }}>+ Satış Ekle</button> : null}
           <Link href="/crm/quotes" style={{ ...ghostLink }}>Teklifler</Link>
           <Link href="/crm/reports/quotes" style={{ ...ghostLink }}>Teklif Raporları</Link>
+          {/* Cihaz Satış Raporu (Excel) — dönem (ay/yıl) + satışçı seçilir (Sinan, 21.09). */}
+          <SalesReportDownload kind="cihaz" owners={owners} canSeeAll={canSeeAll} buttonStyle={ghostLink} />
         </div>
       </div>
 

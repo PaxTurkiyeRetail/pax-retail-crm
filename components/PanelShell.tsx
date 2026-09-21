@@ -430,6 +430,40 @@ export default function PanelShell({
         iconKey: "dashboard",
         exact: true,
       });
+    // OPERASYON MENÜ SIRASI — Sinan, 21.09.2026 ("bu şekilde olsun"): bilinçli sıra, alfabetik değil.
+    //   1 Aktiviteler · 2 Engel & Etki · 3 Forecast · 4 Teklifler · 5 Satışlar · 6 Müşteriler · 7 Account Atama · 8 Hedefler
+    // Yeni ekran eklerken yerini sorarak koy (Raporlar menüsündeki 15.09 kuralıyla aynı).
+    if (allowed('activity.read') && allowed('screen.crm.activities.view'))
+      operations.push({
+        href: "/crm/activities",
+        label: "Aktiviteler",
+        iconKey: "activity",
+      });
+    if (allowed('forecast.read') && allowed('screen.crm.blocker_impact.view'))
+      operations.push({
+        href: "/crm/blocker-impact",
+        label: "Engel & Etki",
+        iconKey: "blocker",
+      });
+    if (allowed('forecast.read') && allowed('screen.crm.forecast.view'))
+      operations.push({
+        href: "/crm/forecast",
+        label: "Forecast",
+        iconKey: "forecast",
+      });
+    if (allowed('quote.read') && allowed('screen.crm.quotes.view'))
+      operations.push({
+        href: "/crm/quotes",
+        label: "Teklifler",
+        iconKey: "quotes",
+      });
+    // Satışlar: kazanılan tekliflerden türeyen düzenlenebilir satış kayıtları (07.09).
+    if (allowed('quote.read') && allowed('screen.crm.quotes.view'))
+      operations.push({
+        href: "/crm/sales",
+        label: "Satışlar",
+        iconKey: "quotes",
+      });
     if (allowed('customer.read') && allowed('screen.crm.customers.view'))
       operations.push({
         href: "/crm/customers",
@@ -451,37 +485,6 @@ export default function PanelShell({
         href: "/admin/targets",
         label: "Hedefler",
         iconKey: "forecast",
-      });
-    if (allowed('activity.read') && allowed('screen.crm.activities.view'))
-      operations.push({
-        href: "/crm/activities",
-        label: "Aktiviteler",
-        iconKey: "activity",
-      });
-    if (allowed('quote.read') && allowed('screen.crm.quotes.view'))
-      operations.push({
-        href: "/crm/quotes",
-        label: "Teklifler",
-        iconKey: "quotes",
-      });
-    // Satışlar: kazanılan tekliflerden türeyen düzenlenebilir satış kayıtları (07.09).
-    if (allowed('quote.read') && allowed('screen.crm.quotes.view'))
-      operations.push({
-        href: "/crm/sales",
-        label: "Satışlar",
-        iconKey: "quotes",
-      });
-    if (allowed('forecast.read') && allowed('screen.crm.forecast.view'))
-      operations.push({
-        href: "/crm/forecast",
-        label: "Forecast",
-        iconKey: "forecast",
-      });
-    if (allowed('forecast.read') && allowed('screen.crm.blocker_impact.view'))
-      operations.push({
-        href: "/crm/blocker-impact",
-        label: "Engel & Etki",
-        iconKey: "blocker",
       });
     // Satış Radarı KALDIRILDI (Sinan, 17.09.2026: "Satış radarını kaldırıyoruz") — sayfa, bileşen ve
     // CSS silindi; `screen.crm.sales_radar.view` izni koddan çıkarıldı (DB'deki izin satırı zararsız durur).

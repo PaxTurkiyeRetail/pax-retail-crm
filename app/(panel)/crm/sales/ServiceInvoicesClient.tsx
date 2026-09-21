@@ -12,6 +12,7 @@
 
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import Link from 'next/link';
+import SalesReportDownload from '@/components/sales/SalesReportDownload';
 import {
   computeLineTotals,
   currentPeriod,
@@ -284,6 +285,8 @@ export default function ServiceInvoicesClient() {
         <div style={{ position: 'relative', zIndex: 1, display: 'flex', gap: 10, marginTop: 14, flexWrap: 'wrap' }}>
           {canCreate ? <button type="button" onClick={() => void openCreate()} style={{ ...ghostLink, border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 14 }}>+ Hizmet Faturası</button> : null}
           <Link href="/admin/parameters" style={ghostLink}>Hizmet Kalemleri (Liste Yönetimleri)</Link>
+          {/* Hizmet Fatura Raporu (Excel) — dönem (ay/yıl) + satışçı seçilir; TL ve USD ayrı toplanır (Sinan, 21.09). */}
+          <SalesReportDownload kind="hizmet" owners={owners} canSeeAll={canSeeAll} buttonStyle={ghostLink} />
         </div>
       </div>
 
