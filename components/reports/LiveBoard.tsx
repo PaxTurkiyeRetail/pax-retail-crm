@@ -348,11 +348,13 @@ function PulseSlide({ data, caps, page, rollup, ringSize }: {
             />
           </DonutCard>
 
-          {/* Entegrasyon = CİHAZ ADEDİ, hizmet faturası kalemlerinden (17.09). Büyük simit içinde
-              bulunulan ay; sağ üstte yıl toplamı (YTD), altında çeyrek. Kişilerin toplamıdır. */}
+          {/* Entegrasyon = CİHAZ ADEDİ, hizmet faturası kalemlerinden (17.09). 18.09: üç halka da
+              KÜMÜLATİF (YTD / ay sonu · yıl · çeyrek sonu hedefi); alt satırda ayın adedi + kazanılan $.
+              Kişilerin toplamıdır. */}
           <DonutCard
             title="Entegrasyon Hedefi · Takım"
             aside={<IntegrationAside g={g} year={r.year} q={q} size={mini} yearElapsedPct={r.yearElapsedPct} />}
+            foot={<IntegrationFoot g={g} />}
           >
             <IntegrationMonthRing g={g} size={ringSize} />
           </DonutCard>
@@ -470,7 +472,49 @@ function PulseSlide({ data, caps, page, rollup, ringSize }: {
             })}
           </div>
         ) : <div className="lb-muted">Rotasyonda satıcı yok (account_manager rolü).</div>}
+        <LeaderPools blocks={data.pools.blocks} total={data.pools.total} />
       </div>
+    </div>
+  );
+}
+
+/**
+ * SATICIYA ATANMAMIŞ PORTFÖY şeridi — sıralama kartının altı (Sinan, 18.09: "buradaki daire
+ * kısmına alanı bölelim, yemek kartları için alan oluşturalım").
+ *
+ * Yemek Kartları ve Havuz Account kullanıcı değil, hedefi ve sırası yok; bu yüzden kişi satırı
+ * gibi yüzde/rank taşımaz. Her blok tek satır: ad · firma · entegrasyon süreci açık · son 30
+ * günde hareket · 90+ gün sessiz. Veri `payload.pools.blocks` — Yemek Kartları & Havuz slaydıyla
+ * AYNI kaynak (altın kural 17). Yüksekliği sabit bütçeyle ayrılmıştır (`LEADER_POOLS_H`,
+ * live-board-shared.ts) — sıralama kapasitesi bu kadar düşer, şerit her sayfada çizilir.
+ */
+function LeaderPools({ blocks, total }: { blocks: LiveBoardPayload['pools']['blocks']; total: number }) {
+  if (!blocks.length) return null;
+  const poolTotal = blocks.reduce((sum, block) => sum + block.total, 0);
+  return (
+    <div className="lb-leader-pools">
+      <div className="lb-leader-pools-head">
+        <span>Satıcıya atanmamış portföy</span>
+        <em>{fmt(poolTotal)} / {fmt(total)} firma</em>
+      </div>
+      {blocks.map((block) => {
+        const quietPct = block.total ? Math.round((block.inactive90 / block.total) * 100) : null;
+        return (
+          <div className="lb-leader-pool" key={block.label}>
+            <div className="lb-leader-pool-name">
+              <span>{block.label}</span>
+              <em>{fmt(block.total)} firma</em>
+            </div>
+            <div className="lb-leader-pool-facts">
+              <span>Entegrasyon <b className={block.integrationOpen ? 'tone-info' : ''}>{fmt(block.integrationOpen)}</b></span>
+              <span>30 gün hareket <b className={block.touched30 ? 'tone-ok' : ''}>{fmt(block.touched30)}</b></span>
+              <span title="90+ gündür hareketsiz ya da hiç hareketi olmayan firma">
+                Sessiz <b className={block.inactive90 ? 'tone-warn' : ''}>{fmt(block.inactive90)}</b>{quietPct != null ? <small> %{quietPct}</small> : null}
+              </span>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -1010,17 +1054,30 @@ function StatusDonut({ list, size }: { list: CustomerListSplit & { unlisted?: nu
  * İÇİNDE ("hafta hedefi büyük simidin içine yazsın… altta hint bir yazsın"). Kazanılan yer
  * halkalara verilir; ekran rahatlar, puntolar büyür.
  */
-function DonutCard({ title, sub, children, aside }: { title: string; sub?: ReactNode; children: ReactNode; aside?: ReactNode }) {
+/**
+ * `foot`: halkaların ALTINDAKİ tek satır (18.09, Entegrasyon kartı: ay ivmesi + kazanılan para).
+ * Kartın yüksekliği sabittir (`--lb-donut-row-h`); alt satır için yer, halka çapı hesabından
+ * düşülür (`DONUT_FOOT_H`, bkz. ownerRing / pulseRing) — yoksa halka kartı taşırır (§3.8).
+ */
+function DonutCard({ title, sub, children, aside, foot }: { title: string; sub?: ReactNode; children: ReactNode; aside?: ReactNode; foot?: ReactNode }) {
   return (
-    <div className="lb-card lb-donut-card">
+    <div className={`lb-card lb-donut-card ${foot ? 'with-foot' : ''}`}>
       <div className="lb-card-head"><h3>{title}</h3>{sub ? <span>{sub}</span> : null}</div>
       <div className={`lb-donut-card-body ${aside ? 'with-aside' : ''}`}>
         <div className="lb-donut-main">{children}</div>
         {aside ? <div className="lb-donut-aside">{aside}</div> : null}
       </div>
+      {foot ? <div className="lb-donut-foot">{foot}</div> : null}
     </div>
   );
 }
+
+/**
+ * Donut kartı alt satırının yükseklik bütçesi; halka çapından düşülür. Satır 18 px + kart aralığı:
+ * Özet'te `.lb-donut-card` 6 px, kişi slaydında `.lb-owner .lb-card` 10 px kazanır (daha özgül) → 28.
+ * 2 px pay ile 30 (ilk sürümde 24 idi — kişi slaydında 4 px eksik kalıyordu, 21.09 kontrolünde görüldü).
+ */
+const DONUT_FOOT_H = 30;
 
 /**
  * Küçük hedef halkası: hedef varsa % ve "gerçekleşen / hedef", yoksa yalnız gerçekleşen.
@@ -1060,8 +1117,13 @@ function MiniRing({ pair, label, tone, size, money = false, pending = false }: {
  *   * Sağ alt     : çeyrek adedi / çeyrek hedefi.
  * `integrationPending` bir gün yeniden true olursa (kaynak koparsa) üçü de "veri bekleniyor" der.
  */
-type IntegrationGoals = Pick<OwnerGoals, 'integration' | 'integrationQuarter' | 'integrationMonth' | 'integrationMonthLabel' | 'integrationMonthElapsedPct' | 'integrationPending' | 'integrationQuarterPending'>;
+type IntegrationGoals = Pick<OwnerGoals, 'integration' | 'integrationQuarter' | 'integrationMonth' | 'integrationMonthDevices' | 'integrationRevenue' | 'integrationMonthLabel' | 'integrationMonthElapsedPct' | 'integrationPending' | 'integrationQuarterPending'>;
 
+/**
+ * 18.09 (Sinan) — KÜMÜLATİF: büyük simit artık "yılbaşından bugüne toplam / bu ay sonunda olmam
+ * gereken toplam" (yıllık ÷ 12 × ay). Alt satır "Eylül sonu · 1.371 / 1.500" diye okunur.
+ * Ayın kendi adedi ve kazanılan para kartın alt satırında (`IntegrationFoot`).
+ */
 function IntegrationMonthRing({ g, size }: { g: IntegrationGoals; size: number }) {
   const pair = g.integrationMonth;
   const label = g.integrationMonthLabel || 'Bu ay';
@@ -1069,14 +1131,14 @@ function IntegrationMonthRing({ g, size }: { g: IntegrationGoals; size: number }
     return <Ring pct={null} tone="neutral" big="—" sub={`${label} · veri bekleniyor`} size={size} stroke={12} />;
   }
   if (pair.target == null) {
-    return <Ring pct={null} tone="neutral" big={fmt(pair.actual)} sub={`${label} · cihaz · hedef yok`} size={size} stroke={12} />;
+    return <Ring pct={null} tone="neutral" big={fmt(pair.actual)} sub="yıl toplamı · cihaz · hedef yok" size={size} stroke={12} />;
   }
   return (
     <Ring
       pct={pair.pct}
       tone={goalTone(pair, g.integrationMonthElapsedPct)}
       big={`%${pair.pct ?? 0}`}
-      sub={`${label} · ${fmt(pair.actual)} / ${fmt(pair.target)}`}
+      sub={`${label} sonu · ${fmt(pair.actual)} / ${fmt(pair.target)}`}
       size={size}
       stroke={12}
     />
@@ -1087,7 +1149,29 @@ function IntegrationAside({ g, year, q, size, yearElapsedPct }: { g: Integration
   return (
     <>
       <MiniRing pair={g.integration} label={`${year} toplam`} tone={g.integrationPending ? 'neutral' : goalTone(g.integration, yearElapsedPct)} size={size} pending={g.integrationPending} />
-      <MiniRing pair={g.integrationQuarter} label={`${q} toplam`} tone="neutral" size={size} pending={g.integrationQuarterPending} />
+      {/* Kümülatif: çeyrek SONUNDA ulaşılmış olması gereken toplam (yıllık ÷ 12 × çeyrek sonu ayı). */}
+      <MiniRing pair={g.integrationQuarter} label={`${q} sonu`} tone="neutral" size={size} pending={g.integrationQuarterPending} />
+    </>
+  );
+}
+
+/**
+ * Entegrasyon kartının alt satırı (18.09, Sinan: "entegrasyondan kazanılan para yazılsın, dolar
+ * olarak, simidin altına"). Sol: ayın KENDİ yeni cihaz adedi (halkalar kümülatife döndüğü için
+ * aylık ivme buraya taşındı). Sağ: hizmet faturası tutarı — bu ay ve yıl, USD. USD olmayan (TL)
+ * fatura varsa dolara karıştırılmaz, "₺ hariç" diye söylenir (altın kural 34).
+ */
+function IntegrationFoot({ g }: { g: IntegrationGoals }) {
+  if (g.integrationPending) return null;
+  const label = g.integrationMonthLabel || 'Bu ay';
+  const rev = g.integrationRevenue;
+  const other = rev.otherYear > 0 ? ` · ₺${fmt(Math.round(rev.otherYear))} hariç` : '';
+  return (
+    <>
+      <span>{label} <b>+{fmt(g.integrationMonthDevices)}</b> cihaz</span>
+      <span title="Hizmet faturaları (KasaPOS entegrasyonu, TMS…) — künye sorumlusuna göre">
+        Kazanılan <b>{fmtMoney(rev.usdMonth)}</b> · yıl <b>{fmtMoney(rev.usdYear)}</b>{other}
+      </span>
     </>
   );
 }
@@ -1246,11 +1330,13 @@ function OwnerSlide({ owner, todayKey, caps, ringSize }: { owner: LiveOwner; tod
       </DonutCard>
 
       {/* Entegrasyon: büyükte yüzde, altında adet (Çağdaş Bey: "burası yüzde olsun, altında adet
-          yazsın"). 17.09 (Sinan): birim CİHAZ ADEDİ (hizmet faturası kalemleri); büyük simit
-          içinde bulunulan AY, sağ üstte yıl toplamı (YTD), altında çeyrek. */}
+          yazsın"). 17.09 (Sinan): birim CİHAZ ADEDİ (hizmet faturası kalemleri). 18.09 (Sinan):
+          KÜMÜLATİF — YTD / ay sonu hedefi; sağ üst yıl, sağ alt çeyrek sonu; alt satırda ayın
+          adedi ve entegrasyondan kazanılan para ($). */}
       <DonutCard
         title="Entegrasyon Hedefi"
         aside={<IntegrationAside g={g} year={r.year} q={q} size={mini} yearElapsedPct={r.yearElapsedPct} />}
+        foot={<IntegrationFoot g={g} />}
       >
         <IntegrationMonthRing g={g} size={ring} />
       </DonutCard>
@@ -1388,13 +1474,14 @@ export default function LiveBoard({ active }: { active: boolean }) {
   const ownerRing = useMemo(() => {
     const cardW = Math.max(160, Math.round((box.w || 1920) / 4 - metrics.gap));
     const usable = cardW - 32 - 12;
-    return Math.max(110, Math.min(metrics.donutRowH - 104, Math.round(usable / 1.46)));
+    // 18.09: Entegrasyon kartının alt satırı (DONUT_FOOT_H) için çaptan pay düşülür — dört kart aynı çapı kullanır.
+    return Math.max(110, Math.min(metrics.donutRowH - 104 - DONUT_FOOT_H, Math.round(usable / 1.46)));
   }, [box.w, metrics.donutRowH, metrics.gap]);
   const pulseRing = useMemo(() => {
     const rowH = Math.max(140, Math.round(((box.h || 900) - metrics.bandH - metrics.gap * 2) / 2));
     const cardW = Math.max(180, Math.round((((box.w || 1920) * 8) / 12 - metrics.gap * 3) / 2));
     // Kişi slaydıyla aynı genişlik kuralı: büyük + küçük halka = 1.46 × çap (+ kart iç boşluğu).
-    return Math.max(104, Math.min(rowH - 96, Math.round((cardW - 32 - 18) / 1.46)));
+    return Math.max(104, Math.min(rowH - 96 - DONUT_FOOT_H, Math.round((cardW - 32 - 18) / 1.46)));
   }, [box.h, box.w, metrics.bandH, metrics.gap]);
   const pagePlan = useMemo(() => (data ? buildPagePlan(data, caps) : undefined), [data, caps]);
 

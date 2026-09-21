@@ -166,6 +166,12 @@ describe('sayfalama (taşma yerine devam slaydı)', () => {
       if (typeof value === 'number') expect(value).toBeGreaterThanOrEqual(1);
     }
   });
+  // 18.09: sıralama kartının altına Yemek Kartları / Havuz şeridi girdi — bütçesi kapasiteden düşer,
+  // 1920×1080 gövdesinde (≈ 900) BEŞ satışçı tek sayfada kalır, şerit yerini alır (eskiden 6 sığardı).
+  it('sıralama kapasitesi havuz şeridinin bütçesini düşer; 5 kişi tek sayfada kalır', () => {
+    expect(capacities(900, 1920).leader).toBe(5);
+    expect(capacities(700, 1366).leader).toBeGreaterThanOrEqual(3);
+  });
   it('uyarıları türe göre panellere böler, hiçbirini gizlemez', () => {
     const mk = (kind: any, n: number) => Array.from({ length: n }, (_, i) => ({ kind, title: `${kind}-${i}`, detail: '', owner: null, days: null, tone: 'warn' as const }));
     const alerts = [...mk('overdue', 5), ...mk('stale', 2)];
@@ -320,6 +326,8 @@ describe('teamRollup — Özet slaydının sol tarafı', () => {
     list?: { hunter: number; farmer: number; lead: number; kasa: number } | null;
     open?: [number, number];
     devices?: [number, number, number];
+    monthDevices?: number;
+    revenue?: { usdMonth: number; usdYear: number; otherMonth: number; otherYear: number };
     poc?: number;
     invoices?: number;
     covered?: [number, number | null];
@@ -336,6 +344,8 @@ describe('teamRollup — Özet slaydının sol tarafı', () => {
       integration: pair(...(over.integration ?? [0, null] as [number, number | null])),
       integrationQuarter: pair(0, null),
       integrationMonth: pair(...(over.month ?? [0, null] as [number, number | null])),
+      integrationMonthDevices: over.monthDevices ?? 0,
+      integrationRevenue: over.revenue ?? { usdMonth: 0, usdYear: 0, otherMonth: 0, otherYear: 0 },
       integrationMonthLabel: 'Eylül',
       integrationMonthElapsedPct: 57,
       integrationPending: over.pending ?? false,
@@ -380,6 +390,17 @@ describe('teamRollup — Özet slaydının sol tarafı', () => {
     const none = teamRollup([owner({ budget: [100, null] }), owner({ budget: [50, null] })]);
     expect(none.budgetQuarter.target).toBeNull();
     expect(none.budgetQuarter.pct).toBeNull();
+  });
+
+  // 18.09 (Sinan): kümülatif entegrasyon — ayın adedi ve kazanılan para kişi kişi toplanır; TL ayrı kalır.
+  it('entegrasyon: ayın cihaz adedi ve kazanılan para toplanır, USD ile TL karışmaz', () => {
+    const rollup = teamRollup([
+      owner({ month: [1000, 1500], monthDevices: 270, revenue: { usdMonth: 12_000, usdYear: 90_000, otherMonth: 0, otherYear: 0 } }),
+      owner({ month: [371, 900], monthDevices: 40, revenue: { usdMonth: 3_000, usdYear: 20_000, otherMonth: 500, otherYear: 4_500 } }),
+    ]);
+    expect(rollup.integrationMonth).toEqual({ actual: 1371, target: 2400, pct: 57 });
+    expect(rollup.integrationMonthDevices).toBe(310);
+    expect(rollup.integrationRevenue).toEqual({ usdMonth: 15_000, usdYear: 110_000, otherMonth: 500, otherYear: 4_500 });
   });
 
   it('ortalama temas toplanmaz, toplam görüşme / toplam kapsanan firmadan yeniden bölünür', () => {

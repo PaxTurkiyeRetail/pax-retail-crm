@@ -325,6 +325,24 @@
 .lb-leader .lb-row.rich .lb-row-num { font-size: 30px; }
 .lb-leader .lb-row .lb-bar { height: 10px; }
 .lb-leader .lb-board { gap: 12px; }
+/* 18.09: sıralama kartının altı — satıcıya atanmamış portföy (Yemek Kartları, Havuz Account).
+   Bütçe LEADER_POOLS_H=130 (kompakt 116): başlık 22 + 2 × 40 + aralıklar; kart içinden yer ayrılır. */
+.lb-leader { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; }
+.lb-leader-pools { display: grid; gap: 6px; padding-top: 10px; border-top: 1px solid var(--lb-track); }
+.lb-leader-pools-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-size: 11px; font-weight: 900; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-3); height: 14px; }
+.lb-leader-pools-head em { font-style: normal; text-transform: none; letter-spacing: 0; font-weight: 700; }
+.lb-leader-pool { display: grid; grid-template-columns: minmax(150px, 1fr) auto; align-items: center; gap: 12px; height: 40px; padding: 0 14px; border-radius: 12px; background: var(--lb-track); min-width: 0; }
+.lb-leader-pool-name { display: flex; align-items: baseline; gap: 8px; min-width: 0; font-size: 15px; font-weight: 800; color: var(--text); }
+.lb-leader-pool-name > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lb-leader-pool-name em { font-style: normal; font-size: 12.5px; font-weight: 700; color: var(--text-3); white-space: nowrap; }
+.lb-leader-pool-facts { display: flex; gap: 14px; font-size: 12.5px; font-weight: 700; color: var(--text-3); white-space: nowrap; }
+.lb-leader-pool-facts b { color: var(--text); font-weight: 900; }
+.lb-leader-pool-facts small { font-size: 11px; font-weight: 700; color: var(--text-3); }
+.lb[data-compact="1"] .lb-leader-pools { padding-top: 8px; }
+.lb[data-compact="1"] .lb-leader-pool { height: 36px; }
+.lb[data-compact="1"] .lb-leader-pools-head { height: 12px; font-size: 10px; }
+.lb[data-compact="1"] .lb-leader-pool-name { font-size: 14px; }
+.lb[data-compact="1"] .lb-leader-pool-facts { font-size: 12px; gap: 10px; }
 
 /* --- Portföy ------------------------------------------------------------ */
 .lb-portfolio { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); }
@@ -450,6 +468,13 @@
 /* v3.1: kart = başlık + gövde (alt not satırı kalktı) → halka büyür, punto büyür. */
 .lb-donut-card { display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 6px; align-items: center; justify-items: center; height: var(--lb-donut-row-h, 344px); padding: 12px 14px 14px; }
 .lb-donut-card .lb-card-head { width: 100%; }
+/* 18.09: Entegrasyon kartı alt satırı (ay ivmesi · kazanılan $). Yükseklik bütçesi DONUT_FOOT_H=30
+   (LiveBoard.tsx: 18 satır + 10 kart aralığı + 2 pay) halka çapından düşülür; satır tek çizgi, taşan metin kesilir. */
+.lb-donut-card.with-foot { grid-template-rows: auto minmax(0, 1fr) auto; }
+.lb-donut-foot { display: flex; justify-content: space-between; gap: 12px; width: 100%; height: 18px; font-size: 12px; font-weight: 700; color: var(--text-3); white-space: nowrap; overflow: hidden; }
+.lb-donut-foot > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.lb-donut-foot b { color: var(--text); font-weight: 900; }
+.lb-donut-foot .tone-warn { color: var(--lb-warn); }
 .lb-donut-card .lb-card-head h3 { font-size: clamp(15px, 1.05vw, 19px); }
 .lb-donut-card-body { display: grid; place-items: center; min-height: 0; min-width: 0; }
 /* v2.7: büyük halka solda, küçük halkalar sağda alt alta (Çağdaş Bey 10.09: "bir büyük, iki küçük simit"). */

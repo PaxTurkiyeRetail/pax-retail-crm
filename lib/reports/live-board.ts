@@ -5,7 +5,7 @@ import { buildSellerFollowupReport, type SellerFollowupRow } from '@/lib/reports
 import { buildWeeklyTargets } from '@/lib/reports/weekly-targets';
 import { loadConversionCounts, loadCustomerListCounts } from '@/lib/reports/customer-list';
 import { inactiveCountsByOwner, loadHunterFarmerActivity } from '@/lib/reports/inactive-customers';
-import { goalPair, monthElapsedPct, monthOf, monthlyTargetOf, quarterElapsedPct, quarterOf, type TargetCode } from '@/lib/reports/targets-shared';
+import { cumulativeTargetOf, goalPair, monthElapsedPct, monthOf, quarterElapsedPct, quarterEndMonthIndex, quarterOf, type TargetCode } from '@/lib/reports/targets-shared';
 import {
   achievementPct,
   activityTargetKind,
@@ -460,6 +460,35 @@ const Q_INTEGRATION_DEVICES = `
   group by 1, 2
 `;
 
+// ENTEGRASYONDAN KAZANILAN PARA (Sinan, 18.09): "kişi kartı için entegrasyondan kazanılan para
+// yazılsın, entegrasyon hizmet faturalarından hesaplayabilirsin, kişi kişi... dolar olarak ver,
+// entegrasyon hedefi simidinin altına koyabilirsin."
+//
+//   Birim: faturanın `amount`u (cihaz adedi DEĞİL). Cihaz sayacından (Q_INTEGRATION_DEVICES) farklı
+//   olarak burada ARTIŞ değil, FATURALANAN TUTARIN TAMAMI toplanır — soru "kaç yeni cihaz entegre
+//   oldu" değil, "bu aydan/yıldan ne kadar para geldi".
+//
+//   Para birimi: 18.09 düzeltmesinden sonra Nebim faturaları USD
+//   (sql/hizmet_faturalari_para_birimi_USD_DUZELTME.sql). Elle girilmiş TL faturalar OLABİLİR ve
+//   kur kararı hâlâ yok (migration 032'den beri bekleyen karar) — bu yüzden TL tutarlar USD'ye
+//   KARIŞTIRILMAZ, ayrı sayılır ve ekranda "· ₺X hariç" diye söylenir (altın kural 34: eşleşmeyen
+//   kayıt sessizce yutulmaz).
+//
+//   Sahiplik: firmanın KÜNYE sorumlusu — cihaz sayacıyla aynı kural (16.09), faturayı giren değil.
+const Q_INTEGRATION_REVENUE = `
+  select coalesce(nullif(trim(m.sorumlu), ''), 'Havuz Account') as owner,
+         sum(s.amount) filter (where s.currency = 'USD')                                  as usd_year,
+         sum(s.amount) filter (where s.currency = 'USD' and s.period_month = $2::date)     as usd_month,
+         sum(s.amount) filter (where s.currency <> 'USD')                                 as other_year,
+         sum(s.amount) filter (where s.currency <> 'USD' and s.period_month = $2::date)    as other_month
+  from public.crm_service_invoices s
+  join public.musteriler m on m.id = s.customer_id
+  where s.status = 'active'
+    and s.period_month >= make_date($1::int, 1, 1)
+    and s.period_month <= $3::date
+  group by 1
+`;
+
 // MÜŞTERİ TAKİP STATÜSÜ · TAKIM — donut'un TEK sayısı (Sinan, 17.09: "iki farklı sonuç istemiyoruz;
 // fark neyse orada küçük yazıyla belirtilsin"). Toplam artık **CRM künyesindeki firma sayısı**, yani
 // Genel Bakış'taki "Toplam Müşteri" ile BİREBİR aynı. Dilimler Account Atama (`crm_musteri_listesi`)
@@ -563,7 +592,7 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
   const { from, to } = targets.range;
 
   const quarter = quarterOf(todayKey);
-  const [ownerResult, customerResult, eventResult, quoteResult, targetResult, forecastMonthResult, forecastOwnerResult, integrationResult, customerListCounts, conversionCounts, yearActivityResult, directSaleResult, saleItemResult, saleNoItemResult, hunterFarmerRows, integrationDeviceResult, customerListStatusResult] = await Promise.all([
+  const [ownerResult, customerResult, eventResult, quoteResult, targetResult, forecastMonthResult, forecastOwnerResult, integrationResult, customerListCounts, conversionCounts, yearActivityResult, directSaleResult, saleItemResult, saleNoItemResult, hunterFarmerRows, integrationDeviceResult, integrationRevenueResult, customerListStatusResult] = await Promise.all([
     db.query(Q_OWNERS),
     db.query(Q_CUSTOMERS),
     db.query(Q_WEEK_EVENTS, [from, to]),
@@ -585,6 +614,8 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
     loadHunterFarmerActivity(today),
     // Hizmet faturası kalemleri (032) — Entegrasyon Hedefi kartı; tablo yoksa pano çökmez.
     db.query(Q_INTEGRATION_DEVICES, [year, todayKey]).catch((error) => { if (isMissingRelation(error)) return { rows: [] as any[] }; throw error; }),
+    // Entegrasyondan kazanılan para (18.09) — aynı tablo, tutar tarafı; tablo yoksa pano çökmez.
+    db.query(Q_INTEGRATION_REVENUE, [year, monthOf(todayKey).key, todayKey]).catch((error) => { if (isMissingRelation(error)) return { rows: [] as any[] }; throw error; }),
     // Account Atama (025) + crm_firma_key (035) — biri yoksa donut eski davranışına döner (pano çökmez).
     db.query(Q_CUSTOMER_LIST_STATUS).catch((error) => { if (isMissingRelation(error)) return { rows: [] as any[] }; throw error; }),
   ]);
@@ -613,6 +644,18 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
     if (key === month.key) { cur.month += adet; cur.firms += num(row.firmalar); }
     integrationDevicesByOwner.set(owner, cur);
   }
+  // Entegrasyondan kazanılan para (18.09): kişi kartında simidin altındaki satır. USD ve
+  // "USD olmayan" ayrı durur — TL tutarlar dolara KARIŞTIRILMAZ, ekranda ayrıca söylenir.
+  type RevenueTally = { usdYear: number; usdMonth: number; otherYear: number; otherMonth: number };
+  const integrationRevenueByOwner = new Map<string, RevenueTally>(
+    (integrationRevenueResult.rows as any[]).map((row) => [String(row.owner), {
+      usdYear: num(row.usd_year),
+      usdMonth: num(row.usd_month),
+      otherYear: num(row.other_year),
+      otherMonth: num(row.other_month),
+    }]),
+  );
+  const emptyRevenue = (): RevenueTally => ({ usdYear: 0, usdMonth: 0, otherYear: 0, otherMonth: 0 });
   const monthElapsed = monthElapsedPct(todayKey);
 
   const ownerRows = ownerResult.rows as OwnerRow[];
@@ -1263,9 +1306,10 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
         const conv = conversionCounts.get(normalizeName(owner)) ?? { hunterToFarmer: 0, leadToHunter: 0 };
         const visitQ = quarterTargetOf(userTargets, 'visit_count');
         const budgetQ = quarterTargetOf(userTargets, 'sales_revenue');
-        const integrationQ = quarterTargetOf(userTargets, 'integration_count');
-        const integrationM = monthlyTargetOf(integrationQ.target, userTargets.year.integration_count ?? null);
+        // Entegrasyon KÜMÜLATİF (18.09) — çeyrek hedefi artık girilmiyor, hepsi yıllıktan türer.
+        const integrationYearTarget = userTargets.year.integration_count ?? null;
         const ownerDevices = integrationDevicesByOwner.get(owner) ?? { year: 0, quarter: 0, month: 0, firms: 0 };
+        const ownerIntegrationRevenue = integrationRevenueByOwner.get(owner) ?? emptyRevenue();
         return {
           quarter: { label: quarter.label, months: quarter.months, elapsedPct: quarterElapsed },
           visitsQuarter: goalPair(visits.quarter, visitQ.target),
@@ -1274,22 +1318,39 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
           budgetQuarter: goalPair(agg.saleQuarterAmount + (directByOwner.get(owner)?.quarterAmount ?? 0), budgetQ.target),
           budgetQuarterAssumed: budgetQ.assumed,
           /**
-           * ENTEGRASYON HEDEFİ KARTI — 17.09 (Sinan): gerçekleşen artık CİHAZ ADEDİ, hizmet
-           * faturası kalemlerinden (`Q_INTEGRATION_DEVICES`, `integrationDevicesByOwner`):
-           *   * integrationMonth   → BÜYÜK simit: bu ayın adedi / (çeyrek hedefi ÷ 3, yoksa yıl ÷ 12)
-           *   * integration        → sağ üst küçük halka: yıl (YTD) adedi / yıllık hedef
-           *   * integrationQuarter → küçük halka: çeyrek adedi / çeyrek hedefi
-           * Tarih = faturanın dönemi (period_month); bu yüzden çeyrek ve ay artık bölünebiliyor
-           * (11.09'daki "veri bekleniyor" notu kapandı). Firma bazlı FAZ sayacı
-           * (`crm_entegrasyon_durumu`, migration 037) Entegrasyon Raporu'nda ve `integrationByOwner`'da
-           * duruyor — o "kaç firma Rollout/Entegrasyon tamamlandı", bu "kaç cihaz faturalandı";
-           * iki farklı ölçüt, ikisi de tek yerden okunur (altın kural 17).
+           * ENTEGRASYON HEDEFİ KARTI — gerçekleşen CİHAZ ADEDİ, hizmet faturası kalemlerinden
+           * (`Q_INTEGRATION_DEVICES`, `integrationDevicesByOwner`).
+           *
+           * 18.09 (Sinan) — ÜÇÜ DE KÜMÜLATİF oldu. Entegrasyon her ay üstüne koyarak ilerlediği
+           * için dönem hedefi "o dönem içinde şu kadar" değil, "o dönemin sonunda toplam şu kadar"
+           * demektir; gerçekleşen taraf da yılbaşından bugüne TOPLAMDIR. Üç halka aynı gerçekleşeni
+           * (YTD cihaz) farklı hedef ufkuyla karşılaştırır:
+           *   * integrationMonth   → BÜYÜK simit: YTD / (yıllık ÷ 12 × bu ay)  — "bugün nerede olmalıydım"
+           *   * integration        → sağ üst halka: YTD / yıllık hedef          — "yıl sonuna ne kadar var"
+           *   * integrationQuarter → sağ alt halka: YTD / (yıllık ÷ 12 × çeyrek sonu ayı)
+           * Eylül gibi çeyreğin son ayında büyük simit ile çeyrek halkası aynı hedefi gösterir —
+           * kümülatif çerçevenin doğal sonucu, hata değil.
+           *
+           * Ayın kendi yeni cihaz adedi kaybolmasın diye `integrationMonthDevices` olarak ayrıca
+           * taşınır (kartın alt satırında "Eylül +270 cihaz" diye görünür).
+           *
+           * Firma bazlı FAZ sayacı (`crm_entegrasyon_durumu`, migration 037) Entegrasyon Raporu'nda
+           * ve `integrationByOwner`'da duruyor — o "kaç firma Rollout/Entegrasyon tamamlandı", bu
+           * "kaç cihaz faturalandı"; iki farklı ölçüt, ikisi de tek yerden okunur (altın kural 17).
            */
-          integration: goalPair(ownerDevices.year, userTargets.year.integration_count ?? null),
-          integrationQuarter: goalPair(ownerDevices.quarter, integrationQ.target),
-          integrationQuarterAssumed: integrationQ.assumed,
-          integrationMonth: goalPair(ownerDevices.month, integrationM.target),
-          integrationMonthAssumed: integrationM.assumed,
+          integration: goalPair(ownerDevices.year, integrationYearTarget),
+          integrationQuarter: goalPair(ownerDevices.year, cumulativeTargetOf(integrationYearTarget, quarterEndMonthIndex(quarter.index))),
+          integrationQuarterAssumed: integrationYearTarget != null,
+          integrationMonth: goalPair(ownerDevices.year, cumulativeTargetOf(integrationYearTarget, month.month)),
+          integrationMonthAssumed: integrationYearTarget != null,
+          integrationMonthDevices: ownerDevices.month,
+          /** Entegrasyondan kazanılan para (18.09) — USD; USD olmayan tutar ayrı taşınır. */
+          integrationRevenue: {
+            usdMonth: ownerIntegrationRevenue.usdMonth,
+            usdYear: ownerIntegrationRevenue.usdYear,
+            otherMonth: ownerIntegrationRevenue.otherMonth,
+            otherYear: ownerIntegrationRevenue.otherYear,
+          },
           integrationMonthLabel: month.label,
           integrationMonthElapsedPct: monthElapsed,
           integrationPending: false,

@@ -52,6 +52,21 @@ export type TargetDefinition = {
   scope: 'user' | 'company';
   /** Ortak hedeflerin ekrandaki varsayılanı (placeholder). */
   defaultValue?: number;
+  /**
+   * KÜMÜLATİF hedef mi? (Sinan, 18.09.2026: "entegrasyonda q4 hedefi ana hedef olmalı, çünkü
+   * entegrasyon her ay üstüne koyarak gidiyor, orada bir toplama işlemi olmamalı.")
+   *
+   * Normal hedefler DÖNEMSELDİR: çeyrekler toplanınca yıl eder (yıllık 12 → 3·3·3·3).
+   * Kümülatif hedefte ise dönem hedefi "o dönemin SONUNDA toplam kaça ulaşılmış olmalı"
+   * demektir: yıllık 12 → Q1 3 · Q2 6 · Q3 9 · Q4 12, Kasım'da 11. Gerçekleşen de aynı
+   * şekilde yılbaşından o güne kadarki TOPLAMDIR — iki taraf da kümülatif, karşılaştırma
+   * "bugün olmam gereken yerde miyim" sorusunu cevaplar.
+   *
+   * Bu yüzden kümülatif hedefe ÇEYREK GİRİLMEZ (`periods: ['year']`): kırılım yıllıktan
+   * türetilir (`cumulativeTargetOf`) ve yalnız Canlı Ekran'da gösterilir — Sinan: "bunun
+   * hedeflere girmesini istemiyorum, kişi bununla uğraşmasın".
+   */
+  accumulates?: boolean;
 };
 
 export const TARGET_DEFINITIONS: readonly TargetDefinition[] = [
@@ -61,7 +76,8 @@ export const TARGET_DEFINITIONS: readonly TargetDefinition[] = [
   // --- Kişi bazlı hedefler --------------------------------------------------
   { code: 'sales_revenue', label: 'Bütçe (ciro, USD)', hint: 'Satış kaydına dönen tekliflerin tutarı (crm_sales)', unit: 'money', periods: ['year', 'quarter'], scope: 'user' },
   { code: 'visit_count', label: 'Ziyaret', hint: 'Fiziki + online satış görüşmesi sayısı', unit: 'count', periods: ['year', 'quarter'], scope: 'user' },
-  { code: 'integration_count', label: 'Entegrasyon (cihaz)', hint: 'KasaPOS entegrasyonu faturalanan cihaz adedi — hizmet faturası kalemlerinden, firmanın künye sorumlusuna (17.09)', unit: 'count', periods: ['year', 'quarter'], scope: 'user' },
+  // KÜMÜLATİF (18.09): yalnız YILLIK girilir; ay/çeyrek kırılımı Canlı Ekran'da türetilir.
+  { code: 'integration_count', label: 'Entegrasyon (cihaz)', hint: 'KasaPOS entegrasyonu faturalanan cihaz adedi — hizmet faturası kalemlerinden, firmanın künye sorumlusuna (17.09). Yıllık girilir; ay/çeyrek hedefi kümülatif türetilir (yıllık 12 → Kasım 11, Q4 12).', unit: 'count', periods: ['year'], scope: 'user', accumulates: true },
   { code: 'device_count', label: 'Cihaz', hint: 'Satışa dönen cihaz adedi', unit: 'count', periods: ['year'], scope: 'user' },
   { code: 'hunter_to_farmer', label: 'Hunter → Farmer', hint: 'Account Atama’da H’den F’ye taşınan firma', unit: 'count', periods: ['year'], scope: 'user' },
   { code: 'lead_to_hunter', label: 'Lead → Hunter', hint: 'Account Atama’da L’den H’ye taşınan firma', unit: 'count', periods: ['year'], scope: 'user' },
@@ -153,14 +169,33 @@ export function monthElapsedPct(dayKey: string): number {
 }
 
 /**
- * Aylık hedef (Sinan, 17.09: "büyük simit için aylık sayı gelmeli"): çeyrek hedefi girilmişse
- * çeyrek / 3, yoksa yıllık / 12; hiçbiri yoksa null. `assumed` = türetildi (girilmiş bir aylık
- * hedef alanı yok, ikisi de türetmedir; bayrak çeyrek hedefinin de varsayılan olduğunu söyler).
+ * KÜMÜLATİF DÖNEM HEDEFİ (Sinan, 18.09.2026) — `accumulates` işaretli hedefler için.
+ *
+ * "Diyelim ki hedef 12; bu otomatik olarak 4'e bölünüp Q1 için 3 diye gidiyor, en son Q4 hedefi
+ *  12 olmalı. Belki direkt 12 aya bölebilirsin. Kasım ayındaysak oradaki hedef ay bazında 11
+ *  olmalı." → dönem hedefi = yıllık ÷ 12 × dönem sonuna kadar geçen ay sayısı.
+ *
+ *   yıllık 12 →  Ocak 1 · Kasım 11 · Aralık 12 · Q1 3 · Q2 6 · Q3 9 · Q4 12
+ *
+ * Çeyrek hedefi için `monthsElapsed` çeyreğin SON ayının sıra numarasıdır (Q3 → 9). Yıl hedefi
+ * için 12 verilir, yani yıllık hedefin kendisi çıkar.
+ *
+ * 17.09'daki eski kural (çeyrek ÷ 3 = ayın kendi hedefi) KALDIRILDI: entegrasyon her ay üstüne
+ * koyarak ilerlediği için aylık dilim hedefi yanıltıcıydı — bir ayın 0 geçmesi, ertesi ayın iki
+ * katına çıkması normaldir; kümülatif karşılaştırma yıl sonu hedefine olan mesafeyi gösterir.
+ *
+ * `monthsElapsed` 1–12 arasına kırpılır; hedef yoksa (ya da ≤ 0 ise) null döner — uydurma
+ * hedef üretilmez (altın kural 34).
  */
-export function monthlyTargetOf(quarterTarget: number | null, yearTarget: number | null): { target: number | null; assumed: boolean } {
-  if (quarterTarget != null) return { target: Math.round(quarterTarget / 3), assumed: false };
-  if (yearTarget != null) return { target: Math.round(yearTarget / 12), assumed: true };
-  return { target: null, assumed: false };
+export function cumulativeTargetOf(yearTarget: number | null | undefined, monthsElapsed: number): number | null {
+  if (yearTarget == null || !(yearTarget > 0)) return null;
+  const months = Math.max(1, Math.min(12, Math.round(monthsElapsed)));
+  return Math.round((yearTarget / 12) * months);
+}
+
+/** Çeyreğin son ayının sıra numarası (Q1 → 3, Q3 → 9); kümülatif çeyrek hedefi bundan çıkar. */
+export function quarterEndMonthIndex(index: QuarterIndex): number {
+  return index * 3;
 }
 
 /* --- Hedef / gerçekleşme çifti ------------------------------------------- */

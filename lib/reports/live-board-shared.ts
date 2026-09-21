@@ -329,14 +329,34 @@ export type OwnerGoals = {
   visitsQuarterAssumed: boolean;
   budgetQuarter: GoalPair;
   budgetQuarterAssumed: boolean;
-  /** Yıl (YTD) cihaz adedi / yıllık hedef — kartın sağ üst küçük halkası. */
+  /**
+   * ENTEGRASYON — üç halkanın da GERÇEKLEŞENİ aynıdır: yılbaşından bugüne kümülatif cihaz adedi
+   * (18.09, Sinan: "entegrasyon her ay üstüne koyarak gidiyor, orada bir toplama işlemi olmamalı").
+   * Farkları HEDEF UFKU: yıl sonu · bu ay sonu · çeyrek sonu. Hedefler yıllıktan türetilir
+   * (`cumulativeTargetOf`), çeyrek hedefi artık GİRİLMEZ.
+   */
+  /** YTD cihaz / yıllık hedef — kartın sağ üst küçük halkası. */
   integration: GoalPair;
-  /** Çeyrek cihaz adedi / çeyrek hedefi (Çağdaş Bey, 11.09: "entegrasyon da çeyreklere bölünecek"). */
+  /** YTD cihaz / çeyrek SONUNA kadar olması gereken kümülatif hedef — sağ alt halka. */
   integrationQuarter: GoalPair;
+  /** Hedef yıllıktan türetildi mi (kümülatif kuralda hep öyledir; hedef yoksa false). */
   integrationQuarterAssumed: boolean;
-  /** İçinde bulunulan ayın cihaz adedi / aylık hedef (çeyrek ÷ 3, yoksa yıl ÷ 12) — BÜYÜK simit (17.09). */
+  /** YTD cihaz / bu ay SONUNA kadar olması gereken kümülatif hedef — BÜYÜK simit. */
   integrationMonth: GoalPair;
   integrationMonthAssumed: boolean;
+  /**
+   * İçinde bulunulan ayın KENDİ yeni cihaz adedi. Halkalar kümülatife döndüğü için (18.09) bu sayı
+   * simitten düştü; kartın alt satırında "Eylül +270 cihaz" diye görünür ki aylık ivme kaybolmasın.
+   */
+  integrationMonthDevices: number;
+  /**
+   * ENTEGRASYONDAN KAZANILAN PARA (18.09, Sinan: "kişi kartı için entegrasyondan kazanılan para
+   * yazılsın, hizmet faturalarından, kişi kişi... dolar olarak"). Hizmet faturası TUTARI — cihaz
+   * adedinden farklı olarak artış değil, faturalanan tutarın tamamı.
+   * `other*` = USD olmayan (TL) faturalar; kur kararı olmadığı için dolara KARIŞTIRILMAZ, ekranda
+   * ayrıca söylenir (altın kural 34).
+   */
+  integrationRevenue: { usdMonth: number; usdYear: number; otherMonth: number; otherYear: number };
   /** Ay adı ('Eylül') ve ayın geçen süre oranı (hız tonu için). */
   integrationMonthLabel: string;
   integrationMonthElapsedPct: number;
@@ -736,6 +756,24 @@ export type Capacities = {
   /** Business Pulse tek ekrana sığmıyor: ciro+sıralama / aktivite+dönüşüm olarak ikiye böl. */
 };
 
+/**
+ * "Kim hedefinde, kim geride?" kartının ALTINDAKİ satıcıya atanmamış portföy şeridi
+ * (Sinan, 18.09: "buradaki daire kısmına alanı bölelim, yemek kartları için alan oluşturalım").
+ *
+ * Şerit HER ZAMAN çizilir ve yüksekliği sıralama kapasitesinden DÜŞÜLÜR. Sebep 17.09 dersi
+ * (altın kural 18/§3.8): sığmayan içerik gövdeyi büyütür → ResizeObserver ölçer → kapasite
+ * değişir → slayt kayar → döngü. "Yer kalırsa çiz" kuralı tam da bu döngüyü kurardı; sabit
+ * bütçe ayırmak tek güvenli yol.
+ *
+ * Bütçe: başlık 22 + iki blok satırı (Yemek Kartları, Havuz Account) 40'ar + aralıklar 16
+ * + kartla arası 12 ≈ 130 (kompakt 116). Blok sayısı artarsa burası da artmalı.
+ */
+export const LEADER_POOLS_H = 130;
+export const LEADER_POOLS_H_COMPACT = 116;
+function leaderPoolsHeight(m: LayoutMetrics): number {
+  return m.compact ? LEADER_POOLS_H_COMPACT : LEADER_POOLS_H;
+}
+
 /** Gövde yüksekliğinden (CSS px, iç boşluklar düşülmüş) liste kapasiteleri. */
 export function capacities(bodyHeight: number, bodyWidth = 1920): Capacities {
   const m = layoutMetrics(bodyHeight);
@@ -746,7 +784,7 @@ export function capacities(bodyHeight: number, bodyWidth = 1920): Capacities {
   // (Son Hareketler | Satış Çıktısı | Portföy Sağlığı). Son Hareketler kutusu küçüldü:
   // Çağdaş Bey "tek kutu içerisinde 1, 2, 3, 4, 5 gibi" dedi → en fazla 5 satır gösterilir.
   const recent = Math.min(5, rowsThatFit(colH - m.donutRowH - m.gap - m.cardChrome, m.actH, m.listGap));
-  const leader = rowsThatFit(H - m.cardChrome, m.leaderH, 10);
+  const leader = rowsThatFit(H - m.cardChrome - leaderPoolsHeight(m), m.leaderH, 10);
   const tableRows = rowsThatFit(H - m.cardChrome - 28, m.rowH, 6);   // 28: tablo başlık satırı
   // Teklifler: KPI şeridinin altında iki kolon; sol kolonda açık teklifler ve
   // son kapananlar kartları üst üste (yüksekliği yarı yarıya paylaşırlar).
@@ -1078,6 +1116,10 @@ export type TeamRollup = {
   integration: GoalPair;
   integrationQuarter: GoalPair;
   integrationMonth: GoalPair;
+  /** Takımın bu ayki yeni cihaz adedi (kümülatif halkaların yanında duran aylık ivme). */
+  integrationMonthDevices: number;
+  /** Takımın entegrasyondan kazandığı para; USD olmayan tutar ayrı. */
+  integrationRevenue: { usdMonth: number; usdYear: number; otherMonth: number; otherYear: number };
   integrationMonthLabel: string;
   integrationMonthElapsedPct: number;
   integrationPending: boolean;
@@ -1127,6 +1169,13 @@ export function teamRollup(owners: LiveOwner[]): TeamRollup {
     integration: sumGoal(goals.map((goal) => goal.integration)),
     integrationQuarter: sumGoal(goals.map((goal) => goal.integrationQuarter)),
     integrationMonth: sumGoal(goals.map((goal) => goal.integrationMonth)),
+    integrationMonthDevices: sumBy(goals, (goal) => goal.integrationMonthDevices),
+    integrationRevenue: {
+      usdMonth: sumBy(goals, (goal) => goal.integrationRevenue.usdMonth),
+      usdYear: sumBy(goals, (goal) => goal.integrationRevenue.usdYear),
+      otherMonth: sumBy(goals, (goal) => goal.integrationRevenue.otherMonth),
+      otherYear: sumBy(goals, (goal) => goal.integrationRevenue.otherYear),
+    },
     integrationMonthLabel: goals[0]?.integrationMonthLabel ?? '',
     integrationMonthElapsedPct: goals[0]?.integrationMonthElapsedPct ?? 0,
     integrationPending: goals.some((goal) => goal.integrationPending),

@@ -200,8 +200,12 @@ yeni as (
   insert into public.crm_service_invoices
     (customer_id, owner_name, owner_user_id, period_month, invoice_date, invoice_no,
      currency, amount, status, note, created_by, created_by_user_id, updated_by)
+  -- Para birimi USD (18.09.2026 düzeltmesi): Nebim'deki tutarlar baştan USD'ydi, ilk
+  -- içe aktarımda yanlışlıkla 'TRY' yazılmıştı. Bu betik eksik firmalar için tekrar
+  -- koşturulacağı için (backlog: 3 eşleşmeyen firma) kaynak da düzeltildi; yoksa yeni
+  -- satırlar tekrar TL olarak girerdi.
   select k.customer_id, o.ad, o.user_id, k.period_month, k.fatura_tarihi, k.fatura_no,
-         'TRY', k.toplam, 'active',
+         'USD', k.toplam, 'active',
          'Nebim hizmet fatura takibi — ödeme dönemi: ' || k.odeme_donemi,
          'nebim-import-2026', o.user_id, 'nebim-import-2026'
   from kaynak k cross join satisci o

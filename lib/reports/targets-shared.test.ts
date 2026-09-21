@@ -3,6 +3,7 @@ import {
   COMPANY_TARGET_DEFINITIONS,
   USER_TARGET_DEFINITIONS,
   QUARTERLY_TARGET_CODES,
+  TARGET_DEFINITIONS,
   TARGET_CODES,
   goalPair,
   isTargetOwnerName,
@@ -14,7 +15,8 @@ import {
   targetYearOf,
   monthElapsedPct,
   monthOf,
-  monthlyTargetOf,
+  cumulativeTargetOf,
+  quarterEndMonthIndex,
 } from './targets-shared';
 import { msUntilIstanbulTime } from './live-board-shared';
 
@@ -73,8 +75,13 @@ describe('hedefler v2 — goalPair ve kod listeleri', () => {
   });
   // v2.9 (11.09): entegrasyon çeyreğe bölündü. v3.1 (15.09, Çağdaş Bey): kazanılan teklif HEDEFİ
   // kalktı ("hedef olarak gerek yok"), haftalık aktivite ve ortalama temas ORTAK hedefe taşındı.
-  it('çeyrek girilebilen kodlar yalnız kişi hedeflerinden: bütçe, ziyaret, entegrasyon', () => {
-    expect(QUARTERLY_TARGET_CODES).toEqual(['sales_revenue', 'visit_count', 'integration_count']);
+  // 18.09 (Sinan): entegrasyon KÜMÜLATİF — çeyrek girilmez, yıllıktan türer.
+  it('çeyrek girilebilen kodlar yalnız kişi hedeflerinden: bütçe, ziyaret — entegrasyon 18.09 itibarıyla kümülatif, çeyreği yok', () => {
+    expect(QUARTERLY_TARGET_CODES).toEqual(['sales_revenue', 'visit_count']);
+    const integration = TARGET_DEFINITIONS.find((d) => d.code === 'integration_count');
+    expect(integration?.accumulates).toBe(true);
+    expect(integration?.periods).toEqual(['year']);
+    expect(TARGET_DEFINITIONS.filter((d) => d.accumulates).map((d) => d.code)).toEqual(['integration_count']);
   });
   it('ortak hedefler: haftalık aktivite + ortalama temas (varsayılan 5)', () => {
     expect(COMPANY_TARGET_DEFINITIONS.map((d) => d.code)).toEqual(['weekly_activity', 'contacts_per_customer']);
@@ -159,10 +166,20 @@ describe('hedefler — ay yardımcıları (entegrasyon simidi, 17.09)', () => {
     expect(monthElapsedPct('2028-02-29')).toBe(100); // artık yıl
   });
 
-  it('monthlyTargetOf: çeyrek ÷ 3 önce; yoksa yıl ÷ 12; ikisi de yoksa null', () => {
-    expect(monthlyTargetOf(500, 2000)).toEqual({ target: 167, assumed: false });
-    expect(monthlyTargetOf(null, 2000)).toEqual({ target: 167, assumed: true });
-    expect(monthlyTargetOf(null, 100)).toEqual({ target: 8, assumed: true });
-    expect(monthlyTargetOf(null, null)).toEqual({ target: null, assumed: false });
+  // 18.09 (Sinan): "hedef 12 ise Kasım'da 11, Q4 12 olmalı; direkt 12 aya böl."
+  it('cumulativeTargetOf: yıllık ÷ 12 × geçen ay — Kasım 11, Aralık 12, Q1 3 · Q2 6 · Q3 9 · Q4 12', () => {
+    expect(cumulativeTargetOf(12, 11)).toBe(11);
+    expect(cumulativeTargetOf(12, 12)).toBe(12);
+    expect([1, 2, 3, 4].map((q) => cumulativeTargetOf(12, quarterEndMonthIndex(q as 1 | 2 | 3 | 4)))).toEqual([3, 6, 9, 12]);
+    expect(cumulativeTargetOf(2000, 9)).toBe(1500);   // 2000/yıl → Eylül sonu 1.500
+    expect(cumulativeTargetOf(5500, 9)).toBe(4125);   // takım 5.500 → Eylül sonu 4.125
+    expect(cumulativeTargetOf(100, 1)).toBe(8);       // yuvarlama: 8,33 → 8
+  });
+  it('cumulativeTargetOf: hedef yoksa/≤0 null; ay 1–12 arasına kırpılır', () => {
+    expect(cumulativeTargetOf(null, 9)).toBeNull();
+    expect(cumulativeTargetOf(undefined, 9)).toBeNull();
+    expect(cumulativeTargetOf(0, 9)).toBeNull();
+    expect(cumulativeTargetOf(12, 0)).toBe(1);
+    expect(cumulativeTargetOf(12, 15)).toBe(12);
   });
 });

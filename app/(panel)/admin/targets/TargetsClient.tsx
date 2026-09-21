@@ -357,7 +357,7 @@ export default function TargetsClient() {
                     })}
                   </div>
                   <p className="tg-note">
-                    Yıllık hedef yazılınca çeyreklere bölünür (kalan son çeyreklere eklenir: 101 → 25·25·25·<b>26</b>).
+                    Yıllık hedef yazılınca çeyreklere bölünür (kalan son çeyreklere eklenir: 101 → 25·25·25·<b>26</b>). <b>Entegrasyon</b> bu tabloda yok: kümülatif ilerlediği için ay/çeyrek hedefi yıllıktan otomatik türer (yıllık 12 → Kasım 11, Q4 12) ve yalnız Canlı Ekran&apos;da gösterilir.
                     Bir çeyreği elle değiştirirsen yıllık toplam onu takip eder — Q3&apos;ü 25&apos;ten 26&apos;ya çıkarmak yıllığı 101 yapar.
                   </p>
                 </div>
