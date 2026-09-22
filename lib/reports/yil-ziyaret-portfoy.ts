@@ -39,10 +39,13 @@ const Q_FORECAST_FIRMS_BY_OWNER = `
   group by 1
 `;
 
-// Engel & Etki kaydı olan HUNTER firma adedi, satışçı bazında (view zaten forecast+blocker join'i).
+// Engel & Etki KAYDI GİRİLMİŞ HUNTER firma adedi, satışçı bazında.
+// DİKKAT: v.has_blocker "hâlâ açık/aktif engel var mı" demek (view'de: not has_blocker -> 'no_blocker'
+// statüsü) — "kayıt girilmiş mi" demek DEĞİL. Girilmiş-mi karşılaştırması için blocker_id is not null
+// kullanılır, has_blocker=false (engel yok diye kapatılmış) girişler de sayılmalı.
 const Q_BLOCKER_FIRMS_BY_OWNER = `
   select coalesce(nullif(trim(v.sorumlu), ''), '—') as owner,
-         count(distinct v.customer_id) filter (where v.has_blocker)::int as firms
+         count(distinct v.customer_id) filter (where v.blocker_id is not null)::int as firms
   from public.v_crm_forecast_blocker_impact v
   left join public.musteri_kunye_v2 kv on kv.musteri_id = v.customer_id
   where ${HUNTER_FILTER}
