@@ -27,10 +27,11 @@ export type YilZiyaretPortfoyPayload = {
   rows: YilZiyaretPortfoyRow[];
 };
 
-// Künye satıcı etiketi Hunter olan firma mı? (live-board.ts saticiEtiketi() ile AYNI mantık:
-// boş/hunter değilse Hunter sayılır — farmer/lead/kasa hariç. Tek yerden okunur kuralı burada
-// SQL'e taşınmış hâli, çünkü bu sorgular buildLiveBoard()'un dışında ayrı çalışıyor.)
-const HUNTER_FILTER = `lower(trim(coalesce(kv.satici_etiketi, ''))) not in ('farmer', 'lead', 'kasa')`;
+// DİKKAT: "Hunter" burada live-board.ts'deki portfolio.hunter TANIMIYLA AYNI olmalı —
+// orada hunter = rows.filter(row => !isFarmer(row)).length yani "Farmer DEĞİLSE" (Lead/Kasa/boş dahil,
+// sadece Farmer hariç). Önceden burada lead/kasa da hariç tutulmuştu, bu yüzden has+missing toplamı
+// portfolio.hunter'a hiç eşit olmuyordu (33 Hunter ama filtre ~24-27 firma buluyordu).
+const HUNTER_FILTER = `lower(trim(coalesce(kv.satici_etiketi, ''))) <> 'farmer'`;
 
 // TEK SORGUDA hem sayı hem eksik-liste: önceden ayrı sorgulardı, toplamları tutmuyordu
 // (Hunter sayısı ≠ girilmiş + eksik). Şimdi tek derived table'dan geldiği için
