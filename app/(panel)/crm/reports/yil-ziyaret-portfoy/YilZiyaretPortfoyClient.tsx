@@ -17,7 +17,11 @@ type Row = {
   blockerFirms: number;
   missingForecastFirms: string[];
   missingBlockerFirms: string[];
+  kunyeHealth: { tamam: number; eksik: number; yok: number };
+  missingKunyeFirms: string[];
 };
+
+type DetailKind = 'forecast' | 'kunye';
 
 type Payload = { generatedAt: string; rows: Row[] };
 
@@ -34,7 +38,7 @@ export default function YilZiyaretPortfoyClient() {
   const [data, setData] = useState<Payload>(EMPTY);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [openDetail, setOpenDetail] = useState<string | null>(null);
+  const [openDetail, setOpenDetail] = useState<{ owner: string; kind: DetailKind } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -97,18 +101,21 @@ export default function YilZiyaretPortfoyClient() {
                 </div>
               </th>
               <th style={{ padding: '10px 14px' }}>Hareketsiz Firma</th>
+              <th style={{ padding: '10px 14px', whiteSpace: 'nowrap' }} title="Künye doluluk durumu: Eksik/Yok toplamı (0 = tüm künyeler tamam)">Künye Sağlığı</th>
               <th style={{ padding: '10px 14px' }}>Temas Edilen Müşteri</th>
               <th style={{ padding: '10px 14px' }}>Ort. Temas / Firma</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={9} style={{ padding: 20, textAlign: 'center', color: 'var(--text-3)' }}>Yükleniyor…</td></tr>
+              <tr><td colSpan={10} style={{ padding: 20, textAlign: 'center', color: 'var(--text-3)' }}>Yükleniyor…</td></tr>
             ) : sortedRows.length === 0 ? (
-              <tr><td colSpan={9} style={{ padding: 20, textAlign: 'center', color: 'var(--text-3)' }}>Kayıt yok.</td></tr>
+              <tr><td colSpan={10} style={{ padding: 20, textAlign: 'center', color: 'var(--text-3)' }}>Kayıt yok.</td></tr>
             ) : sortedRows.map((row) => {
               const hasMissing = row.missingForecastFirms.length > 0 || row.missingBlockerFirms.length > 0;
-              const isOpen = openDetail === row.owner;
+              const hasKunyeMissing = row.missingKunyeFirms.length > 0;
+              const isForecastOpen = openDetail?.owner === row.owner && openDetail.kind === 'forecast';
+              const isKunyeOpen = openDetail?.owner === row.owner && openDetail.kind === 'kunye';
               return (
               <Fragment key={row.owner}>
                 <tr style={{ borderBottom: '1px solid var(--border-1, #f1f5f9)' }}>
@@ -137,7 +144,7 @@ export default function YilZiyaretPortfoyClient() {
                   <button
                     type="button"
                     disabled={!hasMissing}
-                    onClick={() => setOpenDetail(isOpen ? null : row.owner)}
+                    onClick={() => setOpenDetail(isForecastOpen ? null : { owner: row.owner, kind: 'forecast' })}
                     style={{
                       background: 'none',
                       border: 'none',
@@ -160,7 +167,37 @@ export default function YilZiyaretPortfoyClient() {
                   </button>
                 </td>
                 <td style={{ padding: '10px 14px', color: row.inactive.count > 0 ? '#dc2626' : undefined, fontWeight: row.inactive.count > 0 ? 700 : 400 }}>
-                  {row.inactive.count}
+                  {row.inactive.count > 0 ? (
+                    <a
+                      href={`/crm/hareketsiz?satici=${encodeURIComponent(row.owner)}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{ color: 'inherit', fontWeight: 700, textDecoration: 'underline' }}
+                      title="Hareketsiz firmaları yeni sekmede görmek için tıkla"
+                    >
+                      {row.inactive.count}
+                    </a>
+                  ) : row.inactive.count}
+                </td>
+                <td style={{ padding: '10px 14px' }}>
+                  <button
+                    type="button"
+                    disabled={!hasKunyeMissing}
+                    onClick={() => setOpenDetail(isKunyeOpen ? null : { owner: row.owner, kind: 'kunye' })}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      padding: 0,
+                      cursor: hasKunyeMissing ? 'pointer' : 'default',
+                      textDecoration: hasKunyeMissing ? 'underline' : 'none',
+                      font: 'inherit',
+                    }}
+                    title={hasKunyeMissing ? 'Künyesi eksik/yok firmaları görmek için tıkla' : ''}
+                  >
+                    <span style={{ display: 'inline-block', minWidth: 26, padding: '2px 6px', borderRadius: 6, textAlign: 'center', fontWeight: 700, background: hasKunyeMissing ? 'rgba(220,38,38,0.15)' : 'rgba(21,128,61,0.15)', color: hasKunyeMissing ? '#dc2626' : '#15803d' }}>
+                      {row.missingKunyeFirms.length}
+                    </span>
+                  </button>
                 </td>
                 <td style={{ padding: '10px 14px' }}>{row.coverage.coveredCustomers}</td>
                 <td style={{ padding: '10px 14px' }}>
@@ -168,9 +205,9 @@ export default function YilZiyaretPortfoyClient() {
                   {row.coverage.contactsPer.target != null ? ` / ${row.coverage.contactsPer.target}` : ''}
                 </td>
                 </tr>
-                {isOpen && (
+                {isForecastOpen && (
                   <tr style={{ background: 'var(--bg-2, #f8fafc)' }}>
-                    <td colSpan={9} style={{ padding: '12px 14px', fontSize: 12 }}>
+                    <td colSpan={10} style={{ padding: '12px 14px', fontSize: 12 }}>
                       <div style={{ display: 'flex', gap: 32, flexWrap: 'wrap' }}>
                         <div>
                           <strong style={{ color: '#dc2626' }}>Forecast eksik ({row.missingForecastFirms.length}):</strong>
@@ -184,6 +221,16 @@ export default function YilZiyaretPortfoyClient() {
                             {row.missingBlockerFirms.length === 0 ? 'Yok' : row.missingBlockerFirms.join(', ')}
                           </div>
                         </div>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+                {isKunyeOpen && (
+                  <tr style={{ background: 'var(--bg-2, #f8fafc)' }}>
+                    <td colSpan={10} style={{ padding: '12px 14px', fontSize: 12 }}>
+                      <strong style={{ color: '#dc2626' }}>Künye eksik/yok ({row.missingKunyeFirms.length}):</strong>
+                      <div style={{ marginTop: 4 }}>
+                        {row.missingKunyeFirms.length === 0 ? 'Yok' : row.missingKunyeFirms.join(', ')}
                       </div>
                     </td>
                   </tr>

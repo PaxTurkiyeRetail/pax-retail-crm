@@ -20,6 +20,9 @@ export type YilZiyaretPortfoyRow = {
   // Hangi Hunter firmalarda Forecast/Engel&Etki EKSİK — sayı tartışmalı geldiğinde göstermek için.
   missingForecastFirms: string[];
   missingBlockerFirms: string[];
+  // Künye Sağlığı (22.09): tüm portföy (Hunter+Farmer+Lead+Kasa) için künye doluluk durumu.
+  kunyeHealth: { tamam: number; eksik: number; yok: number };
+  missingKunyeFirms: string[];
 };
 
 export type YilZiyaretPortfoyPayload = {
@@ -83,7 +86,48 @@ const Q_BLOCKER_HUNTER = `
   group by 1
 `;
 
+// Künye Sağlığı (22.09): tüm portföy için (Hunter/Farmer/Lead/Kasa ayrımı YOK — künye doluluğu
+// herkes için gerekli). Tanım live-board.ts:1052 ile AYNI: kunye_status='dolu' → Tamam,
+// yoksa required_filled>0 → Eksik (girilmiş ama tam değil), yoksa Yok (hiç başlanmamış).
+const Q_KUNYE_HEALTH = `
+  with kunye_rows as (
+    select coalesce(nullif(trim(m.sorumlu), ''), '—') as owner,
+           m.musteri,
+           case
+             when k.kunye_status = 'dolu' then 'Tamam'
+             when coalesce(k.required_filled, 0) > 0 then 'Eksik'
+             else 'Yok'
+           end as durum
+    from public.musteriler m
+    left join public.v_musteri_kunye_status k on k.musteri_id = m.id
+  )
+  select owner,
+         count(*) filter (where durum = 'Tamam')::int as tamam,
+         count(*) filter (where durum = 'Eksik')::int as eksik,
+         count(*) filter (where durum = 'Yok')::int as yok,
+         array_agg(musteri order by musteri) filter (where durum <> 'Tamam') as missing
+  from kunye_rows
+  group by 1
+`;
+
 type HunterCompareRow = { owner: string; firms: number; missing: string[] | null };
+type KunyeHealthRow = { owner: string; tamam: number; eksik: number; yok: number; missing: string[] | null };
+
+async function kunyeHealthByOwner() {
+  const tamamMap = new Map<string, { tamam: number; eksik: number; yok: number }>();
+  const missingMap = new Map<string, string[]>();
+  try {
+    const result = await db.query(Q_KUNYE_HEALTH);
+    for (const row of result.rows as KunyeHealthRow[]) {
+      const key = normalizeName(row.owner);
+      tamamMap.set(key, { tamam: Number(row.tamam ?? 0), eksik: Number(row.eksik ?? 0), yok: Number(row.yok ?? 0) });
+      missingMap.set(key, row.missing ?? []);
+    }
+  } catch (err) {
+    console.error('[yil-ziyaret-portfoy] künye sorgu hatası:', err);
+  }
+  return { tamamMap, missingMap };
+}
 
 async function hunterCompareByOwner(sql: string, params: unknown[] = []) {
   const firmsMap = new Map<string, number>();
@@ -107,10 +151,11 @@ async function hunterCompareByOwner(sql: string, params: unknown[] = []) {
 // Ayrı sorgu YOK: veri zaten buildLiveBoard() içinde owner bazlı hesaplı — burada sadece
 // ilgili alanlar seçilip düzleştiriliyor (altın kural 17: tek yerden okunur).
 export async function buildYilZiyaretPortfoyRaporu(): Promise<YilZiyaretPortfoyPayload> {
-  const [board, forecast, blocker] = await Promise.all([
+  const [board, forecast, blocker, kunye] = await Promise.all([
     buildLiveBoard(),
     hunterCompareByOwner(Q_FORECAST_HUNTER),
     hunterCompareByOwner(Q_BLOCKER_HUNTER),
+    kunyeHealthByOwner(),
   ]);
   const rows: YilZiyaretPortfoyRow[] = board.owners.map((o: { owner: string; initials: string; goals: { visitsYear: YilZiyaretPortfoyRow['visitsYear'] }; portfolio: YilZiyaretPortfoyRow['portfolio']; coverage: { covered: { actual: number }; contactsPer: YilZiyaretPortfoyRow['coverage']['contactsPer']; activitiesYear: number }; inactive: YilZiyaretPortfoyRow['inactive'] }) => ({
     owner: o.owner,
@@ -127,6 +172,8 @@ export async function buildYilZiyaretPortfoyRaporu(): Promise<YilZiyaretPortfoyP
     blockerFirms: blocker.firmsMap.get(normalizeName(o.owner)) ?? 0,
     missingForecastFirms: forecast.missingMap.get(normalizeName(o.owner)) ?? [],
     missingBlockerFirms: blocker.missingMap.get(normalizeName(o.owner)) ?? [],
+    kunyeHealth: kunye.tamamMap.get(normalizeName(o.owner)) ?? { tamam: 0, eksik: 0, yok: 0 },
+    missingKunyeFirms: kunye.missingMap.get(normalizeName(o.owner)) ?? [],
   }));
   return { generatedAt: new Date().toISOString(), rows };
 }
