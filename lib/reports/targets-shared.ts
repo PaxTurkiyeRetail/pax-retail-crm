@@ -77,7 +77,7 @@ export const TARGET_DEFINITIONS: readonly TargetDefinition[] = [
   { code: 'sales_revenue', label: 'Bütçe (ciro, USD)', hint: 'Satış kaydına dönen tekliflerin tutarı (crm_sales)', unit: 'money', periods: ['year', 'quarter'], scope: 'user' },
   { code: 'visit_count', label: 'Ziyaret', hint: 'Fiziki + online satış görüşmesi sayısı', unit: 'count', periods: ['year', 'quarter'], scope: 'user' },
   // KÜMÜLATİF (18.09): yalnız YILLIK girilir; ay/çeyrek kırılımı Canlı Ekran'da türetilir.
-  { code: 'integration_count', label: 'Entegrasyon (cihaz)', hint: 'KasaPOS entegrasyonu faturalanan cihaz adedi — hizmet faturası kalemlerinden, firmanın künye sorumlusuna (17.09). Yıllık girilir; ay/çeyrek hedefi kümülatif türetilir (yıllık 12 → Kasım 11, Q4 12).', unit: 'count', periods: ['year'], scope: 'user', accumulates: true },
+  { code: 'integration_count', label: 'Entegrasyon (cihaz)', hint: 'KasaPOS entegrasyonu faturalanan cihaz adedi — hizmet faturasının yalnız KasaPOS / KasaPOS + TMS kalemlerinden (22.09; Max Store, AirViewer sayılmaz), firmanın künye sorumlusuna (17.09). Yıllık girilir; ay/çeyrek hedefi kümülatif türetilir (yıllık 12 → Kasım 11, Q4 12).', unit: 'count', periods: ['year'], scope: 'user', accumulates: true },
   { code: 'device_count', label: 'Cihaz', hint: 'Satışa dönen cihaz adedi', unit: 'count', periods: ['year'], scope: 'user' },
   { code: 'hunter_to_farmer', label: 'Hunter → Farmer', hint: 'Account Atama’da H’den F’ye taşınan firma', unit: 'count', periods: ['year'], scope: 'user' },
   { code: 'lead_to_hunter', label: 'Lead → Hunter', hint: 'Account Atama’da L’den H’ye taşınan firma', unit: 'count', periods: ['year'], scope: 'user' },

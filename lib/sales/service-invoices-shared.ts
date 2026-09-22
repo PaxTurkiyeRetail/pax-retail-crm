@@ -8,6 +8,23 @@
  */
 
 export const SERVICE_CURRENCIES = ['TRY', 'USD'] as const;
+
+/**
+ * ENTEGRASYON HEDEFİNDE SAYILAN HİZMET KALEMLERİ (Sinan, 22.09.2026: "Cem Koç entegrasyon hedefi doğru
+ * gelmiyor; orası KasaPOS ve KasaPOS + TMS sayılmalı, diğerini hedefe dahil etmeyelim").
+ *
+ * Canlı Ekran'daki Entegrasyon Hedefi kartı (cihaz adedi) yalnız bu anahtarlardaki kalemlerin `quantity`sini
+ * sayar; Max Store Kullanım ve AirViewer Kullanım gibi kalemler kullanım lisansıdır, entegre cihaz değil —
+ * 17–21.09 arasında hepsi sayılıyordu, Cem Koç'ta bu yüzden şişiyordu. Anahtarlar `system_parameters`
+ * `service_invoice_item` grubunun `param_key` değerleri (migration 032). Liste Yönetimleri'nden yeni bir
+ * ENTEGRASYON kalemi eklenirse buraya da yazılır; yazılmazsa sayılmaz (sessizce şişmesin diye bilinçli).
+ * Para tarafı ("Kazanılan $") bu listeyle SÜZÜLMEZ — o "entegrasyondan gelen fatura tutarı", tüm kalemler.
+ */
+export const INTEGRATION_DEVICE_SERVICE_KEYS: readonly string[] = ['kasapos_entegrasyonu', 'kasapos_entegrasyonu_tms'];
+
+export function isIntegrationDeviceService(serviceKey: unknown): boolean {
+  return typeof serviceKey === 'string' && INTEGRATION_DEVICE_SERVICE_KEYS.includes(serviceKey.trim());
+}
 export type ServiceCurrency = (typeof SERVICE_CURRENCIES)[number];
 
 export const SERVICE_CURRENCY_LABEL: Record<ServiceCurrency, { code: string; symbol: string }> = {

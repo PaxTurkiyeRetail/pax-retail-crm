@@ -9,6 +9,8 @@ import {
   periodLabel,
   previousPeriod,
   sumByCurrency,
+  INTEGRATION_DEVICE_SERVICE_KEYS,
+  isIntegrationDeviceService,
 } from './service-invoices-shared';
 
 // Hizmet faturaları (032) — Sinan, 14.09: firma · ay (geçmiş de olur) · TL/USD · kalem × adet.
@@ -88,5 +90,18 @@ describe('hizmet faturası — "her ay kesilmesi zorunlu"', () => {
   });
   it('bu ay herkesin faturası varsa liste boş', () => {
     expect(missingFirms(prev, [{ customer_id: 'a' }, { customer_id: 'b' }, { customer_id: 'c' }])).toEqual([]);
+  });
+});
+
+// 22.09 (Sinan): entegrasyon hedefinde yalnız KasaPOS / KasaPOS + TMS kalemleri sayılır; Max Store ve AirViewer kullanım lisansıdır.
+describe('INTEGRATION_DEVICE_SERVICE_KEYS — entegrasyon hedefine giren kalemler', () => {
+  it('KasaPOS ve KasaPOS + TMS sayılır; Max Store, AirViewer, boş ve bilinmeyen anahtar sayılmaz', () => {
+    expect([...INTEGRATION_DEVICE_SERVICE_KEYS]).toEqual(['kasapos_entegrasyonu', 'kasapos_entegrasyonu_tms']);
+    expect(isIntegrationDeviceService('kasapos_entegrasyonu')).toBe(true);
+    expect(isIntegrationDeviceService(' kasapos_entegrasyonu_tms ')).toBe(true);
+    expect(isIntegrationDeviceService('max_store_kullanim')).toBe(false);
+    expect(isIntegrationDeviceService('airviewer_kullanim')).toBe(false);
+    expect(isIntegrationDeviceService('')).toBe(false);
+    expect(isIntegrationDeviceService(null)).toBe(false);
   });
 });

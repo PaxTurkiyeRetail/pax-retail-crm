@@ -5,6 +5,7 @@ import { buildSellerFollowupReport, type SellerFollowupRow } from '@/lib/reports
 import { buildWeeklyTargets } from '@/lib/reports/weekly-targets';
 import { loadConversionCounts, loadCustomerListCounts } from '@/lib/reports/customer-list';
 import { inactiveCountsByOwner, loadHunterFarmerActivity } from '@/lib/reports/inactive-customers';
+import { INTEGRATION_DEVICE_SERVICE_KEYS } from '@/lib/sales/service-invoices-shared';
 import { cumulativeTargetOf, goalPair, monthElapsedPct, monthOf, quarterElapsedPct, quarterEndMonthIndex, quarterOf, type TargetCode } from '@/lib/reports/targets-shared';
 import {
   achievementPct,
@@ -437,12 +438,18 @@ const Q_INTEGRATIONS = `
 //   Birim: kalem `quantity`si (cihaz). Sahiplik: firmanın KÜNYE sorumlusu (16.09 kararı — faturayı
 //   giren değil). Dönem: faturanın `period_month`u. Yalnız aktif faturalar. Ay bazında döner,
 //   JS tarafında yıl / çeyrek / ay toplanır.
+//
+//   HANGİ KALEMLER (Sinan, 22.09: "KasaPOS ve KasaPOS + TMS sayılmalı, diğerini hedefe dahil etmeyelim"):
+//   yalnız `INTEGRATION_DEVICE_SERVICE_KEYS` ($3) — Max Store / AirViewer kullanım lisansları cihaz
+//   değildir, sayılmaz. Süzme `aylik` içinde yapılır ki önceki ayla ARTIŞ karşılaştırması da aynı
+//   kalem kümesi üzerinden olsun. Tanım tek yerde: lib/sales/service-invoices-shared.ts.
 const Q_INTEGRATION_DEVICES = `
   with aylik as (
     select s.customer_id, date_trunc('month', s.period_month)::date as month, sum(i.quantity)::int as adet
     from public.crm_service_invoices s
     join public.crm_service_invoice_items i on i.invoice_id = s.id
     where s.status = 'active' and s.period_month <= $2::date
+      and i.service_key = any($3::text[])
     group by 1, 2
   ),
   artis as (
@@ -613,7 +620,7 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
     // Hareketsiz firma sayacı: Müşteri Listesi Hunter/Farmer satırları + son hareket (11.09).
     loadHunterFarmerActivity(today),
     // Hizmet faturası kalemleri (032) — Entegrasyon Hedefi kartı; tablo yoksa pano çökmez.
-    db.query(Q_INTEGRATION_DEVICES, [year, todayKey]).catch((error) => { if (isMissingRelation(error)) return { rows: [] as any[] }; throw error; }),
+    db.query(Q_INTEGRATION_DEVICES, [year, todayKey, [...INTEGRATION_DEVICE_SERVICE_KEYS]]).catch((error) => { if (isMissingRelation(error)) return { rows: [] as any[] }; throw error; }),
     // Entegrasyondan kazanılan para (18.09) — aynı tablo, tutar tarafı; tablo yoksa pano çökmez.
     db.query(Q_INTEGRATION_REVENUE, [year, monthOf(todayKey).key, todayKey]).catch((error) => { if (isMissingRelation(error)) return { rows: [] as any[] }; throw error; }),
     // Account Atama (025) + crm_firma_key (035) — biri yoksa donut eski davranışına döner (pano çökmez).
