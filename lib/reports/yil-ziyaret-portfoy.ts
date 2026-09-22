@@ -56,8 +56,9 @@ async function countsByOwner(sql: string, params: unknown[] = []) {
     for (const row of result.rows as Array<{ owner: string; firms: number }>) {
       map.set(normalizeName(row.owner), (map.get(normalizeName(row.owner)) ?? 0) + Number(row.firms ?? 0));
     }
-  } catch {
-    // Tablo/view henüz yoksa (yeni ortam) rapor kırılmasın — 0 dönsün.
+  } catch (err) {
+    // Rapor kırılmasın (0 dönsün) ama hata görünmez kalmasın — log'a düş.
+    console.error('[yil-ziyaret-portfoy] sorgu hatası:', err);
   }
   return map;
 }
