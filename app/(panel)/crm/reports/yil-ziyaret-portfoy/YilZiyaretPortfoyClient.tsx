@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 
 type Row = {
   owner: string;
@@ -15,6 +15,8 @@ type Row = {
   inactive: { count: number; days: number; unmatched: number };
   forecastFirms: number;
   blockerFirms: number;
+  missingForecastFirms: string[];
+  missingBlockerFirms: string[];
 };
 
 type Payload = { generatedAt: string; rows: Row[] };
@@ -32,6 +34,7 @@ export default function YilZiyaretPortfoyClient() {
   const [data, setData] = useState<Payload>(EMPTY);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [openDetail, setOpenDetail] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -91,8 +94,12 @@ export default function YilZiyaretPortfoyClient() {
               <tr><td colSpan={9} style={{ padding: 20, textAlign: 'center', color: 'var(--text-3)' }}>Yükleniyor…</td></tr>
             ) : sortedRows.length === 0 ? (
               <tr><td colSpan={9} style={{ padding: 20, textAlign: 'center', color: 'var(--text-3)' }}>Kayıt yok.</td></tr>
-            ) : sortedRows.map((row) => (
-              <tr key={row.owner} style={{ borderBottom: '1px solid var(--border-1, #f1f5f9)' }}>
+            ) : sortedRows.map((row) => {
+              const hasMissing = row.missingForecastFirms.length > 0 || row.missingBlockerFirms.length > 0;
+              const isOpen = openDetail === row.owner;
+              return (
+              <Fragment key={row.owner}>
+                <tr style={{ borderBottom: '1px solid var(--border-1, #f1f5f9)' }}>
                 <td style={{ padding: '10px 14px', fontWeight: 600 }}>{row.owner}</td>
                 <td style={{ padding: '10px 14px' }}>
                   {row.visitsYear.actual}{row.visitsYear.target != null ? ` / ${row.visitsYear.target}` : ''}
@@ -115,13 +122,28 @@ export default function YilZiyaretPortfoyClient() {
                   </div>
                 </td>
                 <td style={{ padding: '10px 14px' }}>
-                  <span style={{ color: row.forecastFirms < row.portfolio.hunter ? '#dc2626' : '#15803d', fontWeight: 600 }}>
-                    {row.forecastFirms}
-                  </span>
-                  {' → '}
-                  <span style={{ color: row.blockerFirms < row.portfolio.hunter ? '#dc2626' : '#15803d', fontWeight: 600 }}>
-                    {row.blockerFirms}
-                  </span>
+                  <button
+                    type="button"
+                    disabled={!hasMissing}
+                    onClick={() => setOpenDetail(isOpen ? null : row.owner)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      padding: 0,
+                      cursor: hasMissing ? 'pointer' : 'default',
+                      textDecoration: hasMissing ? 'underline' : 'none',
+                      font: 'inherit',
+                    }}
+                    title={hasMissing ? 'Eksik firmaları görmek için tıkla' : ''}
+                  >
+                    <span style={{ color: row.forecastFirms < row.portfolio.hunter ? '#dc2626' : '#15803d', fontWeight: 600 }}>
+                      {row.forecastFirms}
+                    </span>
+                    {' → '}
+                    <span style={{ color: row.blockerFirms < row.portfolio.hunter ? '#dc2626' : '#15803d', fontWeight: 600 }}>
+                      {row.blockerFirms}
+                    </span>
+                  </button>
                 </td>
                 <td style={{ padding: '10px 14px', color: row.inactive.count > 0 ? '#dc2626' : undefined, fontWeight: row.inactive.count > 0 ? 700 : 400 }}>
                   {row.inactive.count}
@@ -131,8 +153,30 @@ export default function YilZiyaretPortfoyClient() {
                   {row.coverage.contactsPer.actual}
                   {row.coverage.contactsPer.target != null ? ` / ${row.coverage.contactsPer.target}` : ''}
                 </td>
-              </tr>
-            ))}
+                </tr>
+                {isOpen && (
+                  <tr style={{ background: 'var(--bg-2, #f8fafc)' }}>
+                    <td colSpan={9} style={{ padding: '12px 14px', fontSize: 12 }}>
+                      <div style={{ display: 'flex', gap: 32, flexWrap: 'wrap' }}>
+                        <div>
+                          <strong style={{ color: '#dc2626' }}>Forecast eksik ({row.missingForecastFirms.length}):</strong>
+                          <div style={{ marginTop: 4 }}>
+                            {row.missingForecastFirms.length === 0 ? 'Yok' : row.missingForecastFirms.join(', ')}
+                          </div>
+                        </div>
+                        <div>
+                          <strong style={{ color: '#dc2626' }}>Engel&amp;Etki eksik ({row.missingBlockerFirms.length}):</strong>
+                          <div style={{ marginTop: 4 }}>
+                            {row.missingBlockerFirms.length === 0 ? 'Yok' : row.missingBlockerFirms.join(', ')}
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
+              );
+            })}
           </tbody>
         </table>
       </div>

@@ -17,6 +17,9 @@ export type YilZiyaretPortfoyRow = {
   // o kadar Forecast ve Engel&Etki girişi de olmalı" mantığıyla üç sayı yan yana.
   forecastFirms: number;
   blockerFirms: number;
+  // Hangi Hunter firmalarda Forecast/Engel&Etki EKSİK — sayı tartışmalı geldiğinde göstermek için.
+  missingForecastFirms: string[];
+  missingBlockerFirms: string[];
 };
 
 export type YilZiyaretPortfoyPayload = {
@@ -70,16 +73,55 @@ async function countsByOwner(sql: string, params: unknown[] = []) {
   return map;
 }
 
+// Forecast'ı EKSİK Hunter firma adları, satışçı bazında (hangi firmalar diye sorulunca göstermek için).
+const Q_MISSING_FORECAST_FIRMS = `
+  select coalesce(nullif(trim(m.sorumlu), ''), '—') as owner,
+         array_agg(m.musteri order by m.musteri) as firms
+  from public.musteriler m
+  left join public.musteri_kunye_v2 kv on kv.musteri_id = m.id
+  where ${HUNTER_FILTER}
+    and not exists (
+      select 1 from public.crm_forecasts f
+      where f.customer_id = m.id and f.is_active = true and f.forecast_year = $1
+    )
+  group by 1
+`;
+
+// Engel & Etki kaydı EKSİK Hunter firma adları, satışçı bazında.
+const Q_MISSING_BLOCKER_FIRMS = `
+  select coalesce(nullif(trim(v.sorumlu), ''), '—') as owner,
+         array_agg(v.musteri order by v.musteri) as firms
+  from public.v_crm_forecast_blocker_impact v
+  left join public.musteri_kunye_v2 kv on kv.musteri_id = v.customer_id
+  where ${HUNTER_FILTER} and v.blocker_id is null
+  group by 1
+`;
+
+async function namesByOwner(sql: string, params: unknown[] = []) {
+  const map = new Map<string, string[]>();
+  try {
+    const result = await db.query(sql, params);
+    for (const row of result.rows as Array<{ owner: string; firms: string[] }>) {
+      map.set(normalizeName(row.owner), row.firms ?? []);
+    }
+  } catch (err) {
+    console.error('[yil-ziyaret-portfoy] sorgu hatası:', err);
+  }
+  return map;
+}
+
 // Yıl Ziyaret & Portföy Sağlığı Raporu — Canlı Ekran'daki "Aktivite Hedefi" (yıl ziyaret) ve
 // "Portföy Sağlığı" kartlarının tüm satışçılar için tek tabloda toplu görünümü (22.09).
 // Ayrı sorgu YOK: veri zaten buildLiveBoard() içinde owner bazlı hesaplı — burada sadece
 // ilgili alanlar seçilip düzleştiriliyor (altın kural 17: tek yerden okunur).
 export async function buildYilZiyaretPortfoyRaporu(): Promise<YilZiyaretPortfoyPayload> {
   const year = new Date().getFullYear();
-  const [board, forecastByOwner, blockerByOwner] = await Promise.all([
+  const [board, forecastByOwner, blockerByOwner, missingForecastByOwner, missingBlockerByOwner] = await Promise.all([
     buildLiveBoard(),
     countsByOwner(Q_FORECAST_FIRMS_BY_OWNER, [year]),
     countsByOwner(Q_BLOCKER_FIRMS_BY_OWNER),
+    namesByOwner(Q_MISSING_FORECAST_FIRMS, [year]),
+    namesByOwner(Q_MISSING_BLOCKER_FIRMS),
   ]);
   const rows: YilZiyaretPortfoyRow[] = board.owners.map((o) => ({
     owner: o.owner,
@@ -94,6 +136,8 @@ export async function buildYilZiyaretPortfoyRaporu(): Promise<YilZiyaretPortfoyP
     inactive: o.inactive,
     forecastFirms: forecastByOwner.get(normalizeName(o.owner)) ?? 0,
     blockerFirms: blockerByOwner.get(normalizeName(o.owner)) ?? 0,
+    missingForecastFirms: missingForecastByOwner.get(normalizeName(o.owner)) ?? [],
+    missingBlockerFirms: missingBlockerByOwner.get(normalizeName(o.owner)) ?? [],
   }));
   return { generatedAt: new Date().toISOString(), rows };
 }
