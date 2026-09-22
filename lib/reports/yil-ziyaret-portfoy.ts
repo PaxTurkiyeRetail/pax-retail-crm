@@ -23,6 +23,10 @@ export type YilZiyaretPortfoyRow = {
   // Künye Sağlığı (22.09): tüm portföy (Hunter+Farmer+Lead+Kasa) için künye doluluk durumu.
   kunyeHealth: { tamam: number; eksik: number; yok: number };
   missingKunyeFirms: string[];
+  // H/F/K firma isim listeleri (22.09) — badge tıklanınca kim olduğu görülsün.
+  hunterFirmNames: string[];
+  farmerFirmNames: string[];
+  kasaFirmNames: string[];
 };
 
 export type YilZiyaretPortfoyPayload = {
@@ -110,6 +114,43 @@ const Q_KUNYE_HEALTH = `
   group by 1
 `;
 
+// H/F/K firma isim listeleri (22.09): live-board.ts'deki portfolio.hunter/farmer/kasa TANIMIYLA
+// AYNI kategorizasyon — hunter = "Farmer değilse" (Lead/Kasa/boş dahil), kasa = etiket='Kasa'.
+const Q_PORTFOLIO_FIRMS = `
+  with cat as (
+    select coalesce(nullif(trim(m.sorumlu), ''), '—') as owner,
+           m.musteri,
+           lower(trim(coalesce(kv.satici_etiketi, ''))) as etiket
+    from public.musteriler m
+    left join public.musteri_kunye_v2 kv on kv.musteri_id = m.id
+  )
+  select owner,
+         array_agg(musteri order by musteri) filter (where etiket <> 'farmer') as hunter,
+         array_agg(musteri order by musteri) filter (where etiket = 'farmer') as farmer,
+         array_agg(musteri order by musteri) filter (where etiket = 'kasa') as kasa
+  from cat
+  group by 1
+`;
+
+type PortfolioFirmsRow = { owner: string; hunter: string[] | null; farmer: string[] | null; kasa: string[] | null };
+
+async function portfolioFirmsByOwner() {
+  const map = new Map<string, { hunter: string[]; farmer: string[]; kasa: string[] }>();
+  try {
+    const result = await db.query(Q_PORTFOLIO_FIRMS);
+    for (const row of result.rows as PortfolioFirmsRow[]) {
+      map.set(normalizeName(row.owner), {
+        hunter: row.hunter ?? [],
+        farmer: row.farmer ?? [],
+        kasa: row.kasa ?? [],
+      });
+    }
+  } catch (err) {
+    console.error('[yil-ziyaret-portfoy] portföy firma sorgu hatası:', err);
+  }
+  return map;
+}
+
 type HunterCompareRow = { owner: string; firms: number; missing: string[] | null };
 type KunyeHealthRow = { owner: string; tamam: number; eksik: number; yok: number; missing: string[] | null };
 
@@ -151,11 +192,12 @@ async function hunterCompareByOwner(sql: string, params: unknown[] = []) {
 // Ayrı sorgu YOK: veri zaten buildLiveBoard() içinde owner bazlı hesaplı — burada sadece
 // ilgili alanlar seçilip düzleştiriliyor (altın kural 17: tek yerden okunur).
 export async function buildYilZiyaretPortfoyRaporu(): Promise<YilZiyaretPortfoyPayload> {
-  const [board, forecast, blocker, kunye] = await Promise.all([
+  const [board, forecast, blocker, kunye, portfolioFirms] = await Promise.all([
     buildLiveBoard(),
     hunterCompareByOwner(Q_FORECAST_HUNTER),
     hunterCompareByOwner(Q_BLOCKER_HUNTER),
     kunyeHealthByOwner(),
+    portfolioFirmsByOwner(),
   ]);
   const rows: YilZiyaretPortfoyRow[] = board.owners.map((o: { owner: string; initials: string; goals: { visitsYear: YilZiyaretPortfoyRow['visitsYear'] }; portfolio: YilZiyaretPortfoyRow['portfolio']; coverage: { covered: { actual: number }; contactsPer: YilZiyaretPortfoyRow['coverage']['contactsPer']; activitiesYear: number }; inactive: YilZiyaretPortfoyRow['inactive'] }) => ({
     owner: o.owner,
@@ -174,6 +216,9 @@ export async function buildYilZiyaretPortfoyRaporu(): Promise<YilZiyaretPortfoyP
     missingBlockerFirms: blocker.missingMap.get(normalizeName(o.owner)) ?? [],
     kunyeHealth: kunye.tamamMap.get(normalizeName(o.owner)) ?? { tamam: 0, eksik: 0, yok: 0 },
     missingKunyeFirms: kunye.missingMap.get(normalizeName(o.owner)) ?? [],
+    hunterFirmNames: portfolioFirms.get(normalizeName(o.owner))?.hunter ?? [],
+    farmerFirmNames: portfolioFirms.get(normalizeName(o.owner))?.farmer ?? [],
+    kasaFirmNames: portfolioFirms.get(normalizeName(o.owner))?.kasa ?? [],
   }));
   return { generatedAt: new Date().toISOString(), rows };
 }

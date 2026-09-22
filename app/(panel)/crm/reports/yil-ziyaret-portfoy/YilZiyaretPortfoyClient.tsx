@@ -19,9 +19,12 @@ type Row = {
   missingBlockerFirms: string[];
   kunyeHealth: { tamam: number; eksik: number; yok: number };
   missingKunyeFirms: string[];
+  hunterFirmNames: string[];
+  farmerFirmNames: string[];
+  kasaFirmNames: string[];
 };
 
-type DetailKind = 'forecast' | 'kunye';
+type DetailKind = 'forecast' | 'kunye' | 'hunter' | 'farmer' | 'kasa';
 
 type Payload = { generatedAt: string; rows: Row[] };
 
@@ -116,6 +119,9 @@ export default function YilZiyaretPortfoyClient() {
               const hasKunyeMissing = row.missingKunyeFirms.length > 0;
               const isForecastOpen = openDetail?.owner === row.owner && openDetail.kind === 'forecast';
               const isKunyeOpen = openDetail?.owner === row.owner && openDetail.kind === 'kunye';
+              const isHunterOpen = openDetail?.owner === row.owner && openDetail.kind === 'hunter';
+              const isFarmerOpen = openDetail?.owner === row.owner && openDetail.kind === 'farmer';
+              const isKasaOpen = openDetail?.owner === row.owner && openDetail.kind === 'kasa';
               return (
               <Fragment key={row.owner}>
                 <tr style={{ borderBottom: '1px solid var(--border-1, #f1f5f9)' }}>
@@ -129,15 +135,39 @@ export default function YilZiyaretPortfoyClient() {
                 <td style={{ padding: '10px 14px' }}>{row.portfolio.total}</td>
                 <td style={{ padding: '10px 14px' }}>
                   <div style={{ display: 'flex', gap: 6 }}>
-                    <span style={{ display: 'inline-block', minWidth: 26, padding: '2px 6px', borderRadius: 6, textAlign: 'center', fontWeight: 700, background: 'rgba(37,99,235,0.15)', color: '#1d4ed8' }} title="Hunter">
-                      {row.portfolio.hunter}
-                    </span>
-                    <span style={{ display: 'inline-block', minWidth: 26, padding: '2px 6px', borderRadius: 6, textAlign: 'center', fontWeight: 700, background: 'rgba(22,163,74,0.15)', color: '#15803d' }} title="Farmer">
-                      {row.portfolio.farmer}
-                    </span>
-                    <span style={{ display: 'inline-block', minWidth: 26, padding: '2px 6px', borderRadius: 6, textAlign: 'center', fontWeight: 700, background: 'rgba(202,138,4,0.15)', color: '#a16207' }} title="Kasa">
-                      {row.portfolio.kasa}
-                    </span>
+                    <button
+                      type="button"
+                      disabled={row.hunterFirmNames.length === 0}
+                      onClick={() => setOpenDetail(isHunterOpen ? null : { owner: row.owner, kind: 'hunter' })}
+                      style={{ background: 'none', border: 'none', padding: 0, cursor: row.hunterFirmNames.length ? 'pointer' : 'default', font: 'inherit' }}
+                      title="Hunter firmaları görmek için tıkla"
+                    >
+                      <span style={{ display: 'inline-block', minWidth: 26, padding: '2px 6px', borderRadius: 6, textAlign: 'center', fontWeight: 700, background: 'rgba(37,99,235,0.15)', color: '#1d4ed8', textDecoration: row.hunterFirmNames.length ? 'underline' : 'none' }}>
+                        {row.portfolio.hunter}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      disabled={row.farmerFirmNames.length === 0}
+                      onClick={() => setOpenDetail(isFarmerOpen ? null : { owner: row.owner, kind: 'farmer' })}
+                      style={{ background: 'none', border: 'none', padding: 0, cursor: row.farmerFirmNames.length ? 'pointer' : 'default', font: 'inherit' }}
+                      title="Farmer firmaları görmek için tıkla"
+                    >
+                      <span style={{ display: 'inline-block', minWidth: 26, padding: '2px 6px', borderRadius: 6, textAlign: 'center', fontWeight: 700, background: 'rgba(22,163,74,0.15)', color: '#15803d', textDecoration: row.farmerFirmNames.length ? 'underline' : 'none' }}>
+                        {row.portfolio.farmer}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      disabled={row.kasaFirmNames.length === 0}
+                      onClick={() => setOpenDetail(isKasaOpen ? null : { owner: row.owner, kind: 'kasa' })}
+                      style={{ background: 'none', border: 'none', padding: 0, cursor: row.kasaFirmNames.length ? 'pointer' : 'default', font: 'inherit' }}
+                      title="Kasa firmaları görmek için tıkla"
+                    >
+                      <span style={{ display: 'inline-block', minWidth: 26, padding: '2px 6px', borderRadius: 6, textAlign: 'center', fontWeight: 700, background: 'rgba(202,138,4,0.15)', color: '#a16207', textDecoration: row.kasaFirmNames.length ? 'underline' : 'none' }}>
+                        {row.portfolio.kasa}
+                      </span>
+                    </button>
                   </div>
                 </td>
                 <td style={{ padding: '10px 14px' }}>
@@ -232,6 +262,30 @@ export default function YilZiyaretPortfoyClient() {
                       <div style={{ marginTop: 4 }}>
                         {row.missingKunyeFirms.length === 0 ? 'Yok' : row.missingKunyeFirms.join(', ')}
                       </div>
+                    </td>
+                  </tr>
+                )}
+                {isHunterOpen && (
+                  <tr style={{ background: 'var(--bg-2, #f8fafc)' }}>
+                    <td colSpan={10} style={{ padding: '12px 14px', fontSize: 12 }}>
+                      <strong style={{ color: '#1d4ed8' }}>Hunter firmalar ({row.hunterFirmNames.length}):</strong>
+                      <div style={{ marginTop: 4 }}>{row.hunterFirmNames.join(', ')}</div>
+                    </td>
+                  </tr>
+                )}
+                {isFarmerOpen && (
+                  <tr style={{ background: 'var(--bg-2, #f8fafc)' }}>
+                    <td colSpan={10} style={{ padding: '12px 14px', fontSize: 12 }}>
+                      <strong style={{ color: '#15803d' }}>Farmer firmalar ({row.farmerFirmNames.length}):</strong>
+                      <div style={{ marginTop: 4 }}>{row.farmerFirmNames.join(', ')}</div>
+                    </td>
+                  </tr>
+                )}
+                {isKasaOpen && (
+                  <tr style={{ background: 'var(--bg-2, #f8fafc)' }}>
+                    <td colSpan={10} style={{ padding: '12px 14px', fontSize: 12 }}>
+                      <strong style={{ color: '#a16207' }}>Kasa firmalar ({row.kasaFirmNames.length}):</strong>
+                      <div style={{ marginTop: 4 }}>{row.kasaFirmNames.join(', ')}</div>
                     </td>
                   </tr>
                 )}
