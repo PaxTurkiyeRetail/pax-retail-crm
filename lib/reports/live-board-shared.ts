@@ -68,8 +68,14 @@ export const LIVE_BOARD_RULES = {
   paceWarnPoints: 10,
   /** Kazanılmış sayılan ilk faz (Sipariş). */
   orderPhase: 15,
-  /** POC / pilot / uçtan uca test fazları. */
-  pocPhases: [11, 12, 13] as readonly number[],
+  /**
+   * AKTİF POC fazı (Sinan, 22.09.2026: "canlı ekrandaki aktif POC'ler sadece faz 12 gelmeli, herkes için").
+   * Eskiden 11–13 arası (Konsinye / POC / Test) üçü birden sayılıyordu; artık YALNIZ 12.
+   * Üç yerde okunur, üçü de daralır: kişi/takım kartındaki "Aktif POC" sayısı · "POC · Pilot · Rollout"
+   * slaydının satırları · `poc_delay` uyarısı (hedef tarihi geçen POC). Portföy donut'undaki
+   * `PHASE_GROUPS` "Konsinye / POC / Test" (11–13) DEĞİŞMEDİ — o fazların tamamını gruplar, boşluk kalmaz.
+   */
+  pocPhases: [12] as readonly number[],
   /** Rollout fazı. */
   rolloutPhase: 24,
   /** Aktif satış pipeline'ı sayılan faz aralığı (lead validasyonu → sözleşme). */

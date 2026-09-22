@@ -38,6 +38,8 @@ import {
   teamRollup,
   weekRangeLabel,
   yearElapsedPct,
+  LIVE_BOARD_RULES,
+  PHASE_GROUPS,
 } from './live-board-shared';
 import { emptyWeeklyCounters } from './weekly-targets-shared';
 import type { LiveOwner } from './live-board-shared';
@@ -311,6 +313,21 @@ describe('kişi slaydı donut satırı — gövdeyle orantılı (v3.0, 14.09)', 
 /* ------------------------------------------------------------------------ */
 /* ÖZET slaydı — takım toplamı (v3.2, Çağdaş Bey 15.09)                      */
 /* ------------------------------------------------------------------------ */
+
+// 22.09 (Sinan): "canlı ekrandaki aktif POC'ler sadece faz 12 gelmeli, herkes için."
+describe('LIVE_BOARD_RULES.pocPhases — Aktif POC yalnız faz 12', () => {
+  it('faz 12 POC sayılır; 11 (Konsinye) ve 13 (Test) sayılmaz', () => {
+    expect([...LIVE_BOARD_RULES.pocPhases]).toEqual([12]);
+    const isPoc = (phase: number) => LIVE_BOARD_RULES.pocPhases.includes(phase);
+    expect(isPoc(12)).toBe(true);
+    expect(isPoc(11)).toBe(false);
+    expect(isPoc(13)).toBe(false);
+  });
+  it('Portföy donut grubu (Konsinye / POC / Test) 11–13 olarak kaldı — faz boşluğu olmasın', () => {
+    const group = PHASE_GROUPS.find((item) => item.key === 'poc');
+    expect(group).toMatchObject({ from: 11, to: 13 });
+  });
+});
 
 describe('teamRollup — Özet slaydının sol tarafı', () => {
   const pair = (actual: number, target: number | null) => ({

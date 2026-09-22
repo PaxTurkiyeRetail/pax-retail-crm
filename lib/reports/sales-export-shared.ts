@@ -1,4 +1,4 @@
-import type { Cell, Sheet } from '@/lib/xlsx/simple-workbook';
+import { dateCell, moneyCell, type Cell, type Sheet } from '@/lib/xlsx/simple-workbook';
 
 /**
  * SATIŞ RAPORLARI (Excel) — saf yardımcılar. Sinan, 21.09.2026:
@@ -12,8 +12,11 @@ import type { Cell, Sheet } from '@/lib/xlsx/simple-workbook';
  *
  * Kurallar:
  *   * Satır = KALEM (cihaz modeli × adet × birim fiyat). Kalemi olmayan eski satış (030 öncesi) atlanmaz;
- *     tek satır olarak girer, model "—", birim fiyat BOŞ (uydurulmaz), toplam satışın tutarı, notunda
- *     "kalem kaydı yok" yazar (altın kural 34: eşleşmeyen kayıt sessizce yutulmaz, ekranda söylenir).
+ *     tek satır olarak girer, model "—", birim fiyat BOŞ (uydurulmaz), toplam satışın tutarı. Sayısı
+ *     Özet sayfasında "Kalem kaydı olmayan satış" satırında yazar (altın kural 34: sessizce yutulmaz).
+ *   * KOLONLAR (Sinan, 22.09): cihazda **Satış Tipi (Teklifli/Direkt), Teklif No ve Not KALDIRILDI**;
+ *     hizmette **Dönem ve Not KALDIRILDI**. Tutarlar Excel para biçimiyle ($ / ₺ — sayı olarak kalır,
+ *     toplanabilir), tarihler GG.AA.YYYY.
  *   * Hizmet faturasında TL ile USD TOPLANMAZ; toplam satırları para birimine göre ayrıdır (032 kararı).
  *   * Yalnız AKTİF kayıtlar; iptal edilenler ciroya girmediği gibi rapora da girmez.
  */
@@ -142,35 +145,33 @@ function metaRows(meta: ExportMeta, kindLabel: string, lineCount: number): Cell[
   ];
 }
 
+// 22.09 (Sinan): "Satış Tipi (Direkt satış…) kısmını istemiyoruz, Excel'de görünmesin; Not kısmını da
+// kaldıralım, teklif no kalksın." Satış/Kiralama ayrımı KALDI — o kalemin türü, farklı bilgi.
 const DEVICE_HEADERS: Cell[] = [
-  'Tarih', 'Firma', 'Satışçı', 'Satış Tipi', 'Kanal', 'Kalem', 'Model', 'Ürün', 'Adet',
-  'Birim Fiyat (USD)', 'Toplam (USD)', 'Aylık Kira (USD)', 'Kira Başlangıç', 'Kira Bitiş', 'Teklif No', 'Not',
+  'Tarih', 'Firma', 'Satışçı', 'Kanal', 'Satış/Kiralama', 'Model', 'Ürün', 'Adet',
+  'Birim Fiyat', 'Toplam', 'Aylık Kira', 'Kira Başlangıç', 'Kira Bitiş',
 ];
-const DEVICE_WIDTHS = [12, 34, 20, 16, 16, 12, 14, 30, 8, 16, 16, 16, 14, 14, 18, 40];
+const DEVICE_WIDTHS = [13, 34, 20, 16, 15, 14, 30, 8, 15, 15, 15, 15, 15];
 
-/** Kalem satırı → Excel satırı. Kalemsiz satışta birim fiyat boş bırakılır, not düşülür. */
+/** Kalem satırı → Excel satırı. Kalemsiz satışta birim fiyat BOŞ kalır (uydurulmaz). */
 export function deviceLineToRow(line: DeviceSaleLine): Cell[] {
   const hasItem = line.line_no != null;
   const quantity = hasItem ? num(line.quantity) : num(line.sale_device_count);
   const total = hasItem ? num(line.total_price) : num(line.sale_amount);
-  const note = [line.note, hasItem ? null : 'Kalem kaydı yok (030 öncesi satış) — birim fiyat hesaplanmadı'].filter(Boolean).join(' · ');
   return [
-    line.sale_date,
+    dateCell(line.sale_date),
     line.musteri,
     line.owner_name,
-    SOURCE_LABELS[line.source] ?? line.source,
     line.sales_channel ?? '',
     hasItem && line.sale_type ? SALE_TYPE_LABELS[line.sale_type] : '',
     hasItem ? (line.product_code ?? '—') : '—',
     hasItem ? (line.product_name ?? '') : '',
     quantity,
-    hasItem && line.unit_price != null ? round2(num(line.unit_price)) : '',
-    round2(total),
-    hasItem && line.rental_monthly_price != null ? round2(num(line.rental_monthly_price)) : '',
-    line.rental_start_date ?? '',
-    line.rental_end_date ?? '',
-    line.quote_no ?? '',
-    note,
+    hasItem ? moneyCell(line.unit_price) : '',
+    moneyCell(total),
+    hasItem ? moneyCell(line.rental_monthly_price) : '',
+    dateCell(line.rental_start_date),
+    dateCell(line.rental_end_date),
   ];
 }
 
@@ -181,7 +182,6 @@ export type DeviceTotals = {
   amount: number;
   byOwner: Array<{ owner: string; sales: number; devices: number; amount: number }>;
   byModel: Array<{ model: string; devices: number; amount: number }>;
-  bySource: Array<{ source: string; sales: number; devices: number; amount: number }>;
   /** Kalem kaydı olmayan satış sayısı — raporda ayrıca söylenir. */
   withoutItems: number;
 };
@@ -189,10 +189,8 @@ export type DeviceTotals = {
 export function deviceTotals(lines: DeviceSaleLine[]): DeviceTotals {
   const saleIds = new Set<string>();
   const salesByOwner = new Map<string, Set<string>>();
-  const salesBySource = new Map<string, Set<string>>();
   const byOwner = new Map<string, { devices: number; amount: number }>();
   const byModel = new Map<string, { devices: number; amount: number }>();
-  const bySource = new Map<string, { devices: number; amount: number }>();
   const withoutItems = new Set<string>();
   let devices = 0;
   let amount = 0;
@@ -211,10 +209,6 @@ export function deviceTotals(lines: DeviceSaleLine[]): DeviceTotals {
     const model = hasItem ? (line.product_code ?? '—') : '—';
     const modelAgg = byModel.get(model) ?? { devices: 0, amount: 0 };
     modelAgg.devices += qty; modelAgg.amount += total; byModel.set(model, modelAgg);
-    const source = SOURCE_LABELS[line.source] ?? line.source;
-    const sourceAgg = bySource.get(source) ?? { devices: 0, amount: 0 };
-    sourceAgg.devices += qty; sourceAgg.amount += total; bySource.set(source, sourceAgg);
-    (salesBySource.get(source) ?? salesBySource.set(source, new Set()).get(source)!).add(line.sale_id);
   }
   const sortByAmount = <T extends { amount: number }>(rows: T[]) => rows.sort((a, b) => b.amount - a.amount);
   return {
@@ -224,7 +218,6 @@ export function deviceTotals(lines: DeviceSaleLine[]): DeviceTotals {
     amount: round2(amount),
     byOwner: sortByAmount(Array.from(byOwner, ([owner, agg]) => ({ owner, sales: salesByOwner.get(owner)?.size ?? 0, devices: agg.devices, amount: round2(agg.amount) }))),
     byModel: sortByAmount(Array.from(byModel, ([model, agg]) => ({ model, devices: agg.devices, amount: round2(agg.amount) }))),
-    bySource: sortByAmount(Array.from(bySource, ([source, agg]) => ({ source, sales: salesBySource.get(source)?.size ?? 0, devices: agg.devices, amount: round2(agg.amount) }))),
     withoutItems: withoutItems.size,
   };
 }
@@ -234,25 +227,22 @@ export function deviceSheets(lines: DeviceSaleLine[], meta: ExportMeta): Sheet[]
   const totals = deviceTotals(lines);
   const rows: Cell[][] = [DEVICE_HEADERS, ...lines.map(deviceLineToRow)];
   if (lines.length) {
-    rows.push(['TOPLAM', `${totals.sales} satış`, '', '', '', '', '', '', totals.devices, '', totals.amount, '', '', '', '', totals.withoutItems ? `${totals.withoutItems} satışta kalem kaydı yok` : '']);
+    rows.push(['TOPLAM', `${totals.sales} satış`, '', '', '', '', '', totals.devices, '', moneyCell(totals.amount), '', '', '']);
   } else {
-    rows.push(['Bu dönemde kayıt yok', '', '', '', '', '', '', '', 0, '', 0, '', '', '', '', '']);
+    rows.push(['Bu dönemde kayıt yok', '', '', '', '', '', '', 0, '', moneyCell(0), '', '', '']);
   }
   const summary: Cell[][] = [
     ...metaRows(meta, 'Cihaz Satış Raporu', lines.length),
     ['Satış sayısı', totals.sales],
     ['Cihaz adedi', totals.devices],
-    ['Toplam (USD)', totals.amount],
+    ['Toplam', moneyCell(totals.amount)],
     ['Kalem kaydı olmayan satış', totals.withoutItems],
     [],
-    ['Satış Tipi', 'Satış', 'Adet', 'Toplam (USD)'],
-    ...totals.bySource.map((row) => [row.source, row.sales, row.devices, row.amount] as Cell[]),
+    ['Satışçı', 'Satış', 'Adet', 'Toplam'],
+    ...totals.byOwner.map((row) => [row.owner, row.sales, row.devices, moneyCell(row.amount)] as Cell[]),
     [],
-    ['Satışçı', 'Satış', 'Adet', 'Toplam (USD)'],
-    ...totals.byOwner.map((row) => [row.owner, row.sales, row.devices, row.amount] as Cell[]),
-    [],
-    ['Model', 'Adet', 'Toplam (USD)'],
-    ...totals.byModel.map((row) => [row.model, row.devices, row.amount] as Cell[]),
+    ['Model', 'Adet', 'Toplam'],
+    ...totals.byModel.map((row) => [row.model, row.devices, moneyCell(row.amount)] as Cell[]),
   ];
   return [
     { name: 'Kalemler', rows, widths: DEVICE_WIDTHS },
@@ -281,8 +271,11 @@ export type ServiceInvoiceLine = {
   invoice_amount: number;
 };
 
-const SERVICE_HEADERS: Cell[] = ['Dönem', 'Fatura Tarihi', 'Fatura No', 'Firma', 'Satışçı', 'Hizmet', 'Adet', 'Birim Fiyat', 'Toplam', 'Para Birimi', 'Not'];
-const SERVICE_WIDTHS = [12, 14, 20, 34, 20, 30, 8, 14, 16, 12, 40];
+// 22.09 (Sinan): "hizmet faturalarında da dönemi kaldıralım, fiyatlara dolar ibaresi, Not kısmını
+// istemiyoruz, tarih GG.AA.YYYY." Fatura tarihi BOŞ olabilir (alan zorunlu değil) — dönem kolonu
+// kalktığı için o satırda tarih boş görünür; uydurma tarih yazılmaz.
+const SERVICE_HEADERS: Cell[] = ['Fatura Tarihi', 'Fatura No', 'Firma', 'Satışçı', 'Hizmet', 'Adet', 'Birim Fiyat', 'Toplam', 'Para Birimi'];
+const SERVICE_WIDTHS = [14, 20, 34, 20, 32, 8, 15, 16, 13];
 
 /** 'YYYY-MM-01' → 'Eylül 2026'. */
 export function periodMonthLabel(periodMonth: string) {
@@ -295,17 +288,15 @@ export function periodMonthLabel(periodMonth: string) {
 export function serviceLineToRow(line: ServiceInvoiceLine): Cell[] {
   const hasItem = line.line_no != null;
   return [
-    periodMonthLabel(line.period_month),
-    line.invoice_date ?? '',
+    dateCell(line.invoice_date),
     line.invoice_no ?? '',
     line.musteri,
     line.owner_name,
     hasItem ? (line.service_label ?? '') : '—',
     hasItem ? num(line.quantity) : '',
-    hasItem && line.unit_price != null ? round2(num(line.unit_price)) : '',
-    round2(hasItem ? num(line.total_price) : num(line.invoice_amount)),
+    hasItem ? moneyCell(line.unit_price, line.currency) : '',
+    moneyCell(hasItem ? num(line.total_price) : num(line.invoice_amount), line.currency),
     line.currency,
-    [line.note, hasItem ? null : 'Kalem kaydı yok'].filter(Boolean).join(' · '),
   ];
 }
 
@@ -356,21 +347,21 @@ export function serviceSheets(lines: ServiceInvoiceLine[], meta: ExportMeta): Sh
   const rows: Cell[][] = [SERVICE_HEADERS, ...lines.map(serviceLineToRow)];
   if (lines.length) {
     for (const row of totals.byCurrency) {
-      rows.push([`TOPLAM ${row.currency}`, `${row.invoices} fatura`, '', '', '', '', row.quantity, '', row.amount, row.currency, 'Para birimleri ayrı toplanır']);
+      rows.push([`TOPLAM ${row.currency}`, `${row.invoices} fatura`, '', '', '', row.quantity, '', moneyCell(row.amount, row.currency), row.currency]);
     }
   } else {
-    rows.push(['Bu dönemde kayıt yok', '', '', '', '', '', '', '', 0, '', '']);
+    rows.push(['Bu dönemde kayıt yok', '', '', '', '', '', '', moneyCell(0), '']);
   }
   const summary: Cell[][] = [
     ...metaRows(meta, 'Hizmet Fatura Raporu', lines.length),
     ['Fatura sayısı', totals.invoices],
-    ...totals.byCurrency.map((row) => [`Toplam (${row.currency})`, row.amount] as Cell[]),
+    ...totals.byCurrency.map((row) => [`Toplam (${row.currency})`, moneyCell(row.amount, row.currency)] as Cell[]),
     [],
     ['Satışçı', 'Para Birimi', 'Fatura', 'Adet', 'Toplam'],
-    ...totals.byOwner.map((row) => [row.owner, row.currency, row.invoices, row.quantity, row.amount] as Cell[]),
+    ...totals.byOwner.map((row) => [row.owner, row.currency, row.invoices, row.quantity, moneyCell(row.amount, row.currency)] as Cell[]),
     [],
     ['Hizmet', 'Para Birimi', 'Adet', 'Toplam'],
-    ...totals.byService.map((row) => [row.service, row.currency, row.quantity, row.amount] as Cell[]),
+    ...totals.byService.map((row) => [row.service, row.currency, row.quantity, moneyCell(row.amount, row.currency)] as Cell[]),
   ];
   return [
     { name: 'Kalemler', rows, widths: SERVICE_WIDTHS },

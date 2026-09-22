@@ -12,8 +12,47 @@ import JSZip from 'jszip';
  *   * Sayfa adı Excel sınırı gereği 31 karaktere kesilir.
  *   * Tarayıcıda (Blob) ve Node'da (Buffer/Uint8Array) çalışır; `output` ile seçilir.
  */
-export type Cell = string | number | null | undefined;
+/**
+ * Biçimli hücre (22.09, Sinan: "tutarlara $ ekleyelim", "tarih 14.09.2026 şeklinde gözüksün").
+ * Değer SAYI olarak yazılır, görünümü Excel'in kendi biçimi verir — böylece hücre toplanabilir
+ * kalır (metne "$" yapıştırmak sütunu toplanamaz yapardı).
+ *   usd  → $#,##0.00 · try → ₺#,##0.00 · date → GG.AA.YYYY (değer Excel gün seri numarası)
+ */
+export type CellFormat = 'usd' | 'try' | 'date';
+export type FormattedCell = { value: number; format: CellFormat };
+export type Cell = string | number | null | undefined | FormattedCell;
 export type Sheet = { name: string; rows: Cell[][]; widths?: number[] };
+
+/** Excel gün seri numarası (1900 tabanı; 1899-12-30 = 0). 'YYYY-MM-DD' bekler, geçersizde null. */
+export function excelDateSerial(isoDate: unknown): number | null {
+  const text = String(isoDate ?? '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return null;
+  const year = Number(text.slice(0, 4));
+  const month = Number(text.slice(5, 7));
+  const day = Number(text.slice(8, 10));
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  const serial = Math.round((Date.UTC(year, month - 1, day) - Date.UTC(1899, 11, 30)) / 86_400_000);
+  return serial > 0 ? serial : null;
+}
+
+/** Tarih hücresi; tarih yoksa BOŞ hücre (uydurma tarih üretilmez). */
+export function dateCell(isoDate: unknown): Cell {
+  const serial = excelDateSerial(isoDate);
+  return serial == null ? '' : { value: serial, format: 'date' };
+}
+
+/** Para hücresi; değer yoksa BOŞ (0 yazmak "sıfıra satıldı" demek olurdu). */
+export function moneyCell(value: number | null | undefined, currency: 'USD' | 'TRY' = 'USD'): Cell {
+  if (value == null || !Number.isFinite(Number(value))) return '';
+  return { value: Math.round(Number(value) * 100) / 100, format: currency === 'TRY' ? 'try' : 'usd' };
+}
+
+function isFormattedCell(value: Cell): value is FormattedCell {
+  return typeof value === 'object' && value != null && 'format' in value && typeof (value as FormattedCell).value === 'number';
+}
+
+/** Stil sırası cellXfs ile birebir: 0 metin · 1 başlık · 2 USD · 3 TL · 4 tarih. */
+const STYLE_INDEX: Record<CellFormat, number> = { usd: 2, try: 3, date: 4 };
 
 function xmlEscape(value: unknown) {
   return String(value ?? '')
@@ -37,9 +76,10 @@ export function columnName(index: number) {
 
 function cellXml(value: Cell, row: number, col: number, header: boolean) {
   const ref = `${columnName(col)}${row}`;
+  if (!header && isFormattedCell(value)) return `<c r="${ref}" s="${STYLE_INDEX[value.format]}"><v>${value.value}</v></c>`;
   const style = header ? ' s="1"' : ' s="0"';
   if (typeof value === 'number' && Number.isFinite(value)) return `<c r="${ref}"${style}><v>${value}</v></c>`;
-  return `<c r="${ref}" t="inlineStr"${style}><is><t>${xmlEscape(value ?? '')}</t></is></c>`;
+  return `<c r="${ref}" t="inlineStr"${style}><is><t>${xmlEscape(value as string | null | undefined)}</t></is></c>`;
 }
 
 function sheetXml(sheet: Sheet) {
@@ -67,11 +107,12 @@ function sheetXml(sheet: Sheet) {
 function stylesXml() {
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <numFmts count="3"><numFmt numFmtId="164" formatCode="&quot;$&quot;#,##0.00"/><numFmt numFmtId="165" formatCode="&quot;₺&quot;#,##0.00"/><numFmt numFmtId="166" formatCode="DD.MM.YYYY"/></numFmts>
   <fonts count="2"><font><sz val="11"/><color rgb="FF0F172A"/><name val="Calibri"/></font><font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font></fonts>
   <fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF4F46E5"/><bgColor indexed="64"/></patternFill></fill></fills>
   <borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"><color rgb="FFE2E8F0"/></left><right style="thin"><color rgb="FFE2E8F0"/></right><top style="thin"><color rgb="FFE2E8F0"/></top><bottom style="thin"><color rgb="FFE2E8F0"/></bottom><diagonal/></border></borders>
   <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
-  <cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1"><alignment vertical="top" wrapText="1"/></xf><xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf></cellXfs>
+  <cellXfs count="5"><xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1"><alignment vertical="top" wrapText="1"/></xf><xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf><xf numFmtId="164" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyNumberFormat="1"><alignment vertical="top"/></xf><xf numFmtId="165" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyNumberFormat="1"><alignment vertical="top"/></xf><xf numFmtId="166" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyNumberFormat="1"><alignment vertical="top"/></xf></cellXfs>
   <cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
 </styleSheet>`;
 }

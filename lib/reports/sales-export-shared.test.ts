@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import JSZip from 'jszip';
-import { buildWorkbookBytes } from '@/lib/xlsx/simple-workbook';
+import { buildWorkbookBytes, excelDateSerial } from '@/lib/xlsx/simple-workbook';
 import {
   defaultPeriodKey,
   deviceLineToRow,
@@ -50,22 +50,40 @@ describe('Satış raporları (Excel) — dönem seçimi (Sinan, 21.09: "Ocak ay�
 });
 
 describe('Cihaz Satış Raporu — kalemler ve toplamlar', () => {
-  it('kalem satırı: tarih · firma · satışçı · satış tipi · kanal · kalem · model · adet · birim · toplam', () => {
+  // 22.09 (Sinan): Satış Tipi (Teklifli/Direkt), Teklif No ve Not kolonları KALDIRILDI; tutarlar para
+  // biçimli sayı ($), tarihler Excel gün seri numarası (GG.AA.YYYY görünür).
+  it('kalem satırı: tarih · firma · satışçı · kanal · satış/kiralama · model · ürün · adet · birim · toplam', () => {
     const row = deviceLineToRow(line());
-    expect(row.slice(0, 11)).toEqual(['2026-09-03', 'Kiğılı', 'Furkan Kızılkurt', 'Teklifli satış', 'Direkt Satış', 'Satış', 'A80', 'PAX A80', 10, 120, 1200]);
-    expect(deviceLineToRow(line({ source: 'direct' }))[3]).toBe('Direkt satış');
-    expect(deviceLineToRow(line({ sale_type: 'rental', rental_monthly_price: 15 }))[5]).toBe('Kiralama');
-    expect(deviceLineToRow(line({ sale_type: 'rental', rental_monthly_price: 15 }))[11]).toBe(15);
+    expect(row).toHaveLength(13);
+    expect(row[0]).toEqual({ value: excelDateSerial('2026-09-03'), format: 'date' });
+    expect(row.slice(1, 8)).toEqual(['Kiğılı', 'Furkan Kızılkurt', 'Direkt Satış', 'Satış', 'A80', 'PAX A80', 10]);
+    expect(row[8]).toEqual({ value: 120, format: 'usd' });
+    expect(row[9]).toEqual({ value: 1200, format: 'usd' });
   });
-  it('kalemi olmayan eski satış atlanmaz: başlık adedi/tutarı iner, birim fiyat BOŞ, not düşer', () => {
+  it('kaldırılan kolonlar Excel satırında hiç yok: Satış Tipi (Teklifli/Direkt), Teklif No, Not', () => {
+    const row = deviceLineToRow(line({ source: 'direct', quote_no: 'T-2026-001', note: 'elden teslim' }));
+    const text = row.map((cell) => (typeof cell === 'string' ? cell : '')).join('|');
+    expect(text).not.toContain('Direkt satış');
+    expect(text).not.toContain('Teklifli satış');
+    expect(text).not.toContain('T-2026-001');
+    expect(text).not.toContain('elden teslim');
+    expect(deviceSheets([line()], meta)[0].rows[0]).not.toContain('Satış Tipi');
+  });
+  it('kiralama satırı: tür ve aylık kira; kira tarihleri de tarih hücresi', () => {
+    const row = deviceLineToRow(line({ sale_type: 'rental', rental_monthly_price: 15, rental_start_date: '2026-09-01', rental_end_date: null }));
+    expect(row[4]).toBe('Kiralama');
+    expect(row[10]).toEqual({ value: 15, format: 'usd' });
+    expect(row[11]).toEqual({ value: excelDateSerial('2026-09-01'), format: 'date' });
+    expect(row[12]).toBe('');
+  });
+  it('kalemi olmayan eski satış atlanmaz: başlık adedi/tutarı iner, birim fiyat BOŞ (uydurulmaz)', () => {
     const row = deviceLineToRow(line({ line_no: null, product_code: null, quantity: null, unit_price: null, total_price: null, sale_device_count: 4, sale_amount: 900 }));
-    expect(row[6]).toBe('—');
-    expect(row[8]).toBe(4);
-    expect(row[9]).toBe('');
-    expect(row[10]).toBe(900);
-    expect(String(row[15])).toContain('Kalem kaydı yok');
+    expect(row[5]).toBe('—');
+    expect(row[7]).toBe(4);
+    expect(row[8]).toBe('');
+    expect(row[9]).toEqual({ value: 900, format: 'usd' });
   });
-  it('toplamlar: satış sayısı satış bazında (iki kalem = 1 satış), adet ve tutar kalem bazında; tip/satışçı/model kırılımı', () => {
+  it('toplamlar: satış sayısı satış bazında (iki kalem = 1 satış), adet ve tutar kalem bazında; satışçı/model kırılımı', () => {
     const totals = deviceTotals([
       line(), line({ line_no: 2, product_code: 'S210', quantity: 5, unit_price: 80, total_price: 400 }),
       line({ sale_id: 's2', source: 'direct', owner_name: 'Cem Koç', product_code: 'A80', quantity: 2, unit_price: 100, total_price: 200 }),
@@ -75,17 +93,17 @@ describe('Cihaz Satış Raporu — kalemler ve toplamlar', () => {
     expect(totals.devices).toBe(18);
     expect(totals.amount).toBe(1850);
     expect(totals.withoutItems).toBe(1);
-    expect(totals.bySource.map((r) => [r.source, r.sales, r.amount])).toEqual([['Teklifli satış', 2, 1650], ['Direkt satış', 1, 200]]);
     expect(totals.byModel.find((r) => r.model === 'A80')).toEqual({ model: 'A80', devices: 12, amount: 1400 });
     expect(totals.byOwner[0]).toMatchObject({ owner: 'Furkan Kızılkurt', sales: 2 });
   });
   it('sayfalar: Kalemler başlık + satırlar + TOPLAM; boş dönemde "kayıt yok" satırı, uydurma sayı yok', () => {
     const sheets = deviceSheets([line()], meta);
     expect(sheets.map((s) => s.name)).toEqual(['Kalemler', 'Özet']);
+    expect(sheets[0].rows[0]).toEqual(['Tarih', 'Firma', 'Satışçı', 'Kanal', 'Satış/Kiralama', 'Model', 'Ürün', 'Adet', 'Birim Fiyat', 'Toplam', 'Aylık Kira', 'Kira Başlangıç', 'Kira Bitiş']);
     const last = sheets[0].rows.at(-1)!;
     expect(last[0]).toBe('TOPLAM');
-    expect(last[8]).toBe(10);
-    expect(last[10]).toBe(1200);
+    expect(last[7]).toBe(10);
+    expect(last[9]).toEqual({ value: 1200, format: 'usd' });
     const empty = deviceSheets([], meta);
     expect(empty[0].rows).toHaveLength(2);
     expect(String(empty[0].rows[1][0])).toContain('kayıt yok');
@@ -99,20 +117,35 @@ describe('Hizmet Fatura Raporu — TL ile USD toplanmaz', () => {
     owner_name: 'Furkan Kızılkurt', currency: 'TRY', note: null, line_no: 1, service_label: 'KasaPOS Entegrasyonu + TMS',
     quantity: 134, unit_price: 347.96, total_price: 46626.64, invoice_amount: 46626.64, ...over,
   });
-  it('dönem etiketi ve satır', () => {
+  // 22.09 (Sinan): Dönem ve Not kolonları KALDIRILDI; tutar para biçimli (satırın KENDİ para birimiyle),
+  // tarih GG.AA.YYYY. periodMonthLabel duruyor — Özet sayfasının dönem etiketinde kullanılıyor.
+  it('satır: fatura tarihi · no · firma · satışçı · hizmet · adet · birim · toplam · para birimi', () => {
     expect(periodMonthLabel('2026-09-01')).toBe('Eylül 2026');
     const row = serviceLineToRowSafe(inv());
-    expect(row.slice(0, 10)).toEqual(['Eylül 2026', '2026-09-30', 'PSX1', 'Suwen', 'Furkan Kızılkurt', 'KasaPOS Entegrasyonu + TMS', 134, 347.96, 46626.64, 'TRY']);
+    expect(row).toHaveLength(9);
+    expect(row[0]).toEqual({ value: excelDateSerial('2026-09-30'), format: 'date' });
+    expect(row.slice(1, 6)).toEqual(['PSX1', 'Suwen', 'Furkan Kızılkurt', 'KasaPOS Entegrasyonu + TMS', 134]);
+    expect(row[6]).toEqual({ value: 347.96, format: 'try' });
+    expect(row[7]).toEqual({ value: 46626.64, format: 'try' });
+    expect(row[8]).toBe('TRY');
   });
-  it('para birimi başına ayrı toplam satırı; USD önce', () => {
+  it('kaldırılan kolonlar yok: Dönem ve Not; fatura tarihi boşsa hücre boş kalır (uydurulmaz)', () => {
+    const headers = serviceSheets([inv()], meta)[0].rows[0];
+    expect(headers).toEqual(['Fatura Tarihi', 'Fatura No', 'Firma', 'Satışçı', 'Hizmet', 'Adet', 'Birim Fiyat', 'Toplam', 'Para Birimi']);
+    const row = serviceLineToRowSafe(inv({ invoice_date: null, note: 'Nebim aktarımı' }));
+    expect(row[0]).toBe('');
+    expect(row.map((cell) => (typeof cell === 'string' ? cell : '')).join('|')).not.toContain('Nebim');
+  });
+  it('USD faturada $ biçimi, TL faturada ₺ biçimi; para birimi başına ayrı toplam, USD önce', () => {
     const lines = [inv(), inv({ invoice_id: 'i2', currency: 'USD', total_price: 500, invoice_amount: 500, quantity: 10, unit_price: 50 })];
     const totals = serviceTotals(lines);
     expect(totals.invoices).toBe(2);
     expect(totals.byCurrency.map((r) => [r.currency, r.amount])).toEqual([['USD', 500], ['TRY', 46626.64]]);
     const rows = serviceSheets(lines, meta)[0].rows;
     expect(rows.at(-2)![0]).toBe('TOPLAM USD');
+    expect(rows.at(-2)![7]).toEqual({ value: 500, format: 'usd' });
     expect(rows.at(-1)![0]).toBe('TOPLAM TRY');
-    expect(rows.at(-1)![8]).toBe(46626.64);
+    expect(rows.at(-1)![7]).toEqual({ value: 46626.64, format: 'try' });
   });
 });
 
@@ -134,9 +167,16 @@ describe('Excel paketi (simple-workbook) — gerçek dosya üretilir ve geri aç
     expect(workbook).toContain('name="Kalemler"');
     expect(workbook).toContain('name="Özet"');
     const sheet = await zip.file('xl/worksheets/sheet1.xml')!.async('string');
-    expect(sheet).toContain('<t>Birim Fiyat (USD)</t>');
-    expect(sheet).toContain('<c r="I2" s="0"><v>10</v></c>');
-    expect(sheet).toContain('<autoFilter ref="A1:P3"/>');
+    expect(sheet).toContain('<t>Birim Fiyat</t>');
+    expect(sheet).toContain('<c r="H2" s="0"><v>10</v></c>');          // adet: düz sayı
+    expect(sheet).toContain(`<c r="A2" s="4"><v>${excelDateSerial('2026-09-03')}</v></c>`); // tarih biçimi
+    expect(sheet).toContain('<c r="I2" s="2"><v>120</v></c>');          // birim fiyat: $ biçimi
+    expect(sheet).toContain('<autoFilter ref="A1:M3"/>');
+    // Para ve tarih SAYI kalır (Excel'de toplanabilir); "$" ve nokta ayraç biçimden gelir.
+    const styles = await zip.file('xl/styles.xml')!.async('string');
+    expect(styles).toContain('numFmtId="164" formatCode="&quot;$&quot;#,##0.00"');
+    expect(styles).toContain('numFmtId="166" formatCode="DD.MM.YYYY"');
+    expect(styles).toContain('<cellXfs count="5">');
     const core = await zip.file('docProps/core.xml')!.async('string');
     expect(core).toContain('<dc:title>Test</dc:title>');
   });
