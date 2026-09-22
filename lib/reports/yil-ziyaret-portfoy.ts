@@ -30,10 +30,14 @@ export type YilZiyaretPortfoyPayload = {
 const HUNTER_FILTER = `lower(trim(coalesce(kv.satici_etiketi, ''))) not in ('farmer', 'lead', 'kasa')`;
 
 // Forecast girilmiş HUNTER firma adedi, satışçı bazında (bu yıl, aktif forecast satırları).
+// DİKKAT: f.owner_name forecast girilirken yazılan SNAPSHOT isim — müşteri sonradan başka
+// satışçıya devredilmişse güncel sorumluyu YANSITMAZ. Portföy/Blocker sayıları musteriler.sorumlu
+// (güncel) üzerinden geldiği için burada da GÜNCEL sorumlu (m.sorumlu) kullanılıyor, owner_name değil.
 const Q_FORECAST_FIRMS_BY_OWNER = `
-  select coalesce(nullif(trim(f.owner_name), ''), '—') as owner,
+  select coalesce(nullif(trim(m.sorumlu), ''), '—') as owner,
          count(distinct f.customer_id)::int as firms
   from public.crm_forecasts f
+  join public.musteriler m on m.id = f.customer_id
   left join public.musteri_kunye_v2 kv on kv.musteri_id = f.customer_id
   where f.is_active = true and f.forecast_year = $1 and ${HUNTER_FILTER}
   group by 1
