@@ -90,11 +90,10 @@ export default function YilZiyaretPortfoyClient() {
                 </div>
               </th>
               <th style={{ padding: '10px 14px', whiteSpace: 'nowrap' }} title="Hunter firmalardan Forecast / Engel&Etki girişi EKSİK olan sayısı (0 = tamam)">
-                <div style={{ marginBottom: 4, fontSize: 11, color: 'var(--text-3)' }}>Forecast Eksik / E&amp;E Eksik</div>
                 <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                   <span style={{ display: 'inline-block', minWidth: 26, textAlign: 'center' }}>F</span>
                   <span>/</span>
-                  <span style={{ display: 'inline-block', minWidth: 26, textAlign: 'center' }}>E</span>
+                  <span style={{ display: 'inline-block', minWidth: 34, textAlign: 'center' }}>E&amp;E</span>
                 </div>
               </th>
               <th style={{ padding: '10px 14px' }}>Hareketsiz Firma</th>
@@ -154,7 +153,7 @@ export default function YilZiyaretPortfoyClient() {
                         {row.missingForecastFirms.length}
                       </span>
                       <span style={{ color: 'var(--text-3)' }}>/</span>
-                      <span style={{ display: 'inline-block', minWidth: 26, padding: '2px 6px', borderRadius: 6, textAlign: 'center', fontWeight: 700, background: row.missingBlockerFirms.length > 0 ? 'rgba(220,38,38,0.15)' : 'rgba(21,128,61,0.15)', color: row.missingBlockerFirms.length > 0 ? '#dc2626' : '#15803d' }} title="Engel&Etki eksik">
+                      <span style={{ display: 'inline-block', minWidth: 34, padding: '2px 6px', borderRadius: 6, textAlign: 'center', fontWeight: 700, background: row.missingBlockerFirms.length > 0 ? 'rgba(220,38,38,0.15)' : 'rgba(21,128,61,0.15)', color: row.missingBlockerFirms.length > 0 ? '#dc2626' : '#15803d' }} title="Engel&Etki eksik">
                         {row.missingBlockerFirms.length}
                       </span>
                     </div>
