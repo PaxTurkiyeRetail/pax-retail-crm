@@ -270,7 +270,7 @@ export type LiveOwner = {
   owner: string;
   initials: string;
   rank: number;
-  portfolio: { total: number; active: number; hunter: number; farmer: number };
+  portfolio: { total: number; active: number; hunter: number; farmer: number; lead: number; kasa: number };
   revenue: RevenueBlock;
   funnel: Funnel;
   pipeline: PipelineStats;

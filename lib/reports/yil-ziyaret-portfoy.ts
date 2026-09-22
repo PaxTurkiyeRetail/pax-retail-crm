@@ -4,7 +4,7 @@ export type YilZiyaretPortfoyRow = {
   owner: string;
   initials: string;
   visitsYear: { actual: number; target: number | null; pct: number | null };
-  portfolio: { total: number; active: number; farmer: number; hunter: number };
+  portfolio: { total: number; active: number; farmer: number; hunter: number; kasa: number };
   coverage: {
     coveredCustomers: number;
     contactsPer: { actual: number; target: number | null; pct: number | null };

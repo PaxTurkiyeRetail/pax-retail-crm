@@ -1289,7 +1289,16 @@ export async function buildLiveBoard(options?: { today?: Date }): Promise<LiveBo
     return {
       owner,
       initials: initialsOf(owner),
-      portfolio: { total: rows.length, active: rows.filter(activeSince).length, farmer: rows.filter(isFarmer).length, hunter: rows.filter((row) => !isFarmer(row)).length },
+      portfolio: {
+        total: rows.length,
+        active: rows.filter(activeSince).length,
+        farmer: rows.filter(isFarmer).length,
+        hunter: rows.filter((row) => !isFarmer(row)).length,
+        // Lead/Kasa (22.09, Taha): Yıl Ziyaret & Portföy Sağlığı raporunda K sütunu için eklendi.
+        // Mevcut hunter/farmer toplamı DEĞİŞMEDİ (hunter hâlâ "farmer değilse" — geriye dönük uyum).
+        lead: rows.filter((row) => saticiEtiketi(row) === 'Lead').length,
+        kasa: rows.filter((row) => saticiEtiketi(row) === 'Kasa').length,
+      },
       revenue: revenueBlock(agg, userTargets.revenue, userTargets.devices, { target: userTargets.integrations, ...ownerIntegration }, directByOwner.get(owner) ?? emptyDirect()),
       funnel,
       pipeline: pipelineStats(rows),

@@ -6,7 +6,7 @@ type Row = {
   owner: string;
   initials: string;
   visitsYear: { actual: number; target: number | null; pct: number | null };
-  portfolio: { total: number; active: number; farmer: number; hunter: number };
+  portfolio: { total: number; active: number; farmer: number; hunter: number; kasa: number };
   coverage: {
     coveredCustomers: number;
     contactsPer: { actual: number; target: number | null; pct: number | null };
@@ -77,7 +77,8 @@ export default function YilZiyaretPortfoyClient() {
               <th style={{ padding: '10px 14px' }}>Yıl Ziyaret</th>
               <th style={{ padding: '10px 14px' }}>%</th>
               <th style={{ padding: '10px 14px' }}>Portföy</th>
-              <th style={{ padding: '10px 14px' }}>Hunter / Farmer</th>
+              <th style={{ padding: '10px 14px' }}>H / F</th>
+              <th style={{ padding: '10px 14px' }}>K</th>
               <th style={{ padding: '10px 14px' }}>Hareketsiz Firma</th>
               <th style={{ padding: '10px 14px' }}>Temas Edilen Müşteri</th>
               <th style={{ padding: '10px 14px' }}>Ort. Temas / Firma</th>
@@ -85,9 +86,9 @@ export default function YilZiyaretPortfoyClient() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={8} style={{ padding: 20, textAlign: 'center', color: 'var(--text-3)' }}>Yükleniyor…</td></tr>
+              <tr><td colSpan={9} style={{ padding: 20, textAlign: 'center', color: 'var(--text-3)' }}>Yükleniyor…</td></tr>
             ) : sortedRows.length === 0 ? (
-              <tr><td colSpan={8} style={{ padding: 20, textAlign: 'center', color: 'var(--text-3)' }}>Kayıt yok.</td></tr>
+              <tr><td colSpan={9} style={{ padding: 20, textAlign: 'center', color: 'var(--text-3)' }}>Kayıt yok.</td></tr>
             ) : sortedRows.map((row) => (
               <tr key={row.owner} style={{ borderBottom: '1px solid var(--border-1, #f1f5f9)' }}>
                 <td style={{ padding: '10px 14px', fontWeight: 600 }}>{row.owner}</td>
@@ -99,6 +100,7 @@ export default function YilZiyaretPortfoyClient() {
                 </td>
                 <td style={{ padding: '10px 14px' }}>{row.portfolio.total}</td>
                 <td style={{ padding: '10px 14px' }}>{row.portfolio.hunter} / {row.portfolio.farmer}</td>
+                <td style={{ padding: '10px 14px' }}>{row.portfolio.kasa}</td>
                 <td style={{ padding: '10px 14px', color: row.inactive.count > 0 ? '#dc2626' : undefined, fontWeight: row.inactive.count > 0 ? 700 : 400 }}>
                   {row.inactive.count}
                 </td>
