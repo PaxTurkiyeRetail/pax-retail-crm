@@ -38,13 +38,17 @@ const HUNTER_FILTER = `lower(trim(coalesce(kv.satici_etiketi, ''))) <> 'farmer'`
 // firms + missing.length HER ZAMAN owner'ın Hunter toplamına eşit.
 // DİKKAT: f.owner_name forecast girilirken yazılan SNAPSHOT isim, müşteri devrolmuşse güncel
 // sorumluyu yansıtmaz — bu yüzden GÜNCEL sorumlu (m.sorumlu) kullanılıyor, owner_name değil.
+// DİKKAT 2 (22.09 teşhis): forecast_year = $1 (bu takvim yılı) filtresi YANLIŞTI — satışçılar
+// forecast'ı GELECEK yıl için giriyor (ör. 2026'da 2027 forecast'ı), o yüzden "girilmiş" olan
+// kayıtlar bile "eksik" görünüyordu. Yıl filtresi kaldırıldı: aktif herhangi bir forecast kaydı
+// varsa "girilmiş" sayılır (hangi yıl için olursa olsun).
 const Q_FORECAST_HUNTER = `
   with hunter_firms as (
     select coalesce(nullif(trim(m.sorumlu), ''), '—') as owner,
            m.musteri,
            exists (
              select 1 from public.crm_forecasts f
-             where f.customer_id = m.id and f.is_active = true and f.forecast_year = $1
+             where f.customer_id = m.id and f.is_active = true
            ) as has_forecast
     from public.musteriler m
     left join public.musteri_kunye_v2 kv on kv.musteri_id = m.id
@@ -103,10 +107,9 @@ async function hunterCompareByOwner(sql: string, params: unknown[] = []) {
 // Ayrı sorgu YOK: veri zaten buildLiveBoard() içinde owner bazlı hesaplı — burada sadece
 // ilgili alanlar seçilip düzleştiriliyor (altın kural 17: tek yerden okunur).
 export async function buildYilZiyaretPortfoyRaporu(): Promise<YilZiyaretPortfoyPayload> {
-  const year = new Date().getFullYear();
   const [board, forecast, blocker] = await Promise.all([
     buildLiveBoard(),
-    hunterCompareByOwner(Q_FORECAST_HUNTER, [year]),
+    hunterCompareByOwner(Q_FORECAST_HUNTER),
     hunterCompareByOwner(Q_BLOCKER_HUNTER),
   ]);
   const rows: YilZiyaretPortfoyRow[] = board.owners.map((o: { owner: string; initials: string; goals: { visitsYear: YilZiyaretPortfoyRow['visitsYear'] }; portfolio: YilZiyaretPortfoyRow['portfolio']; coverage: { covered: { actual: number }; contactsPer: YilZiyaretPortfoyRow['coverage']['contactsPer']; activitiesYear: number }; inactive: YilZiyaretPortfoyRow['inactive'] }) => ({
