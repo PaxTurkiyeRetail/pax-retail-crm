@@ -90,10 +90,11 @@ export default function YilZiyaretPortfoyClient() {
                 </div>
               </th>
               <th style={{ padding: '10px 14px', whiteSpace: 'nowrap' }} title="Hunter firmalardan Forecast / Engel&Etki girişi EKSİK olan sayısı (0 = tamam)">
+                <div style={{ marginBottom: 4, fontSize: 11, color: 'var(--text-3)' }}>Forecast Eksik / E&amp;E Eksik</div>
                 <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                  <span style={{ display: 'inline-block', minWidth: 26, textAlign: 'center' }}>Forecast</span>
-                  <span style={{ visibility: 'hidden' }}>/</span>
-                  <span style={{ display: 'inline-block', minWidth: 26, textAlign: 'center' }}>E&amp;E</span>
+                  <span style={{ display: 'inline-block', minWidth: 26, textAlign: 'center' }}>F</span>
+                  <span>/</span>
+                  <span style={{ display: 'inline-block', minWidth: 26, textAlign: 'center' }}>E</span>
                 </div>
               </th>
               <th style={{ padding: '10px 14px' }}>Hareketsiz Firma</th>
