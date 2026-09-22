@@ -13,17 +13,34 @@ export const SERVICE_CURRENCIES = ['TRY', 'USD'] as const;
  * ENTEGRASYON HEDEFİNDE SAYILAN HİZMET KALEMLERİ (Sinan, 22.09.2026: "Cem Koç entegrasyon hedefi doğru
  * gelmiyor; orası KasaPOS ve KasaPOS + TMS sayılmalı, diğerini hedefe dahil etmeyelim").
  *
- * Canlı Ekran'daki Entegrasyon Hedefi kartı (cihaz adedi) yalnız bu anahtarlardaki kalemlerin `quantity`sini
- * sayar; Max Store Kullanım ve AirViewer Kullanım gibi kalemler kullanım lisansıdır, entegre cihaz değil —
- * 17–21.09 arasında hepsi sayılıyordu, Cem Koç'ta bu yüzden şişiyordu. Anahtarlar `system_parameters`
- * `service_invoice_item` grubunun `param_key` değerleri (migration 032). Liste Yönetimleri'nden yeni bir
- * ENTEGRASYON kalemi eklenirse buraya da yazılır; yazılmazsa sayılmaz (sessizce şişmesin diye bilinçli).
- * Para tarafı ("Kazanılan $") bu listeyle SÜZÜLMEZ — o "entegrasyondan gelen fatura tutarı", tüm kalemler.
+ * Canlı Ekran'daki Entegrasyon Hedefi kartı (cihaz adedi) yalnız KasaPOS kalemlerinin `quantity`sini sayar;
+ * Max Store Kullanım ve AirViewer Kullanım kullanım lisansıdır, entegre cihaz değil.
+ *
+ * ⚠️ `crm_service_invoice_items.service_key` İKİ AYRI BİÇİMDE kayıtlı (22.09'da öğrenildi — ilk süzgeç
+ * yalnız birincisini tanıyordu ve Canlı Ekran'da entegrasyon 0'a düştü):
+ *   * Nebim içe aktarımı (sql/hizmet_faturalari_nebim_ICE_AKTARIM.sql) → param_key: 'kasapos_entegrasyonu_tms'
+ *   * Ekrandan giriş (resolveServiceLabels `value` ile doğrular)       → değer:    'KasaPOS Entegrasyonu + TMS'
+ * Bu yüzden eşleşme hem `service_key` hem `service_label` üzerinden, küçük harfe indirilmiş TAM eşleşmeyle
+ * yapılır; iki biçim de listede. (Kalıcı çözüm iki yazıcıyı tek biçime çekmek — backlog.)
+ *
+ * Liste Yönetimleri'nden yeni bir ENTEGRASYON kalemi eklenirse buraya da yazılır; yazılmazsa sayılmaz
+ * (sessizce şişmesin diye bilinçli). Para tarafı ("Kazanılan $") bu listeyle SÜZÜLMEZ — o "entegrasyondan
+ * gelen fatura tutarı", tüm kalemler.
  */
-export const INTEGRATION_DEVICE_SERVICE_KEYS: readonly string[] = ['kasapos_entegrasyonu', 'kasapos_entegrasyonu_tms'];
+export const INTEGRATION_DEVICE_SERVICE_KEYS: readonly string[] = [
+  // param_key biçimi (Nebim içe aktarımı)
+  'kasapos_entegrasyonu',
+  'kasapos_entegrasyonu_tms',
+  // değer/etiket biçimi (ekrandan giriş) — küçük harfle karşılaştırılır
+  'kasapos entegrasyonu',
+  'kasapos entegrasyonu + tms',
+];
 
-export function isIntegrationDeviceService(serviceKey: unknown): boolean {
-  return typeof serviceKey === 'string' && INTEGRATION_DEVICE_SERVICE_KEYS.includes(serviceKey.trim());
+/** Kalem entegrasyon cihazı mı? `service_key` ya da `service_label`'dan BİRİ eşleşirse evet. */
+export function isIntegrationDeviceService(serviceKey: unknown, serviceLabel?: unknown): boolean {
+  const match = (value: unknown) =>
+    typeof value === 'string' && INTEGRATION_DEVICE_SERVICE_KEYS.includes(value.trim().toLowerCase());
+  return match(serviceKey) || match(serviceLabel);
 }
 export type ServiceCurrency = (typeof SERVICE_CURRENCIES)[number];
 

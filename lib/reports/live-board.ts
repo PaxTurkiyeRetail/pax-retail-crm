@@ -443,13 +443,18 @@ const Q_INTEGRATIONS = `
 //   yalnız `INTEGRATION_DEVICE_SERVICE_KEYS` ($3) — Max Store / AirViewer kullanım lisansları cihaz
 //   değildir, sayılmaz. Süzme `aylik` içinde yapılır ki önceki ayla ARTIŞ karşılaştırması da aynı
 //   kalem kümesi üzerinden olsun. Tanım tek yerde: lib/sales/service-invoices-shared.ts.
+//
+//   EŞLEŞME HEM ANAHTAR HEM ETİKET ÜZERİNDEN: `service_key` iki biçimde kayıtlı (Nebim içe aktarımı
+//   param_key yazıyor, ekran değerin kendisini). İlk sürüm yalnız param_key'i tanıyordu ve kart 0'a
+//   düştü (22.09, Sinan: "entegrasyonlar hiç gelmemiş"). Karşılaştırma küçük harfe indirilmiş tam
+//   eşleşmedir — 'Max Store Kullanim' gibi kalemler yine dışarıda kalır.
 const Q_INTEGRATION_DEVICES = `
   with aylik as (
     select s.customer_id, date_trunc('month', s.period_month)::date as month, sum(i.quantity)::int as adet
     from public.crm_service_invoices s
     join public.crm_service_invoice_items i on i.invoice_id = s.id
     where s.status = 'active' and s.period_month <= $2::date
-      and i.service_key = any($3::text[])
+      and (lower(btrim(i.service_key)) = any($3::text[]) or lower(btrim(i.service_label)) = any($3::text[]))
     group by 1, 2
   ),
   artis as (

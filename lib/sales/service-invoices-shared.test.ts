@@ -96,12 +96,25 @@ describe('hizmet faturası — "her ay kesilmesi zorunlu"', () => {
 // 22.09 (Sinan): entegrasyon hedefinde yalnız KasaPOS / KasaPOS + TMS kalemleri sayılır; Max Store ve AirViewer kullanım lisansıdır.
 describe('INTEGRATION_DEVICE_SERVICE_KEYS — entegrasyon hedefine giren kalemler', () => {
   it('KasaPOS ve KasaPOS + TMS sayılır; Max Store, AirViewer, boş ve bilinmeyen anahtar sayılmaz', () => {
-    expect([...INTEGRATION_DEVICE_SERVICE_KEYS]).toEqual(['kasapos_entegrasyonu', 'kasapos_entegrasyonu_tms']);
+    expect(INTEGRATION_DEVICE_SERVICE_KEYS).toContain('kasapos_entegrasyonu_tms');
+    expect(INTEGRATION_DEVICE_SERVICE_KEYS).toContain('kasapos entegrasyonu + tms');
+    expect(INTEGRATION_DEVICE_SERVICE_KEYS).not.toContain('max_store_kullanim');
     expect(isIntegrationDeviceService('kasapos_entegrasyonu')).toBe(true);
     expect(isIntegrationDeviceService(' kasapos_entegrasyonu_tms ')).toBe(true);
     expect(isIntegrationDeviceService('max_store_kullanim')).toBe(false);
     expect(isIntegrationDeviceService('airviewer_kullanim')).toBe(false);
     expect(isIntegrationDeviceService('')).toBe(false);
     expect(isIntegrationDeviceService(null)).toBe(false);
+  });
+  // 22.09: service_key İKİ biçimde kayıtlı (Nebim param_key, ekran değerin kendisi). İlk süzgeç yalnız
+  // birincisini tanıdığı için Canlı Ekran'da entegrasyon 0'a düşmüştü — iki biçim de tanınmalı.
+  it('ekrandan girilen "KasaPOS Entegrasyonu + TMS" biçimi de sayılır (key ya da label)', () => {
+    expect(isIntegrationDeviceService('KasaPOS Entegrasyonu + TMS')).toBe(true);
+    expect(isIntegrationDeviceService('KasaPOS Entegrasyonu')).toBe(true);
+    expect(isIntegrationDeviceService('kasapos entegrasyonu')).toBe(true);
+    // anahtar tanınmasa bile etiket eşleşirse sayılır
+    expect(isIntegrationDeviceService('bilinmeyen_anahtar', 'KasaPOS Entegrasyonu + TMS')).toBe(true);
+    expect(isIntegrationDeviceService('max_store_kullanim', 'Max Store Kullanim')).toBe(false);
+    expect(isIntegrationDeviceService('airviewer_kullanim', 'AirViewer Kullanım')).toBe(false);
   });
 });

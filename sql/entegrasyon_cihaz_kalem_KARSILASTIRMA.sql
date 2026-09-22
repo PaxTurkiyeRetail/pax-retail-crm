@@ -9,6 +9,11 @@
 -- itibaren yalnız `kasapos_entegrasyonu` ve `kasapos_entegrasyonu_tms` anahtarlı kalemler sayılır
 -- (tanım: lib/sales/service-invoices-shared.ts INTEGRATION_DEVICE_SERVICE_KEYS).
 --
+-- ⚠️ 22.09 DERSİ: `service_key` İKİ BİÇİMDE kayıtlı — Nebim içe aktarımı param_key ('kasapos_entegrasyonu_tms'),
+-- ekrandan giriş değerin kendisi ('KasaPOS Entegrasyonu + TMS') yazıyor. İlk süzgeç yalnız birincisini tanıdığı
+-- için Canlı Ekran'da entegrasyon 0'a düştü. Eşleşme artık key VE label üzerinden, küçük harf tam eşleşme.
+-- §A'daki `service_key` sütunu hangi biçimin ne kadar olduğunu gösterir.
+--
 -- Bu betik iki hesabı yan yana koyar: §A kalem türlerine göre adet (neyin dışarıda kaldığı görünür),
 -- §B satışçı bazında ESKİ ve YENİ kural ile YTD "yeni entegre cihaz" — ekrandaki sayı §B'nin YENİ
 -- sütunuyla birebir aynı olmalı. §C Cem Koç'un firma firma kırılımı.
@@ -26,7 +31,9 @@
 \echo '=== A) Aktif hizmet faturası kalemleri — tür bazında adet (yıl içi) ==='
 select li.service_key,
        li.service_label,
-       case when li.service_key in ('kasapos_entegrasyonu', 'kasapos_entegrasyonu_tms') then 'SAYILIR' else 'sayılmaz' end as hedefte,
+       case when lower(btrim(li.service_key)) in ('kasapos_entegrasyonu', 'kasapos_entegrasyonu_tms', 'kasapos entegrasyonu', 'kasapos entegrasyonu + tms')
+            or lower(btrim(li.service_label)) in ('kasapos_entegrasyonu', 'kasapos_entegrasyonu_tms', 'kasapos entegrasyonu', 'kasapos entegrasyonu + tms')
+         then 'SAYILIR' else 'sayılmaz' end as hedefte,
        count(*)                     as satir,
        sum(li.quantity)             as adet_toplam_ham,
        count(distinct s.customer_id) as firma
@@ -52,7 +59,8 @@ aylik_yeni as (
   from public.crm_service_invoices s
   join public.crm_service_invoice_items li on li.invoice_id = s.id
   where s.status = 'active' and s.period_month <= current_date
-    and li.service_key in ('kasapos_entegrasyonu', 'kasapos_entegrasyonu_tms')
+    and (lower(btrim(li.service_key)) in ('kasapos_entegrasyonu', 'kasapos_entegrasyonu_tms', 'kasapos entegrasyonu', 'kasapos entegrasyonu + tms')
+         or lower(btrim(li.service_label)) in ('kasapos_entegrasyonu', 'kasapos_entegrasyonu_tms', 'kasapos entegrasyonu', 'kasapos entegrasyonu + tms'))
   group by 1, 2
 ),
 artis_eski as (
@@ -82,7 +90,9 @@ select m.musteri,
        to_char(s.period_month, 'YYYY-MM') as donem,
        li.service_label,
        li.quantity as adet,
-       case when li.service_key in ('kasapos_entegrasyonu', 'kasapos_entegrasyonu_tms') then 'SAYILIR' else 'sayılmaz' end as hedefte
+       case when lower(btrim(li.service_key)) in ('kasapos_entegrasyonu', 'kasapos_entegrasyonu_tms', 'kasapos entegrasyonu', 'kasapos entegrasyonu + tms')
+            or lower(btrim(li.service_label)) in ('kasapos_entegrasyonu', 'kasapos_entegrasyonu_tms', 'kasapos entegrasyonu', 'kasapos entegrasyonu + tms')
+         then 'SAYILIR' else 'sayılmaz' end as hedefte
 from public.crm_service_invoice_items li
 join public.crm_service_invoices s on s.id = li.invoice_id
 join public.musteriler m on m.id = s.customer_id
