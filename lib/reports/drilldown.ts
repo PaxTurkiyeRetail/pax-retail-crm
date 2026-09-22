@@ -264,8 +264,13 @@ export async function loadDrilldown(params: DrilldownParams, today = new Date())
   }
 
   if (params.kind === 'poc') {
+    // 22.09 (Sinan: "linklenmesinde diğer fazlar da görünüyor, onlar görünmezse süper olur"):
+    // liste artık YALNIZ `pocPhases` (faz 12). Eskiden rollout (24) da ekleniyordu — "Aktif POC"
+    // sayısı 5 iken liste 7 satır gösteriyordu; sayı ile arkasındaki liste AYNI kümeyi göstermeli
+    // (17.09 kuralı: "iki farklı sonuç istemiyoruz"). Canlı Ekran'ın "POC · Pilot · Rollout"
+    // SLAYDI değişmedi — başlığı rollout'u zaten vaat ediyor, o ayrı bir ekran.
     const rows = await safeQuery<{ customer_id: string; musteri: string; sorumlu: string; faz: number; faz_adi: string | null; baslangic: string | null; hedef: string | null; son_hareket: string | null }>(
-      Q_POC, [[...LIVE_BOARD_RULES.pocPhases, LIVE_BOARD_RULES.rolloutPhase], owner],
+      Q_POC, [[...LIVE_BOARD_RULES.pocPhases], owner],
     );
     return {
       title, subtitle: scope,
@@ -281,8 +286,8 @@ export async function loadDrilldown(params: DrilldownParams, today = new Date())
         customerId: row.customer_id,
         cells: [row.musteri, row.sorumlu, `${row.faz}${row.faz_adi ? ` · ${row.faz_adi}` : ''}`, row.baslangic, row.hedef, row.son_hareket],
       })),
-      stats: [{ label: 'Aktif POC / Pilot', value: count(rows.length) }],
-      note: `Faz ${LIVE_BOARD_RULES.pocPhases.join(', ')} (POC / pilot / uçtan uca test) ve faz ${LIVE_BOARD_RULES.rolloutPhase} (rollout).`,
+      stats: [{ label: 'Aktif POC', value: count(rows.length) }],
+      note: `Yalnız faz ${LIVE_BOARD_RULES.pocPhases.join(', ')} (POC Scope / Pilot Lokasyon). Rollout (faz ${LIVE_BOARD_RULES.rolloutPhase}) bu listede YOK — Canlı Ekran'ın "POC · Pilot · Rollout" slaydında görünür.`,
     };
   }
 

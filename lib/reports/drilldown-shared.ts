@@ -66,7 +66,7 @@ export const KIND_TITLE: Record<DrilldownKind, string> = {
   teklif: 'Teklifler',
   kapsama: 'Kapsanan Firmalar',
   portfoy: 'Portföy',
-  poc: 'Aktif POC · Pilot',
+  poc: 'Aktif POC',
   fatura: 'Kesilen Faturalar',
 };
 
