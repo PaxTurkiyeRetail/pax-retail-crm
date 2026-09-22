@@ -80,7 +80,7 @@ export default function YilZiyaretPortfoyClient() {
               <th style={{ padding: '10px 14px' }}>%</th>
               <th style={{ padding: '10px 14px' }}>Portföy</th>
               <th style={{ padding: '10px 14px' }}>H / F / K</th>
-              <th style={{ padding: '10px 14px' }} title="Hunter firma sayısı ile karşılaştır: her Hunter'ın Forecast ve Engel&Etki girişi olmalı">Hunter → Forecast → E&amp;E</th>
+              <th style={{ padding: '10px 14px' }} title="Hunter firma sayısı (soldaki H) ile karşılaştır: her Hunter'ın Forecast ve Engel&Etki girişi olmalı">Forecast → E&amp;E</th>
               <th style={{ padding: '10px 14px' }}>Hareketsiz Firma</th>
               <th style={{ padding: '10px 14px' }}>Temas Edilen Müşteri</th>
               <th style={{ padding: '10px 14px' }}>Ort. Temas / Firma</th>
@@ -101,10 +101,20 @@ export default function YilZiyaretPortfoyClient() {
                   {row.visitsYear.pct != null ? `%${row.visitsYear.pct}` : '—'}
                 </td>
                 <td style={{ padding: '10px 14px' }}>{row.portfolio.total}</td>
-                <td style={{ padding: '10px 14px' }}>{row.portfolio.hunter} / {row.portfolio.farmer} / {row.portfolio.kasa}</td>
                 <td style={{ padding: '10px 14px' }}>
-                  {row.portfolio.hunter}
-                  {' → '}
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <span style={{ display: 'inline-block', minWidth: 26, padding: '2px 6px', borderRadius: 6, textAlign: 'center', fontWeight: 700, background: 'rgba(37,99,235,0.15)', color: '#1d4ed8' }} title="Hunter">
+                      {row.portfolio.hunter}
+                    </span>
+                    <span style={{ display: 'inline-block', minWidth: 26, padding: '2px 6px', borderRadius: 6, textAlign: 'center', fontWeight: 700, background: 'rgba(22,163,74,0.15)', color: '#15803d' }} title="Farmer">
+                      {row.portfolio.farmer}
+                    </span>
+                    <span style={{ display: 'inline-block', minWidth: 26, padding: '2px 6px', borderRadius: 6, textAlign: 'center', fontWeight: 700, background: 'rgba(202,138,4,0.15)', color: '#a16207' }} title="Kasa">
+                      {row.portfolio.kasa}
+                    </span>
+                  </div>
+                </td>
+                <td style={{ padding: '10px 14px' }}>
                   <span style={{ color: row.forecastFirms < row.portfolio.hunter ? '#dc2626' : '#15803d', fontWeight: 600 }}>
                     {row.forecastFirms}
                   </span>
