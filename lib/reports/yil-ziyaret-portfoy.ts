@@ -24,20 +24,28 @@ export type YilZiyaretPortfoyPayload = {
   rows: YilZiyaretPortfoyRow[];
 };
 
-// Forecast girilmiş firma adedi, satışçı bazında (bu yıl, aktif forecast satırları).
+// Künye satıcı etiketi Hunter olan firma mı? (live-board.ts saticiEtiketi() ile AYNI mantık:
+// boş/hunter değilse Hunter sayılır — farmer/lead/kasa hariç. Tek yerden okunur kuralı burada
+// SQL'e taşınmış hâli, çünkü bu sorgular buildLiveBoard()'un dışında ayrı çalışıyor.)
+const HUNTER_FILTER = `lower(trim(coalesce(kv.satici_etiketi, ''))) not in ('farmer', 'lead', 'kasa')`;
+
+// Forecast girilmiş HUNTER firma adedi, satışçı bazında (bu yıl, aktif forecast satırları).
 const Q_FORECAST_FIRMS_BY_OWNER = `
   select coalesce(nullif(trim(f.owner_name), ''), '—') as owner,
          count(distinct f.customer_id)::int as firms
   from public.crm_forecasts f
-  where f.is_active = true and f.forecast_year = $1
+  left join public.musteri_kunye_v2 kv on kv.musteri_id = f.customer_id
+  where f.is_active = true and f.forecast_year = $1 and ${HUNTER_FILTER}
   group by 1
 `;
 
-// Engel & Etki kaydı olan firma adedi, satışçı bazında (view zaten forecast+blocker join'i).
+// Engel & Etki kaydı olan HUNTER firma adedi, satışçı bazında (view zaten forecast+blocker join'i).
 const Q_BLOCKER_FIRMS_BY_OWNER = `
   select coalesce(nullif(trim(v.sorumlu), ''), '—') as owner,
          count(distinct v.customer_id) filter (where v.has_blocker)::int as firms
   from public.v_crm_forecast_blocker_impact v
+  left join public.musteri_kunye_v2 kv on kv.musteri_id = v.customer_id
+  where ${HUNTER_FILTER}
   group by 1
 `;
 
