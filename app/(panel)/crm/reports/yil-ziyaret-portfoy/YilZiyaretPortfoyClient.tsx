@@ -13,6 +13,8 @@ type Row = {
     activitiesYear: number;
   };
   inactive: { count: number; days: number; unmatched: number };
+  forecastFirms: number;
+  blockerFirms: number;
 };
 
 type Payload = { generatedAt: string; rows: Row[] };
@@ -77,8 +79,8 @@ export default function YilZiyaretPortfoyClient() {
               <th style={{ padding: '10px 14px' }}>Yıl Ziyaret</th>
               <th style={{ padding: '10px 14px' }}>%</th>
               <th style={{ padding: '10px 14px' }}>Portföy</th>
-              <th style={{ padding: '10px 14px' }}>H / F</th>
-              <th style={{ padding: '10px 14px' }}>K</th>
+              <th style={{ padding: '10px 14px' }}>H / F / K</th>
+              <th style={{ padding: '10px 14px' }} title="Hunter firma sayısı ile karşılaştır: her Hunter'ın Forecast ve Engel&Etki girişi olmalı">Hunter → Forecast → E&amp;E</th>
               <th style={{ padding: '10px 14px' }}>Hareketsiz Firma</th>
               <th style={{ padding: '10px 14px' }}>Temas Edilen Müşteri</th>
               <th style={{ padding: '10px 14px' }}>Ort. Temas / Firma</th>
@@ -99,8 +101,18 @@ export default function YilZiyaretPortfoyClient() {
                   {row.visitsYear.pct != null ? `%${row.visitsYear.pct}` : '—'}
                 </td>
                 <td style={{ padding: '10px 14px' }}>{row.portfolio.total}</td>
-                <td style={{ padding: '10px 14px' }}>{row.portfolio.hunter} / {row.portfolio.farmer}</td>
-                <td style={{ padding: '10px 14px' }}>{row.portfolio.kasa}</td>
+                <td style={{ padding: '10px 14px' }}>{row.portfolio.hunter} / {row.portfolio.farmer} / {row.portfolio.kasa}</td>
+                <td style={{ padding: '10px 14px' }}>
+                  {row.portfolio.hunter}
+                  {' → '}
+                  <span style={{ color: row.forecastFirms < row.portfolio.hunter ? '#dc2626' : '#15803d', fontWeight: 600 }}>
+                    {row.forecastFirms}
+                  </span>
+                  {' → '}
+                  <span style={{ color: row.blockerFirms < row.portfolio.hunter ? '#dc2626' : '#15803d', fontWeight: 600 }}>
+                    {row.blockerFirms}
+                  </span>
+                </td>
                 <td style={{ padding: '10px 14px', color: row.inactive.count > 0 ? '#dc2626' : undefined, fontWeight: row.inactive.count > 0 ? 700 : 400 }}>
                   {row.inactive.count}
                 </td>
