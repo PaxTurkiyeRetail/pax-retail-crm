@@ -83,7 +83,7 @@ export default function YilZiyaretPortfoyClient() {
               <th style={{ padding: '10px 14px' }}>%</th>
               <th style={{ padding: '10px 14px' }}>Portföy</th>
               <th style={{ padding: '10px 14px' }}>H / F / K</th>
-              <th style={{ padding: '10px 14px' }} title="Hunter firma sayısı (soldaki H) ile karşılaştır: her Hunter'ın Forecast ve Engel&Etki girişi olmalı">Forecast → E&amp;E</th>
+              <th style={{ padding: '10px 14px' }} title="Hunter firmalardan Forecast / Engel&Etki girişi EKSİK olan sayısı (0 = tamam)">Forecast Eksik / E&amp;E Eksik</th>
               <th style={{ padding: '10px 14px' }}>Hareketsiz Firma</th>
               <th style={{ padding: '10px 14px' }}>Temas Edilen Müşteri</th>
               <th style={{ padding: '10px 14px' }}>Ort. Temas / Firma</th>
@@ -137,12 +137,12 @@ export default function YilZiyaretPortfoyClient() {
                     title={hasMissing ? 'Eksik firmaları görmek için tıkla' : ''}
                   >
                     <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                      <span style={{ display: 'inline-block', minWidth: 26, padding: '2px 6px', borderRadius: 6, textAlign: 'center', fontWeight: 700, background: row.forecastFirms < row.portfolio.hunter ? 'rgba(220,38,38,0.15)' : 'rgba(21,128,61,0.15)', color: row.forecastFirms < row.portfolio.hunter ? '#dc2626' : '#15803d' }}>
-                        {row.forecastFirms}
+                      <span style={{ display: 'inline-block', minWidth: 26, padding: '2px 6px', borderRadius: 6, textAlign: 'center', fontWeight: 700, background: row.missingForecastFirms.length > 0 ? 'rgba(220,38,38,0.15)' : 'rgba(21,128,61,0.15)', color: row.missingForecastFirms.length > 0 ? '#dc2626' : '#15803d' }} title="Forecast eksik">
+                        {row.missingForecastFirms.length}
                       </span>
-                      <span style={{ color: 'var(--text-3)' }}>→</span>
-                      <span style={{ display: 'inline-block', minWidth: 26, padding: '2px 6px', borderRadius: 6, textAlign: 'center', fontWeight: 700, background: row.blockerFirms < row.portfolio.hunter ? 'rgba(220,38,38,0.15)' : 'rgba(21,128,61,0.15)', color: row.blockerFirms < row.portfolio.hunter ? '#dc2626' : '#15803d' }}>
-                        {row.blockerFirms}
+                      <span style={{ color: 'var(--text-3)' }}>/</span>
+                      <span style={{ display: 'inline-block', minWidth: 26, padding: '2px 6px', borderRadius: 6, textAlign: 'center', fontWeight: 700, background: row.missingBlockerFirms.length > 0 ? 'rgba(220,38,38,0.15)' : 'rgba(21,128,61,0.15)', color: row.missingBlockerFirms.length > 0 ? '#dc2626' : '#15803d' }} title="Engel&Etki eksik">
+                        {row.missingBlockerFirms.length}
                       </span>
                     </div>
                   </button>
