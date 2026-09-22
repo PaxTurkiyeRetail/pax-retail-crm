@@ -136,13 +136,15 @@ export default function YilZiyaretPortfoyClient() {
                     }}
                     title={hasMissing ? 'Eksik firmaları görmek için tıkla' : ''}
                   >
-                    <span style={{ color: row.forecastFirms < row.portfolio.hunter ? '#dc2626' : '#15803d', fontWeight: 600 }}>
-                      {row.forecastFirms}
-                    </span>
-                    {' → '}
-                    <span style={{ color: row.blockerFirms < row.portfolio.hunter ? '#dc2626' : '#15803d', fontWeight: 600 }}>
-                      {row.blockerFirms}
-                    </span>
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      <span style={{ display: 'inline-block', minWidth: 26, padding: '2px 6px', borderRadius: 6, textAlign: 'center', fontWeight: 700, background: row.forecastFirms < row.portfolio.hunter ? 'rgba(220,38,38,0.15)' : 'rgba(21,128,61,0.15)', color: row.forecastFirms < row.portfolio.hunter ? '#dc2626' : '#15803d' }}>
+                        {row.forecastFirms}
+                      </span>
+                      <span style={{ color: 'var(--text-3)' }}>→</span>
+                      <span style={{ display: 'inline-block', minWidth: 26, padding: '2px 6px', borderRadius: 6, textAlign: 'center', fontWeight: 700, background: row.blockerFirms < row.portfolio.hunter ? 'rgba(220,38,38,0.15)' : 'rgba(21,128,61,0.15)', color: row.blockerFirms < row.portfolio.hunter ? '#dc2626' : '#15803d' }}>
+                        {row.blockerFirms}
+                      </span>
+                    </div>
                   </button>
                 </td>
                 <td style={{ padding: '10px 14px', color: row.inactive.count > 0 ? '#dc2626' : undefined, fontWeight: row.inactive.count > 0 ? 700 : 400 }}>

@@ -32,82 +32,69 @@ export type YilZiyaretPortfoyPayload = {
 // SQL'e taşınmış hâli, çünkü bu sorgular buildLiveBoard()'un dışında ayrı çalışıyor.)
 const HUNTER_FILTER = `lower(trim(coalesce(kv.satici_etiketi, ''))) not in ('farmer', 'lead', 'kasa')`;
 
-// Forecast girilmiş HUNTER firma adedi, satışçı bazında (bu yıl, aktif forecast satırları).
-// DİKKAT: f.owner_name forecast girilirken yazılan SNAPSHOT isim — müşteri sonradan başka
-// satışçıya devredilmişse güncel sorumluyu YANSITMAZ. Portföy/Blocker sayıları musteriler.sorumlu
-// (güncel) üzerinden geldiği için burada da GÜNCEL sorumlu (m.sorumlu) kullanılıyor, owner_name değil.
-const Q_FORECAST_FIRMS_BY_OWNER = `
-  select coalesce(nullif(trim(m.sorumlu), ''), '—') as owner,
-         count(distinct f.customer_id)::int as firms
-  from public.crm_forecasts f
-  join public.musteriler m on m.id = f.customer_id
-  left join public.musteri_kunye_v2 kv on kv.musteri_id = f.customer_id
-  where f.is_active = true and f.forecast_year = $1 and ${HUNTER_FILTER}
+// TEK SORGUDA hem sayı hem eksik-liste: önceden ayrı sorgulardı, toplamları tutmuyordu
+// (Hunter sayısı ≠ girilmiş + eksik). Şimdi tek derived table'dan geldiği için
+// firms + missing.length HER ZAMAN owner'ın Hunter toplamına eşit.
+// DİKKAT: f.owner_name forecast girilirken yazılan SNAPSHOT isim, müşteri devrolmuşse güncel
+// sorumluyu yansıtmaz — bu yüzden GÜNCEL sorumlu (m.sorumlu) kullanılıyor, owner_name değil.
+const Q_FORECAST_HUNTER = `
+  with hunter_firms as (
+    select coalesce(nullif(trim(m.sorumlu), ''), '—') as owner,
+           m.musteri,
+           exists (
+             select 1 from public.crm_forecasts f
+             where f.customer_id = m.id and f.is_active = true and f.forecast_year = $1
+           ) as has_forecast
+    from public.musteriler m
+    left join public.musteri_kunye_v2 kv on kv.musteri_id = m.id
+    where ${HUNTER_FILTER}
+  )
+  select owner,
+         count(*) filter (where has_forecast)::int as firms,
+         array_agg(musteri order by musteri) filter (where not has_forecast) as missing
+  from hunter_firms
   group by 1
 `;
 
-// Engel & Etki KAYDI GİRİLMİŞ HUNTER firma adedi, satışçı bazında.
-// DİKKAT: v.has_blocker "hâlâ açık/aktif engel var mı" demek (view'de: not has_blocker -> 'no_blocker'
-// statüsü) — "kayıt girilmiş mi" demek DEĞİL. Girilmiş-mi karşılaştırması için blocker_id is not null
-// kullanılır, has_blocker=false (engel yok diye kapatılmış) girişler de sayılmalı.
-const Q_BLOCKER_FIRMS_BY_OWNER = `
-  select coalesce(nullif(trim(v.sorumlu), ''), '—') as owner,
-         count(distinct v.customer_id) filter (where v.blocker_id is not null)::int as firms
-  from public.v_crm_forecast_blocker_impact v
-  left join public.musteri_kunye_v2 kv on kv.musteri_id = v.customer_id
-  where ${HUNTER_FILTER}
+// v_crm_forecast_blocker_impact müşteri başına birden fazla satır üretebiliyor (forecast_id'ye göre
+// birden fazla blocker girilmiş olabilir) — "distinct on" ile müşteri başına TEK satıra indirgeniyor,
+// varsa girilmiş (blocker_id not null) satır tercih ediliyor. Böylece has+missing toplamı Hunter
+// sayısını AŞMAZ / EKSİK KALMAZ.
+const Q_BLOCKER_HUNTER = `
+  with hunter_blocker as (
+    select distinct on (v.customer_id)
+           coalesce(nullif(trim(v.sorumlu), ''), '—') as owner,
+           v.musteri,
+           (v.blocker_id is not null) as answered
+    from public.v_crm_forecast_blocker_impact v
+    left join public.musteri_kunye_v2 kv on kv.musteri_id = v.customer_id
+    where ${HUNTER_FILTER}
+    order by v.customer_id, (v.blocker_id is not null) desc
+  )
+  select owner,
+         count(*) filter (where answered)::int as firms,
+         array_agg(musteri order by musteri) filter (where not answered) as missing
+  from hunter_blocker
   group by 1
 `;
 
-async function countsByOwner(sql: string, params: unknown[] = []) {
-  const map = new Map<string, number>();
+type HunterCompareRow = { owner: string; firms: number; missing: string[] | null };
+
+async function hunterCompareByOwner(sql: string, params: unknown[] = []) {
+  const firmsMap = new Map<string, number>();
+  const missingMap = new Map<string, string[]>();
   try {
     const result = await db.query(sql, params);
-    for (const row of result.rows as Array<{ owner: string; firms: number }>) {
-      map.set(normalizeName(row.owner), (map.get(normalizeName(row.owner)) ?? 0) + Number(row.firms ?? 0));
+    for (const row of result.rows as HunterCompareRow[]) {
+      const key = normalizeName(row.owner);
+      firmsMap.set(key, Number(row.firms ?? 0));
+      missingMap.set(key, row.missing ?? []);
     }
   } catch (err) {
     // Rapor kırılmasın (0 dönsün) ama hata görünmez kalmasın — log'a düş.
     console.error('[yil-ziyaret-portfoy] sorgu hatası:', err);
   }
-  return map;
-}
-
-// Forecast'ı EKSİK Hunter firma adları, satışçı bazında (hangi firmalar diye sorulunca göstermek için).
-const Q_MISSING_FORECAST_FIRMS = `
-  select coalesce(nullif(trim(m.sorumlu), ''), '—') as owner,
-         array_agg(m.musteri order by m.musteri) as firms
-  from public.musteriler m
-  left join public.musteri_kunye_v2 kv on kv.musteri_id = m.id
-  where ${HUNTER_FILTER}
-    and not exists (
-      select 1 from public.crm_forecasts f
-      where f.customer_id = m.id and f.is_active = true and f.forecast_year = $1
-    )
-  group by 1
-`;
-
-// Engel & Etki kaydı EKSİK Hunter firma adları, satışçı bazında.
-const Q_MISSING_BLOCKER_FIRMS = `
-  select coalesce(nullif(trim(v.sorumlu), ''), '—') as owner,
-         array_agg(v.musteri order by v.musteri) as firms
-  from public.v_crm_forecast_blocker_impact v
-  left join public.musteri_kunye_v2 kv on kv.musteri_id = v.customer_id
-  where ${HUNTER_FILTER} and v.blocker_id is null
-  group by 1
-`;
-
-async function namesByOwner(sql: string, params: unknown[] = []) {
-  const map = new Map<string, string[]>();
-  try {
-    const result = await db.query(sql, params);
-    for (const row of result.rows as Array<{ owner: string; firms: string[] }>) {
-      map.set(normalizeName(row.owner), row.firms ?? []);
-    }
-  } catch (err) {
-    console.error('[yil-ziyaret-portfoy] sorgu hatası:', err);
-  }
-  return map;
+  return { firmsMap, missingMap };
 }
 
 // Yıl Ziyaret & Portföy Sağlığı Raporu — Canlı Ekran'daki "Aktivite Hedefi" (yıl ziyaret) ve
@@ -116,14 +103,12 @@ async function namesByOwner(sql: string, params: unknown[] = []) {
 // ilgili alanlar seçilip düzleştiriliyor (altın kural 17: tek yerden okunur).
 export async function buildYilZiyaretPortfoyRaporu(): Promise<YilZiyaretPortfoyPayload> {
   const year = new Date().getFullYear();
-  const [board, forecastByOwner, blockerByOwner, missingForecastByOwner, missingBlockerByOwner] = await Promise.all([
+  const [board, forecast, blocker] = await Promise.all([
     buildLiveBoard(),
-    countsByOwner(Q_FORECAST_FIRMS_BY_OWNER, [year]),
-    countsByOwner(Q_BLOCKER_FIRMS_BY_OWNER),
-    namesByOwner(Q_MISSING_FORECAST_FIRMS, [year]),
-    namesByOwner(Q_MISSING_BLOCKER_FIRMS),
+    hunterCompareByOwner(Q_FORECAST_HUNTER, [year]),
+    hunterCompareByOwner(Q_BLOCKER_HUNTER),
   ]);
-  const rows: YilZiyaretPortfoyRow[] = board.owners.map((o) => ({
+  const rows: YilZiyaretPortfoyRow[] = board.owners.map((o: { owner: string; initials: string; goals: { visitsYear: YilZiyaretPortfoyRow['visitsYear'] }; portfolio: YilZiyaretPortfoyRow['portfolio']; coverage: { covered: { actual: number }; contactsPer: YilZiyaretPortfoyRow['coverage']['contactsPer']; activitiesYear: number }; inactive: YilZiyaretPortfoyRow['inactive'] }) => ({
     owner: o.owner,
     initials: o.initials,
     visitsYear: o.goals.visitsYear,
@@ -134,10 +119,10 @@ export async function buildYilZiyaretPortfoyRaporu(): Promise<YilZiyaretPortfoyP
       activitiesYear: o.coverage.activitiesYear,
     },
     inactive: o.inactive,
-    forecastFirms: forecastByOwner.get(normalizeName(o.owner)) ?? 0,
-    blockerFirms: blockerByOwner.get(normalizeName(o.owner)) ?? 0,
-    missingForecastFirms: missingForecastByOwner.get(normalizeName(o.owner)) ?? [],
-    missingBlockerFirms: missingBlockerByOwner.get(normalizeName(o.owner)) ?? [],
+    forecastFirms: forecast.firmsMap.get(normalizeName(o.owner)) ?? 0,
+    blockerFirms: blocker.firmsMap.get(normalizeName(o.owner)) ?? 0,
+    missingForecastFirms: forecast.missingMap.get(normalizeName(o.owner)) ?? [],
+    missingBlockerFirms: blocker.missingMap.get(normalizeName(o.owner)) ?? [],
   }));
   return { generatedAt: new Date().toISOString(), rows };
 }
