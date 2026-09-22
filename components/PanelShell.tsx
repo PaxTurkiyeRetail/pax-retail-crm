@@ -243,6 +243,7 @@ function routeMeta(pathname: string) {
     ["/crm/reports/seller-presentation", "Rapor Merkezi", "Satışçı Sunumu"],
     ["/crm/reports/seller-followup", "Rapor Merkezi", "Dashboard"],
     ["/crm/reports/entegrasyon-raporu", "Rapor Merkezi", "Entegrasyon Raporu"],
+    ["/crm/reports/yil-ziyaret-portfoy", "Rapor Merkezi", "Yıl Ziyaret & Portföy Sağlığı"],
     ["/crm/reports/forecast", "Rapor Merkezi", "Forecast Raporu"],
     ["/crm/reports/quotes", "Rapor Merkezi", "Teklif Raporları"],
     ["/crm/reports/kasapos-summary", "Rapor Merkezi", "KasaPOS Raporu"],
@@ -492,7 +493,7 @@ export default function PanelShell({
     // ya da ekleme sırası değildir; yeni rapor eklerken bu listeye yerini sorarak koy.
     //   1 Dashboard (eski adı "Satışçı Takip Raporu"; Faz Raporu ve Canlı Ekran onun sekmeleri)
     //   2 Teklif Raporları · 3 Forecast Raporu · 4 KasaPOS Raporu · 5 Aktiviteler Raporu
-    //   6 Satışçı Sunumu · 7 Yönetim Sunumu · 8 Entegrasyon Raporu
+    //   6 Satışçı Sunumu · 7 Yönetim Sunumu · 8 Entegrasyon Raporu · 9 Yıl Ziyaret & Portföy Sağlığı
     // Menüden KALKANLAR: Faz Raporu (artık Satışçı Takip Raporu'nun sekmesi),
     // Satıcı Özeti ve Kullanıcı Aktivite Sunumu (15.09'da tamamen kapatıldı — sayfaları 404).
     if (allowed('report.read.all') && allowed('screen.reports.view')) {
@@ -539,6 +540,13 @@ export default function PanelShell({
       reports.push({
         href: "/crm/reports/entegrasyon-raporu",
         label: "Entegrasyon Raporu",
+        iconKey: "weekly",
+        exact: true,
+      });
+      // 9. Yıl Ziyaret & Portföy Sağlığı Raporu — Taha, 22.09.2026: liste sonuna eklendi.
+      reports.push({
+        href: "/crm/reports/yil-ziyaret-portfoy",
+        label: "Yıl Ziyaret & Portföy Sağlığı",
         iconKey: "weekly",
         exact: true,
       });
