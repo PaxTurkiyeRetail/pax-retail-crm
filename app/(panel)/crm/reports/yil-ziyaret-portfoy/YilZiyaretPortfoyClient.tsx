@@ -82,8 +82,8 @@ export default function YilZiyaretPortfoyClient() {
               <th style={{ padding: '10px 14px' }}>Yıl Ziyaret</th>
               <th style={{ padding: '10px 14px' }}>%</th>
               <th style={{ padding: '10px 14px' }}>Portföy</th>
-              <th style={{ padding: '10px 14px' }}>H / F / K</th>
-              <th style={{ padding: '10px 14px' }} title="Hunter firmalardan Forecast / Engel&Etki girişi EKSİK olan sayısı (0 = tamam)">Forecast Eksik / E&amp;E Eksik</th>
+              <th style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>H / F / K</th>
+              <th style={{ padding: '10px 14px', whiteSpace: 'nowrap' }} title="Hunter firmalardan Forecast / Engel&Etki girişi EKSİK olan sayısı (0 = tamam)">Forecast Eksik / E&amp;E Eksik</th>
               <th style={{ padding: '10px 14px' }}>Hareketsiz Firma</th>
               <th style={{ padding: '10px 14px' }}>Temas Edilen Müşteri</th>
               <th style={{ padding: '10px 14px' }}>Ort. Temas / Firma</th>
