@@ -82,8 +82,20 @@ export default function YilZiyaretPortfoyClient() {
               <th style={{ padding: '10px 14px' }}>Yıl Ziyaret</th>
               <th style={{ padding: '10px 14px' }}>%</th>
               <th style={{ padding: '10px 14px' }}>Portföy</th>
-              <th style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>H / F / K</th>
-              <th style={{ padding: '10px 14px', whiteSpace: 'nowrap' }} title="Hunter firmalardan Forecast / Engel&Etki girişi EKSİK olan sayısı (0 = tamam)">Forecast Eksik / E&amp;E Eksik</th>
+              <th style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <span style={{ display: 'inline-block', minWidth: 26, textAlign: 'center' }}>H</span>
+                  <span style={{ display: 'inline-block', minWidth: 26, textAlign: 'center' }}>F</span>
+                  <span style={{ display: 'inline-block', minWidth: 26, textAlign: 'center' }}>K</span>
+                </div>
+              </th>
+              <th style={{ padding: '10px 14px', whiteSpace: 'nowrap' }} title="Hunter firmalardan Forecast / Engel&Etki girişi EKSİK olan sayısı (0 = tamam)">
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <span style={{ display: 'inline-block', minWidth: 26, textAlign: 'center' }}>Forecast</span>
+                  <span style={{ visibility: 'hidden' }}>/</span>
+                  <span style={{ display: 'inline-block', minWidth: 26, textAlign: 'center' }}>E&amp;E</span>
+                </div>
+              </th>
               <th style={{ padding: '10px 14px' }}>Hareketsiz Firma</th>
               <th style={{ padding: '10px 14px' }}>Temas Edilen Müşteri</th>
               <th style={{ padding: '10px 14px' }}>Ort. Temas / Firma</th>
