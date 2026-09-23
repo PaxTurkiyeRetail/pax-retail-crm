@@ -23,9 +23,12 @@ type Row = {
   farmerFirmNames: string[];
   kasaFirmNames: string[];
   bankaFirmNames: string[];
+  leadFirmNames: string[];
+  activeFirmNames: string[];
+  coveredCustomerNames: string[];
 };
 
-type DetailKind = 'forecast' | 'kunye' | 'hunter' | 'farmer' | 'kasa' | 'banka';
+type DetailKind = 'forecast' | 'kunye' | 'hunter' | 'farmer' | 'kasa' | 'banka' | 'lead' | 'total' | 'active' | 'covered';
 
 type Payload = { generatedAt: string; rows: Row[] };
 
@@ -96,6 +99,7 @@ export default function YilZiyaretPortfoyClient() {
                   <span style={{ display: 'inline-block', minWidth: 26, textAlign: 'center' }}>F</span>
                   <span style={{ display: 'inline-block', minWidth: 26, textAlign: 'center' }}>K</span>
                   <span style={{ display: 'inline-block', minWidth: 26, textAlign: 'center' }}>B</span>
+                  <span style={{ display: 'inline-block', minWidth: 26, textAlign: 'center' }}>L</span>
                 </div>
               </th>
               <th style={{ padding: '10px 14px', whiteSpace: 'nowrap' }} title="Hunter firmalardan Forecast / Engel&Etki girişi EKSİK olan sayısı (0 = tamam)">
@@ -125,6 +129,11 @@ export default function YilZiyaretPortfoyClient() {
               const isFarmerOpen = openDetail?.owner === row.owner && openDetail.kind === 'farmer';
               const isKasaOpen = openDetail?.owner === row.owner && openDetail.kind === 'kasa';
               const isBankaOpen = openDetail?.owner === row.owner && openDetail.kind === 'banka';
+              const isLeadOpen = openDetail?.owner === row.owner && openDetail.kind === 'lead';
+              const isTotalOpen = openDetail?.owner === row.owner && openDetail.kind === 'total';
+              const isActiveOpen = openDetail?.owner === row.owner && openDetail.kind === 'active';
+              const isCoveredOpen = openDetail?.owner === row.owner && openDetail.kind === 'covered';
+              const allFirmNames = [...row.hunterFirmNames, ...row.farmerFirmNames, ...row.kasaFirmNames, ...row.bankaFirmNames, ...row.leadFirmNames].sort((a, b) => a.localeCompare(b, 'tr'));
               return (
               <Fragment key={row.owner}>
                 <tr style={{ borderBottom: '1px solid var(--border-1, #f1f5f9)' }}>
@@ -135,7 +144,17 @@ export default function YilZiyaretPortfoyClient() {
                 <td style={{ padding: '10px 14px', fontWeight: 700, color: pctColor(row.visitsYear.pct) }}>
                   {row.visitsYear.pct != null ? `%${row.visitsYear.pct}` : '—'}
                 </td>
-                <td style={{ padding: '10px 14px' }}>{row.portfolio.total}</td>
+                <td style={{ padding: '10px 14px' }}>
+                  <button
+                    type="button"
+                    disabled={allFirmNames.length === 0}
+                    onClick={() => setOpenDetail(isTotalOpen ? null : { owner: row.owner, kind: 'total' })}
+                    style={{ background: 'none', border: 'none', padding: 0, cursor: allFirmNames.length ? 'pointer' : 'default', textDecoration: allFirmNames.length ? 'underline' : 'none', font: 'inherit' }}
+                    title="Portföydeki tüm firmaları görmek için tıkla"
+                  >
+                    {row.portfolio.total}
+                  </button>
+                </td>
                 <td style={{ padding: '10px 14px' }}>
                   <div style={{ display: 'flex', gap: 6 }}>
                     <button
@@ -168,7 +187,7 @@ export default function YilZiyaretPortfoyClient() {
                       title="Kasa firmaları görmek için tıkla"
                     >
                       <span style={{ display: 'inline-block', minWidth: 26, padding: '2px 6px', borderRadius: 6, textAlign: 'center', fontWeight: 700, background: 'rgba(202,138,4,0.15)', color: '#a16207', textDecoration: row.kasaFirmNames.length ? 'underline' : 'none' }}>
-                        {row.portfolio.kasa}
+                        {row.kasaFirmNames.length}
                       </span>
                     </button>
                     <button
@@ -180,6 +199,17 @@ export default function YilZiyaretPortfoyClient() {
                     >
                       <span style={{ display: 'inline-block', minWidth: 26, padding: '2px 6px', borderRadius: 6, textAlign: 'center', fontWeight: 700, background: 'rgba(124,58,237,0.15)', color: '#6d28d9', textDecoration: row.bankaFirmNames.length ? 'underline' : 'none' }}>
                         {row.bankaFirmNames.length}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      disabled={row.leadFirmNames.length === 0}
+                      onClick={() => setOpenDetail(isLeadOpen ? null : { owner: row.owner, kind: 'lead' })}
+                      style={{ background: 'none', border: 'none', padding: 0, cursor: row.leadFirmNames.length ? 'pointer' : 'default', font: 'inherit' }}
+                      title="Lead firmaları görmek için tıkla"
+                    >
+                      <span style={{ display: 'inline-block', minWidth: 26, padding: '2px 6px', borderRadius: 6, textAlign: 'center', fontWeight: 700, background: 'rgba(100,116,139,0.15)', color: '#475569', textDecoration: row.leadFirmNames.length ? 'underline' : 'none' }}>
+                        {row.leadFirmNames.length}
                       </span>
                     </button>
                   </div>
@@ -210,18 +240,35 @@ export default function YilZiyaretPortfoyClient() {
                     </div>
                   </button>
                 </td>
-                <td style={{ padding: '10px 14px', color: row.inactive.count > 0 ? '#dc2626' : undefined, fontWeight: row.inactive.count > 0 ? 700 : 400 }}>
-                  {row.inactive.count > 0 ? (
-                    <a
-                      href={`/crm/hareketsiz?satici=${encodeURIComponent(row.owner)}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      style={{ color: 'inherit', fontWeight: 700, textDecoration: 'underline' }}
-                      title="Hareketsiz firmaları yeni sekmede görmek için tıkla"
+                <td style={{ padding: '10px 14px' }}>
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <button
+                      type="button"
+                      disabled={row.activeFirmNames.length === 0}
+                      onClick={() => setOpenDetail(isActiveOpen ? null : { owner: row.owner, kind: 'active' })}
+                      style={{ background: 'none', border: 'none', padding: 0, cursor: row.activeFirmNames.length ? 'pointer' : 'default', font: 'inherit' }}
+                      title="Hareketli firmaları görmek için tıkla"
                     >
-                      {row.inactive.count}
-                    </a>
-                  ) : row.inactive.count}
+                      <span style={{ display: 'inline-block', minWidth: 26, padding: '2px 6px', borderRadius: 6, textAlign: 'center', fontWeight: 700, background: 'rgba(21,128,61,0.15)', color: '#15803d', textDecoration: row.activeFirmNames.length ? 'underline' : 'none' }} title="Hareketli">
+                        {row.activeFirmNames.length}
+                      </span>
+                    </button>
+                    {row.inactive.count > 0 ? (
+                      <a
+                        href={`/crm/hareketsiz?satici=${encodeURIComponent(row.owner)}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{ color: '#dc2626', fontWeight: 700, textDecoration: 'underline' }}
+                        title="Hareketsiz firmaları yeni sekmede görmek için tıkla"
+                      >
+                        <span style={{ display: 'inline-block', minWidth: 26, padding: '2px 6px', borderRadius: 6, textAlign: 'center', background: 'rgba(220,38,38,0.15)' }}>
+                          {row.inactive.count}
+                        </span>
+                      </a>
+                    ) : (
+                      <span style={{ display: 'inline-block', minWidth: 26, padding: '2px 6px', borderRadius: 6, textAlign: 'center', fontWeight: 700, background: 'rgba(21,128,61,0.15)', color: '#15803d' }}>0</span>
+                    )}
+                  </div>
                 </td>
                 <td style={{ padding: '10px 14px' }}>
                   <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
@@ -248,7 +295,17 @@ export default function YilZiyaretPortfoyClient() {
                     </button>
                   </div>
                 </td>
-                <td style={{ padding: '10px 14px' }}>{row.coverage.coveredCustomers}</td>
+                <td style={{ padding: '10px 14px' }}>
+                  <button
+                    type="button"
+                    disabled={row.coveredCustomerNames.length === 0}
+                    onClick={() => setOpenDetail(isCoveredOpen ? null : { owner: row.owner, kind: 'covered' })}
+                    style={{ background: 'none', border: 'none', padding: 0, cursor: row.coveredCustomerNames.length ? 'pointer' : 'default', textDecoration: row.coveredCustomerNames.length ? 'underline' : 'none', font: 'inherit' }}
+                    title="Temas edilen müşterileri görmek için tıkla"
+                  >
+                    {row.coverage.coveredCustomers}
+                  </button>
+                </td>
                 <td style={{ padding: '10px 14px' }}>
                   {row.coverage.contactsPer.actual}
                   {row.coverage.contactsPer.target != null ? ` / ${row.coverage.contactsPer.target}` : ''}
@@ -313,6 +370,38 @@ export default function YilZiyaretPortfoyClient() {
                     <td colSpan={10} style={{ padding: '12px 14px', fontSize: 12 }}>
                       <strong style={{ color: '#6d28d9' }}>Banka/Finans firmalar ({row.bankaFirmNames.length}):</strong>
                       <div style={{ marginTop: 4 }}>{row.bankaFirmNames.join(', ')}</div>
+                    </td>
+                  </tr>
+                )}
+                {isLeadOpen && (
+                  <tr style={{ background: 'var(--bg-2, #f8fafc)' }}>
+                    <td colSpan={10} style={{ padding: '12px 14px', fontSize: 12 }}>
+                      <strong style={{ color: '#475569' }}>Lead firmalar ({row.leadFirmNames.length}):</strong>
+                      <div style={{ marginTop: 4 }}>{row.leadFirmNames.join(', ')}</div>
+                    </td>
+                  </tr>
+                )}
+                {isTotalOpen && (
+                  <tr style={{ background: 'var(--bg-2, #f8fafc)' }}>
+                    <td colSpan={10} style={{ padding: '12px 14px', fontSize: 12 }}>
+                      <strong>Portföydeki tüm firmalar ({allFirmNames.length}):</strong>
+                      <div style={{ marginTop: 4 }}>{allFirmNames.join(', ')}</div>
+                    </td>
+                  </tr>
+                )}
+                {isActiveOpen && (
+                  <tr style={{ background: 'var(--bg-2, #f8fafc)' }}>
+                    <td colSpan={10} style={{ padding: '12px 14px', fontSize: 12 }}>
+                      <strong style={{ color: '#15803d' }}>Hareketli firmalar ({row.activeFirmNames.length}):</strong>
+                      <div style={{ marginTop: 4 }}>{row.activeFirmNames.join(', ')}</div>
+                    </td>
+                  </tr>
+                )}
+                {isCoveredOpen && (
+                  <tr style={{ background: 'var(--bg-2, #f8fafc)' }}>
+                    <td colSpan={10} style={{ padding: '12px 14px', fontSize: 12 }}>
+                      <strong style={{ color: '#15803d' }}>Temas edilen müşteriler ({row.coveredCustomerNames.length}):</strong>
+                      <div style={{ marginTop: 4 }}>{row.coveredCustomerNames.join(', ')}</div>
                     </td>
                   </tr>
                 )}

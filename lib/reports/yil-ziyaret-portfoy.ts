@@ -1,6 +1,10 @@
 import { db } from '@/lib/db';
 import { buildLiveBoard } from '@/lib/reports/live-board';
 import { normalizeName } from '@/lib/reports/live-board-shared';
+import { loadHunterFarmerActivity } from '@/lib/reports/inactive-customers';
+import { isInactiveRow } from '@/lib/reports/inactive-customers-shared';
+import { activityLabelFromRow } from '@/lib/activities/presentation';
+import { activityTargetKind } from '@/lib/reports/weekly-targets-shared';
 
 export type YilZiyaretPortfoyRow = {
   owner: string;
@@ -29,6 +33,14 @@ export type YilZiyaretPortfoyRow = {
   kasaFirmNames: string[];
   // B = Banka/Finans sektöründeki firma sayısı (23.09, Taha talebi) — H/F/K'nın yanına.
   bankaFirmNames: string[];
+  // L = Lead firma isim listesi (23.09, müdür talebi) — H/F/K/B'nin yanına.
+  leadFirmNames: string[];
+  // Hareketli firma isimleri (23.09, Taha talebi) — Hareketsiz'in yanına, aynı Müşteri Listesi
+  // kaynağından (Hunter/Farmer), sadece "hareketsiz DEĞİL" (matched && !isInactiveRow) filtresiyle.
+  activeFirmNames: string[];
+  // Temas edilen müşteri isim listesi (23.09) — coverage.coveredCustomers sayısının detayı,
+  // live-board.ts'deki AYNI sınıflandırmayla (activityTargetKind: salesPhysical/salesOnline).
+  coveredCustomerNames: string[];
 };
 
 export type YilZiyaretPortfoyPayload = {
@@ -116,12 +128,13 @@ const Q_KUNYE_HEALTH = `
   group by 1
 `;
 
-// H/F/K/B firma isim listeleri (23.09 düzeltme, Taha): H+F+K+B toplamı Portföy'e EŞİT olmalı —
-// her firma tek kolonda sayılır (mutually exclusive), 4 kategori öncelik sırasıyla ayrılır:
+// H/F/K/B/L firma isim listeleri (23.09 düzeltme, Taha): H+F+K+B+L toplamı Portföy'e EŞİT
+// olmalı — her firma tek kolonda sayılır (mutually exclusive), kategori öncelik sırasıyla ayrılır:
 // 1) sektör Banka/Finans ise → B (etiketi ne olursa olsun)
 // 2) değilse etiket=farmer → F
 // 3) değilse etiket=kasa → K (satıcı etiketindeki "Kasa" — iş ortağı DEĞİL)
-// 4) kalan (Hunter/Lead/boş) → H
+// 4) değilse etiket=lead → L (müdür talebi: Lead ayrı görünsün)
+// 5) kalan (Hunter/boş) → H
 const Q_PORTFOLIO_FIRMS = `
   with cat as (
     select coalesce(nullif(trim(m.sorumlu), ''), '—') as owner,
@@ -130,6 +143,7 @@ const Q_PORTFOLIO_FIRMS = `
              when m.sektor = 'Banka / Finans' then 'banka'
              when lower(trim(coalesce(kv.satici_etiketi, ''))) = 'farmer' then 'farmer'
              when lower(trim(coalesce(kv.satici_etiketi, ''))) = 'kasa' then 'kasa'
+             when lower(trim(coalesce(kv.satici_etiketi, ''))) = 'lead' then 'lead'
              else 'hunter'
            end as kategori
     from public.musteriler m
@@ -139,15 +153,29 @@ const Q_PORTFOLIO_FIRMS = `
          array_agg(musteri order by musteri) filter (where kategori = 'hunter') as hunter,
          array_agg(musteri order by musteri) filter (where kategori = 'farmer') as farmer,
          array_agg(musteri order by musteri) filter (where kategori = 'kasa') as kasa,
-         array_agg(musteri order by musteri) filter (where kategori = 'banka') as banka
+         array_agg(musteri order by musteri) filter (where kategori = 'banka') as banka,
+         array_agg(musteri order by musteri) filter (where kategori = 'lead') as lead
   from cat
   group by 1
 `;
 
-type PortfolioFirmsRow = { owner: string; hunter: string[] | null; farmer: string[] | null; kasa: string[] | null; banka: string[] | null };
+// Temas edilen müşteri (23.09): live-board.ts:719-731 ile AYNI kaynak + AYNI sınıflandırma
+// (pipeline_eventleri, planlanan aksiyon hariç, yalnız salesPhysical/salesOnline). Yıl aralığı
+// da aynı mantık: takvim yılı başından bugüne (İstanbul).
+const Q_COVERED_CUSTOMERS = `
+  select pe.aksiyon, pe.durum, pe.created_by, pe.musteri_id::text as musteri_id, m.musteri
+  from public.pipeline_eventleri pe
+  left join public.musteriler m on m.id = pe.musteri_id
+  where coalesce(pe.aktivite_tarihi, (pe.created_at at time zone 'Europe/Istanbul')::date)
+        between make_date(extract(year from (now() at time zone 'Europe/Istanbul'))::int, 1, 1)
+            and (now() at time zone 'Europe/Istanbul')::date
+    and not (pe.durum = 'Başlamadı' and pe.hedef_tarihi is not null)
+`;
+
+type PortfolioFirmsRow = { owner: string; hunter: string[] | null; farmer: string[] | null; kasa: string[] | null; banka: string[] | null; lead: string[] | null };
 
 async function portfolioFirmsByOwner() {
-  const map = new Map<string, { hunter: string[]; farmer: string[]; kasa: string[]; banka: string[] }>();
+  const map = new Map<string, { hunter: string[]; farmer: string[]; kasa: string[]; banka: string[]; lead: string[] }>();
   try {
     const result = await db.query(Q_PORTFOLIO_FIRMS);
     for (const row of result.rows as PortfolioFirmsRow[]) {
@@ -156,6 +184,7 @@ async function portfolioFirmsByOwner() {
         farmer: row.farmer ?? [],
         kasa: row.kasa ?? [],
         banka: row.banka ?? [],
+        lead: row.lead ?? [],
       });
     }
   } catch (err) {
@@ -183,6 +212,48 @@ async function kunyeHealthByOwner() {
   return { tamamMap, missingMap };
 }
 
+type CoveredRow = { aksiyon: string | null; durum: string | null; created_by: string | null; musteri_id: string | null; musteri: string | null };
+
+async function coveredCustomerNamesByOwner() {
+  const map = new Map<string, Set<string>>();
+  try {
+    const result = await db.query(Q_COVERED_CUSTOMERS);
+    for (const row of result.rows as CoveredRow[]) {
+      const creator = (row.created_by ?? '').trim();
+      if (!creator || !row.musteri) continue;
+      const kind = activityTargetKind(activityLabelFromRow(row));
+      if (kind !== 'salesPhysical' && kind !== 'salesOnline') continue;
+      const key = normalizeName(creator);
+      const set = map.get(key) ?? new Set<string>();
+      set.add(row.musteri);
+      map.set(key, set);
+    }
+  } catch (err) {
+    console.error('[yil-ziyaret-portfoy] temas edilen müşteri sorgu hatası:', err);
+  }
+  const out = new Map<string, string[]>();
+  for (const [key, set] of map) out.set(key, Array.from(set).sort((a, b) => a.localeCompare(b, 'tr')));
+  return out;
+}
+
+async function activeFirmNamesByOwner() {
+  const map = new Map<string, string[]>();
+  try {
+    const rows = await loadHunterFarmerActivity();
+    for (const row of rows) {
+      if (!row.matched || isInactiveRow(row) || !row.musteri) continue;
+      const key = normalizeName(row.owner);
+      const list = map.get(key) ?? [];
+      list.push(row.musteri);
+      map.set(key, list);
+    }
+    for (const [key, list] of map) map.set(key, [...new Set(list)].sort((a, b) => a.localeCompare(b, 'tr')));
+  } catch (err) {
+    console.error('[yil-ziyaret-portfoy] hareketli firma sorgu hatası:', err);
+  }
+  return map;
+}
+
 async function hunterCompareByOwner(sql: string, params: unknown[] = []) {
   const firmsMap = new Map<string, number>();
   const missingMap = new Map<string, string[]>();
@@ -205,12 +276,14 @@ async function hunterCompareByOwner(sql: string, params: unknown[] = []) {
 // Ayrı sorgu YOK: veri zaten buildLiveBoard() içinde owner bazlı hesaplı — burada sadece
 // ilgili alanlar seçilip düzleştiriliyor (altın kural 17: tek yerden okunur).
 export async function buildYilZiyaretPortfoyRaporu(): Promise<YilZiyaretPortfoyPayload> {
-  const [board, forecast, blocker, kunye, portfolioFirms] = await Promise.all([
+  const [board, forecast, blocker, kunye, portfolioFirms, activeFirms, coveredNames] = await Promise.all([
     buildLiveBoard(),
     hunterCompareByOwner(Q_FORECAST_HUNTER),
     hunterCompareByOwner(Q_BLOCKER_HUNTER),
     kunyeHealthByOwner(),
     portfolioFirmsByOwner(),
+    activeFirmNamesByOwner(),
+    coveredCustomerNamesByOwner(),
   ]);
   const rows: YilZiyaretPortfoyRow[] = board.owners.map((o: { owner: string; initials: string; goals: { visitsYear: YilZiyaretPortfoyRow['visitsYear'] }; portfolio: YilZiyaretPortfoyRow['portfolio']; coverage: { covered: { actual: number }; contactsPer: YilZiyaretPortfoyRow['coverage']['contactsPer']; activitiesYear: number }; inactive: YilZiyaretPortfoyRow['inactive'] }) => ({
     owner: o.owner,
@@ -233,6 +306,9 @@ export async function buildYilZiyaretPortfoyRaporu(): Promise<YilZiyaretPortfoyP
     farmerFirmNames: portfolioFirms.get(normalizeName(o.owner))?.farmer ?? [],
     kasaFirmNames: portfolioFirms.get(normalizeName(o.owner))?.kasa ?? [],
     bankaFirmNames: portfolioFirms.get(normalizeName(o.owner))?.banka ?? [],
+    leadFirmNames: portfolioFirms.get(normalizeName(o.owner))?.lead ?? [],
+    activeFirmNames: activeFirms.get(normalizeName(o.owner)) ?? [],
+    coveredCustomerNames: coveredNames.get(normalizeName(o.owner)) ?? [],
   }));
   return { generatedAt: new Date().toISOString(), rows };
 }
