@@ -27,6 +27,8 @@ export type YilZiyaretPortfoyRow = {
   // Künye Sağlığı (22.09): tüm portföy (Hunter+Farmer+Lead+Kasa) için künye doluluk durumu.
   kunyeHealth: { tamam: number; eksik: number; yok: number };
   missingKunyeFirms: string[];
+  // Künye Tamam olan firma isimleri (23.09, Taha talebi) — Tamam sayacına tıklayınca görünsün.
+  tamamKunyeFirms: string[];
   // H/F/K firma isim listeleri (22.09) — badge tıklanınca kim olduğu görülsün.
   hunterFirmNames: string[];
   farmerFirmNames: string[];
@@ -123,7 +125,8 @@ const Q_KUNYE_HEALTH = `
          count(*) filter (where durum = 'Tamam')::int as tamam,
          count(*) filter (where durum = 'Eksik')::int as eksik,
          count(*) filter (where durum = 'Yok')::int as yok,
-         array_agg(musteri order by musteri) filter (where durum <> 'Tamam') as missing
+         array_agg(musteri order by musteri) filter (where durum <> 'Tamam') as missing,
+         array_agg(musteri order by musteri) filter (where durum = 'Tamam') as tamam_list
   from kunye_rows
   group by 1
 `;
@@ -194,22 +197,24 @@ async function portfolioFirmsByOwner() {
 }
 
 type HunterCompareRow = { owner: string; firms: number; missing: string[] | null };
-type KunyeHealthRow = { owner: string; tamam: number; eksik: number; yok: number; missing: string[] | null };
+type KunyeHealthRow = { owner: string; tamam: number; eksik: number; yok: number; missing: string[] | null; tamam_list: string[] | null };
 
 async function kunyeHealthByOwner() {
   const tamamMap = new Map<string, { tamam: number; eksik: number; yok: number }>();
   const missingMap = new Map<string, string[]>();
+  const tamamListMap = new Map<string, string[]>();
   try {
     const result = await db.query(Q_KUNYE_HEALTH);
     for (const row of result.rows as KunyeHealthRow[]) {
       const key = normalizeName(row.owner);
       tamamMap.set(key, { tamam: Number(row.tamam ?? 0), eksik: Number(row.eksik ?? 0), yok: Number(row.yok ?? 0) });
       missingMap.set(key, row.missing ?? []);
+      tamamListMap.set(key, row.tamam_list ?? []);
     }
   } catch (err) {
     console.error('[yil-ziyaret-portfoy] künye sorgu hatası:', err);
   }
-  return { tamamMap, missingMap };
+  return { tamamMap, missingMap, tamamListMap };
 }
 
 type CoveredRow = { aksiyon: string | null; durum: string | null; created_by: string | null; musteri_id: string | null; musteri: string | null };
@@ -302,6 +307,7 @@ export async function buildYilZiyaretPortfoyRaporu(): Promise<YilZiyaretPortfoyP
     missingBlockerFirms: blocker.missingMap.get(normalizeName(o.owner)) ?? [],
     kunyeHealth: kunye.tamamMap.get(normalizeName(o.owner)) ?? { tamam: 0, eksik: 0, yok: 0 },
     missingKunyeFirms: kunye.missingMap.get(normalizeName(o.owner)) ?? [],
+    tamamKunyeFirms: kunye.tamamListMap.get(normalizeName(o.owner)) ?? [],
     hunterFirmNames: portfolioFirms.get(normalizeName(o.owner))?.hunter ?? [],
     farmerFirmNames: portfolioFirms.get(normalizeName(o.owner))?.farmer ?? [],
     kasaFirmNames: portfolioFirms.get(normalizeName(o.owner))?.kasa ?? [],

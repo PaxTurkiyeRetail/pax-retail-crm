@@ -19,6 +19,7 @@ type Row = {
   missingBlockerFirms: string[];
   kunyeHealth: { tamam: number; eksik: number; yok: number };
   missingKunyeFirms: string[];
+  tamamKunyeFirms: string[];
   hunterFirmNames: string[];
   farmerFirmNames: string[];
   kasaFirmNames: string[];
@@ -28,7 +29,7 @@ type Row = {
   coveredCustomerNames: string[];
 };
 
-type DetailKind = 'forecast' | 'kunye' | 'hunter' | 'farmer' | 'kasa' | 'banka' | 'lead' | 'total' | 'active' | 'covered';
+type DetailKind = 'forecast' | 'kunye' | 'kunyeTamam' | 'hunter' | 'farmer' | 'kasa' | 'banka' | 'lead' | 'total' | 'active' | 'covered';
 
 type Payload = { generatedAt: string; rows: Row[] };
 
@@ -125,6 +126,7 @@ export default function YilZiyaretPortfoyClient() {
               const hasKunyeMissing = row.missingKunyeFirms.length > 0;
               const isForecastOpen = openDetail?.owner === row.owner && openDetail.kind === 'forecast';
               const isKunyeOpen = openDetail?.owner === row.owner && openDetail.kind === 'kunye';
+              const isKunyeTamamOpen = openDetail?.owner === row.owner && openDetail.kind === 'kunyeTamam';
               const isHunterOpen = openDetail?.owner === row.owner && openDetail.kind === 'hunter';
               const isFarmerOpen = openDetail?.owner === row.owner && openDetail.kind === 'farmer';
               const isKasaOpen = openDetail?.owner === row.owner && openDetail.kind === 'kasa';
@@ -272,9 +274,17 @@ export default function YilZiyaretPortfoyClient() {
                 </td>
                 <td style={{ padding: '10px 14px' }}>
                   <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                    <span style={{ display: 'inline-block', minWidth: 26, padding: '2px 6px', borderRadius: 6, textAlign: 'center', fontWeight: 700, background: 'rgba(21,128,61,0.15)', color: '#15803d' }} title="Künye tamam">
-                      {row.kunyeHealth.tamam}
-                    </span>
+                    <button
+                      type="button"
+                      disabled={row.tamamKunyeFirms.length === 0}
+                      onClick={() => setOpenDetail(isKunyeTamamOpen ? null : { owner: row.owner, kind: 'kunyeTamam' })}
+                      style={{ background: 'none', border: 'none', padding: 0, cursor: row.tamamKunyeFirms.length ? 'pointer' : 'default', font: 'inherit' }}
+                      title="Künyesi tamam firmaları görmek için tıkla"
+                    >
+                      <span style={{ display: 'inline-block', minWidth: 26, padding: '2px 6px', borderRadius: 6, textAlign: 'center', fontWeight: 700, background: 'rgba(21,128,61,0.15)', color: '#15803d', textDecoration: row.tamamKunyeFirms.length ? 'underline' : 'none' }} title="Künye tamam">
+                        {row.kunyeHealth.tamam}
+                      </span>
+                    </button>
                     <button
                       type="button"
                       disabled={!hasKunyeMissing}
@@ -337,6 +347,16 @@ export default function YilZiyaretPortfoyClient() {
                       <strong style={{ color: '#dc2626' }}>Künye eksik/yok ({row.missingKunyeFirms.length}):</strong>
                       <div style={{ marginTop: 4 }}>
                         {row.missingKunyeFirms.length === 0 ? 'Yok' : row.missingKunyeFirms.join(', ')}
+                      </div>
+                    </td>
+                  </tr>
+                )}
+                {isKunyeTamamOpen && (
+                  <tr style={{ background: 'var(--bg-2, #f8fafc)' }}>
+                    <td colSpan={10} style={{ padding: '12px 14px', fontSize: 12 }}>
+                      <strong style={{ color: '#15803d' }}>Künye tamam ({row.tamamKunyeFirms.length}):</strong>
+                      <div style={{ marginTop: 4 }}>
+                        {row.tamamKunyeFirms.length === 0 ? 'Yok' : row.tamamKunyeFirms.join(', ')}
                       </div>
                     </td>
                   </tr>
