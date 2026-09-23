@@ -224,24 +224,29 @@ export default function YilZiyaretPortfoyClient() {
                   ) : row.inactive.count}
                 </td>
                 <td style={{ padding: '10px 14px' }}>
-                  <button
-                    type="button"
-                    disabled={!hasKunyeMissing}
-                    onClick={() => setOpenDetail(isKunyeOpen ? null : { owner: row.owner, kind: 'kunye' })}
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      padding: 0,
-                      cursor: hasKunyeMissing ? 'pointer' : 'default',
-                      textDecoration: hasKunyeMissing ? 'underline' : 'none',
-                      font: 'inherit',
-                    }}
-                    title={hasKunyeMissing ? 'Künyesi eksik/yok firmaları görmek için tıkla' : ''}
-                  >
-                    <span style={{ display: 'inline-block', minWidth: 26, padding: '2px 6px', borderRadius: 6, textAlign: 'center', fontWeight: 700, background: hasKunyeMissing ? 'rgba(220,38,38,0.15)' : 'rgba(21,128,61,0.15)', color: hasKunyeMissing ? '#dc2626' : '#15803d' }}>
-                      {row.missingKunyeFirms.length}
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <span style={{ display: 'inline-block', minWidth: 26, padding: '2px 6px', borderRadius: 6, textAlign: 'center', fontWeight: 700, background: 'rgba(21,128,61,0.15)', color: '#15803d' }} title="Künye tamam">
+                      {row.kunyeHealth.tamam}
                     </span>
-                  </button>
+                    <button
+                      type="button"
+                      disabled={!hasKunyeMissing}
+                      onClick={() => setOpenDetail(isKunyeOpen ? null : { owner: row.owner, kind: 'kunye' })}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        padding: 0,
+                        cursor: hasKunyeMissing ? 'pointer' : 'default',
+                        textDecoration: hasKunyeMissing ? 'underline' : 'none',
+                        font: 'inherit',
+                      }}
+                      title={hasKunyeMissing ? 'Künyesi eksik/yok firmaları görmek için tıkla' : ''}
+                    >
+                      <span style={{ display: 'inline-block', minWidth: 26, padding: '2px 6px', borderRadius: 6, textAlign: 'center', fontWeight: 700, background: hasKunyeMissing ? 'rgba(220,38,38,0.15)' : 'rgba(21,128,61,0.15)', color: hasKunyeMissing ? '#dc2626' : '#15803d' }} title="Künye eksik/yok">
+                        {row.missingKunyeFirms.length}
+                      </span>
+                    </button>
+                  </div>
                 </td>
                 <td style={{ padding: '10px 14px' }}>{row.coverage.coveredCustomers}</td>
                 <td style={{ padding: '10px 14px' }}>
