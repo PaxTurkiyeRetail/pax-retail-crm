@@ -116,8 +116,12 @@ const Q_KUNYE_HEALTH = `
   group by 1
 `;
 
-// H/F/K firma isim listeleri (22.09): live-board.ts'deki portfolio.hunter/farmer/kasa TANIMIYLA
-// AYNI kategorizasyon — hunter = "Farmer değilse" (Lead/Kasa/boş dahil), kasa = etiket='Kasa'.
+// H/F/K firma isim listeleri (23.09 düzeltme, Taha): H+F+K toplamı Portföy'e EŞİT olmalı —
+// önceden hunter = "Farmer değilse" diyip Kasa'yı da içine alıyordu, K de ayrıca Kasa'yı
+// sayınca aynı firma iki kolonda birden görünüp toplam Portföy'ü AŞIYORDU. Şimdi 3 kategori
+// AYRIK (mutually exclusive): farmer / kasa / hunter(=ne farmer ne kasa — Lead/boş dahil).
+// K = satıcı etiketindeki "Kasa" (iş ortağı DEĞİL — customer_type ile karıştırılmasın).
+// B = sektör = Banka/Finans, kesişimli bilgi amaçlı ayrı kolon (toplama dahil değil).
 const Q_PORTFOLIO_FIRMS = `
   with cat as (
     select coalesce(nullif(trim(m.sorumlu), ''), '—') as owner,
@@ -128,7 +132,7 @@ const Q_PORTFOLIO_FIRMS = `
     left join public.musteri_kunye_v2 kv on kv.musteri_id = m.id
   )
   select owner,
-         array_agg(musteri order by musteri) filter (where etiket <> 'farmer') as hunter,
+         array_agg(musteri order by musteri) filter (where etiket <> 'farmer' and etiket <> 'kasa') as hunter,
          array_agg(musteri order by musteri) filter (where etiket = 'farmer') as farmer,
          array_agg(musteri order by musteri) filter (where etiket = 'kasa') as kasa,
          array_agg(musteri order by musteri) filter (where sektor = 'Banka / Finans') as banka

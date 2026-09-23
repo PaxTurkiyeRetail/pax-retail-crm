@@ -146,7 +146,7 @@ export default function YilZiyaretPortfoyClient() {
                       title="Hunter firmaları görmek için tıkla"
                     >
                       <span style={{ display: 'inline-block', minWidth: 26, padding: '2px 6px', borderRadius: 6, textAlign: 'center', fontWeight: 700, background: 'rgba(37,99,235,0.15)', color: '#1d4ed8', textDecoration: row.hunterFirmNames.length ? 'underline' : 'none' }}>
-                        {row.portfolio.hunter}
+                        {row.hunterFirmNames.length}
                       </span>
                     </button>
                     <button
@@ -157,7 +157,7 @@ export default function YilZiyaretPortfoyClient() {
                       title="Farmer firmaları görmek için tıkla"
                     >
                       <span style={{ display: 'inline-block', minWidth: 26, padding: '2px 6px', borderRadius: 6, textAlign: 'center', fontWeight: 700, background: 'rgba(22,163,74,0.15)', color: '#15803d', textDecoration: row.farmerFirmNames.length ? 'underline' : 'none' }}>
-                        {row.portfolio.farmer}
+                        {row.farmerFirmNames.length}
                       </span>
                     </button>
                     <button
