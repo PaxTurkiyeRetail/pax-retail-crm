@@ -27,6 +27,8 @@ export type YilZiyaretPortfoyRow = {
   hunterFirmNames: string[];
   farmerFirmNames: string[];
   kasaFirmNames: string[];
+  // B = Banka/Finans sektöründeki firma sayısı (23.09, Taha talebi) — H/F/K'nın yanına.
+  bankaFirmNames: string[];
 };
 
 export type YilZiyaretPortfoyPayload = {
@@ -120,22 +122,24 @@ const Q_PORTFOLIO_FIRMS = `
   with cat as (
     select coalesce(nullif(trim(m.sorumlu), ''), '—') as owner,
            m.musteri,
-           lower(trim(coalesce(kv.satici_etiketi, ''))) as etiket
+           lower(trim(coalesce(kv.satici_etiketi, ''))) as etiket,
+           m.sektor
     from public.musteriler m
     left join public.musteri_kunye_v2 kv on kv.musteri_id = m.id
   )
   select owner,
          array_agg(musteri order by musteri) filter (where etiket <> 'farmer') as hunter,
          array_agg(musteri order by musteri) filter (where etiket = 'farmer') as farmer,
-         array_agg(musteri order by musteri) filter (where etiket = 'kasa') as kasa
+         array_agg(musteri order by musteri) filter (where etiket = 'kasa') as kasa,
+         array_agg(musteri order by musteri) filter (where sektor = 'Banka / Finans') as banka
   from cat
   group by 1
 `;
 
-type PortfolioFirmsRow = { owner: string; hunter: string[] | null; farmer: string[] | null; kasa: string[] | null };
+type PortfolioFirmsRow = { owner: string; hunter: string[] | null; farmer: string[] | null; kasa: string[] | null; banka: string[] | null };
 
 async function portfolioFirmsByOwner() {
-  const map = new Map<string, { hunter: string[]; farmer: string[]; kasa: string[] }>();
+  const map = new Map<string, { hunter: string[]; farmer: string[]; kasa: string[]; banka: string[] }>();
   try {
     const result = await db.query(Q_PORTFOLIO_FIRMS);
     for (const row of result.rows as PortfolioFirmsRow[]) {
@@ -143,6 +147,7 @@ async function portfolioFirmsByOwner() {
         hunter: row.hunter ?? [],
         farmer: row.farmer ?? [],
         kasa: row.kasa ?? [],
+        banka: row.banka ?? [],
       });
     }
   } catch (err) {
@@ -219,6 +224,7 @@ export async function buildYilZiyaretPortfoyRaporu(): Promise<YilZiyaretPortfoyP
     hunterFirmNames: portfolioFirms.get(normalizeName(o.owner))?.hunter ?? [],
     farmerFirmNames: portfolioFirms.get(normalizeName(o.owner))?.farmer ?? [],
     kasaFirmNames: portfolioFirms.get(normalizeName(o.owner))?.kasa ?? [],
+    bankaFirmNames: portfolioFirms.get(normalizeName(o.owner))?.banka ?? [],
   }));
   return { generatedAt: new Date().toISOString(), rows };
 }
