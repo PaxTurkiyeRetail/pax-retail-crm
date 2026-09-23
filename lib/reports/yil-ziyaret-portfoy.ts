@@ -116,26 +116,30 @@ const Q_KUNYE_HEALTH = `
   group by 1
 `;
 
-// H/F/K firma isim listeleri (23.09 düzeltme, Taha): H+F+K toplamı Portföy'e EŞİT olmalı —
-// önceden hunter = "Farmer değilse" diyip Kasa'yı da içine alıyordu, K de ayrıca Kasa'yı
-// sayınca aynı firma iki kolonda birden görünüp toplam Portföy'ü AŞIYORDU. Şimdi 3 kategori
-// AYRIK (mutually exclusive): farmer / kasa / hunter(=ne farmer ne kasa — Lead/boş dahil).
-// K = satıcı etiketindeki "Kasa" (iş ortağı DEĞİL — customer_type ile karıştırılmasın).
-// B = sektör = Banka/Finans, kesişimli bilgi amaçlı ayrı kolon (toplama dahil değil).
+// H/F/K/B firma isim listeleri (23.09 düzeltme, Taha): H+F+K+B toplamı Portföy'e EŞİT olmalı —
+// her firma tek kolonda sayılır (mutually exclusive), 4 kategori öncelik sırasıyla ayrılır:
+// 1) sektör Banka/Finans ise → B (etiketi ne olursa olsun)
+// 2) değilse etiket=farmer → F
+// 3) değilse etiket=kasa → K (satıcı etiketindeki "Kasa" — iş ortağı DEĞİL)
+// 4) kalan (Hunter/Lead/boş) → H
 const Q_PORTFOLIO_FIRMS = `
   with cat as (
     select coalesce(nullif(trim(m.sorumlu), ''), '—') as owner,
            m.musteri,
-           lower(trim(coalesce(kv.satici_etiketi, ''))) as etiket,
-           m.sektor
+           case
+             when m.sektor = 'Banka / Finans' then 'banka'
+             when lower(trim(coalesce(kv.satici_etiketi, ''))) = 'farmer' then 'farmer'
+             when lower(trim(coalesce(kv.satici_etiketi, ''))) = 'kasa' then 'kasa'
+             else 'hunter'
+           end as kategori
     from public.musteriler m
     left join public.musteri_kunye_v2 kv on kv.musteri_id = m.id
   )
   select owner,
-         array_agg(musteri order by musteri) filter (where etiket <> 'farmer' and etiket <> 'kasa') as hunter,
-         array_agg(musteri order by musteri) filter (where etiket = 'farmer') as farmer,
-         array_agg(musteri order by musteri) filter (where etiket = 'kasa') as kasa,
-         array_agg(musteri order by musteri) filter (where sektor = 'Banka / Finans') as banka
+         array_agg(musteri order by musteri) filter (where kategori = 'hunter') as hunter,
+         array_agg(musteri order by musteri) filter (where kategori = 'farmer') as farmer,
+         array_agg(musteri order by musteri) filter (where kategori = 'kasa') as kasa,
+         array_agg(musteri order by musteri) filter (where kategori = 'banka') as banka
   from cat
   group by 1
 `;
