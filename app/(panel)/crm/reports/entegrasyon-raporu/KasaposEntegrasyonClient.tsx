@@ -328,7 +328,7 @@ export default function KasaposEntegrasyonClient() {
                 Aktif satış kasalarının {data.kpi.kullanimPct != null ? `%${data.kpi.kullanimPct}'ı` : '—'} faturalanıyor; {fmt(data.kpi.firsatAdet)} kasa satış fırsatı
               </h2>
               <p className="kpe-help no-print">
-                Aktif satış kasası sütununa sayıyı yazıp Enter&apos;a basın — anında kaydedilir. Fiyat, firmanın son faturalı ayındaki birim fiyattır.
+                Faturalanan = Satışlar › Hizmet Faturaları KasaPOS kalem adedi. Aktif satış kasası aynı fatura formundan girilir. Fiyat, firmanın son faturalı ayındaki birim fiyattır.
               </p>
               <div className="kpe-card kpe-scroll">
                 <table className="kpe-htable">
