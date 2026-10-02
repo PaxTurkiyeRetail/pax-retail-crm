@@ -34,6 +34,11 @@ describe('computeKasaposEntegrasyon', () => {
     expect(by('MARKAPARK')).toMatchObject({ refAdet: 0, eksikAy: true, kullanimPct: 0, firsatAdet: 21, potansiyel: 168 });
   });
 
+  it('aktif kasa girilmemişse son fatura adedi kullanılır', () => {
+    const p = computeKasaposEntegrasyon(2026, [{ customerId: 'X', ay: 9, adet: 33, tutar: 264 }], [firm('X', null)]);
+    expect(p.firms[0]).toMatchObject({ aktifKasa: 33, kullanimPct: 100, firsatAdet: 0 });
+  });
+
   it('KPI toplamları; kasası girilmeyen firma hariç', () => {
     expect(payload.kpi).toMatchObject({
       refAdet: 503, aktifKasaToplam: 622, faturalananAktif: 503, firsatAdet: 119, potansiyel: 805, kasaGirilmemisFirma: 1,
