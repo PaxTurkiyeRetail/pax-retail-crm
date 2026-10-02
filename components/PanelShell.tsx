@@ -41,7 +41,7 @@ type NavItem = {
   iconKey: IconKey;
   exact?: boolean;
 };
-type NavGroup = { title: string; items: NavItem[] };
+type NavGroup = { title: string; items: NavItem[]; tail?: boolean };
 type ReportsGroup = { title: string; iconKey: IconKey; items: NavItem[] };
 
 function isActive(pathname: string, item: NavItem, search = "") {
@@ -415,15 +415,27 @@ export default function PanelShell({
     const overview: NavItem[] = [];
     const operations: NavItem[] = [];
     const reports: NavItem[] = [];
+    const tail: NavItem[] = [];
+    const canDashboard = allowed('report.read.all') && allowed('screen.reports.view');
+
+    // MENÜ (Taha, 02.10.2026): Dashboard en üstte "Genel Bakış" yerine; Talepler menünün en altında.
+    // Dashboard yetkisi olmayan kullanıcıda eski Genel Bakış (/crm) kalır — menüsüz kalmasın.
+    if (canDashboard)
+      overview.push({
+        href: "/crm/reports/seller-followup",
+        label: "Dashboard",
+        iconKey: "dashboard",
+        exact: true,
+      });
 
     if ((allowed('request.read.own') || allowed('request.read.all') || allowed('request.create')) && allowed('screen.requests.view'))
-      overview.push({
+      tail.push({
         href: "/requests",
         label: "Talepler",
         iconKey: "requests",
       });
 
-    if (allowed('customer.read') && allowed('screen.crm.dashboard.view'))
+    if (!canDashboard && allowed('customer.read') && allowed('screen.crm.dashboard.view'))
       overview.push({
         href: "/crm",
         label: "Genel Bakış",
@@ -495,17 +507,9 @@ export default function PanelShell({
     //   6 Satışçı Sunumu · 7 Yönetim Sunumu · 8 Entegrasyon Raporu · 9 Yıl Ziyaret & Portföy Sağlığı
     // Menüden KALKANLAR: Faz Raporu (artık Satışçı Takip Raporu'nun sekmesi),
     // Satıcı Özeti ve Kullanıcı Aktivite Sunumu (15.09'da tamamen kapatıldı — sayfaları 404).
-    if (allowed('report.read.all') && allowed('screen.reports.view')) {
-      // Canlı Ekran (Command Center) ve Faz bu raporun sekmeleridir (?tab=live / ?tab=faz);
-      // ayrı menü girdileri bilinçli olarak yok (Sinan, 04.09 · 15.09).
-      // "Satışçı Takip Raporu" adı 15.09 akşam **Dashboard** oldu (Çağdaş Bey'in listesindeki
-      // ilk satır); Takip Listesi · Kişi Bazlı Aktivite · Faz · Canlı Ekran bunun sekmeleridir.
-      reports.push({
-        href: "/crm/reports/seller-followup",
-        label: "Dashboard",
-        iconKey: "weekly",
-        exact: true,
-      });
+    if (canDashboard) {
+      // Canlı Ekran (Command Center) ve Faz Dashboard'un sekmeleridir (?tab=live / ?tab=faz).
+      // Dashboard (/crm/reports/seller-followup) 02.10'dan beri Genel grubunda en üstte.
       reports.push({
         href: "/crm/reports/quotes",
         label: "Teklif Raporları",
@@ -554,6 +558,7 @@ export default function PanelShell({
       groups: [
         { title: "Genel", items: overview },
         { title: "Operasyon", items: operations },
+        { title: "Destek", items: tail, tail: true },
       ].filter((group) => group.items.length > 0),
       reportsGroup: reports.length
         ? { title: "Raporlar", iconKey: "weekly", items: reports }
@@ -653,7 +658,7 @@ export default function PanelShell({
         </div>
 
         <div className="pax-nav-area">
-          {groups.map((group) => (
+          {groups.filter((g) => !g.tail).map((group) => (
             <div className="pax-nav-section" key={group.title}>
               <div className="pax-section-label tw-nav-label">{group.title}</div>
               <nav className="pax-nav-list">
@@ -726,6 +731,34 @@ export default function PanelShell({
               )}
             </div>
           )}
+
+          {groups.filter((g) => g.tail).map((group) => (
+            <div className="pax-nav-section" key={group.title}>
+              <div className="pax-section-label tw-nav-label">{group.title}</div>
+              <nav className="pax-nav-list">
+                {group.items.map((item) => {
+                  const active = isActive(pathname, item, search);
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      prefetch
+                      onMouseEnter={() => prefetchRoute(item.href)}
+                      onFocus={() => prefetchRoute(item.href)}
+                      className={`pax-nav-link tw-nav-link${active ? " active tw-nav-active" : ""}`}
+                      title={collapsed ? item.label : undefined}
+                      aria-current={active ? "page" : undefined}
+                    >
+                      <span className="pax-nav-icon">
+                        <NavIcon k={item.iconKey} />
+                      </span>
+                      <span className="pax-nav-label">{item.label}</span>
+                    </Link>
+                  );
+                })}
+              </nav>
+            </div>
+          ))}
         </div>
 
         <div className="pax-sep" />

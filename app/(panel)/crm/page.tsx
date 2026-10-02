@@ -4,6 +4,10 @@ import { requireAllowedUserOrThrow, userHasPermission } from '@/lib/authz';
 
 export default async function CrmPage() {
   const user = await requireAllowedUserOrThrow();
+  // Açılış ekranı Dashboard (02.10.2026): rapor yetkisi olan herkes oraya düşer.
+  if (userHasPermission(user, 'report.read.all') && userHasPermission(user, 'screen.reports.view')) {
+    redirect('/crm/reports/seller-followup');
+  }
   // screen.crm.dashboard.view yoksa throw etmek yerine kullanıcının erişebildiği
   // ilk ekrana yönlendir — login sonrası herkes varsayılan olarak /crm'e düşüyor,
   // dashboard yetkisi olmayan rol (ör. user) burada patlamamalı.
