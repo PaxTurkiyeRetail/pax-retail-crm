@@ -241,7 +241,7 @@ function routeMeta(pathname: string) {
       "Haftalık Yönetim Sunumu",
     ],
     ["/crm/reports/seller-presentation", "Rapor Merkezi", "Satışçı Sunumu"],
-    ["/crm/reports/seller-followup", "Rapor Merkezi", "Dashboard"],
+    ["/crm/reports/seller-followup", "Genel", "Dashboard"],
     ["/crm/reports/entegrasyon-raporu", "Rapor Merkezi", "KasaPOS Entegrasyon Raporu"],    ["/crm/reports/yil-ziyaret-portfoy", "Rapor Merkezi", "Yıl Ziyaret & Portföy Sağlığı"],
     ["/crm/reports/forecast", "Rapor Merkezi", "Forecast Raporu"],
     ["/crm/reports/quotes", "Rapor Merkezi", "Teklif Raporları"],
@@ -579,7 +579,8 @@ export default function PanelShell({
   const shellClass = ["pax-shell", collapsed ? "sidebar-collapsed" : ""]
     .filter(Boolean)
     .join(" ");
-  const reportsActive = pathname.startsWith("/crm/reports");
+  // Dashboard rapor URL'inde yaşar ama menüde ayrı; Raporlar grubunu aktif/açık yapmasın.
+  const reportsActive = pathname.startsWith("/crm/reports") && !pathname.startsWith("/crm/reports/seller-followup");
   const pageMeta = useMemo(() => routeMeta(pathname), [pathname]);
   const showParameterManagement = allowed('admin.parameters.manage') && allowed('screen.admin.parameters.view');
   const showReports = Boolean(
