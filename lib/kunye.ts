@@ -331,7 +331,8 @@ export function mapKunyeDbToUi(
     magaza_sayisi: normalizeRangeValue(row.magaza_sayisi),
     franchise_sayisi: normalizeRangeValue(row.franchise_sayisi, true),
 
-    sabit_kasa_adedi: normalizeRangeValue(row.sabit_kasa_adedi),
+    // Net sayı (KasaPOS raporu aktif satış kasası); eski aralık değerleri olduğu gibi gösterilir.
+    sabit_kasa_adedi: trimOrNull(row.sabit_kasa_adedi),
     kasapos_firmasi: normalizeKasaposFirmasi(kasaposFirmasi),
     pos_modeli: trimOrNull(row.pos_modeli),
     pos_markasi: normalizePosMarkasi(posMarkasiSource),

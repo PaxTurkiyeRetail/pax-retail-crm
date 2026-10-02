@@ -14,7 +14,8 @@ export * from './kasapos-entegrasyon-shared';
 //   * Adet / tutar: Satışlar › Hizmet Faturaları — aktif faturaların KasaPOS kalemleri
 //     (crm_service_invoice_items), faturanın dönemine (period_month) göre. Kalem kümesi Canlı Ekran
 //     cihaz sayacıyla AYNI (INTEGRATION_DEVICE_SERVICE_KEYS — tanım tek yerde). Tutar yalnız USD faturalardan.
-//   * Aktif satış kasası: musteriler.aktif_satis_kasasi (migration 040), rapor ekranından girilir.
+//   * Aktif satış kasası: Künye › Sabit kasa adedi (musteri_kunye_v2.sabit_kasa_adedi, net sayıysa);
+//     yoksa musteriler.aktif_satis_kasasi (Hizmet Faturası formu); ikisi de yoksa "Girilmedi".
 
 const KASAPOS_ITEM_FILTER = `
   s.status = 'active'
@@ -50,11 +51,22 @@ async function fetchInvoiceAggregates(year: number, keys: string[]): Promise<Kas
 async function fetchFirmSources(year: number, keys: string[]): Promise<KasaposFirmSource[]> {
   const result = await db.query(
     `
-      select m.id::text as customer_id, m.musteri, m.sorumlu, m.aktif_satis_kasasi,
-             m.aktif_satis_kasasi_updated_at, m.aktif_satis_kasasi_updated_by
+      select m.id::text as customer_id, m.musteri, m.sorumlu,
+             coalesce(
+               case when btrim(k.sabit_kasa_adedi) ~ '^[0-9]+$' then btrim(k.sabit_kasa_adedi)::int end,
+               m.aktif_satis_kasasi
+             ) as aktif_satis_kasasi,
+             case when btrim(k.sabit_kasa_adedi) ~ '^[0-9]+$' then k.updated_at else m.aktif_satis_kasasi_updated_at end
+               as aktif_satis_kasasi_updated_at,
+             case when btrim(k.sabit_kasa_adedi) ~ '^[0-9]+$' then 'Künye' else m.aktif_satis_kasasi_updated_by end
+               as aktif_satis_kasasi_updated_by
       from public.musteriler m
-      where m.aktif_satis_kasasi is not null
-         or exists (
+      left join lateral (
+        select mk.sabit_kasa_adedi, mk.updated_at
+        from public.musteri_kunye_v2 mk
+        where mk.musteri_id = m.id
+      ) k on true
+      where exists (
            select 1
            from public.crm_service_invoices s
            join public.crm_service_invoice_items i on i.invoice_id = s.id

@@ -90,9 +90,8 @@ export function computeKasaposEntegrasyon(
     const refTutar = refCell?.tutar ?? 0;
     const lastCell = [...monthly].reverse().find((cell) => cell && cell.adet > 0 && cell.tutar > 0) ?? null;
     const birimFiyat = lastCell ? round2(lastCell.tutar / lastCell.adet) : null;
-    // Aktif satış kasası: formdan girilen değer; yoksa firmanın son Hizmet Faturası KasaPOS adedi.
-    const lastAdetCell = [...monthly].reverse().find((cell) => cell && cell.adet > 0) ?? null;
-    const aktifKasa = src.aktifKasa ?? lastAdetCell?.adet ?? null;
+    // Aktif satış kasası: yalnız Hizmet Faturası formundan girilen değer (fatura adedinden ayrı).
+    const aktifKasa = src.aktifKasa;
     const kullanimPct = aktifKasa && aktifKasa > 0 ? Math.round((refAdet / aktifKasa) * 100) : null;
     const firsatAdet = aktifKasa != null ? Math.max(aktifKasa - refAdet, 0) : null;
     const potansiyel = firsatAdet != null && birimFiyat != null ? round2(firsatAdet * birimFiyat) : null;

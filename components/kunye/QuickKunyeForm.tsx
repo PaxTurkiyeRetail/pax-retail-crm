@@ -255,7 +255,7 @@ export default function QuickKunyeForm({ musteriId, musteriAdi, existingData, on
   };
 
   // Conditional visibility
-  const sabitKasaVisible = form.sabit_kasa_adedi !== 'Kullanılmıyor';
+  const sabitKasaVisible = form.sabit_kasa_adedi !== 'Kullanılmıyor' && form.sabit_kasa_adedi !== '0';
   const reyonVisible = form.reyon_kullaniliyor === 'Evet';
   const elTerminaliVisible = form.el_terminali_kullaniliyor === 'Evet';
   const posMulkiyetBankalarVisible = form.pos_mulkiyet === 'Banka';
@@ -415,15 +415,22 @@ export default function QuickKunyeForm({ musteriId, musteriAdi, existingData, on
               <label className="pax-label" style={{ display: 'block', marginBottom: 8 }}>
                 Sabit Kasa Adedi
               </label>
-              <select
-                value={form.sabit_kasa_adedi}
-                onChange={(e) => updateForm('sabit_kasa_adedi', e.target.value)}
+              <input
+                type="number"
+                inputMode="numeric"
+                min={0}
+                step={1}
+                placeholder="Net kasa adedi (örn. 220)"
+                value={/^\d+$/.test(form.sabit_kasa_adedi) ? form.sabit_kasa_adedi : ''}
+                onChange={(e) => updateForm('sabit_kasa_adedi', e.target.value.replace(/[^0-9]/g, ''))}
                 className="pax-input"
                 style={{ width: '100%', minHeight: 48, fontSize: 16 }}
-              >
-                <option value="">Seçin...</option>
-                {opt('kunye_sabit_kasa_adedi').map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
-              </select>
+              />
+              {form.sabit_kasa_adedi && !/^\d+$/.test(form.sabit_kasa_adedi) ? (
+                <div style={{ marginTop: 6, fontSize: 13, color: '#b45309' }}>
+                  Eski değer: {form.sabit_kasa_adedi} — net sayı girin.
+                </div>
+              ) : null}
             </div>
 
             {sabitKasaVisible && (
