@@ -242,7 +242,7 @@ function routeMeta(pathname: string) {
     ],
     ["/crm/reports/seller-presentation", "Rapor Merkezi", "Satışçı Sunumu"],
     ["/crm/reports/seller-followup", "Rapor Merkezi", "Dashboard"],
-    ["/crm/reports/entegrasyon-raporu", "Rapor Merkezi", "Entegrasyon Raporu"],    ["/crm/reports/yil-ziyaret-portfoy", "Rapor Merkezi", "Yıl Ziyaret & Portföy Sağlığı"],
+    ["/crm/reports/entegrasyon-raporu", "Rapor Merkezi", "KasaPOS Entegrasyon Raporu"],    ["/crm/reports/yil-ziyaret-portfoy", "Rapor Merkezi", "Yıl Ziyaret & Portföy Sağlığı"],
     ["/crm/reports/forecast", "Rapor Merkezi", "Forecast Raporu"],
     ["/crm/reports/quotes", "Rapor Merkezi", "Teklif Raporları"],
     ["/crm/reports/kasapos-summary", "Rapor Merkezi", "KasaPOS Raporu"],
@@ -538,7 +538,7 @@ export default function PanelShell({
       });
       reports.push({
         href: "/crm/reports/entegrasyon-raporu",
-        label: "Entegrasyon Raporu",
+        label: "KasaPOS Entegrasyon Raporu",
         iconKey: "weekly",
         exact: true,
       });      // 9. Yıl Ziyaret & Portföy Sağlığı Raporu — Taha, 22.09.2026: liste sonuna eklendi.

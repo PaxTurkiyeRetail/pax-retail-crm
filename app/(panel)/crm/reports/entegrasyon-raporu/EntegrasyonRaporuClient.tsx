@@ -141,7 +141,7 @@ export default function EntegrasyonRaporuClient() {
   return (
     <main className="pax-page-container">
       <div className="pax-card" style={{ padding: 20, marginBottom: 16 }}>
-        <h1 style={{ margin: 0, fontSize: 20 }}>Entegrasyon Raporu</h1>
+        <h1 style={{ margin: 0, fontSize: 20 }}>KasaPOS Entegrasyon Raporu</h1>
         <p style={{ margin: '6px 0 0', color: 'var(--text-3)', fontSize: 13 }}>
           Entegrasyon süreci açık müşterilerin ve iş ortaklarının aktif fazı ile son aktivite notu.
         </p>
