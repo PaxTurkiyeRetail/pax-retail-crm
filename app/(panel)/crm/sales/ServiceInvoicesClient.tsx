@@ -17,6 +17,7 @@ import {
   computeLineTotals,
   currentPeriod,
   fmtServiceMoney,
+  isIntegrationDeviceService,
   periodInputValue,
   periodLabel,
   previousPeriod,
@@ -30,7 +31,7 @@ type Options = {
   services: Array<{ value: string; label: string }>;
   owners: string[];
   currencies: Array<{ value: ServiceCurrency; label: string; symbol: string }>;
-  customers: Array<{ id: string; musteri: string; sorumlu: string | null }>;
+  customers: Array<{ id: string; musteri: string; sorumlu: string | null; aktif_satis_kasasi: number | null }>;
 };
 
 type DraftLine = { uid: string; service_key: string; quantity: string; unit_price: string };
@@ -44,6 +45,8 @@ type Draft = {
   owner_name: string;
   note: string;
   lines: DraftLine[];
+  /** Aktif satış kasası girişi; null = dokunulmadı (firmanın kayıtlı değeri gösterilir). */
+  aktif_kasa?: string | null;
 };
 
 const uid = () => Math.random().toString(36).slice(2);
@@ -203,6 +206,12 @@ export default function ServiceInvoicesClient() {
     return { amount: computed.amount, count: computed.lines.length };
   }, [draft]);
 
+  /** Taslakta KasaPOS kalemi var mı → aktif satış kasası alanı görünür (KasaPOS Entegrasyon Raporu kaynağı). */
+  const hasKasapos = useMemo(() => Boolean(draft?.lines.some((line) => {
+    const label = options?.services.find((service) => service.value === line.service_key)?.label;
+    return line.service_key && isIntegrationDeviceService(line.service_key, label);
+  })), [draft, options]);
+
   const filteredCustomers = useMemo(() => {
     const list = options?.customers ?? [];
     const needle = customerFilter.trim().toLocaleLowerCase('tr-TR');
@@ -215,6 +224,9 @@ export default function ServiceInvoicesClient() {
     if (!draft.customer_id) { setMsg('Firma seçilmeli.'); return; }
     if (!/^\d{4}-\d{2}$/.test(draft.period)) { setMsg('Ay seçilmeli.'); return; }
     if (!draftTotals.count) { setMsg('En az bir hizmet kalemi girilmeli (adet > 0).'); return; }
+    const kasaRaw = hasKasapos && draft.aktif_kasa != null ? draft.aktif_kasa.trim() : null;
+    const kasaValue = kasaRaw === null ? undefined : kasaRaw === '' ? null : Number(kasaRaw);
+    const kasaChanged = kasaValue !== undefined && kasaValue !== (selectedCustomer?.aktif_satis_kasasi ?? null);
     setBusy(true);
     setMsg(null);
     try {
@@ -230,6 +242,7 @@ export default function ServiceInvoicesClient() {
         lines: draft.lines
           .filter((line) => line.service_key && Number(line.quantity) > 0)
           .map((line) => ({ service_key: line.service_key, quantity: Number(line.quantity), unit_price: parseMoney(line.unit_price) })),
+        ...(kasaChanged ? { aktif_satis_kasasi: kasaValue } : {}),
       };
       const res = await fetch(draft.id ? '/api/service-invoices/update' : '/api/service-invoices/create', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
@@ -237,6 +250,7 @@ export default function ServiceInvoicesClient() {
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json?.message || 'Kaydedilemedi.');
       setDraft(null);
+      if (kasaChanged) setOptions(null); // firmanın kayıtlı aktif kasa değeri yenilensin
       await load();
     } catch (error) {
       setMsg(error instanceof Error ? error.message : 'Kaydedilemedi.');
@@ -427,7 +441,7 @@ export default function ServiceInvoicesClient() {
                     value={draft.customer_id}
                     onChange={(e) => {
                       const customer = options?.customers.find((row) => row.id === e.target.value);
-                      setDraft((prev) => (prev ? { ...prev, customer_id: e.target.value, owner_name: prev.owner_name || customer?.sorumlu || '' } : prev));
+                      setDraft((prev) => (prev ? { ...prev, customer_id: e.target.value, aktif_kasa: null, owner_name: prev.owner_name || customer?.sorumlu || '' } : prev));
                     }}
                     style={inputStyle}
                   >
@@ -508,6 +522,22 @@ export default function ServiceInvoicesClient() {
                 </div>
               </div>
             </div>
+
+            {hasKasapos ? (
+              <label style={{ ...fieldStyle, marginTop: 12 }}>
+                <span style={labelStyle}>
+                  Aktif satış kasası <small style={{ fontWeight: 600, color: 'var(--text-3)' }}>— firmanın sahadaki toplam aktif kasası (KasaPOS Entegrasyon Raporu kullanım % ve fırsat hesabı)</small>
+                </span>
+                <input
+                  inputMode="numeric"
+                  value={draft.aktif_kasa ?? (selectedCustomer?.aktif_satis_kasasi != null ? String(selectedCustomer.aktif_satis_kasasi) : '')}
+                  onChange={(e) => setDraft((prev) => (prev ? { ...prev, aktif_kasa: e.target.value.replace(/\D/g, '').slice(0, 6) } : prev))}
+                  placeholder="Örn. 400"
+                  style={{ ...inputStyle, maxWidth: 200 }}
+                  aria-label="Aktif satış kasası"
+                />
+              </label>
+            ) : null}
 
             <label style={{ ...fieldStyle, marginTop: 12 }}>
               <span style={labelStyle}>Not</span>

@@ -6,6 +6,7 @@ import { revalidatePath } from 'next/cache';
 import { requirePermissionOrThrow } from '@/lib/authz';
 import { apiErrorResponse, parseJsonBody } from '@/lib/http/api-error';
 import { createServiceInvoice } from '@/lib/sales/service-invoices';
+import { updateAktifSatisKasasi } from '@/lib/reports/kasapos-entegrasyon';
 import { serviceInvoiceSchema } from '@/lib/sales/service-invoices-schema';
 
 // Hizmet faturası açma (032). Yetki `sale.create`; sahiplik kısıtı yok (entegrasyon ekibi tüm
@@ -22,6 +23,11 @@ export async function POST(request: Request) {
         ownerName: input.owner_name ?? null, note: input.note ?? null, lines: input.lines,
       },
     );
+    if (input.aktif_satis_kasasi !== undefined) {
+      await updateAktifSatisKasasi(input.customer_id, input.aktif_satis_kasasi ?? null, {
+        id: me.id, email: me.email, name: String(me.full_name ?? me.email ?? '').trim() || 'Bilinmiyor',
+      });
+    }
     revalidatePath('/crm/sales');
     return NextResponse.json({ ok: true, row }, { status: 201 });
   } catch (error) {

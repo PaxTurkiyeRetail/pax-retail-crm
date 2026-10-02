@@ -16,6 +16,9 @@ export const serviceInvoiceSchema = z.object({
     quantity: z.number().int().min(1).max(100000),
     unit_price: z.number().min(0).max(1_000_000_000),
   })).min(1, 'En az bir kalem girilmeli.').max(100),
+  // KasaPOS kalemi varsa firmanın aktif satış kasası (musteriler.aktif_satis_kasasi, 040).
+  // Gönderilmezse dokunulmaz; null = temizle. KasaPOS Entegrasyon Raporu buradan okur.
+  aktif_satis_kasasi: z.number().int().min(0).max(100000).nullish(),
 });
 
 export const serviceInvoiceUpdateSchema = serviceInvoiceSchema.partial({ customer_id: true }).extend({ id: z.string().uuid() });

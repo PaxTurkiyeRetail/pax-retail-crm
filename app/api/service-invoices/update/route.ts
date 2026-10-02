@@ -6,6 +6,7 @@ import { revalidatePath } from 'next/cache';
 import { requirePermissionOrThrow, userHasPermission } from '@/lib/authz';
 import { ApiError, apiErrorResponse, parseJsonBody } from '@/lib/http/api-error';
 import { updateServiceInvoice } from '@/lib/sales/service-invoices';
+import { updateAktifSatisKasasi } from '@/lib/reports/kasapos-entegrasyon';
 import { serviceInvoiceUpdateSchema } from '@/lib/sales/service-invoices-schema';
 
 // Hizmet faturası düzenleme: Satışlar ile aynı gevşek kural (Sinan, 10.09) — quote.update.own
@@ -27,6 +28,12 @@ export async function POST(request: Request) {
         ownerName: input.owner_name ?? null, note: input.note ?? null, lines: input.lines,
       },
     );
+    const customerId = input.customer_id ?? row.customer_id;
+    if (input.aktif_satis_kasasi !== undefined && customerId) {
+      await updateAktifSatisKasasi(customerId, input.aktif_satis_kasasi ?? null, {
+        id: me.id, email: me.email, name: String(me.full_name ?? me.email ?? '').trim() || 'Bilinmiyor',
+      });
+    }
     revalidatePath('/crm/sales');
     return NextResponse.json({ ok: true, row });
   } catch (error) {
