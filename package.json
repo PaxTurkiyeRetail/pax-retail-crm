@@ -22,8 +22,8 @@
   "dependencies": {
     "@pdf-lib/fontkit": "^1.1.1",
     "bcryptjs": "^3.0.3",
-    "jszip": "^3.10.1",
     "jose": "^6.1.0",
+    "jszip": "^3.10.1",
     "lucide-react": "^0.469.0",
     "next": "^15.5.25",
     "pdf-lib": "^1.17.1",
@@ -33,6 +33,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20.11.30",
     "@types/pg": "^8.20.0",
@@ -40,6 +41,7 @@
     "@types/react-dom": "^18.2.22",
     "eslint": "8.57.1",
     "eslint-config-next": "^15.5.25",
+    "tailwindcss": "^4.3.3",
     "typescript": "^5.4.5",
     "vitest": "^3.2.4"
   },

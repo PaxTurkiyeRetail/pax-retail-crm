@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+import './tailwind.css';
 import './globals.css';
 import AppRuntimeShell from '@/components/AppRuntimeShell';
 

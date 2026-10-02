@@ -382,21 +382,6 @@
   min-width: 64px;
 }
 
-.pax-nav-link,
-.pax-subnav-link {
-  font-weight: 780;
-}
-
-.pax-nav-link.active,
-.pax-subnav-link.active {
-  color: #4f46e5 !important;
-}
-
-[data-theme="dark"] .pax-nav-link.active,
-[data-theme="dark"] .pax-subnav-link.active {
-  color: #c4b5fd !important;
-}
-
 /* Mobile: premium card-first structure */
 @media (max-width: 920px) {
   .pax-main-inner {

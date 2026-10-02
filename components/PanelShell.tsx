@@ -655,7 +655,7 @@ export default function PanelShell({
         <div className="pax-nav-area">
           {groups.map((group) => (
             <div className="pax-nav-section" key={group.title}>
-              <div className="pax-section-label">{group.title}</div>
+              <div className="pax-section-label tw-nav-label">{group.title}</div>
               <nav className="pax-nav-list">
                 {group.items.map((item) => {
                   const active = isActive(pathname, item, search);
@@ -666,7 +666,7 @@ export default function PanelShell({
                       prefetch
                       onMouseEnter={() => prefetchRoute(item.href)}
                       onFocus={() => prefetchRoute(item.href)}
-                      className={`pax-nav-link${active ? " active" : ""}`}
+                      className={`pax-nav-link tw-nav-link${active ? " active tw-nav-active" : ""}`}
                       title={collapsed ? item.label : undefined}
                       aria-current={active ? "page" : undefined}
                     >
@@ -685,7 +685,7 @@ export default function PanelShell({
             <div className="pax-nav-section pax-report-section">
               <button
                 type="button"
-                className={`pax-nav-link pax-nav-group-trigger${reportsActive ? " active" : ""}`}
+                className={`pax-nav-link tw-nav-link pax-nav-group-trigger${reportsActive ? " active tw-nav-active" : ""}`}
                 onClick={() => setReportsOpen((value) => !value)}
                 aria-expanded={showReports}
                 title={collapsed ? reportsGroup.title : undefined}
@@ -713,7 +713,7 @@ export default function PanelShell({
                         prefetch
                         onMouseEnter={() => prefetchRoute(item.href)}
                         onFocus={() => prefetchRoute(item.href)}
-                        className={`pax-subnav-link${active ? " active" : ""}`}
+                        className={`pax-subnav-link tw-subnav-link${active ? " active tw-nav-active" : ""}`}
                         title={collapsed ? item.label : undefined}
                         aria-current={active ? "page" : undefined}
                       >
@@ -756,9 +756,12 @@ export default function PanelShell({
 
       <main className="pax-main">
         <header className="pax-topbar">
-          <div className="pax-topbar-title">
-            <span>{pageMeta.section}</span>
-            <strong>{pageMeta.title}</strong>
+          <div className="pax-topbar-title flex min-w-0 flex-col gap-1">
+            <nav className="tw-crumb" aria-label="Breadcrumb">
+              <span className="truncate font-medium text-text-3">{pageMeta.section}</span>
+              <span className="text-text-4" aria-hidden="true">/</span>
+              <strong className="truncate font-semibold tracking-tight text-text">{pageMeta.title}</strong>
+            </nav>
             <small>{roleLabel(role)}</small>
           </div>
           <div className="pax-topbar-actions">

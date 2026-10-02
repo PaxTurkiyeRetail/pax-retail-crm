@@ -1,0 +1,98 @@
+/* Tailwind v4 — kademeli geçiş. Preflight YOK; mevcut katmansız CSS her zaman kazanır. */
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+
+@source "../components";
+@source "../app";
+
+/* Mevcut CSS değişkenlerine bağlı tokenlar — data-theme="dark" otomatik takip edilir. */
+@theme inline {
+  --color-app-bg: var(--app-bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-card: var(--card);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-text: var(--text);
+  --color-text-2: var(--text-2);
+  --color-text-3: var(--text-3);
+  --color-text-4: var(--text-4);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-border: var(--accent-border);
+  --color-brand: #4f46e5;
+  --color-brand-2: #7c3aed;
+
+  --color-sb-bg: var(--sb-bg);
+  --color-sb-border: var(--sb-border);
+  --color-sb-label: var(--sb-label);
+  --color-sb-link: var(--sb-link);
+  --color-sb-link-hover-bg: var(--sb-link-hover-bg);
+  --color-sb-link-hover-bd: var(--sb-link-hover-bd);
+  --color-sb-link-hover: var(--sb-link-hover-color);
+  --color-sb-active-bg: var(--sb-active-bg);
+  --color-sb-active-bd: var(--sb-active-bd);
+  --color-sb-active: var(--sb-active-color);
+  --color-sb-sep: var(--sb-sep);
+
+  --shadow-card: var(--shadow-sm);
+  --shadow-card-md: var(--shadow-md);
+  --font-app: var(--app-font);
+}
+
+@layer components {
+  /* Kart / buton / tablo ortak görünüm */
+  .tw-card {
+    @apply rounded-xl border border-border bg-card text-text shadow-card;
+  }
+  .tw-btn {
+    @apply inline-flex h-9 cursor-pointer items-center justify-center gap-2 rounded-lg border border-border bg-surface px-3.5 text-[13px] font-medium text-text-2 shadow-xs transition-colors hover:bg-surface-2 hover:text-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:pointer-events-none disabled:opacity-50;
+  }
+  .tw-btn-primary {
+    @apply border-brand bg-brand text-white hover:bg-brand/90 hover:text-white;
+  }
+  .tw-table {
+    @apply w-full border-collapse text-[13px] text-text-2;
+  }
+  .tw-table th {
+    @apply border-b border-border bg-surface-2 px-3 py-2 text-left text-[11px] font-semibold tracking-wide text-text-3 uppercase;
+  }
+  .tw-table td {
+    @apply border-b border-border px-3 py-2;
+  }
+
+  /* Segment / sekme çubuğu */
+  .tw-tabs {
+    @apply inline-flex flex-wrap gap-1 rounded-xl border border-border bg-surface-2 p-1;
+  }
+  .tw-tab {
+    @apply inline-flex h-8 cursor-pointer items-center rounded-lg border border-transparent bg-transparent px-3.5 text-[13px] font-medium text-text-3 transition-colors hover:text-text;
+  }
+  .tw-tab-active {
+    @apply border-border bg-surface font-semibold text-text shadow-xs;
+  }
+
+  /* Sidebar navigasyon */
+  .tw-nav-label {
+    @apply mb-1.5 px-2.5 text-[10px] leading-none font-semibold tracking-[0.12em] whitespace-nowrap text-sb-label uppercase transition-opacity;
+  }
+  .tw-nav-link {
+    @apply relative flex h-9 cursor-pointer bg-transparent items-center gap-2.5 overflow-hidden rounded-lg border border-transparent px-2.5 text-[13px] font-medium whitespace-nowrap text-sb-link no-underline transition-colors duration-150 hover:border-sb-link-hover-bd hover:bg-sb-link-hover-bg hover:text-sb-link-hover;
+  }
+  .tw-subnav-link {
+    @apply relative flex min-h-8 cursor-pointer bg-transparent items-center gap-2 overflow-hidden rounded-md border border-transparent px-2 text-[12.5px] font-medium whitespace-nowrap text-sb-link no-underline transition-colors duration-150 hover:bg-sb-link-hover-bg hover:text-sb-link-hover;
+  }
+  .tw-nav-active {
+    @apply border-sb-active-bd bg-sb-active-bg font-semibold text-sb-active hover:border-sb-active-bd hover:bg-sb-active-bg hover:text-sb-active;
+  }
+  .tw-nav-link.tw-nav-active::before {
+    content: "";
+    @apply absolute top-1/2 left-0 h-4 w-[3px] -translate-y-1/2 rounded-r-sm bg-gradient-to-b from-brand to-brand-2;
+  }
+
+  /* Topbar breadcrumb */
+  .tw-crumb {
+    @apply flex min-w-0 items-center gap-1.5 text-[13px];
+  }
+}

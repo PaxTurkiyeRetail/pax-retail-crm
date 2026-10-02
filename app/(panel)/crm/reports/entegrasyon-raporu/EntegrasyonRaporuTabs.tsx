@@ -18,21 +18,15 @@ export default function EntegrasyonRaporuTabs() {
   return (
     <>
       <div className="pax-page-container no-print" style={{ paddingBottom: 0 }}>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <div className="tw-tabs" role="tablist">
           {TABS.map((item) => (
             <button
               key={item.key}
               type="button"
+              role="tab"
+              aria-selected={tab === item.key}
               onClick={() => setTab(item.key)}
-              style={{
-                padding: '8px 16px',
-                borderRadius: 8,
-                border: '1px solid var(--border-1, #ccc)',
-                background: tab === item.key ? '#1F4E79' : 'transparent',
-                color: tab === item.key ? '#fff' : 'inherit',
-                fontWeight: tab === item.key ? 600 : 400,
-                cursor: 'pointer',
-              }}
+              className={`tw-tab${tab === item.key ? ' tw-tab-active' : ''}`}
             >
               {item.label}
             </button>
