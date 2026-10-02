@@ -243,6 +243,7 @@ function routeMeta(pathname: string) {
     ["/crm/reports/seller-presentation", "Rapor Merkezi", "Satışçı Sunumu"],
     ["/crm/reports/seller-followup", "Rapor Merkezi", "Dashboard"],
     ["/crm/reports/entegrasyon-raporu", "Rapor Merkezi", "Entegrasyon Raporu"],
+    ["/crm/reports/kasapos-entegrasyon", "Rapor Merkezi", "KasaPOS Entegrasyon Adet & Tutar"],
     ["/crm/reports/yil-ziyaret-portfoy", "Rapor Merkezi", "Yıl Ziyaret & Portföy Sağlığı"],
     ["/crm/reports/forecast", "Rapor Merkezi", "Forecast Raporu"],
     ["/crm/reports/quotes", "Rapor Merkezi", "Teklif Raporları"],
@@ -540,6 +541,13 @@ export default function PanelShell({
       reports.push({
         href: "/crm/reports/entegrasyon-raporu",
         label: "Entegrasyon Raporu",
+        iconKey: "weekly",
+        exact: true,
+      });
+      // KasaPOS entegrasyon adet & tutar — müdür raporu (Taha, 02.10.2026).
+      reports.push({
+        href: "/crm/reports/kasapos-entegrasyon",
+        label: "KasaPOS Entegrasyon Adet & Tutar",
         iconKey: "weekly",
         exact: true,
       });

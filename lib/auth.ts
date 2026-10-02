@@ -3,7 +3,9 @@ import { cookies } from 'next/headers';
 import { db } from './db';
 
 const AUTH_COOKIE_NAME = process.env.AUTH_COOKIE_NAME ?? 'crm_session';
-export const AUTH_SESSION_TTL_HOURS = Math.min(720, Math.max(1, Number(process.env.AUTH_SESSION_TTL_HOURS ?? '12')));
+// Varsayılan 30 gün (02.10.2026): aynı cihazda sürekli AD şifresi istenmesin. Oturum kayar —
+// kullanıldıkça süre yenilenir (getUserBySessionToken + middleware cookie yenilemesi).
+export const AUTH_SESSION_TTL_HOURS = Math.min(720, Math.max(1, Number(process.env.AUTH_SESSION_TTL_HOURS ?? '720')));
 
 export type AuthUser = {
   id: string;
@@ -78,7 +80,7 @@ export async function getUserBySessionToken(sessionToken: string): Promise<AuthU
   const result = support.sessions
     ? await db.query(
       `
-        select u.id, u.email, u.full_name, u.is_active, u.role, s.auth_source, s.effective_roles
+        select u.id, u.email, u.full_name, u.is_active, u.role, s.auth_source, s.effective_roles, s.expires_at
         from public.user_sessions s
         inner join public.allowed_users u on u.id = s.user_id
         where s.session_token_hash = $1 and s.expires_at > now()
@@ -99,6 +101,17 @@ export async function getUserBySessionToken(sessionToken: string): Promise<AuthU
 
   const user = result.rows[0];
   if (!user || !user.is_active) return null;
+
+  // Kayan oturum: sürenin yarısından azı kaldıysa tam TTL'e uzat (her istekte yazmamak için yarı eşik).
+  if (support.sessions && user.expires_at) {
+    const ttlMs = AUTH_SESSION_TTL_HOURS * 60 * 60 * 1000;
+    if (new Date(user.expires_at).getTime() - Date.now() < ttlMs / 2) {
+      await db.query(
+        'update public.user_sessions set expires_at = $2 where session_token_hash = $1',
+        [hashOpaqueToken(sessionToken), new Date(Date.now() + ttlMs)],
+      ).catch(() => undefined);
+    }
+  }
 
   return {
     id: String(user.id),

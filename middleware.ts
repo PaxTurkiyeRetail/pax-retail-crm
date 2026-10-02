@@ -1,6 +1,9 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import { shouldUseSecureAuthCookie } from '@/lib/auth-cookie';
 
 const AUTH_COOKIE_NAME = process.env.AUTH_COOKIE_NAME ?? 'crm_session';
+// lib/auth.ts AUTH_SESSION_TTL_HOURS ile aynı formül (middleware DB'li modülü import edemez).
+const SESSION_TTL_HOURS = Math.min(720, Math.max(1, Number(process.env.AUTH_SESSION_TTL_HOURS ?? '720')));
 
 function getPublicOrigin(request: NextRequest) {
   const forwardedProto = request.headers
@@ -60,7 +63,22 @@ export function middleware(request: NextRequest) {
   // Burada yalnızca cookie varlığı doğrulanabilir; geçerliliği DB gerektirir.
   // Geçersiz/bitmiş cookie ile /login <-> /crm yönlendirme döngüsü oluşmaması
   // için login sayfasını middleware seviyesinde CRM'e yönlendirmiyoruz.
-  return NextResponse.next();
+  const response = NextResponse.next();
+
+  // Kayan oturum: sayfa gezildikçe cookie ömrü yenilenir (DB tarafı lib/auth.ts'de uzar).
+  // Böylece aynı cihazda aktif kullanan kullanıcıdan tekrar AD şifresi istenmez.
+  const sessionCookie = request.cookies.get(AUTH_COOKIE_NAME)?.value;
+  if (sessionCookie && !isApi && request.method === 'GET') {
+    response.cookies.set(AUTH_COOKIE_NAME, sessionCookie, {
+      httpOnly: true,
+      secure: shouldUseSecureAuthCookie(request),
+      sameSite: 'lax',
+      maxAge: SESSION_TTL_HOURS * 60 * 60,
+      path: '/',
+      priority: 'high',
+    });
+  }
+  return response;
 }
 
 export const config = {
