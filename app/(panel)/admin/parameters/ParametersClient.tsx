@@ -176,10 +176,6 @@ export default function ParametersClient() {
       groups.filter((group) => (group.module || "Genel") === selectedModule),
     [groups, selectedModule],
   );
-  const categories = useMemo(
-    () => uniq(moduleGroups.map((group) => group.category || "Genel")),
-    [moduleGroups],
-  );
   const categoryGroups = useMemo(
     () =>
       moduleGroups.filter(
@@ -233,15 +229,12 @@ export default function ParametersClient() {
     [phaseRows, selectedGroup],
   );
 
-  const selectedRows = [...rows, ...phaseRows].filter(row => moduleGroups.some(group => group.key === row.group_key));
   const nextPosition = isPhaseGroup(selectedDefinition)
     ? Math.max(0, ...visiblePhaseRows.map(row => row.faz_no)) + 1
     : Math.max(0, ...visibleRows.map(row => row.sort_order)) + 10;
   useEffect(() => {
     setLabel(''); setValue(''); setSortOrder(String(nextPosition));
   }, [selectedGroup, nextPosition]);
-  const activeCount = selectedRows.filter(row => row.is_active).length;
-  const inactiveCount = selectedRows.length - activeCount;
   const searchResults = groupSearch.trim() ? groups.filter(group =>
     [group.title, group.description, group.module, group.category].join(' ').toLocaleLowerCase('tr').includes(groupSearch.trim().toLocaleLowerCase('tr'))
   ) : [];
@@ -466,16 +459,6 @@ export default function ParametersClient() {
 
   return (
     <div className="parameters-workspace enterprise-settings">
-      <section className="pax-card parameters-search" aria-label="Parametre bul">
-        <label className="pax-label" htmlFor="parameter-group-search">Hangi ayarı arıyorsunuz?</label>
-        <input id="parameter-group-search" className="pax-input" type="search" value={groupSearch} onChange={e => setGroupSearch(e.target.value)} placeholder="Örneğin: iş ortağı, faz, sektör..." />
-        {groupSearch.trim() && <div className="parameters-search-results">
-          {!searchResults.length && <p role="status">Eşleşen ayar bulunamadı.</p>}
-          {searchResults.map(group => <button type="button" className="parameters-search-result" key={group.key} onClick={() => {
-            setSelectedModule(group.module || 'Genel'); setSelectedCategory(group.category || 'Genel'); setSelectedGroup(group.key); setGroupSearch('');
-          }}><strong>{group.title}</strong><span>{group.module || 'Genel'} / {group.category || 'Genel'}</span></button>)}
-        </div>}
-      </section>
       {(error || message) && (
         <div
           className="pax-card parameters-alert"
@@ -485,74 +468,85 @@ export default function ParametersClient() {
         </div>
       )}
 
-      <div className="pax-card parameters-area-picker">
-        <label className="pax-label" htmlFor="parameter-module">Ayar Alanı</label>
-        <select id="parameter-module" className="pax-input" value={selectedModule} onChange={e => {
-          const moduleName = e.target.value;
-          const first = groups.find(group => (group.module || "Genel") === moduleName);
-          setSelectedModule(moduleName);
-          if (first) { setSelectedCategory(first.category || "Genel"); setSelectedGroup(first.key); }
-        }}>
-          {modules.map(moduleName => <option key={moduleName} value={moduleName}>{moduleName}</option>)}
-        </select>
-        <p>{selectedMeta.help}</p>
-      </div>
-
-      <div className="parameters-metrics">
-        <div className="pax-card parameters-metric">
-          <span>Seçili Alan</span>
-          <strong>{selectedModule}</strong>
-        </div>
-        <div className="pax-card parameters-metric">
-          <span>Seçili Alandaki Aktif Değer</span>
-          <strong>{activeCount}</strong>
-        </div>
-        <div className="pax-card parameters-metric">
-          <span>Seçili Alandaki Pasif Değer</span>
-          <strong>{inactiveCount}</strong>
-        </div>
-      </div>
-
-      <div className="parameters-grid">
-        <aside className="pax-card parameters-aside">
-          <div className="parameters-aside-head">
-            <span>
-              {selectedMeta.icon} {selectedModule}
-            </span>
-            <button
-              className="pax-btn secondary"
-              type="button"
-              onClick={load}
-              disabled={loading}
-            >
+      <div className="parameters-grid prm-grid">
+        {/* Tek tablo: Alan › Grup › kayıt sayısı. Arama tabloyu süzer. */}
+        <aside className="pax-card prm-groups" aria-label="Parametre grupları">
+          <div className="prm-groups-head">
+            <input
+              className="pax-input"
+              type="search"
+              value={groupSearch}
+              onChange={(e) => setGroupSearch(e.target.value)}
+              placeholder="Ayar ara (faz, sektör, jira...)"
+              aria-label="Ayar ara"
+            />
+            <button className="pax-btn secondary" type="button" onClick={load} disabled={loading}>
               Yenile
             </button>
           </div>
-          <p className="settings-aside-help">{selectedMeta.help}</p>
-          <div className="parameters-subtitle">Alt kırılım</div>
-          <div className="parameters-category-list">
-            {categories.map((category) => {
-              const count = moduleGroups.filter(
-                (group) => (group.category || "Genel") === category,
-              ).length;
-              return (
-                <button
-                  key={category}
-                  type="button"
-                  className={`parameters-category${selectedCategory === category ? " active" : ""}`}
-                  onClick={() => {
-                    const first = moduleGroups.find(
-                      (group) => (group.category || "Genel") === category,
-                    );
-                    setSelectedCategory(category);
-                    if (first) setSelectedGroup(first.key);
-                  }}
-                >
-                  <strong>{category}</strong>
-                  <span>{count} parametre grubu</span>
-                </button>
-              );
-            })}
+          <div className="prm-groups-scroll">
+            <table className="prm-group-table">
+              <thead>
+                <tr>
+                  <th>Parametre</th>
+                  <th className="num">Kayıt</th>
+                </tr>
+              </thead>
+              <tbody>
+                {modules.map((moduleName) => {
+                  const list = (groupSearch.trim() ? searchResults : groups).filter(
+                    (group) => (group.module || "Genel") === moduleName,
+                  );
+                  if (!list.length) return null;
+                  const meta = moduleMeta(moduleName);
+                  return [
+                    <tr key={`m-${moduleName}`} className="prm-module-row">
+                      <th colSpan={2}>
+                        {meta.icon} {moduleName}
+                      </th>
+                    </tr>,
+                    ...list.map((group) => {
+                      const count =
+                        rows.filter((row) => row.group_key === group.key).length +
+                        phaseRows.filter((row) => row.group_key === group.key).length;
+                      const active = selectedGroup === group.key;
+                      return (
+                        <tr
+                          key={group.key}
+                          className={active ? "active" : undefined}
+                          aria-selected={active}
+                          tabIndex={0}
+                          onClick={() => {
+                            setSelectedModule(moduleName);
+                            setSelectedCategory(group.category || "Genel");
+                            setSelectedGroup(group.key);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              setSelectedModule(moduleName);
+                              setSelectedCategory(group.category || "Genel");
+                              setSelectedGroup(group.key);
+                            }
+                          }}
+                        >
+                          <td>
+                            <strong>{group.title}</strong>
+                            <small>{group.category || "Genel"}</small>
+                          </td>
+                          <td className="num">{count}</td>
+                        </tr>
+                      );
+                    }),
+                  ];
+                })}
+                {groupSearch.trim() && !searchResults.length && (
+                  <tr>
+                    <td colSpan={2} role="status">Eşleşen ayar bulunamadı.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
         </aside>
 
@@ -580,26 +574,6 @@ export default function ParametersClient() {
                       : "Sistem Ayarı"}
             </span>
           </div>
-
-          {!isJiraCategory && (
-            <div
-              className="parameters-tabs"
-              role="group"
-              aria-label="Parametre grupları"
-            >
-              {categoryGroups.map((group) => (
-                <button
-                  key={group.key}
-                  type="button"
-                  className={`parameters-tab${selectedGroup === group.key ? " active" : ""}`}
-                  aria-pressed={selectedGroup === group.key}
-                  onClick={() => setSelectedGroup(group.key)}
-                >
-                  {group.title}
-                </button>
-              ))}
-            </div>
-          )}
 
           {(listEditor || isPhaseGroup(selectedDefinition)) && <label className="parameters-check">
             <input type="checkbox" checked={showAdvanced} onChange={e => setShowAdvanced(e.target.checked)} />

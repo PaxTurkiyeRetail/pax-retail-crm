@@ -103,3 +103,24 @@
   .settings-single-form { grid-template-columns: 1fr; }
   .parameters-main-head { display: grid; }
 }
+
+/* Parametreler: sol tarafta tek gruplu tablo (Alan › Grup › kayıt sayısı) */
+.prm-grid { grid-template-columns: minmax(260px, 320px) minmax(0, 1fr); }
+.prm-groups { padding: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); position: sticky; top: 86px; max-height: calc(100vh - 110px); overflow: hidden; }
+.prm-groups-head { display: flex; gap: 8px; padding: 12px; border-bottom: 1px solid var(--border); }
+.prm-groups-head .pax-input { flex: 1; min-height: 36px; }
+.prm-groups-scroll { overflow: auto; }
+.prm-group-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.prm-group-table thead th { position: sticky; top: 0; z-index: 1; background: var(--surface-2); color: var(--text-3); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+.prm-group-table .num { text-align: right; width: 56px; font-variant-numeric: tabular-nums; color: var(--text-3); }
+.prm-group-table .prm-module-row th { background: var(--surface); color: var(--brand-navy); font-size: 12px; font-weight: 800; text-align: left; padding: 12px 12px 6px; border-bottom: 1px solid var(--border); }
+[data-theme="dark"] .prm-group-table .prm-module-row th { color: var(--brand-light); }
+.prm-group-table tbody tr:not(.prm-module-row) { cursor: pointer; }
+.prm-group-table tbody td { padding: 8px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.prm-group-table tbody td strong { display: block; color: var(--text); font-weight: 600; }
+.prm-group-table tbody td small { display: block; color: var(--text-4); font-size: 11.5px; margin-top: 2px; }
+.prm-group-table tbody tr:not(.prm-module-row):hover td { background: var(--surface-2); }
+.prm-group-table tbody tr.active td { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--brand); }
+.prm-group-table tbody tr.active td strong { color: var(--brand); }
+.prm-group-table tbody tr:focus-visible { outline: 2px solid var(--brand); outline-offset: -2px; }
+@media (max-width: 900px) { .prm-grid { grid-template-columns: 1fr; } .prm-groups { position: static; max-height: 50vh; } }
