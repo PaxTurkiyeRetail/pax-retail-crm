@@ -215,7 +215,7 @@ function buildPhaseBuckets(items: SummaryItem[]): PhaseBucket[] {
       range: 'Faz 1-4',
       value: sumPhaseRange(items, 1, 4),
       filterValue: '1-4',
-      tone: 'linear-gradient(135deg, #f3e8ff 0%, #ede9fe 100%)',
+      tone: 'linear-gradient(135deg, #f3e8ff 0%, #e3f2fd 100%)',
     },
     {
       key: 'contact',
@@ -581,7 +581,7 @@ export default function CrmCustomersClient() {
   const kasaTotal = kasaBreakdown.reduce((sum, item) => sum + item.value, 0);
   const kasaSegments = kasaBreakdown.length
     ? (() => {
-        const colors = ['#5eead4', '#38bdf8', '#818cf8', '#cbd5e1'];
+        const colors = ['#5eead4', '#38bdf8', '#4cb8f5', '#cbd5e1'];
         let start = 0;
         const parts = kasaBreakdown.map((item, index) => {
           const pct = Math.round((item.value / Math.max(1, kasaTotal)) * 100);
@@ -951,7 +951,7 @@ export default function CrmCustomersClient() {
         }
         :global([data-theme="dark"]) .customers-page {
           --cc-accent: #93b4fd;
-          --cc-primary-a: #4f46e5;
+          --cc-primary-a: #0e6fc7;
           --cc-primary-b: #6366f1;
         }
         .surface {
@@ -1419,7 +1419,7 @@ export default function CrmCustomersClient() {
                         style={{
                           fontSize: 15,
                           fontWeight: 800,
-                          color: "var(--accent, #4f46e5)",
+                          color: "var(--accent, #0e6fc7)",
                           textDecoration: "underline",
                           textDecorationColor: "color-mix(in srgb, currentColor 35%, transparent)",
                           textUnderlineOffset: 3,

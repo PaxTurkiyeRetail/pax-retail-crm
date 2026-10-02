@@ -90,7 +90,7 @@ export default function SalesReportDownload({ kind, owners, canSeeAll, buttonSty
             <option value="">Tüm satışçılar</option>
             {ownerOptions.map((name) => <option key={name} value={name}>{name}</option>)}
           </select>
-          <button type="button" onClick={() => void download()} disabled={busy} style={{ ...buttonStyle, border: 'none', cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit', fontSize: 14, background: 'white', color: '#312e81' }}>
+          <button type="button" onClick={() => void download()} disabled={busy} style={{ ...buttonStyle, border: 'none', cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit', fontSize: 14, background: 'white', color: '#07055b' }}>
             {busy ? 'Hazırlanıyor…' : 'Excel indir'}
           </button>
           {note ? <span style={{ color: 'rgba(255,255,255,0.85)', fontSize: 13, fontWeight: 700 }}>{note}</span> : null}

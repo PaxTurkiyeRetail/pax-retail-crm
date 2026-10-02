@@ -199,7 +199,7 @@ export default function YilZiyaretPortfoyClient() {
                       style={{ background: 'none', border: 'none', padding: 0, cursor: row.bankaFirmNames.length ? 'pointer' : 'default', font: 'inherit' }}
                       title="Banka/Finans firmaları görmek için tıkla"
                     >
-                      <span style={{ display: 'inline-block', minWidth: 26, padding: '2px 6px', borderRadius: 6, textAlign: 'center', fontWeight: 700, background: 'rgba(124,58,237,0.15)', color: '#6d28d9', textDecoration: row.bankaFirmNames.length ? 'underline' : 'none' }}>
+                      <span style={{ display: 'inline-block', minWidth: 26, padding: '2px 6px', borderRadius: 6, textAlign: 'center', fontWeight: 700, background: 'rgba(17, 161, 242,0.15)', color: '#07055b', textDecoration: row.bankaFirmNames.length ? 'underline' : 'none' }}>
                         {row.bankaFirmNames.length}
                       </span>
                     </button>
@@ -388,7 +388,7 @@ export default function YilZiyaretPortfoyClient() {
                 {isBankaOpen && (
                   <tr style={{ background: 'var(--bg-2, #f8fafc)' }}>
                     <td colSpan={10} style={{ padding: '12px 14px', fontSize: 12 }}>
-                      <strong style={{ color: '#6d28d9' }}>Banka/Finans firmalar ({row.bankaFirmNames.length}):</strong>
+                      <strong style={{ color: '#07055b' }}>Banka/Finans firmalar ({row.bankaFirmNames.length}):</strong>
                       <div style={{ marginTop: 4 }}>{row.bankaFirmNames.join(', ')}</div>
                     </td>
                   </tr>

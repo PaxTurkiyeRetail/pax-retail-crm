@@ -135,7 +135,7 @@ export default function PersonStats() {
             </div>
             <div className="card">
               <div className="kicker">Ort. Çözüm</div>
-              <div className="big" style={{ color:'#7c3aed', fontSize:28 }}>{avgResolutionHr !== null ? `${avgResolutionHr}s` : '—'}</div>
+              <div className="big" style={{ color:'#11a1f2', fontSize:28 }}>{avgResolutionHr !== null ? `${avgResolutionHr}s` : '—'}</div>
               <div className="sub">Talebi kapatma süresi</div>
             </div>
             <div className="card" style={{ display:'flex', alignItems:'center', gap:16 }}>

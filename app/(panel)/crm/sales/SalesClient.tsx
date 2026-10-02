@@ -541,7 +541,7 @@ export default function SalesClient() {
 }
 
 const surface: CSSProperties = { background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 22, padding: 16, boxShadow: 'var(--shadow)' };
-const primaryButton: CSSProperties = { minHeight: 42, padding: '0 16px', borderRadius: 14, background: '#4f46e5', color: '#fff', border: 'none', fontWeight: 800, fontFamily: 'inherit', cursor: 'pointer' };
+const primaryButton: CSSProperties = { minHeight: 42, padding: '0 16px', borderRadius: 14, background: '#0e6fc7', color: '#fff', border: 'none', fontWeight: 800, fontFamily: 'inherit', cursor: 'pointer' };
 const ghostButton: CSSProperties = { minHeight: 38, padding: '0 14px', borderRadius: 12, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer' };
 const ghostLink: CSSProperties = { display: 'inline-flex', alignItems: 'center', minHeight: 40, padding: '0 14px', borderRadius: 12, background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.2)', color: 'white', textDecoration: 'none', fontWeight: 700 };
 const inputStyle: CSSProperties = { minHeight: 42, borderRadius: 14, border: '1px solid var(--border)', padding: '0 12px', background: 'var(--surface)', color: 'var(--text)', fontFamily: 'inherit', fontSize: 14, width: '100%' };

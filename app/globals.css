@@ -4,6 +4,17 @@
    <html> tag'ine ekle veya kaldır.
    ═══════════════════════════════════════════════════════ */
 
+/* ── MARKA PARAMETRELERİ (PAX Türkiye kurumsal kimlik) ──
+   Tüm CRM renkleri buradan beslenir; tek yerden değiştir. */
+:root {
+  --brand-navy:    #07055b;   /* logo lacivert */
+  --brand:         #0e6fc7;   /* buton/link/aktif (beyaz yazı okunur) */
+  --brand-2:       #11a1f2;   /* logo mavi — vurgu */
+  --brand-light:   #4cb8f5;   /* koyu temada vurgu */
+  --brand-gray:    #808285;   /* logo gri */
+  --brand-hero:    var(--brand-navy); /* büyük başlık kutuları: düz lacivert, gradyan yok */
+}
+
 /* ── LIGHT TEMA (default) ── */
 :root {
   --app-bg:        #f4f6fb;
@@ -13,7 +24,7 @@
   --sb-bg:               #ffffff;
   --sb-border:           #e8ecf4;
   --sb-brand-name:       #111827;
-  --sb-badge-color:      #6d28d9;
+  --sb-badge-color:      var(--brand-navy);
   --sb-toggle-bg:        #f4f6fb;
   --sb-toggle-border:    #e2e8f0;
   --sb-toggle-color:     #94a3b8;
@@ -22,17 +33,17 @@
   --sb-link-hover-bg:    #f8fafc;
   --sb-link-hover-bd:    #edf0f5;
   --sb-link-hover-color: #1e293b;
-  --sb-active-bg:        #f0edff;
-  --sb-active-bd:        #d4ccff;
-  --sb-active-color:     #4f46e5;
-  --sb-active-bar:       linear-gradient(180deg,#5b5bd6,#7c3aed);
-  --sb-active-glow:      rgba(91,91,214,.3);
+  --sb-active-bg:        #eaf4fd;
+  --sb-active-bd:        #c2e0f7;
+  --sb-active-color:     var(--brand);
+  --sb-active-bar:       linear-gradient(180deg,var(--brand),var(--brand-2));
+  --sb-active-glow:      rgba(14,111,199,.3);
   --sb-sep:              #f0f2f7;
   --sb-footer-bg:        #f8fafc;
   --sb-footer-bd:        #edf0f5;
-  --sb-avatar-bg:        linear-gradient(135deg,#ede9fe,#ddd6fe);
-  --sb-avatar-bd:        rgba(99,102,241,.2);
-  --sb-avatar-color:     #4f46e5;
+  --sb-avatar-bg:        linear-gradient(135deg,#e3f2fd,#cde9fb);
+  --sb-avatar-bd:        rgba(14,111,199,.2);
+  --sb-avatar-color:     var(--brand);
   --sb-name:             #111827;
   --sb-sub:              #9ca3af;
   --sb-logout-bg:        #ffffff;
@@ -49,13 +60,13 @@
   --surface:       #ffffff;
   --surface-2:     #f8fafc;
   --border:        #e8ecf4;
-  --border-strong: rgba(79,70,229,.14);
+  --border-strong: rgba(14, 111, 199,.14);
   --shadow-sm:     0 1px 3px rgba(15,23,42,.04), 0 4px 16px rgba(148,163,184,.08);
   --shadow-md:     0 2px 6px rgba(15,23,42,.04), 0 12px 32px rgba(148,163,184,.1);
-  --radius-xl:     24px;
-  --radius-lg:     18px;
-  --radius-md:     12px;
-  --radius-sm:     8px;
+  --radius-xl:     14px;
+  --radius-lg:     12px;
+  --radius-md:     10px;
+  --radius-sm:     6px;
 
   /* Text */
   --text:          #0f172a;
@@ -64,9 +75,9 @@
   --text-4:        #94a3b8;
 
   /* Accent */
-  --accent:        #4f46e5;
-  --accent-soft:   #eef2ff;
-  --accent-border: #c7d2fe;
+  --accent:        var(--brand);
+  --accent-soft:   #eaf4fd;
+  --accent-border: #c2e0f7;
 
   /* Status chips */
   --chip-indigo-bg: #eff3ff; --chip-indigo-bd: #ced8ff; --chip-indigo-color: #4159d8;
@@ -96,7 +107,7 @@
   --sb-bg:               #0e0f14;
   --sb-border:           rgba(255,255,255,.06);
   --sb-brand-name:       #f0f2f8;
-  --sb-badge-color:      #a78bfa;
+  --sb-badge-color:      #6cc4f7;
   --sb-toggle-bg:        rgba(255,255,255,.04);
   --sb-toggle-border:    rgba(255,255,255,.09);
   --sb-toggle-color:     #8b93b3;
@@ -105,17 +116,17 @@
   --sb-link-hover-bg:    rgba(255,255,255,.045);
   --sb-link-hover-bd:    rgba(255,255,255,.07);
   --sb-link-hover-color: #9ca3af;
-  --sb-active-bg:        rgba(91,91,214,.14);
-  --sb-active-bd:        rgba(91,91,214,.28);
-  --sb-active-color:     #a5b4fc;
-  --sb-active-bar:       linear-gradient(180deg,#5b5bd6,#7c3aed);
-  --sb-active-glow:      rgba(91,91,214,.65);
+  --sb-active-bg:        rgba(14,111,199,.14);
+  --sb-active-bd:        rgba(14,111,199,.28);
+  --sb-active-color:     #7cc9f7;
+  --sb-active-bar:       linear-gradient(180deg,var(--brand),var(--brand-2));
+  --sb-active-glow:      rgba(14,111,199,.65);
   --sb-sep:              rgba(255,255,255,.05);
   --sb-footer-bg:        rgba(255,255,255,.03);
   --sb-footer-bd:        rgba(255,255,255,.06);
   --sb-avatar-bg:        linear-gradient(135deg,#1a1740,#2d1f6e);
-  --sb-avatar-bd:        rgba(91,91,214,.35);
-  --sb-avatar-color:     #9b9eff;
+  --sb-avatar-bd:        rgba(14,111,199,.35);
+  --sb-avatar-color:     #7cc9f7;
   --sb-name:             #d0d4e8;
   --sb-sub:              #6b7394;
   --sb-logout-bg:        rgba(255,255,255,.03);
@@ -131,7 +142,7 @@
   --surface:       #13151c;
   --surface-2:     #0e0f14;
   --border:        rgba(255,255,255,.07);
-  --border-strong: rgba(99,102,241,.2);
+  --border-strong: rgba(14,111,199,.2);
   --shadow-sm:     0 1px 3px rgba(0,0,0,.3), 0 4px 16px rgba(0,0,0,.2);
   --shadow-md:     0 2px 6px rgba(0,0,0,.3), 0 12px 32px rgba(0,0,0,.25);
 
@@ -140,15 +151,15 @@
   --text-3:        #94a3b8;
   --text-4:        #64748b;
 
-  --accent:        #818cf8;
-  --accent-soft:   rgba(99,102,241,.12);
-  --accent-border: rgba(99,102,241,.3);
+  --accent:        var(--brand-light);
+  --accent-soft:   rgba(14,111,199,.12);
+  --accent-border: rgba(14,111,199,.3);
 
-  --chip-indigo-bg: rgba(65,89,216,.15); --chip-indigo-bd: rgba(65,89,216,.3); --chip-indigo-color: #818cf8;
+  --chip-indigo-bg: rgba(65,89,216,.15); --chip-indigo-bd: rgba(65,89,216,.3); --chip-indigo-color: var(--brand-light);
   --chip-gold-bg:   rgba(183,121,31,.15); --chip-gold-bd:   rgba(183,121,31,.3); --chip-gold-color:   #fbbf24;
   --chip-green-bg:  rgba(8,150,105,.15);  --chip-green-bd:  rgba(8,150,105,.3);  --chip-green-color:  #34d399;
   --chip-red-bg:    rgba(185,28,28,.15);  --chip-red-bd:    rgba(185,28,28,.3);  --chip-red-color:    #f87171;
-  --chip-violet-bg: rgba(91,77,219,.15);  --chip-violet-bd: rgba(91,77,219,.3);  --chip-violet-color: #a78bfa;
+  --chip-violet-bg: rgba(91,77,219,.15);  --chip-violet-bd: rgba(91,77,219,.3);  --chip-violet-color: #6cc4f7;
   --chip-gray-bg:   rgba(71,85,105,.2);   --chip-gray-bd:   rgba(71,85,105,.3);  --chip-gray-color:   #94a3b8;
 }
 
@@ -168,14 +179,14 @@
   --surface:       #ffffff;
   --surface-2:     #f8fafc;
   --border:        #e8ecf4;
-  --border-strong: rgba(79,70,229,.14);
+  --border-strong: rgba(14, 111, 199,.14);
   --text:          #0f172a;
   --text-2:        #334155;
   --text-3:        #64748b;
   --text-4:        #94a3b8;
-  --accent:        #4f46e5;
-  --accent-soft:   #eef2ff;
-  --accent-border: #c7d2fe;
+  --accent:        var(--brand);
+  --accent-soft:   #eaf4fd;
+  --accent-border: #c2e0f7;
   --pe-card-solid: #ffffff;
   --pe-border:     rgba(148,163,184,.22);
   --card:          #ffffff;
@@ -258,7 +269,7 @@ img, svg { display: block; }
 }
 .pax-input:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(99,102,241,.14);
+  box-shadow: 0 0 0 3px rgba(14,111,199,.14);
 }
 .pax-label {
   display: block; font-size: 12px; font-weight: 700;
@@ -753,7 +764,7 @@ button { touch-action: manipulation; }
   opacity: 0;
   transform: scaleX(0);
   transform-origin: left center;
-  background: linear-gradient(90deg, #1d4ed8, #6366f1, #22c55e);
+  background: linear-gradient(90deg, #1d4ed8, var(--brand), #22c55e);
   transition: transform 420ms ease, opacity 160ms ease;
 }
 .app-route-progress.active {
@@ -774,7 +785,7 @@ button { touch-action: manipulation; }
   place-items: center;
   padding: clamp(18px, 4vw, 48px);
   background:
-    radial-gradient(circle at 15% 10%, rgba(79, 70, 229, .13), transparent 34%),
+    radial-gradient(circle at 15% 10%, rgba(14, 111, 199, .13), transparent 34%),
     radial-gradient(circle at 90% 85%, rgba(14, 165, 233, .12), transparent 30%),
     var(--app-bg);
 }
@@ -797,9 +808,9 @@ button { touch-action: manipulation; }
 .crm-auth-subtitle { margin: 0; color: var(--sb-link); font-size: 14px; line-height: 1.55; }
 .crm-auth-card label { color: var(--sb-name); font-size: 13px; font-weight: 700; }
 .crm-auth-input { width: 100%; min-height: 48px; padding: 0 14px; border: 1px solid var(--sb-toggle-border); border-radius: 12px; background: var(--sb-bg); color: var(--sb-name); font: inherit; transition: border-color .15s, box-shadow .15s; }
-.crm-auth-input:focus { outline: none; border-color: var(--sb-active-color); box-shadow: 0 0 0 3px rgba(79, 70, 229, .14); }
+.crm-auth-input:focus { outline: none; border-color: var(--sb-active-color); box-shadow: 0 0 0 3px rgba(14, 111, 199, .14); }
 .crm-auth-primary, .crm-auth-secondary { min-height: 48px; display: grid; place-items: center; border-radius: 12px; font: inherit; font-weight: 750; cursor: pointer; text-decoration: none; }
-.crm-auth-primary { border: 0; background: linear-gradient(135deg, #4f46e5, #6d28d9); color: white; box-shadow: 0 10px 24px rgba(79, 70, 229, .24); }
+.crm-auth-primary { border: 0; background: linear-gradient(135deg, var(--brand), var(--brand-navy)); color: white; box-shadow: 0 10px 24px rgba(14, 111, 199, .24); }
 .crm-auth-primary:disabled { opacity: .65; cursor: wait; }
 .crm-auth-secondary { border: 1px solid var(--sb-toggle-border); background: var(--sb-bg); color: var(--sb-name); }
 .crm-auth-link { color: var(--sb-active-color); font-size: 13px; font-weight: 700; text-align: center; text-decoration: none; }

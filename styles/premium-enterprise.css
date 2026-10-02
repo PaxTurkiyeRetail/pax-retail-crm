@@ -5,26 +5,26 @@
    ========================================================= */
 
 :root {
-  --pe-bg-noise: radial-gradient(circle at 16% 8%, rgba(99, 102, 241, .12), transparent 28%), radial-gradient(circle at 88% 5%, rgba(168, 85, 247, .10), transparent 24%);
+  --pe-bg-noise: none;
   --pe-card: rgba(255, 255, 255, .86);
   --pe-card-solid: #fff;
   --pe-border: rgba(148, 163, 184, .22);
-  --pe-border-strong: rgba(99, 102, 241, .30);
-  --pe-shadow: 0 18px 55px rgba(15, 23, 42, .075), 0 1px 3px rgba(15, 23, 42, .045);
-  --pe-shadow-hover: 0 26px 80px rgba(15, 23, 42, .12), 0 2px 10px rgba(15, 23, 42, .055);
-  --pe-radius-card: 26px;
-  --pe-radius-inner: 18px;
-  --pe-gradient: linear-gradient(135deg, #111827 0%, #312e81 46%, #7c3aed 100%);
-  --pe-gradient-soft: linear-gradient(135deg, rgba(79, 70, 229, .10), rgba(124, 58, 237, .07));
+  --pe-border-strong: rgba(14,111,199,.30);
+  --pe-shadow: var(--premium-shadow);
+  --pe-shadow-hover: var(--premium-shadow-strong);
+  --pe-radius-card: 14px;
+  --pe-radius-inner: 10px;
+  --pe-gradient: var(--brand-hero);
+  --pe-gradient-soft: linear-gradient(135deg, rgba(14, 111, 199, .10), rgba(17, 161, 242, .07));
 }
 
 [data-theme="dark"] {
   --pe-card: rgba(15, 23, 42, .82);
   --pe-card-solid: #111827;
   --pe-border: rgba(255, 255, 255, .09);
-  --pe-border-strong: rgba(129, 140, 248, .34);
-  --pe-shadow: 0 22px 70px rgba(0, 0, 0, .38);
-  --pe-shadow-hover: 0 32px 95px rgba(0, 0, 0, .52);
+  --pe-border-strong: rgba(76,184,245,.34);
+  --pe-shadow: var(--premium-shadow);
+  --pe-shadow-hover: var(--premium-shadow-strong);
 }
 
 .pax-main::before {
@@ -113,7 +113,7 @@
   content: '';
   position: absolute;
   inset: 0;
-  background: radial-gradient(circle at 90% 8%, rgba(255,255,255,.26), transparent 24%), radial-gradient(circle at 8% 12%, rgba(129,140,248,.38), transparent 28%);
+  background: radial-gradient(circle at 90% 8%, rgba(255,255,255,.26), transparent 24%), radial-gradient(circle at 8% 12%, rgba(76,184,245,.38), transparent 28%);
   pointer-events: none;
 }
 
@@ -279,7 +279,7 @@
 }
 
 .pax-main-inner table tbody tr:hover td {
-  background: rgba(99, 102, 241, .045) !important;
+  background: rgba(14,111,199,.045) !important;
 }
 
 /* Forms */
@@ -299,8 +299,8 @@
 
 .pax-main-inner :is(input, select, textarea, .pax-input, .wa-input, .ph-input, .ph-select, .seller-select):focus {
   outline: none !important;
-  border-color: rgba(99, 102, 241, .62) !important;
-  box-shadow: 0 0 0 4px rgba(99, 102, 241, .16) !important;
+  border-color: rgba(14,111,199,.62) !important;
+  box-shadow: 0 0 0 4px rgba(14,111,199,.16) !important;
 }
 
 .pax-main-inner :is(.field-label,.pax-label,.wa-field-label,.ph-field span,.parameters-kicker,.kicker,.eyebrow,.section-kicker,.panel-kicker,.det-kicker,.kd-eyebrow,.forecast-eyebrow,.seller-eyebrow,.wmp-eyebrow) {
@@ -318,10 +318,10 @@
 }
 
 .pax-main-inner :is(.pax-btn-primary,.premium-btn.primary,.primary,.btn-hero,.new-btn,.seg-save) {
-  background: linear-gradient(135deg, #4f46e5, #7c3aed) !important;
-  border-color: rgba(99, 102, 241, .36) !important;
+  background: linear-gradient(135deg, var(--brand), var(--brand-2)) !important;
+  border-color: rgba(14,111,199,.36) !important;
   color: #fff !important;
-  box-shadow: 0 14px 34px rgba(79, 70, 229, .22) !important;
+  box-shadow: 0 14px 34px rgba(14, 111, 199, .22) !important;
 }
 
 .pax-main-inner :is(.pax-btn-secondary,.premium-btn.secondary,.secondary,.ghost,.btn-ghost,.seg-cancel,.pager-btn) {

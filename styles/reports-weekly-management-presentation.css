@@ -355,6 +355,6 @@
 }
 
 .wmp-kind-tamamlanan {
-  background: #ede9fe;
-  color: #6d28d9;
+  background: #e3f2fd;
+  color: var(--brand-navy);
 }

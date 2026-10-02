@@ -305,7 +305,7 @@
 }
 
 .seller-bar-fill.violet {
-  background: #8b5cf6;
+  background: var(--brand-2);
 }
 
 /* Table grid */

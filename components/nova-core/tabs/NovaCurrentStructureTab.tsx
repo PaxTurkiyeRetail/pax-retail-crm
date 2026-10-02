@@ -164,7 +164,7 @@ export default function NovaCurrentStructureTab({ userRole, userTeam, userNode, 
 
               const colorMap: Record<string, string> = {
                 emerald: isActive ? '#10b981' : '#86efac',
-                violet: isActive ? '#a855f7' : '#c4b5fd',
+                violet: isActive ? '#a855f7' : '#a9dcfa',
                 sky: isActive ? '#0ea5e9' : '#7dd3fc',
                 pink: isActive ? '#ec4899' : '#f9a8d4',
                 orange: isActive ? '#f97316' : '#fdba74',

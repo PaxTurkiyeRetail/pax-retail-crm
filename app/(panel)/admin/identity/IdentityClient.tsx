@@ -308,7 +308,7 @@ function EffectivePermissionsTab() {
                 <div style={{ fontWeight: 700, marginBottom: 6 }}>RBAC Efektif Yetkiler ({result.permissions.length})</div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                   {result.permissions.map((p) => (
-                    <span key={p} style={{ fontSize: 11, padding: '2px 8px', borderRadius: 999, background: p.startsWith('screen.') ? '#ede9fe' : '#dcfce7' }}>{p}</span>
+                    <span key={p} style={{ fontSize: 11, padding: '2px 8px', borderRadius: 999, background: p.startsWith('screen.') ? '#e3f2fd' : '#dcfce7' }}>{p}</span>
                   ))}
                   {result.permissions.length === 0 ? <span style={{ color: '#64748b' }}>Yetki yok</span> : null}
                 </div>

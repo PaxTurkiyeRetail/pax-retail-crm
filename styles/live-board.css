@@ -23,7 +23,7 @@
   --lb-info: #1d4ed8;
   --lb-neutral: #64748b;
   /* Kiralama modeli çubuğu (lb-model-bar .rental) — mor. */
-  --lb-violet: #6d28d9;
+  --lb-violet: var(--brand-navy);
   /* Müşteri Takip Statüsü dilimleri (21.09 toplantısı): Lead TURUNCU, Kasa Firması SARI (Furkan'ın isteği;
      Çağdaş Bey: "iş ortağı = kasa"). Yalnız dolgu; yazı bu renklerle yazılmaz. */
   --lb-lead: #ea580c;
@@ -60,7 +60,7 @@
   --lb-danger: #fca5a5;
   --lb-info: #93b4fd;
   --lb-neutral: #94a3b8;
-  --lb-violet: #c4b5fd;
+  --lb-violet: #a9dcfa;
   --lb-lead: #fb923c;
   --lb-kasa: #facc15;
   --lb-hunter: #60a5fa;

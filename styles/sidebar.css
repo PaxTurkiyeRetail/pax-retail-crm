@@ -58,15 +58,34 @@
 .pax-brand-mark {
   width: 32px; height: 32px; min-width: 32px;
   border-radius: 9px;
-  background: linear-gradient(145deg, #5b5bd6, #7c3aed);
+  background: linear-gradient(145deg, var(--brand), var(--brand-2));
   display: none;
   align-items: center; justify-content: center;
   font-size: 14px; font-weight: 800; color: #fff; letter-spacing: -.5px;
-  box-shadow: 0 0 0 1px rgba(124,58,237,.45), 0 5px 14px rgba(91,91,214,.3);
+  box-shadow: 0 0 0 1px rgba(17, 161, 242,.45), 0 5px 14px rgba(14,111,199,.3);
   flex-shrink: 0;
 }
 .pax-sidebar.collapsed .pax-brand-mark {
   display: flex;
+}
+
+/* Daraltılmış: kurumsal PAX ikonu + altında ok, ortalı dikey yığın */
+.pax-sidebar .pax-brand-mark img { width: 30px; height: 30px; object-fit: contain; display: block; }
+.pax-sidebar.collapsed .pax-brand-mark {
+  background: transparent !important;
+  box-shadow: none !important;
+  width: 40px; height: 40px; min-width: 40px;
+}
+.pax-sidebar.collapsed .pax-sidebar-header {
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+}
+.pax-sidebar.collapsed .pax-brand { gap: 0; }
+.pax-sidebar.collapsed .pax-toggle {
+  width: 28px; height: 28px;
+  border-radius: 8px;
+  margin: 0;
 }
 
 /* Logo container */
@@ -272,7 +291,7 @@
   }
   .pax-mobile-mark {
     width: 28px; height: 28px; border-radius: 8px;
-    background: linear-gradient(145deg,#5b5bd6,#7c3aed);
+    background: linear-gradient(145deg,var(--brand),var(--brand-2));
     display: flex; align-items: center; justify-content: center;
     font-size: 12px; font-weight: 800; color: #fff; flex-shrink: 0;
   }

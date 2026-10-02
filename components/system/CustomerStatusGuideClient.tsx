@@ -10,7 +10,7 @@ const RULES = [
   },
   {
     title: 'Fırsat',
-    tone: { bg: '#f5f3ff', border: '#ddd6fe', text: '#6d28d9' },
+    tone: { bg: '#f0f8fe', border: '#cde9fb', text: '#07055b' },
     logic: ['Faz 1–23 arasında ve canlı müşteri sinyali yok.', 'Satış süreci devam ediyor.'],
     management: 'Yeni Kazanım',
   },

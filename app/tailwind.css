@@ -21,8 +21,9 @@
   --color-accent: var(--accent);
   --color-accent-soft: var(--accent-soft);
   --color-accent-border: var(--accent-border);
-  --color-brand: #4f46e5;
-  --color-brand-2: #7c3aed;
+  --color-brand: var(--brand);
+  --color-brand-2: var(--brand-2);
+  --color-brand-navy: var(--brand-navy);
 
   --color-sb-bg: var(--sb-bg);
   --color-sb-border: var(--sb-border);

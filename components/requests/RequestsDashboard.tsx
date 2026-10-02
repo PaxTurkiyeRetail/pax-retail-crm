@@ -83,7 +83,7 @@ export default function RequestsDashboard() {
           { label:'Devam Eden', value:kpis.inProg,   color:'#2563eb' },
           { label:'Çözülen',   value:kpis.resolved,  color:'#16a34a' },
           { label:'Riskli SLA',value:kpis.atRisk,    color:'#d97706' },
-          { label:'Ort. Çözüm',value: kpis.avgResolutionHr !== null ? `${kpis.avgResolutionHr}s` : '—', color:'#7c3aed' },
+          { label:'Ort. Çözüm',value: kpis.avgResolutionHr !== null ? `${kpis.avgResolutionHr}s` : '—', color:'#11a1f2' },
         ].map(k => (
           <div key={k.label} className="card">
             <div className="kicker">{k.label}</div>

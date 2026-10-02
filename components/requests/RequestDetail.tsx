@@ -39,7 +39,7 @@ function evIcon(type: string) {
   if (type === 'created') return { bg: '#dbeafe', color: '#1d4ed8', icon: '✦' };
   if (type === 'comment') return { bg: '#f0fdf4', color: '#166534', icon: '💬' };
   if (type === 'status_changed') return { bg: '#fef3c7', color: '#b45309', icon: '→' };
-  if (type.includes('assign')) return { bg: '#ede9fe', color: '#6d28d9', icon: '👤' };
+  if (type.includes('assign')) return { bg: '#e3f2fd', color: '#07055b', icon: '👤' };
   return { bg: 'var(--surface-2)', color: 'var(--text-3)', icon: '·' };
 }
 

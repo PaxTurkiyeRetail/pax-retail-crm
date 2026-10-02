@@ -75,7 +75,7 @@
 .settings-module-card small { color: var(--text-3); line-height: 1.35; }
 .settings-module-card em { font-style: normal; color: var(--text-2); font-size: 12px; font-weight: 850; }
 .settings-module-card.tone-blue { --accent: #2563eb; }
-.settings-module-card.tone-purple { --accent: #7c3aed; }
+.settings-module-card.tone-purple { --accent: var(--brand-2); }
 .settings-module-card.tone-slate { --accent: #475569; }
 .settings-module-card.tone-green { --accent: #16a34a; }
 .settings-module-card.tone-amber { --accent: #d97706; }
@@ -83,7 +83,7 @@
 .settings-aside-help { margin: -4px 0 0; color: var(--text-3); font-size: 12px; line-height: 1.45; }
 .settings-type-badge { align-self: flex-start; border-radius: 999px; padding: 8px 11px; font-size: 11px; font-weight: 900; border: 1px solid var(--border); background: var(--surface); color: var(--text-2); }
 .settings-type-badge.tone-blue { color: #1d4ed8; background: #eff6ff; border-color: #bfdbfe; }
-.settings-type-badge.tone-purple { color: #6d28d9; background: #f5f3ff; border-color: #ddd6fe; }
+.settings-type-badge.tone-purple { color: var(--brand-navy); background: #f0f8fe; border-color: #cde9fb; }
 .settings-type-badge.tone-slate { color: #334155; background: #f8fafc; border-color: #cbd5e1; }
 .settings-type-badge.tone-green { color: #15803d; background: #f0fdf4; border-color: #bbf7d0; }
 .settings-type-badge.tone-amber { color: #b45309; background: #fffbeb; border-color: #fde68a; }

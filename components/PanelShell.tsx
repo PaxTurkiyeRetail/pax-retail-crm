@@ -632,7 +632,7 @@ export default function PanelShell({
         <div className="pax-sidebar-header">
           <div className="pax-brand">
             <div className="pax-brand-mark" aria-hidden={!collapsed}>
-              P
+              <img src="/pax-icon.svg" alt="PAX" draggable={false} />
             </div>
             <div className="pax-brand-logo">
               <img

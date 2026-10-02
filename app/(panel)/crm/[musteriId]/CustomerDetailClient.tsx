@@ -92,7 +92,7 @@ export default function CustomerDetailPage() {
           .detail-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
           .action-group { display: flex; gap: 9px; flex-wrap: wrap; }
           .action-link { min-height: 40px; display: inline-flex; align-items: center; justify-content: center; padding: 0 14px; border: 1px solid var(--border); border-radius: 11px; background: var(--surface); color: var(--text-2); text-decoration: none; font-size: 13px; font-weight: 850; box-shadow: var(--shadow-sm); }
-          .action-link.primary { color: white; border-color: transparent; background: linear-gradient(135deg, var(--accent), #7c3aed); }
+          .action-link.primary { color: white; border-color: transparent; background: linear-gradient(135deg, var(--accent), #11a1f2); }
           @media (max-width: 720px) { .detail-actions { align-items: stretch; display: grid; } .action-group { display: grid; grid-template-columns: 1fr; } .action-link { width: 100%; } }
         `}</style>
         <Link className="action-link" href="/crm/customers">← Firma Listesine Dön</Link>

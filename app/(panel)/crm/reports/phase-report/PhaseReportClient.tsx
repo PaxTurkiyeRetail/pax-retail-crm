@@ -8,7 +8,7 @@ type MacroGroup = 'Fazsız' | 'Fırsat' | 'İlk Temas' | 'Business' | 'Operasyon
 const MACRO_ORDER: MacroGroup[] = ['Fırsat', 'İlk Temas', 'Business', 'Operasyon', 'Yayılım', 'Fazsız'];
 
 const GROUP_META: Record<MacroGroup, { color: string; bg: string; bgSoft: string; border: string; dot: string; label: string; range: string }> = {
-  'Fırsat':    { color: '#7c3aed', bg: 'linear-gradient(135deg, #f3e8ff 0%, #ede9fe 100%)', bgSoft: '#faf5ff', border: '#ddd6fe', dot: '#7c3aed', label: 'Fırsat İlk Temas', range: 'Faz 1-4' },
+  'Fırsat':    { color: '#11a1f2', bg: 'linear-gradient(135deg, #f3e8ff 0%, #e3f2fd 100%)', bgSoft: '#faf5ff', border: '#cde9fb', dot: '#11a1f2', label: 'Fırsat İlk Temas', range: 'Faz 1-4' },
   'İlk Temas': { color: '#2563eb', bg: 'linear-gradient(135deg, #e0f2fe 0%, #dbeafe 100%)', bgSoft: '#f0f9ff', border: '#bfdbfe', dot: '#2563eb', label: 'Analiz + Sunumlar', range: 'Faz 5-9' },
   'Business':  { color: '#b45309', bg: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)', bgSoft: '#fffbeb', border: '#fde68a', dot: '#b45309', label: 'Business', range: 'Faz 10-14' },
   'Operasyon': { color: '#be185d', bg: 'linear-gradient(135deg, #ffe4e6 0%, #fecdd3 100%)', bgSoft: '#fff1f2', border: '#fecdd3', dot: '#be185d', label: 'Operasyon', range: 'Faz 15-23' },

@@ -108,7 +108,7 @@ export default function CustomersHero({
               <div className="ch-donut-kicker">Kasa Firmaları</div>
               <div className="ch-legend">
                 {kasaBreakdown.slice(0, 3).map((item, i) => {
-                  const colors = ['#5eead4', '#38bdf8', '#818cf8'];
+                  const colors = ['#5eead4', '#38bdf8', '#4cb8f5'];
                   return (
                     <div key={item.label} className="ch-legend-row">
                       <span className="ch-dot" style={{ background: colors[i % colors.length] }} />

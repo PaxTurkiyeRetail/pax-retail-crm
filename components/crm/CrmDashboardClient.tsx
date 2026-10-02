@@ -350,7 +350,7 @@ export default function CrmDashboardClient() {
                     <div style={{
                       height: "100%",
                       width: `${Math.min((targetActual.totalActivities / targetGoal.totalActivities) * 100, 100)}%`,
-                      background: targetActual.totalActivities >= targetGoal.totalActivities ? "var(--chip-green-color)" : "var(--accent, #4f46e5)",
+                      background: targetActual.totalActivities >= targetGoal.totalActivities ? "var(--chip-green-color)" : "var(--accent, #0e6fc7)",
                       borderRadius: 999,
                     }} />
                   </div>
