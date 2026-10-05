@@ -834,8 +834,8 @@ export default function PanelShell({
                     const showUsers = allowed('admin.users.manage') && allowed('screen.admin.users.view');
                     const showRbac = allowed('admin.rbac.manage') && allowed('screen.admin.rbac.view');
                     const showIdentity = allowed('admin.identity.manage') && allowed('screen.admin.identity.view');
-                    const showTargets = allowed('admin.targets.manage') && allowed('screen.admin.targets.view');
-                    if (!(showParameterManagement || showBackup || showUsers || showRbac || showIdentity || showTargets)) return null;
+                    // Hedefler yalnız sol menüde (Operasyon) — burada tekrar etmez.
+                    if (!(showParameterManagement || showBackup || showUsers || showRbac || showIdentity)) return null;
                     return (
                       <div className="pax-user-dropdown-section">
                         {showParameterManagement && (
@@ -860,14 +860,6 @@ export default function PanelShell({
                             className="pax-user-dropdown-link"
                           >
                             Kullanıcı Yönetimi
-                          </Link>
-                        )}
-                        {showTargets && (
-                          <Link
-                            href="/admin/targets"
-                            className="pax-user-dropdown-link"
-                          >
-                            Hedefler
                           </Link>
                         )}
                         {showRbac && (
