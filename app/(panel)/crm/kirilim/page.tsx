@@ -19,6 +19,17 @@ import '@/styles/drilldown.css';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
+/** Kolon sıralama: sayı (faz "25 · …" gibi baştaki sayı dahil) sayısal, kalan Türkçe alfabetik; boşlar hep sonda. */
+function compareCells(a: string | number | null, b: string | number | null) {
+  const empty = (v: unknown) => v == null || v === '' || v === '—';
+  if (empty(a) || empty(b)) return empty(a) && empty(b) ? 0 : empty(a) ? 1 : -1;
+  const num = (v: string | number) => (typeof v === 'number' ? v : /^-?\d+([.,]\d+)?(\s|$|·)/.test(v) ? parseFloat(v.replace(',', '.')) : NaN);
+  const na = num(a!);
+  const nb = num(b!);
+  if (!Number.isNaN(na) && !Number.isNaN(nb)) return na - nb;
+  return String(a).localeCompare(String(b), 'tr', { numeric: true });
+}
+
 function fmtDay(value: string | number | null) {
   if (value == null || value === '') return '—';
   const text = String(value);
@@ -37,8 +48,28 @@ export default async function DrilldownPage({
 
   const today = new Date();
   const currentYear = Number(istanbulDayKey(today).slice(0, 4));
-  const params = parseDrilldownParams(await searchParams, currentYear);
+  const raw = await searchParams;
+  const params = parseDrilldownParams(raw, currentYear);
   const data = await loadDrilldown(params, today);
+  // Başlık okları: ?sirala=<kolon>&yon=artan|azalan (JS'siz link, diğer filtreler korunur).
+  const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? '';
+  const sortKey = one(raw.sirala);
+  const sortIndex = data.columns.findIndex((column) => column.key === sortKey);
+  const sortDesc = one(raw.yon) === 'azalan';
+  const rows = sortIndex < 0 ? data.rows : [...data.rows].sort((x, y) => {
+    const a = x.cells[sortIndex] ?? null;
+    const b = y.cells[sortIndex] ?? null;
+    const empty = (v: unknown) => v == null || v === '' || v === '—';
+    if (empty(a) || empty(b)) return compareCells(a, b);
+    return sortDesc ? compareCells(b, a) : compareCells(a, b);
+  });
+  const sortHref = (key: string) => {
+    const qs = new URLSearchParams();
+    for (const [k, v] of Object.entries(raw)) if (k !== 'sirala' && k !== 'yon' && one(v)) qs.set(k, one(v));
+    qs.set('sirala', key);
+    qs.set('yon', sortKey === key && !sortDesc ? 'azalan' : 'artan');
+    return `/crm/kirilim?${qs}`;
+  };
   const filterFields: GhostFilterField[] = [
     { name: 'tip', label: 'Liste', value: params.kind, options: DRILLDOWN_KINDS.map((kind) => ({ value: kind, label: KIND_TITLE[kind] })) },
     { name: 'satisci', label: 'Satıcı', value: params.owner ?? '', options: ownerOptions(OWNER_ORDER, params.owner) },
@@ -101,10 +132,14 @@ export default async function DrilldownPage({
           <div className="dd-tr dd-th" role="row">
             <span role="columnheader" className="right dd-no">#</span>
             {data.columns.map((column) => (
-              <span key={column.key} role="columnheader" className={column.align === 'right' ? 'right' : ''}>{column.label}</span>
+              <span key={column.key} role="columnheader" className={column.align === 'right' ? 'right' : ''}>
+                <Link href={sortHref(column.key)} className={`dd-sort${sortKey === column.key ? ' active' : ''}`} title="Sırala">
+                  {column.label} <i aria-hidden>{sortKey === column.key ? (sortDesc ? '▼' : '▲') : '⇅'}</i>
+                </Link>
+              </span>
             ))}
           </div>
-          {data.rows.map((row, rowIndex) => (
+          {rows.map((row, rowIndex) => (
             <div className="dd-tr" role="row" key={`${row.customerId ?? 'row'}-${rowIndex}`}>
               <span role="cell" className="right dd-no">{rowIndex + 1}</span>
               {row.cells.map((cell, cellIndex) => (

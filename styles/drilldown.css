@@ -62,3 +62,8 @@
 .dd-seg b{font-weight:800}
 .dd-seg i,.dd-tag i{width:9px;height:9px;border-radius:50%;display:inline-block;flex:none}
 .dd-tag{display:inline-flex;align-items:center;gap:6px;font-weight:600}
+/* Sıralanabilir başlık okları */
+.dd-sort { color: inherit; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+.dd-sort i { font-style: normal; opacity: 0.35; font-size: 0.9em; }
+.dd-sort:hover i, .dd-sort.active i { opacity: 1; }
+.dd-sort.active { color: var(--text, #0f172a); }
