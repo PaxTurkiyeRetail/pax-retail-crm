@@ -19,13 +19,13 @@ const fmt = (v: number | null | undefined) => (v == null ? NA : v.toLocaleString
 const money = (v: number | null | undefined) => (v == null ? NA : fmtMoney(v));
 
 /** Tıklanabilir kutu: her sayı detay (kırılım) ekranına yeni sekmede açılır. */
-function Box({ href, className, children }: { href?: string; className: string; children: React.ReactNode }) {
+export function Box({ href, className, children }: { href?: string; className: string; children: React.ReactNode }) {
   return href
     ? <a href={href} target="_blank" rel="noreferrer" className={`${className} pc-link`}>{children}</a>
     : <div className={className}>{children}</div>;
 }
 
-function Hero({ label, m, render, href }: { label: string; m: Measure; render: (v: number) => string; href?: string }) {
+export function Hero({ label, m, render, href }: { label: string; m: Measure; render: (v: number) => string; href?: string }) {
   const pct = attainmentPct(m);
   const tone = attainmentTone(pct);
   return (
@@ -38,7 +38,7 @@ function Hero({ label, m, render, href }: { label: string; m: Measure; render: (
   );
 }
 
-function Row({ k, v, href, tone }: { k: string; v: string; href?: string; tone?: Tone }) {
+export function Row({ k, v, href, tone }: { k: string; v: string; href?: string; tone?: Tone }) {
   return (
     <div className="pc-row">
       <span>{k}</span>
@@ -47,7 +47,7 @@ function Row({ k, v, href, tone }: { k: string; v: string; href?: string; tone?:
   );
 }
 
-function Trend({ points, href }: { points: PerfOwnerReport['trend']; href: (year: number) => string }) {
+export function Trend({ points, href }: { points: PerfOwnerReport['trend']; href: (year: number) => string }) {
   const max = Math.max(1, ...points.map((p) => Math.max(p.actual, p.target ?? 0)));
   return (
     <div className="pc-chart">

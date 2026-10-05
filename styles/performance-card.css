@@ -120,3 +120,17 @@
 .pc-tag.t-teklif { color: var(--pc-warn); background: color-mix(in srgb, var(--pc-warn) 12%, transparent); }
 .pc-tag.t-kazanim, .pc-tag.t-fatura { color: var(--pc-ok); background: color-mix(in srgb, var(--pc-ok) 12%, transparent); }
 .pc-tag.t-kayip { color: var(--pc-danger); background: color-mix(in srgb, var(--pc-danger) 12%, transparent); }
+
+/* DASHBOARD (05.10.2026) — teşhis kartları + satıcı sıralaması */
+.pc-advice { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+.pc-adv { display: flex; flex-direction: column; gap: 6px; border-left: 4px solid var(--pc-line, #ddd); text-decoration: none; color: inherit; }
+.pc-adv b { font-size: 15px; }
+.pc-adv span { font-size: 13px; line-height: 1.45; opacity: .85; }
+.pc-adv.tone-b-ok { border-left-color: #16a34a; }
+.pc-adv.tone-b-warn { border-left-color: #d97706; }
+.pc-adv.tone-b-danger { border-left-color: #dc2626; }
+.pc-adv.tone-b-info { border-left-color: #2563eb; }
+.pc-rank { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.pc-rank-item { display: flex; align-items: center; gap: 10px; cursor: pointer; text-align: left; font: inherit; color: inherit; }
+.pc-rank-item strong { flex: 1; }
+.pc-rank-item.active { outline: 2px solid #2563eb; }

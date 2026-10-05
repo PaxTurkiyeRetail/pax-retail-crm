@@ -349,7 +349,7 @@ export default function PanelShell({
     setMenuOpen(false);
     setUserMenuOpen(false);
     // Dashboard rapor URL'inde ama menüde ayrı: açılınca Raporlar grubu kapanır.
-    if (pathname.startsWith("/dashboard")) setReportsOpen(false);
+    if (pathname.startsWith("/dashboard") || pathname.startsWith("/canli-ekran")) setReportsOpen(false);
     else if (pathname.startsWith("/crm/reports")) setReportsOpen(true);
   }, [pathname]);
 
@@ -423,10 +423,17 @@ export default function PanelShell({
 
     // MENÜ (Taha, 02.10.2026): Dashboard en üstte "Genel Bakış" yerine; Talepler menünün en altında.
     // Dashboard yetkisi olmayan kullanıcıda eski Genel Bakış (/crm) kalır — menüsüz kalmasın.
+    // Dashboard (05.10.2026): herkese açık — her hesap kendi durumunu görür. Eski dönen ekran: Canlı Ekran.
+    overview.push({
+      href: "/dashboard",
+      label: "Dashboard",
+      iconKey: "dashboard",
+      exact: true,
+    });
     if (canDashboard)
       overview.push({
-        href: "/dashboard",
-        label: "Dashboard",
+        href: "/canli-ekran",
+        label: "Canlı Ekran",
         iconKey: "dashboard",
         exact: true,
       });
