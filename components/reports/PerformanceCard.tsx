@@ -233,9 +233,74 @@ export default function PerformanceCard() {
   if (status === 'error') return <div className="pc-wrap"><div className="pc-card">Veri alınamadı: {error} <button type="button" className="pc-btn" onClick={() => void load(period)}>Tekrar dene</button></div></div>;
   if (!data) return <div className="pc-wrap"><div className="pc-card">Yükleniyor…</div></div>;
 
+  const elapsed = data.range.elapsedPct;
+  const periodButtons = PERF_PERIODS.map((x) => (
+    <button type="button" key={x.key} className={period === x.key ? 'active' : ''} onClick={() => setPeriod(x.key)}>{x.label}</button>
+  ));
+
+  // İlk açılış: tüm satıcıların özet listesi (puana göre); karta basınca kişinin karnesi açılır.
+  if (!selected) {
+    const ranked = data.owners
+      .map((o) => { const d = perfDimensions(o, elapsed); return { o, d, t: perfTotal(d) }; })
+      .sort((a, b) => (b.t ?? -1) - (a.t ?? -1));
+    const scored = ranked.filter((x) => x.t != null);
+    const avg = scored.length ? Math.round(scored.reduce((s, x) => s + (x.t ?? 0), 0) / scored.length) : null;
+    const below = scored.filter((x) => (x.t ?? 0) < 60).length;
+    return (
+      <div className={`pc-wrap${status === 'loading' ? ' is-loading' : ''}`}>
+        <div className="pc-top">
+          <div>
+            <div className="pc-eyebrow">Retail Sales Performance Report</div>
+            <h1>Performans Karnesi</h1>
+            <div className="pc-sub">
+              {data.range.label} · dönemin %{elapsed}&apos;i geçti · {ranked.length} satıcı · ortalama {avg == null ? NA : `%${avg}`}
+              {below ? ` · ${below} kişi %60 altında` : ''}
+            </div>
+          </div>
+          <div className="pc-filters">{periodButtons}</div>
+        </div>
+        <div className="pc-overview">
+          {ranked.map(({ o, d, t }, i) => {
+            const g = perfGrade(t);
+            const kpi = (label: string, m: Measure, render: (v: number) => string) => {
+              const pct = attainmentPct(m);
+              return <div className="pc-ov-kpi"><span>{label}</span><b>{render(m.actual)}</b><small className={`tone-${attainmentTone(pct)}`}>{pct == null ? 'hedef yok' : `%${pct}`}</small></div>;
+            };
+            return (
+              <button type="button" key={o.owner} className="pc-card pc-ov" onClick={() => setSelected(o.owner)}>
+                <div className="pc-ov-head">
+                  <span className="pc-ov-rank">{i + 1}</span>
+                  <div className={`pc-ring sm tone-${g.tone}`} style={{ ['--pc-pct' as string]: `${t ?? 0}%` }}><b>{t == null ? NA : `%${t}`}</b></div>
+                  <div className="pc-ov-name"><strong>{o.owner}</strong></div>
+                </div>
+                <div className="pc-ov-kpis">
+                  {kpi('Ciro', o.revenue, fmtMoney)}
+                  {kpi('Cihaz', o.devices, (v) => v.toLocaleString('tr-TR'))}
+                  {kpi('Görüşme', o.meetings, (v) => v.toLocaleString('tr-TR'))}
+                </div>
+                <div className="pc-ov-dims">
+                  {d.map((x) => {
+                    const pct = x.score == null ? null : Math.round((x.score / x.weight) * 100);
+                    return (
+                      <div key={x.key} title={`${x.label}: ${pct == null ? NA : `%${pct}`}`}>
+                        <span>{x.label}</span>
+                        <span className="pc-progress"><span className={`tone-${perfGrade(pct).tone}`} style={{ width: `${pct ?? 0}%` }} /></span>
+                        <small>{pct == null ? NA : `%${pct}`}</small>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="pc-ov-foot">Açık teklif {o.pipeline.openCount} · {fmtMoney(o.pipeline.openAmount)} · hareketsiz {o.risks.inactive} → Karneyi aç</div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
   const isTeam = showTeam && selected === TEAM;
   const r = isTeam ? data.team : data.owners.find((o) => o.owner === selected) ?? data.owners[0] ?? data.team;
-  const elapsed = data.range.elapsedPct;
   const dims = perfDimensions(r, elapsed);
   const total = isTeam
     ? (() => { const s = data.owners.map((o) => perfTotal(perfDimensions(o, elapsed))).filter((v): v is number => v != null); return s.length ? Math.round(s.reduce((a, b) => a + b, 0) / s.length) : null; })()
@@ -259,30 +324,15 @@ export default function PerformanceCard() {
 
   return (
     <div className={`pc-wrap${status === 'loading' ? ' is-loading' : ''}`}>
-      <div className="pc-people" aria-label="Satıcı performans özetleri">
-        {data.owners.map((o) => {
-          const t = perfTotal(perfDimensions(o, elapsed));
-          const g = perfGrade(t);
-          return (
-            <button type="button" key={o.owner} className={`pc-person${!isTeam && o.owner === r.owner ? ' active' : ''}`} onClick={() => setSelected(o.owner)}>
-              <span className="pc-person-name">{o.owner}</span>
-              <b className={`tone-${g.tone}`}>{t == null ? NA : `%${t}`}</b>
-              <small className={`tone-${g.tone}`}>{g.label}</small>
-              <span className="pc-progress"><span className={`tone-${g.tone}`} style={{ width: `${t ?? 0}%` }} /></span>
-            </button>
-          );
-        })}
-      </div>
       <div className="pc-top">
         <div>
-          <div className="pc-eyebrow">Retail Sales Performance Report</div>
+          <button type="button" className="pc-back" onClick={() => setSelected('')}>← Tüm satıcılar</button>
+          <div className="pc-eyebrow">Performans Karnesi</div>
           <h1>{r.owner}</h1>
           <div className="pc-sub">{data.range.label} · dönemin %{elapsed}&apos;i geçti</div>
         </div>
         <div className="pc-filters">
-          {PERF_PERIODS.map((x) => (
-            <button type="button" key={x.key} className={period === x.key ? 'active' : ''} onClick={() => setPeriod(x.key)}>{x.label}</button>
-          ))}
+          {periodButtons}
           <select value={isTeam ? TEAM : r.owner} onChange={(e) => setSelected(e.target.value)} aria-label="Satıcı">
             {data.owners.map((o) => <option key={o.owner} value={o.owner}>{o.owner}</option>)}
             {showTeam ? <option value={TEAM}>Ekip Özeti</option> : null}
