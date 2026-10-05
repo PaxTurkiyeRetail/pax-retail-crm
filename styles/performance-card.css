@@ -1,0 +1,56 @@
+/* Performans Karnesi — müdür taslağı "Retail Sales Performance Report" görünümü. */
+.pc-wrap {
+  --pc-card: #fff; --pc-ink: #142033; --pc-muted: #718096; --pc-line: #e6ebf2; --pc-soft: #fbfcfe;
+  --pc-ok: #168a5b; --pc-info: #2563eb; --pc-warn: #d97706; --pc-danger: #c81e1e; --pc-neutral: #94a3b8;
+  max-width: 1500px; margin: 0 auto; padding: 8px 0 22px; color: var(--pc-ink);
+}
+:root[data-theme="dark"] .pc-wrap { --pc-card: #111827; --pc-ink: #e5e7eb; --pc-muted: #9ca3af; --pc-line: #1f2937; --pc-soft: #0f172a; }
+.pc-wrap .tone-ok { color: var(--pc-ok); } .pc-wrap .tone-info { color: var(--pc-info); }
+.pc-wrap .tone-warn { color: var(--pc-warn); } .pc-wrap .tone-danger { color: var(--pc-danger); } .pc-wrap .tone-neutral { color: var(--pc-muted); }
+.pc-top { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; margin-bottom: 16px; flex-wrap: wrap; }
+.pc-eyebrow { font-size: 12px; color: var(--pc-info); font-weight: 800; letter-spacing: .8px; text-transform: uppercase; }
+.pc-top h1 { margin: 4px 0; font-size: 28px; }
+.pc-sub, .pc-mini { color: var(--pc-muted); font-size: 12.5px; }
+.pc-mini { margin-top: 6px; }
+.pc-filters { display: flex; gap: 8px; flex-wrap: wrap; }
+.pc-filters button { border: 1px solid var(--pc-line); background: var(--pc-card); padding: 9px 12px; border-radius: 10px; color: var(--pc-ink); cursor: pointer; font: inherit; font-size: 13px; }
+.pc-filters button.active { background: var(--pc-info); color: #fff; border-color: var(--pc-info); }
+.pc-grid { display: grid; gap: 14px; }
+.pc-grid.g4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.pc-grid.g2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.pc-section { margin-top: 14px; }
+.pc-card { background: var(--pc-card); border: 1px solid var(--pc-line); border-radius: 18px; padding: 18px; box-shadow: 0 10px 28px rgba(20, 32, 51, .06); min-width: 0; }
+.pc-title { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+.pc-title h2 { margin: 0; font-size: 16px; }
+.pc-title span { font-size: 12px; color: var(--pc-muted); }
+.pc-score { display: flex; gap: 18px; align-items: center; }
+.pc-ring { --pc-c: currentColor; width: 112px; height: 112px; border-radius: 50%; flex: 0 0 auto; display: grid; place-items: center; position: relative;
+  background: conic-gradient(var(--pc-c) 0 var(--pc-pct), var(--pc-line) var(--pc-pct)); }
+.pc-ring::after { content: ""; position: absolute; width: 82px; height: 82px; border-radius: 50%; background: var(--pc-card); }
+.pc-ring b { position: relative; z-index: 1; font-size: 30px; color: var(--pc-ink); }
+.pc-grade { display: inline-block; margin-top: 8px; background: color-mix(in srgb, currentColor 12%, transparent); padding: 5px 10px; border-radius: 999px; font-size: 12px; font-weight: 800; }
+.pc-label { font-size: 12px; color: var(--pc-muted); font-weight: 800; text-transform: uppercase; letter-spacing: .5px; }
+.pc-value { font-size: 30px; font-weight: 900; margin-top: 8px; }
+.pc-progress { height: 8px; background: var(--pc-line); border-radius: 999px; overflow: hidden; margin-top: 12px; }
+.pc-progress span { display: block; height: 100%; border-radius: 999px; background: currentColor; }
+.pc-dims { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+.pc-dim { border: 1px solid var(--pc-line); border-radius: 14px; padding: 14px; background: var(--pc-soft); }
+.pc-dimtop { display: flex; justify-content: space-between; gap: 8px; }
+.pc-dimname { font-size: 13px; font-weight: 800; }
+.pc-dimscore { font-size: 21px; font-weight: 900; white-space: nowrap; }
+.pc-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.pc-summary > div { padding: 12px; border-radius: 12px; background: var(--pc-soft); border: 1px solid var(--pc-line); }
+.pc-summary span { display: block; font-size: 11.5px; color: var(--pc-muted); }
+.pc-summary b { display: block; font-size: 20px; font-weight: 900; margin-top: 4px; }
+.pc-wrap a { color: inherit; text-decoration: underline; text-underline-offset: 3px; }
+.pc-rows { display: grid; gap: 10px; margin-top: 12px; }
+.pc-row { display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px dashed var(--pc-line); padding-bottom: 8px; font-size: 13.5px; }
+.pc-row:last-child { border-bottom: none; }
+.pc-row span { color: var(--pc-muted); }
+.pc-row b, .pc-row a { font-weight: 800; }
+.pc-focus { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.pc-focus h3 { margin: 0 0 10px; font-size: 14px; }
+.pc-focus ul { margin: 0; padding-left: 18px; font-size: 13.5px; line-height: 1.65; }
+.pc-footer { text-align: right; color: var(--pc-muted); font-size: 11px; margin-top: 12px; }
+@media (max-width: 1100px) { .pc-grid.g4, .pc-dims { grid-template-columns: repeat(2, minmax(0, 1fr)); } .pc-focus, .pc-grid.g2 { grid-template-columns: 1fr; } }
+@media (max-width: 700px) { .pc-grid.g4, .pc-dims { grid-template-columns: 1fr; } .pc-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
