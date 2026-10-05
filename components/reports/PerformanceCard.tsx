@@ -90,7 +90,7 @@ export default function PerformanceCard({ active }: { active: boolean }) {
         <div>
           <div className="pc-eyebrow">Performans Karnesi</div>
           <h1>{owner.owner}</h1>
-          <div className="pc-sub">YTD Performans · 01 Ocak – {new Date(`${data.range.today}T12:00:00Z`).toLocaleDateString('tr-TR', { day: '2-digit', month: 'long', year: 'numeric' })} · yılın %{elapsed}'i geçti</div>
+          <div className="pc-sub">YTD Performans · 01 Ocak – {new Date(`${data.range.today}T12:00:00Z`).toLocaleDateString('tr-TR', { day: '2-digit', month: 'long', year: 'numeric' })} · yılın %{elapsed}&apos;i geçti</div>
         </div>
         <div className="pc-filters">
           <button type="button" className={isTeam ? 'active' : ''} onClick={() => setSelected(TEAM)}>Ekip Özeti</button>
@@ -184,7 +184,7 @@ export default function PerformanceCard({ active }: { active: boolean }) {
         </div>
 
         <div className="pc-card">
-          <div className="pc-title"><h2>Çeyrek Durumu · {g.quarter.label}</h2><span>{g.quarter.months} · çeyreğin %{g.quarter.elapsedPct}'i geçti</span></div>
+          <div className="pc-title"><h2>Çeyrek Durumu · {g.quarter.label}</h2><span>{g.quarter.months} · çeyreğin %{g.quarter.elapsedPct}&apos;i geçti</span></div>
           <div className="pc-rows">
             <Row k="Çeyrek ciro" v={`${fmtMoney(g.budgetQuarter.actual)}${g.budgetQuarter.target != null ? ` / ${fmtMoney(g.budgetQuarter.target)}` : ''}`} tone={toneOf(goalRatio(g.budgetQuarter), g.quarter.elapsedPct)} />
             <Row k="Çeyrek görüşme" v={`${fmt(g.visitsQuarter.actual)}${g.visitsQuarter.target != null ? ` / ${fmt(g.visitsQuarter.target)}` : ''}`} tone={toneOf(goalRatio(g.visitsQuarter), g.quarter.elapsedPct)} />

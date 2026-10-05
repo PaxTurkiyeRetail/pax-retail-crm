@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import LiveBoard from '@/components/reports/LiveBoard';
-import PerformanceCard from '@/components/reports/PerformanceCard';
 import PhaseReport from '@/app/(panel)/crm/reports/phase-report/PhaseReportClient';
 import { appToast } from '@/lib/app-toast';
 import { followupPptxFileName } from '@/lib/reports/seller-followup-pptx-shared';
@@ -13,17 +12,16 @@ import '@/styles/seller-followup.css';
 //   Sekme 2 — Kişi Bazlı Aktivite: temas edilen müşteriler, kanal kırılımı + hedef.
 //   Sekme 3 — Faz: eski "Faz Raporu" ekranı (15.09'da buraya gömüldü, Çağdaş Bey).
 //             /crm/reports/phase-report adresi ?tab=faz'a yönlendirilir.
-//   Sekme 0 — Performans Karnesi (05.10.2026, açılış): müdür taslağı, bkz. components/reports/PerformanceCard.tsx.
 //   Sekme 4 — Canlı Ekran: kendi kendine dönen yönetici panosu (takım özeti + kişi
 //             slaytları). ?tab=live ile doğrudan açılır — TV/ikinci ekran için yer imi.
 
-type TabKey = 'perf' | 'followup' | 'activity' | 'faz' | 'live';
-const TAB_KEYS: TabKey[] = ['perf', 'followup', 'activity', 'faz', 'live'];
+type TabKey = 'followup' | 'activity' | 'faz' | 'live';
+const TAB_KEYS: TabKey[] = ['followup', 'activity', 'faz', 'live'];
 
 function tabFromUrl(): TabKey {
-  if (typeof window === 'undefined') return 'perf';
+  if (typeof window === 'undefined') return 'live';
   const value = new URLSearchParams(window.location.search).get('tab');
-  return (TAB_KEYS as string[]).includes(value ?? '') ? (value as TabKey) : 'perf';
+  return (TAB_KEYS as string[]).includes(value ?? '') ? (value as TabKey) : 'live';
 }
 
 type FollowupRow = {
@@ -131,7 +129,7 @@ function TargetCell({ actual, target }: { actual: number; target: number }) {
 }
 
 export default function SellerFollowupClient() {
-  const [tab, setTab] = useState<TabKey>('perf');
+  const [tab, setTab] = useState<TabKey>('live');
 
   // Yer imiyle açılış (?tab=live) + sekme değişince URL'yi sessizce güncelle.
   useEffect(() => { setTab(tabFromUrl()); }, []);
@@ -139,7 +137,7 @@ export default function SellerFollowupClient() {
     setTab(next);
     try {
       const url = new URL(window.location.href);
-      if (next === 'perf') url.searchParams.delete('tab'); else url.searchParams.set('tab', next);
+      if (next === 'live') url.searchParams.delete('tab'); else url.searchParams.set('tab', next);
       window.history.replaceState(null, '', url.toString());
       window.dispatchEvent(new Event('pax:locationchange')); // menü aktifliği güncellensin
     } catch {}
@@ -325,9 +323,6 @@ export default function SellerFollowupClient() {
       </section>
 
       <div className="sfu-tabs">
-        <button type="button" className={`sfu-tab ${tab === 'perf' ? 'active' : ''}`} onClick={() => switchTab('perf')} title="Kişi ve ekip performans karnesi">
-          Performans Karnesi
-        </button>
         <button type="button" className={`sfu-tab ${tab === 'followup' ? 'active' : ''}`} onClick={() => switchTab('followup')}>
           Takip Listesi
         </button>
@@ -348,10 +343,9 @@ export default function SellerFollowupClient() {
         <LiveBoard active={tab === 'live'} />
       </div>
 
-      {tab === 'perf' ? <PerformanceCard active /> : null}
       {tab === 'faz' ? <PhaseReport embedded /> : null}
 
-      {tab === 'live' || tab === 'faz' || tab === 'perf' ? null : tab === 'followup' ? (
+      {tab === 'live' || tab === 'faz' ? null : tab === 'followup' ? (
         <section className="sfu-panel">
           <div className="sfu-panel-head">
             <h2>Takip Listesi</h2>

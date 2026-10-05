@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import LogoutButton from "@/components/LogoutButton";
 import {
   hasPermission,
+  isAdminLike,
   type AllowedRole,
   type Permission,
 } from "@/lib/roles";
@@ -242,6 +243,7 @@ function routeMeta(pathname: string) {
     ],
     ["/crm/reports/seller-presentation", "Rapor Merkezi", "Satışçı Sunumu"],
     ["/dashboard", "Genel", "Dashboard"],
+    ["/performans-karnesi", "Genel", "Performans Karnesi"],
     ["/crm/reports/entegrasyon-raporu", "Rapor Merkezi", "KasaPOS Entegrasyon Raporu"],    ["/crm/reports/yil-ziyaret-portfoy", "Rapor Merkezi", "Yıl Ziyaret & Portföy Sağlığı"],
     ["/crm/reports/forecast", "Rapor Merkezi", "Forecast Raporu"],
     ["/crm/reports/quotes", "Rapor Merkezi", "Teklif Raporları"],
@@ -430,6 +432,15 @@ export default function PanelShell({
         exact: true,
       });
 
+    // Performans Karnesi (05.10.2026): ayrı birime açılan ekran — yalnız admin + super_admin.
+    if (isAdminLike(role))
+      overview.push({
+        href: "/performans-karnesi",
+        label: "Performans Karnesi",
+        iconKey: "weekly",
+        exact: true,
+      });
+
     if ((allowed('request.read.own') || allowed('request.read.all') || allowed('request.create')) && allowed('screen.requests.view'))
       tail.push({
         href: "/requests",
@@ -566,7 +577,7 @@ export default function PanelShell({
         ? { title: "Raporlar", iconKey: "weekly", items: reports }
         : null,
     };
-  }, [allowed]);
+  }, [allowed, role]);
 
   const displayName = (fullName ?? "").trim() || "Demo Kullanıcı";
   const displaySub = email?.trim() || roleLabel(role);
