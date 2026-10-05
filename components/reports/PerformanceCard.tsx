@@ -17,16 +17,23 @@ const NA = 'N/A';
 const fmt = (v: number | null | undefined) => (v == null ? NA : v.toLocaleString('tr-TR'));
 const money = (v: number | null | undefined) => (v == null ? NA : fmtMoney(v));
 
-function Hero({ label, m, render }: { label: string; m: Measure; render: (v: number) => string }) {
+/** Tıklanabilir kutu: her sayı detay (kırılım) ekranına yeni sekmede açılır. */
+function Box({ href, className, children }: { href?: string; className: string; children: React.ReactNode }) {
+  return href
+    ? <a href={href} target="_blank" rel="noreferrer" className={`${className} pc-link`}>{children}</a>
+    : <div className={className}>{children}</div>;
+}
+
+function Hero({ label, m, render, href }: { label: string; m: Measure; render: (v: number) => string; href?: string }) {
   const pct = attainmentPct(m);
   const tone = attainmentTone(pct);
   return (
-    <div className="pc-card">
+    <Box href={href} className="pc-card">
       <div className="pc-label">{label}</div>
       <div className={`pc-value tone-${pct == null ? 'info' : tone}`}>{render(m.actual)}</div>
       <div className="pc-mini">{m.target != null ? `${render(m.target)} hedef · %${pct} gerçekleşme` : 'hedef girilmemiş · N/A'}</div>
       <div className="pc-progress"><span className={`tone-${tone}`} style={{ width: `${Math.min(100, pct ?? 0)}%` }} /></div>
-    </div>
+    </Box>
   );
 }
 
@@ -39,19 +46,19 @@ function Row({ k, v, href, tone }: { k: string; v: string; href?: string; tone?:
   );
 }
 
-function Trend({ points }: { points: PerfOwnerReport['trend'] }) {
+function Trend({ points, href }: { points: PerfOwnerReport['trend']; href: (year: number) => string }) {
   const max = Math.max(1, ...points.map((p) => Math.max(p.actual, p.target ?? 0)));
   return (
     <div className="pc-chart">
       {points.map((p) => (
-        <div className="pc-month" key={p.month} title={`${p.label}: ${fmtMoney(p.actual)} / ${p.target == null ? 'hedef yok' : fmtMoney(p.target)}`}>
+        <a href={href(Number(p.month.slice(0, 4)))} target="_blank" rel="noreferrer" className="pc-month pc-link" key={p.month} title={`${p.label}: ${fmtMoney(p.actual)} / ${p.target == null ? 'hedef yok' : fmtMoney(p.target)}`}>
           <div className="pc-bars">
             <i className="pc-bar actual" style={{ height: `${(p.actual / max) * 100}%` }} />
             <i className="pc-bar target" style={{ height: `${((p.target ?? 0) / max) * 100}%` }} />
           </div>
           <small>{p.label}</small>
           <small className="pc-mini">{fmtMoney(p.actual)}</small>
-        </div>
+        </a>
       ))}
     </div>
   );
@@ -161,7 +168,16 @@ export default function PerformanceCard() {
   const year = Number(data.range.from.slice(0, 4));
   const link = (kind: Parameters<typeof drilldownHref>[0]['kind'], extra: Omit<Parameters<typeof drilldownHref>[0], 'kind' | 'owner'> = {}) =>
     drilldownHref({ kind, owner: isTeam ? null : r.owner, year, ...extra });
-  const ringStyle = { ['--pc-pct' as string]: `${total ?? 0}%` };
+  const ownerQs = isTeam ? '' : `satici=${encodeURIComponent(r.owner)}&`;
+  const inactiveHref = `/crm/hareketsiz?${ownerQs}gun=15`;
+  const dimHref: Record<string, string> = {
+    commercial: link('fatura'),
+    bizdev: link('teklif', { state: 'kazanilan' }),
+    customer: inactiveHref,
+    activity: link('kapsama'),
+    crm: link('teklif', { state: 'acik' }),
+  };
+  const ringStyle ={ ['--pc-pct' as string]: `${total ?? 0}%` };
   const risk = (v: number) => (v ? 'danger' : 'ok') as Tone;
   const p = r.portfolio;
 
@@ -193,9 +209,9 @@ export default function PerformanceCard() {
             <div className="pc-mini">{isTeam ? 'Kişi skorlarının ortalaması.' : 'Ticari sonuç, iş geliştirme, müşteri yönetimi, aktivite ve CRM disiplininin ağırlıklı bileşimi.'}</div>
           </div>
         </div>
-        <Hero label={`${PERF_PERIODS.find((x) => x.key === period)?.label} Ciro`} m={r.revenue} render={fmtMoney} />
-        <Hero label="Satılan Cihaz" m={r.devices} render={(v) => v.toLocaleString('tr-TR')} />
-        <Hero label="Görüşme" m={r.meetings} render={(v) => v.toLocaleString('tr-TR')} />
+        <Hero label={`${PERF_PERIODS.find((x) => x.key === period)?.label} Ciro`} m={r.revenue} render={fmtMoney} href={link('fatura')} />
+        <Hero label="Satılan Cihaz" m={r.devices} render={(v) => v.toLocaleString('tr-TR')} href={link('cihaz', { mode: 'sale' })} />
+        <Hero label="Görüşme" m={r.meetings} render={(v) => v.toLocaleString('tr-TR')} href={link('kapsama')} />
       </div>
 
       <div className="pc-section">
@@ -205,14 +221,14 @@ export default function PerformanceCard() {
             const pct = d.score == null ? null : Math.round((d.score / d.weight) * 100);
             const tone = attainmentTone(pct);
             return (
-              <div className="pc-dim" key={d.key}>
+              <Box href={dimHref[d.key]} className="pc-dim" key={d.key}>
                 <div className="pc-dimtop">
                   <div><div className="pc-dimname">{d.label}</div><div className="pc-mini">%{d.weight} ağırlık</div></div>
                   <div className={`pc-dimscore tone-${tone}`}>{d.score == null ? NA : `${d.score}/${d.weight}`}</div>
                 </div>
                 <div className="pc-progress"><span className={`tone-${tone}`} style={{ width: `${pct ?? 0}%` }} /></div>
                 <div className="pc-mini">{d.hint}</div>
-              </div>
+              </Box>
             );
           })}
         </div>
@@ -222,16 +238,16 @@ export default function PerformanceCard() {
         <div className="pc-card">
           <div className="pc-title"><h2>Ticari Sonuç ve Pipeline</h2><span>sonuç + potansiyel · pipeline anlık</span></div>
           <div className="pc-summary">
-            <div><span>Forecast</span><b className="tone-info">{money(r.pipeline.forecast)}</b></div>
-            <div><span>Weighted Forecast</span><b>{money(r.pipeline.weighted)}</b></div>
-            <div><span>Açık Teklif</span><b><a href={link('teklif', { state: 'acik' })} target="_blank" rel="noreferrer">{fmt(r.pipeline.openCount)}</a></b></div>
-            <div><span>Açık Teklif Değeri</span><b>{money(r.pipeline.openAmount)}</b></div>
+            <Box href="/crm/forecast" className=""><span>Forecast</span><b className="tone-info">{money(r.pipeline.forecast)}</b></Box>
+            <Box href="/crm/forecast" className=""><span>Weighted Forecast</span><b>{money(r.pipeline.weighted)}</b></Box>
+            <Box href={link('teklif', { state: 'acik' })} className=""><span>Açık Teklif</span><b>{fmt(r.pipeline.openCount)}</b></Box>
+            <Box href={link('teklif', { state: 'acik' })} className=""><span>Açık Teklif Değeri</span><b>{money(r.pipeline.openAmount)}</b></Box>
           </div>
           <div className="pc-rows">
-            <Row k="Kazanılan müşteri" v={fmt(r.won.customers)} />
+            <Row k="Kazanılan müşteri" v={fmt(r.won.customers)} href={link('teklif', { state: 'kazanilan' })} />
             <Row k="Kazanılan fırsat" v={`${fmt(r.won.quotes)} · ${money(r.won.amount)}`} href={link('teklif', { state: 'kazanilan' })} />
-            <Row k="Aktif hizmet cihazı" v={`${fmt(r.service.activeDevices)}${r.service.target != null ? ` / ${fmt(r.service.target)}` : ''}`} tone={attainmentTone(attainmentPct({ actual: r.service.activeDevices, target: r.service.target }))} />
-            <Row k="Aylık hizmet geliri" v={money(r.service.monthlyRevenue)} />
+            <Row k="Aktif hizmet cihazı" v={`${fmt(r.service.activeDevices)}${r.service.target != null ? ` / ${fmt(r.service.target)}` : ''}`} href={link('cihaz', { mode: 'rental' })} tone={attainmentTone(attainmentPct({ actual: r.service.activeDevices, target: r.service.target }))} />
+            <Row k="Aylık hizmet geliri" v={money(r.service.monthlyRevenue)} href={link('fatura')} />
             <Row k="Kiralanan cihaz (dönem)" v={fmt(r.rentalDevices)} href={link('cihaz', { mode: 'rental' })} />
           </div>
         </div>
@@ -239,16 +255,16 @@ export default function PerformanceCard() {
         <div className="pc-card">
           <div className="pc-title"><h2>Portföy Sağlığı</h2><span>müşteri kapsama ve takip</span></div>
           <div className="pc-summary">
-            <div><span>Portföy</span><b><a href={link('portfoy')} target="_blank" rel="noreferrer">{p.listed ? fmt(p.total) : NA}</a></b></div>
-            <div><span>Temas Edilen Müşteri</span><b>{fmt(r.contacted)}</b></div>
-            <div><span>Ort. Görüşme / Firma</span><b className={`tone-${attainmentTone(attainmentPct(r.meetingsPerFirm))}`}>{r.meetingsPerFirm ? `${r.meetingsPerFirm.actual.toLocaleString('tr-TR')} / ${r.meetingsPerFirm.target}` : NA}</b></div>
-            <div><span>Hareketsiz Firma</span><b className={`tone-${risk(r.risks.inactive)}`}>{p.listed ? fmt(r.risks.inactive) : NA}</b></div>
+            <Box href={link('portfoy')} className=""><span>Portföy</span><b>{p.listed ? fmt(p.total) : NA}</b></Box>
+            <Box href={link('kapsama')} className=""><span>Temas Edilen Müşteri</span><b>{fmt(r.contacted)}</b></Box>
+            <Box href={link('kapsama')} className=""><span>Ort. Görüşme / Firma</span><b className={`tone-${attainmentTone(attainmentPct(r.meetingsPerFirm))}`}>{r.meetingsPerFirm ? `${r.meetingsPerFirm.actual.toLocaleString('tr-TR')} / ${r.meetingsPerFirm.target}` : NA}</b></Box>
+            <Box href={inactiveHref} className=""><span>Hareketsiz Firma</span><b className={`tone-${risk(r.risks.inactive)}`}>{p.listed ? fmt(r.risks.inactive) : NA}</b></Box>
           </div>
           <div className="pc-rows">
-            <Row k="Lead" v={p.listed ? fmt(p.lead) : NA} />
-            <Row k="Hunter" v={p.listed ? fmt(p.hunter) : NA} />
-            <Row k="Farmer" v={p.listed ? fmt(p.farmer) : NA} />
-            <Row k="Kasa" v={p.listed ? fmt(p.kasa) : NA} />
+            <Row k="Lead" v={p.listed ? fmt(p.lead) : NA} href={link('portfoy', { segment: 'Lead' })} />
+            <Row k="Hunter" v={p.listed ? fmt(p.hunter) : NA} href={link('portfoy', { segment: 'Hunter' })} />
+            <Row k="Farmer" v={p.listed ? fmt(p.farmer) : NA} href={link('portfoy', { segment: 'Farmer' })} />
+            <Row k="Kasa" v={p.listed ? fmt(p.kasa) : NA} href={link('portfoy', { segment: 'Kasa' })} />
             <Row k="Aktif POC / Konsinye müşteri" v={fmt(r.activePoc)} href={link('poc')} />
           </div>
         </div>
@@ -260,17 +276,17 @@ export default function PerformanceCard() {
             <h2>Son 6 Ay Ciro Trendi</h2>
             <div className="pc-legend"><span><i className="pc-dot actual" />Gerçekleşen</span><span><i className="pc-dot target" />Hedef</span></div>
           </div>
-          <Trend points={r.trend} />
+          <Trend points={r.trend} href={(y) => link('fatura', { year: y })} />
         </div>
 
         <div className="pc-card">
           <div className="pc-title"><h2>Risk ve Süreç Göstergeleri</h2><span>takip gereken noktalar · anlık</span></div>
           <div className="pc-rows">
-            <Row k="15/30+ gün hareketsiz müşteri" v={p.listed ? fmt(r.risks.inactive) : NA} tone={risk(r.risks.inactive)} />
-            <Row k="30+ gün hareketsiz açık teklif" v={fmt(r.risks.staleQuotes)} tone={r.risks.staleQuotes ? 'warn' : 'ok'} />
-            <Row k="30+ gün açık POC" v={fmt(r.risks.longPoc)} tone={r.risks.longPoc ? 'warn' : 'ok'} />
-            <Row k="Aksiyon tarihi geçmiş" v={fmt(r.risks.overdueActions)} tone={risk(r.risks.overdueActions)} />
-            <Row k="Kapanış tarihi geçmiş açık teklif" v={fmt(r.risks.overdueClose)} tone={risk(r.risks.overdueClose)} />
+            <Row k="15/30+ gün hareketsiz müşteri" v={p.listed ? fmt(r.risks.inactive) : NA} tone={risk(r.risks.inactive)} href={inactiveHref} />
+            <Row k="30+ gün hareketsiz açık teklif" v={fmt(r.risks.staleQuotes)} tone={r.risks.staleQuotes ? 'warn' : 'ok'} href={link('teklif', { state: 'acik' })} />
+            <Row k="30+ gün açık POC" v={fmt(r.risks.longPoc)} tone={r.risks.longPoc ? 'warn' : 'ok'} href={link('poc')} />
+            <Row k="Aksiyon tarihi geçmiş" v={fmt(r.risks.overdueActions)} tone={risk(r.risks.overdueActions)} href="/crm/activities" />
+            <Row k="Kapanış tarihi geçmiş açık teklif" v={fmt(r.risks.overdueClose)} tone={risk(r.risks.overdueClose)} href={link('teklif', { state: 'acik' })} />
             <Row k="Kesilen fatura (dönem)" v={`${fmt(r.invoices.count)} · ${money(r.invoices.amount)}`} href={link('fatura')} />
           </div>
         </div>

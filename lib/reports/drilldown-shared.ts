@@ -121,9 +121,11 @@ export function drilldownHref(params: {
   mode?: DeviceMode | null;
   model?: string | null;
   year?: number | null;
+  segment?: SellerSegment | null;
 }): string {
   const query = new URLSearchParams({ tip: params.kind });
   if (params.owner) query.set('satisci', params.owner);
+  if (params.segment) query.set('etiket', params.segment);
   if (params.state) query.set('durum', params.state);
   if (params.mode) query.set('cihaz', params.mode);
   if (params.model) query.set('model', params.model);
