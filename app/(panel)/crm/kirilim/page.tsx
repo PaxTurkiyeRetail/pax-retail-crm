@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { requireCrmAccessOrThrow, requireScreenAccessOrThrow } from '@/lib/authz';
 import { loadDrilldown } from '@/lib/reports/drilldown';
-import { DEVICE_MODE_LABEL, DRILLDOWN_KINDS, KIND_TITLE, QUOTE_STATES, QUOTE_STATE_LABEL, parseDrilldownParams } from '@/lib/reports/drilldown-shared';
+import { DEVICE_MODE_LABEL, DRILLDOWN_KINDS, KIND_TITLE, QUOTE_STATES, QUOTE_STATE_LABEL, SELLER_SEGMENT_COLOR, parseDrilldownParams, type SellerSegment } from '@/lib/reports/drilldown-shared';
 import { OWNER_ORDER, istanbulDayKey } from '@/lib/reports/live-board-shared';
 import { GhostFilterBar, ownerOptions, yearOptions, type GhostFilterField } from '@/components/reports/GhostFilterBar';
 import '@/styles/drilldown.css';
@@ -69,6 +69,25 @@ export default async function DrilldownPage({
         {params.model ? <span className="dd-filter-note">Model: <b>{params.model}</b> (linkten geldi; tüm modeller için listeyi yeniden seçip uygula)</span> : null}
       </GhostFilterBar>
 
+      {data.segments ? (
+        <nav className="dd-segs" aria-label="Takip etiketi">
+          {[{ key: null as SellerSegment | null, count: data.segments.reduce((sum, seg) => sum + seg.count, 0) }, ...data.segments].map((seg) => {
+            const qs = new URLSearchParams();
+            qs.set('tip', params.kind);
+            if (params.owner) qs.set('satisci', params.owner);
+            qs.set('yil', String(params.year));
+            if (seg.key) qs.set('etiket', seg.key.toLocaleLowerCase('tr'));
+            const active = params.segment === seg.key;
+            return (
+              <Link key={seg.key ?? 'all'} href={`/crm/kirilim?${qs}`} className={`dd-seg${active ? ' active' : ''}`}>
+                {seg.key ? <i style={{ background: SELLER_SEGMENT_COLOR[seg.key] }} /> : null}
+                {seg.key ?? 'Tümü'} <b>{seg.count.toLocaleString('tr-TR')}</b>
+              </Link>
+            );
+          })}
+        </nav>
+      ) : null}
+
       <div className="dd-summary">
         {data.stats.map((stat) => (
           <div key={stat.label}><strong>{stat.value}</strong><span>{stat.label}</span></div>
@@ -92,6 +111,8 @@ export default async function DrilldownPage({
                 <span key={data.columns[cellIndex]?.key ?? cellIndex} role="cell" className={data.columns[cellIndex]?.align === 'right' ? 'right' : ''}>
                   {cellIndex === 0 && row.customerId
                     ? <Link href={`/crm/${row.customerId}`} target="_blank">{cell}</Link>
+                    : data.columns[cellIndex]?.key === 'etiket' && cell
+                      ? <span className="dd-tag"><i style={{ background: SELLER_SEGMENT_COLOR[cell as SellerSegment] }} />{cell}</span>
                     : dayColumns.has(cellIndex) ? fmtDay(cell) : (cell ?? '—')}
                 </span>
               ))}

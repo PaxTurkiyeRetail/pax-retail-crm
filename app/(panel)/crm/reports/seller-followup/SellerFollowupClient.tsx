@@ -19,9 +19,9 @@ type TabKey = 'followup' | 'activity' | 'faz' | 'live';
 const TAB_KEYS: TabKey[] = ['followup', 'activity', 'faz', 'live'];
 
 function tabFromUrl(): TabKey {
-  if (typeof window === 'undefined') return 'followup';
+  if (typeof window === 'undefined') return 'live';
   const value = new URLSearchParams(window.location.search).get('tab');
-  return (TAB_KEYS as string[]).includes(value ?? '') ? (value as TabKey) : 'followup';
+  return (TAB_KEYS as string[]).includes(value ?? '') ? (value as TabKey) : 'live';
 }
 
 type FollowupRow = {
@@ -129,7 +129,7 @@ function TargetCell({ actual, target }: { actual: number; target: number }) {
 }
 
 export default function SellerFollowupClient() {
-  const [tab, setTab] = useState<TabKey>('followup');
+  const [tab, setTab] = useState<TabKey>('live');
 
   // Yer imiyle açılış (?tab=live) + sekme değişince URL'yi sessizce güncelle.
   useEffect(() => { setTab(tabFromUrl()); }, []);
@@ -137,7 +137,7 @@ export default function SellerFollowupClient() {
     setTab(next);
     try {
       const url = new URL(window.location.href);
-      if (next === 'followup') url.searchParams.delete('tab'); else url.searchParams.set('tab', next);
+      if (next === 'live') url.searchParams.delete('tab'); else url.searchParams.set('tab', next);
       window.history.replaceState(null, '', url.toString());
       window.dispatchEvent(new Event('pax:locationchange')); // menü aktifliği güncellensin
     } catch {}

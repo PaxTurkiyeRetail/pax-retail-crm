@@ -39,7 +39,28 @@ export type DrilldownParams = {
   /** cihaz: tek modele daralt (A80 gibi) */
   model: string | null;
   year: number;
+  /** portfoy: künye satıcı etiketi sekmesi (Hunter/Farmer/Lead/Kasa) */
+  segment: SellerSegment | null;
 };
+
+export const SELLER_SEGMENTS = ['Hunter', 'Farmer', 'Lead', 'Kasa'] as const;
+export type SellerSegment = (typeof SELLER_SEGMENTS)[number];
+/** Canlı Ekran "Müşteri Takip Statüsü" renkleriyle aynı. */
+export const SELLER_SEGMENT_COLOR: Record<SellerSegment, string> = {
+  Hunter: '#3b82f6',
+  Farmer: '#22c55e',
+  Lead: '#ea580c',
+  Kasa: '#eab308',
+};
+/** Künye etiketi → segment; boş = Hunter (yeni müşteri varsayılanı, Çağdaş Bey 07.09). */
+export function sellerSegment(value: string | null | undefined): SellerSegment {
+  switch (String(value ?? '').trim().toLocaleLowerCase('tr')) {
+    case 'farmer': return 'Farmer';
+    case 'lead': return 'Lead';
+    case 'kasa': return 'Kasa';
+    default: return 'Hunter';
+  }
+}
 
 export type DrilldownColumn = { key: string; label: string; align?: 'left' | 'right'; width?: string };
 
@@ -59,6 +80,8 @@ export type DrilldownPayload = {
   /** Üst şeritteki özet kutuları. */
   stats: Array<{ label: string; value: string }>;
   note: string | null;
+  /** Sekme şeridi (yalnız portföy): etiket başına kayıt sayısı. */
+  segments?: Array<{ key: SellerSegment; count: number }>;
 };
 
 export const KIND_TITLE: Record<DrilldownKind, string> = {
@@ -121,6 +144,7 @@ export function parseDrilldownParams(
     state: isQuoteState(stateRaw) ? stateRaw : null,
     mode: isDeviceMode(modeRaw) ? modeRaw : null,
     model: one(raw.model).trim().toLocaleUpperCase('tr-TR') || null,
+    segment: SELLER_SEGMENTS.find((key) => key.toLocaleLowerCase('tr') === one(raw.etiket).trim().toLocaleLowerCase('tr')) ?? null,
     year: Number.isFinite(yearRaw) && yearRaw >= 2020 && yearRaw <= 2100 ? Math.floor(yearRaw) : fallbackYear,
   };
 }

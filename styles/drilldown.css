@@ -53,3 +53,12 @@
 .dd-shell .dd-filter button { height: 38px; padding: 0 18px; border: none; border-radius: 10px; background: var(--accent); color: #fff; font: inherit; font-size: 13.5px; font-weight: 900; cursor: pointer; }
 .dd-shell .dd-filter .dd-filter-note { flex-basis: 100%; font-size: 12.5px; color: var(--text-2); }
 .dd-shell .dd-tr .dd-no { color: var(--text-3); font-variant-numeric: tabular-nums; }
+
+/* Takip etiketi sekmeleri (Hunter/Farmer/Lead/Kasa) — Canlı Ekran renkleri */
+.dd-segs{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 12px}
+.dd-seg{display:inline-flex;align-items:center;gap:7px;height:34px;padding:0 14px;border:1px solid var(--border);border-radius:999px;background:var(--surface);color:var(--text-2);font-size:13px;font-weight:600;text-decoration:none}
+.dd-seg:hover{border-color:var(--brand);color:var(--text)}
+.dd-seg.active{background:var(--brand-navy);border-color:var(--brand-navy);color:#fff}
+.dd-seg b{font-weight:800}
+.dd-seg i,.dd-tag i{width:9px;height:9px;border-radius:50%;display:inline-block;flex:none}
+.dd-tag{display:inline-flex;align-items:center;gap:6px;font-weight:600}

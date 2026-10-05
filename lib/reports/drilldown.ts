@@ -5,6 +5,8 @@ import { activityTargetKind } from '@/lib/reports/weekly-targets-shared';
 import { LIVE_BOARD_RULES, istanbulDayKey } from '@/lib/reports/live-board-shared';
 import {
   drilldownTitle,
+  SELLER_SEGMENTS,
+  sellerSegment,
   type DrilldownColumn,
   type DrilldownParams,
   type DrilldownPayload,
@@ -84,9 +86,10 @@ const Q_PORTFOLIO = `
   select m.id::text as customer_id, m.musteri, coalesce(nullif(trim(m.sorumlu), ''), '—') as sorumlu,
          coalesce(nullif(trim(m.sektor), ''), '—') as sektor,
          mp.aktif_faz_no as faz, ft.asama_adi as faz_adi,
-         la.gun::text as son_hareket
+         la.gun::text as son_hareket, kv.satici_etiketi
   from public.musteriler m
   left join public.musteri_pipeline mp on mp.musteri_id = m.id
+  left join public.musteri_kunye_v2 kv on kv.musteri_id = m.id
   left join public.faz_tanimlari ft on ft.faz_no = mp.aktif_faz_no
   left join lateral (
     select max(coalesce(pe.aktivite_tarihi, (pe.created_at at time zone 'Europe/Istanbul')::date)) as gun
@@ -320,14 +323,17 @@ export async function loadDrilldown(params: DrilldownParams, today = new Date())
   }
 
   // portfoy (varsayılan)
-  const rows = await safeQuery<{ customer_id: string; musteri: string; sorumlu: string; sektor: string; faz: number | null; faz_adi: string | null; son_hareket: string | null }>(
+  const allRows = await safeQuery<{ customer_id: string; musteri: string; sorumlu: string; sektor: string; faz: number | null; faz_adi: string | null; son_hareket: string | null; satici_etiketi: string | null }>(
     Q_PORTFOLIO, [owner],
   );
+  const segments = SELLER_SEGMENTS.map((key) => ({ key, count: allRows.filter((row) => sellerSegment(row.satici_etiketi) === key).length }));
+  const rows = params.segment ? allRows.filter((row) => sellerSegment(row.satici_etiketi) === params.segment) : allRows;
   const stale = rows.filter((row) => !row.son_hareket).length;
   return {
     title, subtitle: scope,
     columns: [
       { key: 'musteri', label: 'Firma' },
+      { key: 'etiket', label: 'Takip', width: '110px' },
       { key: 'sorumlu', label: 'Sorumlu', width: '170px' },
       { key: 'sektor', label: 'Sektör', width: '200px' },
       { key: 'faz', label: 'Faz', width: '200px' },
@@ -335,13 +341,14 @@ export async function loadDrilldown(params: DrilldownParams, today = new Date())
     ],
     rows: rows.map((row) => ({
       customerId: row.customer_id,
-      cells: [row.musteri, row.sorumlu, row.sektor, row.faz == null ? '—' : `${row.faz}${row.faz_adi ? ` · ${row.faz_adi}` : ''}`, row.son_hareket],
+      cells: [row.musteri, sellerSegment(row.satici_etiketi), row.sorumlu, row.sektor, row.faz == null ? '—' : `${row.faz}${row.faz_adi ? ` · ${row.faz_adi}` : ''}`, row.son_hareket],
     })),
     stats: [
       { label: 'Firma', value: count(rows.length) },
       { label: 'Hiç hareketi yok', value: count(stale) },
     ],
-    note: null,
+    note: 'Takip etiketi müşteri künyesinden gelir; künyesi boş firma Hunter sayılır.',
+    segments,
   };
 }
 

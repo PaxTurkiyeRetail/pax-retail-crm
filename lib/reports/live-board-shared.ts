@@ -14,8 +14,8 @@ import { goalPair, type GoalPair } from '@/lib/reports/targets-shared';
 
 /** Slayt süreleri ve yenileme aralığı. Spec: 20–30 sn otomatik geçiş, 5–10 dk veri yenileme. */
 export const LIVE_BOARD_TIMING = {
-  teamMs: 22_000,
-  ownerMs: 18_000,
+  teamMs: 40_000,
+  ownerMs: 35_000,
   refreshMs: 5 * 60_000,
   /** Kaç takım ekranından sonra kişi slaytlarına geçilir (dönüşümlü akış). */
   teamBurst: 2,

@@ -347,7 +347,9 @@ export default function PanelShell({
   useEffect(() => {
     setMenuOpen(false);
     setUserMenuOpen(false);
-    if (pathname.startsWith("/crm/reports")) setReportsOpen(true);
+    // Dashboard rapor URL'inde ama menüde ayrı: açılınca Raporlar grubu kapanır.
+    if (pathname.startsWith("/crm/reports/seller-followup")) setReportsOpen(false);
+    else if (pathname.startsWith("/crm/reports")) setReportsOpen(true);
   }, [pathname]);
 
   useEffect(() => {
