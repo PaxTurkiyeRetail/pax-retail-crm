@@ -3,7 +3,7 @@
 // PERFORMANS KARNESİ — Retail Sales Performance Report V1 (05.10.2026, müdür taslağı v2).
 // Veri: /api/reports/performance?period=… (report.performance.read). Kurallar: lib/reports/performance-card.ts.
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { drilldownHref } from '@/lib/reports/drilldown-shared';
 import { fmtMoney, type Tone } from '@/lib/reports/live-board-shared';
 import {
@@ -203,14 +203,23 @@ export default function PerformanceCard() {
   const [selected, setSelected] = useState<string>('');
   // Ekip Özeti menüde yok; gizli kısayol Ctrl+G ile aç/kapa (sayfa zaten yalnız karne yetkilisine açık).
   const [showTeam, setShowTeam] = useState(false);
+  const prevSelected = useRef('');
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (!(e.ctrlKey && e.key.toLowerCase() === 'g')) return;
+      if (!(e.ctrlKey && (e.code === 'KeyG' || e.key.toLowerCase() === 'g'))) return;
       e.preventDefault();
-      setShowTeam((on) => { setSelected(on ? '' : TEAM); return !on; });
+      e.stopPropagation();
+      setShowTeam((on) => {
+        // Aç: Ekip Özeti'ne geç, önceki satıcıyı hatırla · Kapat: önceki satıcıya (yoksa özet sayfasına) dön.
+        setSelected((cur) => {
+          if (!on) { prevSelected.current = cur === TEAM ? '' : cur; return TEAM; }
+          return prevSelected.current;
+        });
+        return !on;
+      });
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
   }, []);
 
   const load = useCallback(async (p: PerfPeriodKind) => {
