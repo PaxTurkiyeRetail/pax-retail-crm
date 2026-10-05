@@ -259,6 +259,20 @@ export default function PerformanceCard() {
 
   return (
     <div className={`pc-wrap${status === 'loading' ? ' is-loading' : ''}`}>
+      <div className="pc-people" aria-label="Satıcı performans özetleri">
+        {data.owners.map((o) => {
+          const t = perfTotal(perfDimensions(o, elapsed));
+          const g = perfGrade(t);
+          return (
+            <button type="button" key={o.owner} className={`pc-person${!isTeam && o.owner === r.owner ? ' active' : ''}`} onClick={() => setSelected(o.owner)}>
+              <span className="pc-person-name">{o.owner}</span>
+              <b className={`tone-${g.tone}`}>{t == null ? NA : `%${t}`}</b>
+              <small className={`tone-${g.tone}`}>{g.label}</small>
+              <span className="pc-progress"><span className={`tone-${g.tone}`} style={{ width: `${t ?? 0}%` }} /></span>
+            </button>
+          );
+        })}
+      </div>
       <div className="pc-top">
         <div>
           <div className="pc-eyebrow">Retail Sales Performance Report</div>
