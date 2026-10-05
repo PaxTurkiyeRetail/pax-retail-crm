@@ -223,8 +223,8 @@ export default function PerformanceCard() {
             return (
               <Box href={dimHref[d.key]} className="pc-dim" key={d.key}>
                 <div className="pc-dimtop">
-                  <div><div className="pc-dimname">{d.label}</div><div className="pc-mini">%{d.weight} ağırlık</div></div>
-                  <div className={`pc-dimscore tone-${tone}`}>{d.score == null ? NA : `${d.score}/${d.weight}`}</div>
+                  <div><div className="pc-dimname">{d.label}</div><div className="pc-mini">%{d.weight} ağırlık{d.score == null ? '' : ` · ${d.score}/${d.weight} puan`}</div></div>
+                  <div className={`pc-dimscore tone-${tone}`}>{pct == null ? NA : `%${pct}`}</div>
                 </div>
                 <div className="pc-progress"><span className={`tone-${tone}`} style={{ width: `${pct ?? 0}%` }} /></div>
                 <div className="pc-mini">{d.hint}</div>
