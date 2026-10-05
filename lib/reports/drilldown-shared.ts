@@ -41,6 +41,8 @@ export type DrilldownParams = {
   year: number;
   /** portfoy: künye satıcı etiketi sekmesi (Hunter/Farmer/Lead/Kasa) */
   segment: SellerSegment | null;
+  /** portfoy: sektör sekmesi (Banka / Finans gibi) */
+  sector: string | null;
 };
 
 export const SELLER_SEGMENTS = ['Hunter', 'Farmer', 'Lead', 'Kasa'] as const;
@@ -82,6 +84,8 @@ export type DrilldownPayload = {
   note: string | null;
   /** Sekme şeridi (yalnız portföy): etiket başına kayıt sayısı. */
   segments?: Array<{ key: SellerSegment; count: number }>;
+  /** Sektör sekmeleri (yalnız portföy), çoktan aza. */
+  sectors?: Array<{ key: string; count: number }>;
 };
 
 export const KIND_TITLE: Record<DrilldownKind, string> = {
@@ -145,6 +149,7 @@ export function parseDrilldownParams(
     mode: isDeviceMode(modeRaw) ? modeRaw : null,
     model: one(raw.model).trim().toLocaleUpperCase('tr-TR') || null,
     segment: SELLER_SEGMENTS.find((key) => key.toLocaleLowerCase('tr') === one(raw.etiket).trim().toLocaleLowerCase('tr')) ?? null,
+    sector: one(raw.sektor).trim() || null,
     year: Number.isFinite(yearRaw) && yearRaw >= 2020 && yearRaw <= 2100 ? Math.floor(yearRaw) : fallbackYear,
   };
 }

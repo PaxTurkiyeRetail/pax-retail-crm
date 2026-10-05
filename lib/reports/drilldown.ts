@@ -326,8 +326,14 @@ export async function loadDrilldown(params: DrilldownParams, today = new Date())
   const allRows = await safeQuery<{ customer_id: string; musteri: string; sorumlu: string; sektor: string; faz: number | null; faz_adi: string | null; son_hareket: string | null; satici_etiketi: string | null }>(
     Q_PORTFOLIO, [owner],
   );
-  const segments = SELLER_SEGMENTS.map((key) => ({ key, count: allRows.filter((row) => sellerSegment(row.satici_etiketi) === key).length }));
-  const rows = params.segment ? allRows.filter((row) => sellerSegment(row.satici_etiketi) === params.segment) : allRows;
+  // İki sekme şeridi birlikte süzer; her şeridin sayısı diğer şeridin seçimine göre hesaplanır.
+  const inSegment = (row: (typeof allRows)[number]) => !params.segment || sellerSegment(row.satici_etiketi) === params.segment;
+  const inSector = (row: (typeof allRows)[number]) => !params.sector || row.sektor === params.sector;
+  const segments = SELLER_SEGMENTS.map((key) => ({ key, count: allRows.filter((row) => inSector(row) && sellerSegment(row.satici_etiketi) === key).length }));
+  const sectorCounts = new Map<string, number>();
+  for (const row of allRows) if (inSegment(row)) sectorCounts.set(row.sektor, (sectorCounts.get(row.sektor) ?? 0) + 1);
+  const sectors = Array.from(sectorCounts, ([key, n]) => ({ key, count: n })).sort((a, b) => b.count - a.count || a.key.localeCompare(b.key, 'tr'));
+  const rows = allRows.filter((row) => inSegment(row) && inSector(row));
   const stale = rows.filter((row) => !row.son_hareket).length;
   return {
     title, subtitle: scope,
@@ -349,6 +355,7 @@ export async function loadDrilldown(params: DrilldownParams, today = new Date())
     ],
     note: 'Takip etiketi müşteri künyesinden gelir; künyesi boş firma Hunter sayılır.',
     segments,
+    sectors,
   };
 }
 
