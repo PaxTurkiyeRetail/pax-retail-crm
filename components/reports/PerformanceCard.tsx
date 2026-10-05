@@ -64,6 +64,46 @@ function Trend({ points, href }: { points: PerfOwnerReport['trend']; href: (year
   );
 }
 
+/** Boyut kartı hover açıklaması: puanın hangi rakamlardan, nasıl çıktığı (perfDimensions ile aynı formül). */
+function dimExplain(key: string, r: PerfOwnerReport, elapsed: number): string[] {
+  const num = (v: number) => v.toLocaleString('tr-TR');
+  const pace = (label: string, m: Measure | null | undefined, render: (v: number) => string = num) => {
+    if (!m || m.target == null || m.target <= 0) return `${label}: ${m ? render(m.actual) : NA} · hedef girilmemiş → hesaba katılmaz`;
+    const pct = Math.round((m.actual / m.target) * 100);
+    const speed = Math.min(100, Math.round((pct / Math.max(5, elapsed)) * 100));
+    return `${label}: ${render(m.actual)} / ${render(m.target)} hedef = %${pct} gerçekleşme · beklenen %${elapsed} → %${speed} puan`;
+  };
+  switch (key) {
+    case 'commercial':
+      return [pace('Ciro', r.revenue, fmtMoney), pace('Satılan cihaz', r.devices), 'Puan = iki oranın ortalaması × 40'];
+    case 'bizdev':
+      return [
+        pace('Hunter → Farmer', r.hunterToFarmer), pace('Lead → Hunter', r.leadToHunter),
+        pace('Kazanılan teklif', { actual: r.won.quotes, target: r.won.target }), 'Puan = oranların ortalaması × 20',
+      ];
+    case 'customer': {
+      const pf = r.meetingsPerFirm;
+      const perFirm = pf && pf.target ? `Görüşme / firma: ${num(pf.actual)} / ${pf.target} hedef = %${Math.min(100, Math.round((pf.actual / pf.target) * 100))}` : 'Görüşme / firma: hedef yok → hesaba katılmaz';
+      const total = r.portfolio.total;
+      const active = total > 0 ? `Aktif portföy: ${num(total - r.risks.inactive)} / ${num(total)} firma = %${Math.round((1 - r.risks.inactive / total) * 100)} (hareketsiz ${num(r.risks.inactive)})` : 'Portföy yok → hesaba katılmaz';
+      return [perFirm, active, 'Puan = iki oranın ortalaması × 15'];
+    }
+    case 'activity':
+      return [pace('Görüşme (fiziki + online)', r.meetings), 'Puan = oran × 15'];
+    case 'crm': {
+      const issues = r.risks.staleQuotes + r.risks.overdueClose + r.risks.overdueActions + r.risks.longPoc;
+      const base = r.pipeline.openCount + r.activePoc + r.portfolio.total;
+      return [
+        `Sorunlu kayıt: ${num(issues)} (30+ gün bekleyen teklif ${r.risks.staleQuotes}, kapanışı geçmiş ${r.risks.overdueClose}, aksiyonu geçmiş ${r.risks.overdueActions}, 30+ gün POC ${r.risks.longPoc})`,
+        `Takip edilen kayıt: ${num(base)} (açık teklif + aktif POC + portföy)`,
+        base > 0 ? `Temiz oran: %${Math.max(0, Math.round((1 - issues / base) * 100))} → puan = oran × 10` : 'Kayıt yok → hesaba katılmaz',
+      ];
+    }
+    default:
+      return [];
+  }
+}
+
 const REVIEW_FIELDS = [
   { key: 'strong', title: 'Güçlü Alanlar', tone: 'ok' },
   { key: 'improve', title: 'Gelişim Alanları', tone: 'warn' },
@@ -228,6 +268,10 @@ export default function PerformanceCard() {
                 </div>
                 <div className="pc-progress"><span className={`tone-${tone}`} style={{ width: `${pct ?? 0}%` }} /></div>
                 <div className="pc-mini">{d.hint}</div>
+                <div className="pc-tip" role="tooltip">
+                  <b>{d.label} nasıl hesaplandı?</b>
+                  <ul>{dimExplain(d.key, r, elapsed).map((t) => <li key={t}>{t}</li>)}</ul>
+                </div>
               </Box>
             );
           })}

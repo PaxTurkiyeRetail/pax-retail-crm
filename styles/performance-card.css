@@ -58,6 +58,13 @@
 .pc-summary > a { display: block; padding: 12px; border-radius: 12px; background: var(--pc-soft); border: 1px solid var(--pc-line); }
 .pc-summary > a span { display: block; font-size: 11.5px; color: var(--pc-muted); }
 .pc-summary > a b { display: block; font-size: 20px; font-weight: 900; margin-top: 4px; }
+.pc-dim { position: relative; }
+.pc-tip { display: none; position: absolute; z-index: 30; left: 0; top: calc(100% + 6px); width: max(100%, 340px); max-width: 92vw; padding: 12px 14px; border-radius: 12px; background: var(--pc-card); color: var(--pc-ink); border: 1px solid var(--pc-line); box-shadow: 0 12px 32px rgba(15, 23, 42, .18); font-size: 12.5px; line-height: 1.5; text-decoration: none; }
+.pc-tip ul { margin: 6px 0 0; padding-left: 16px; }
+.pc-tip li + li { margin-top: 4px; }
+.pc-dim:hover .pc-tip, .pc-dim:focus-visible .pc-tip { display: block; }
+.pc-dims > :last-child .pc-tip, .pc-dims > :nth-last-child(2) .pc-tip { left: auto; right: 0; }
+.pc-wrap a.pc-link:hover .pc-tip b { text-decoration: none; }
 .pc-wrap.is-loading { opacity: .6; pointer-events: none; }
 .pc-filters select { border: 1px solid var(--pc-line); background: var(--pc-card); color: var(--pc-ink); padding: 9px 12px; border-radius: 10px; font: inherit; font-size: 13px; min-width: 180px; }
 .pc-legend { display: flex; gap: 12px; font-size: 12px; color: var(--pc-muted); }
