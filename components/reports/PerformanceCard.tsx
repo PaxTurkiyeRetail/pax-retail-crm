@@ -174,7 +174,8 @@ function Events({ period, owner }: { period: PerfPeriodKind; owner: string | nul
               <thead><tr><th>Tarih</th><th>Tür</th>{owner ? null : <th>Satıcı</th>}<th>Firma</th><th>Detay</th><th className="r">Tutar</th><th className="r">Cihaz</th></tr></thead>
               <tbody>
                 {rows.map((e, i) => (
-                  <tr key={i}>
+                  <tr key={i} className={e.href ? 'pc-click' : undefined} title={e.href ? 'Kaydı aç' : undefined}
+                    onClick={(ev) => { if (e.href && !(ev.target as HTMLElement).closest('a')) window.open(e.href, '_blank', 'noopener'); }}>
                     <td className="nowrap">{new Date(`${e.date}T00:00:00`).toLocaleDateString('tr-TR')}</td>
                     <td><span className={`pc-tag t-${e.type}`}>{label(e.type)}</span></td>
                     {owner ? null : <td>{e.owner}</td>}

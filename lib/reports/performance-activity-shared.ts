@@ -20,6 +20,8 @@ export type PerfEvent = {
   detail: string;
   amount: number | null;
   devices: number | null;
+  /** Satıra basınca açılacak kayıt (teklif, fatura teklifi, müşteri kartı, Account Atama). */
+  href: string | null;
 };
 
 export type PerfEventsPayload = {

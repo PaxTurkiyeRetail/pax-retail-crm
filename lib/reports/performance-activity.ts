@@ -28,7 +28,7 @@ const Q_ACTIVITIES = `
 `;
 
 const Q_QUOTES = `
-  select q.quote_no, q.owner_user_id::text as owner_user_id, q.owner_name, q.status, q.closed_reason,
+  select q.id::text as quote_id, q.quote_no, q.owner_user_id::text as owner_user_id, q.owner_name, q.status, q.closed_reason,
          q.total_amount::float8 as tutar, q.total_device_count as cihaz,
          coalesce(q.proposal_date, (q.created_at at time zone 'Europe/Istanbul')::date)::text as acilis,
          (coalesce(q.closed_at, q.updated_at) at time zone 'Europe/Istanbul')::date::text as kapanis,
@@ -43,7 +43,7 @@ const Q_QUOTES = `
 `;
 
 const Q_INVOICES = `
-  select s.sale_date::text as gun, s.owner_user_id::text as owner_user_id, s.owner_name,
+  select s.sale_date::text as gun, s.quote_id::text as quote_id, s.owner_user_id::text as owner_user_id, s.owner_name,
          s.amount::float8 as tutar, s.device_count as cihaz, m.id::text as customer_id, m.musteri,
          coalesce((
            select string_agg(i.product_code || ' × ' || i.quantity || case when i.sale_type = 'rental' then ' (kira)' else '' end, ' · ' order by i.line_no)
@@ -104,12 +104,12 @@ export async function buildPerformanceEvents(options: { period: PerfPeriodKind; 
       date: String(r.gun), type: meeting ? 'gorusme' : 'aktivite', owner: String(r.created_by ?? ''),
       customerId: r.customer_id ?? null, customer: r.musteri ?? '—',
       detail: [label, r.durum, r.aciklama ? String(r.aciklama).slice(0, 140) : null].filter(Boolean).join(' · '),
-      amount: null, devices: null,
+      amount: null, devices: null, href: r.customer_id ? `/crm/${r.customer_id}` : null,
     });
   }
   for (const r of quotes) {
     if (!mine(r.owner_user_id, r.owner_name)) continue;
-    const base = { owner: String(r.owner_name ?? ''), customerId: r.customer_id ?? null, customer: r.musteri ?? '—', amount: num(r.tutar), devices: r.cihaz == null ? null : num(r.cihaz) };
+    const base = { owner: String(r.owner_name ?? ''), customerId: r.customer_id ?? null, customer: r.musteri ?? '—', amount: num(r.tutar), devices: r.cihaz == null ? null : num(r.cihaz), href: r.quote_id ? `/crm/quotes/${r.quote_id}` : null };
     if (inRange(r.acilis)) events.push({ ...base, date: String(r.acilis), type: 'teklif', detail: `Teklif ${r.quote_no ?? ''} gönderildi` });
     if (r.status === 'closed' && inRange(r.kapanis)) {
       const won = r.closed_reason === 'won';
@@ -121,6 +121,7 @@ export async function buildPerformanceEvents(options: { period: PerfPeriodKind; 
     events.push({
       date: String(r.gun), type: 'fatura', owner: String(r.owner_name ?? ''), customerId: r.customer_id ?? null, customer: r.musteri ?? '—',
       detail: r.kalemler ? `Fatura · ${r.kalemler}` : 'Fatura', amount: num(r.tutar), devices: r.cihaz == null ? null : num(r.cihaz),
+      href: r.quote_id ? `/crm/quotes/${r.quote_id}` : r.customer_id ? `/crm/${r.customer_id}` : '/crm/sales',
     });
   }
   for (const r of moves) {
@@ -130,7 +131,7 @@ export async function buildPerformanceEvents(options: { period: PerfPeriodKind; 
     const who = r.from_satici && r.from_satici !== r.satici ? ` · ${r.from_satici} → ${r.satici}` : '';
     events.push({
       date: String(r.gun), type: 'cevirme', owner: String(r.satici ?? ''), customerId: null, customer: String(r.firma ?? '—'),
-      detail: `${from} → ${to}${who}${r.moved_by ? ` (işlem: ${r.moved_by})` : ''}`, amount: null, devices: null,
+      detail: `${from} → ${to}${who}${r.moved_by ? ` (işlem: ${r.moved_by})` : ''}`, amount: null, devices: null, href: '/crm/customer-list',
     });
   }
 
