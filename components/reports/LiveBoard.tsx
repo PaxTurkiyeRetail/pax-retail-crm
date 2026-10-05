@@ -124,7 +124,12 @@ function readSpeed(): LiveBoardSpeed {
   } catch {}
   return 'normal';
 }
-const SHORT_LABELS: Record<string, string> = { pulse: 'ÖZET', portfolio: 'PORTFÖY', pools: 'HAVUZ', hot: 'HOT', poc: 'POC', quotes: 'TEKLİF', alerts: 'UYARI', jira: 'JIRA' };
+const SHORT_LABELS: Record<string, string> = { pulse: 'Genel Özet', portfolio: 'Portföy', pools: 'Müşteri Havuzu', hot: 'Sıcak Fırsatlar', poc: 'POC', quotes: 'Teklifler', alerts: 'Uyarılar', jira: 'Jira' };
+/** Alt şerit: baş harf (CK) yerine okunur ad — "Cem K." */
+function stripName(name: string) {
+  const parts = name.trim().split(/\s+/);
+  return parts.length > 1 ? `${parts[0]} ${parts[parts.length - 1][0]}.` : name;
+}
 
 /* --- Küçük parçalar ----------------------------------------------------- */
 
@@ -253,11 +258,11 @@ function Kpi({ label, value, sub, tone = 'neutral', small }: { label: string; va
 function CommercialBand({ r, invoices, invoicesHref }: { r: RevenueBlock; invoices: number; invoicesHref?: string }) {
   const items: Array<{ k: string; v: string; tone?: Tone; href?: string }> = [
     { k: `Yıllık Ciro Hedefi · ${r.year}`, v: fmtMoney(r.target) },
-    { k: 'YTD Ciro', v: fmtMoney(r.actualYtd), tone: r.pace ?? 'neutral' },
+    { k: 'Yılbaşından Bugüne Ciro', v: fmtMoney(r.actualYtd), tone: r.pace ?? 'neutral' },
     { k: 'Forecast · yıl sonu', v: fmtMoney(r.forecast) },
-    { k: 'Gap', v: r.forecastGap == null ? '—' : fmtMoney(r.forecastGap, { sign: true }), tone: r.forecastGap == null ? 'neutral' : r.forecastGap >= 0 ? 'ok' : 'danger' },
+    { k: 'Hedefe Kalan (Forecast − Hedef)', v: r.forecastGap == null ? '—' : fmtMoney(r.forecastGap, { sign: true }), tone: r.forecastGap == null ? 'neutral' : r.forecastGap >= 0 ? 'ok' : 'danger' },
     { k: 'Kesilen Fatura', v: fmt(invoices), tone: invoices ? 'ok' : 'neutral', href: invoicesHref },
-    { k: 'Dönüşüm', v: r.conversionPct == null ? '—' : `%${r.conversionPct}`, tone: conversionTone(r.conversionPct) },
+    { k: 'Teklif → Satış Oranı', v: r.conversionPct == null ? '—' : `%${r.conversionPct}`, tone: conversionTone(r.conversionPct) },
   ];
   return (
     <div className="lb-band no-hints" aria-label="Ticari sonuç" style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}>
@@ -380,8 +385,8 @@ function PulseSlide({ data, caps, page, rollup, ringSize }: {
               ? `Account Atama · ${fmt(data.customerList.unmatchedRows)} liste satırı künyeyle eşleşmedi`
               : 'Account Atama · tüm portföy'}
             aside={<>
-              <MiniRing pair={g.hunterToFarmer} label="H → F çevirme" tone={goalTone(g.hunterToFarmer)} size={mini} />
-              <MiniRing pair={g.leadToHunter} label="L → H çevirme" tone={goalTone(g.leadToHunter)} size={mini} />
+              <MiniRing pair={g.hunterToFarmer} label="Hunter → Farmer" tone={goalTone(g.hunterToFarmer)} size={mini} />
+              <MiniRing pair={g.leadToHunter} label="Lead → Hunter" tone={goalTone(g.leadToHunter)} size={mini} />
             </>}
           >
             {data.customerList
@@ -1357,9 +1362,10 @@ function OwnerSlide({ owner, todayKey, caps, ringSize }: { owner: LiveOwner; tod
 
       <DonutCard
         title="Müşteri Takip Statüsü"
+        sub="halka: firma dağılımı · sağ: hedefe göre statü yükselten firma"
         aside={<>
-          <MiniRing pair={g.hunterToFarmer} label="H → F çevirme" tone={goalTone(g.hunterToFarmer)} size={mini} />
-          <MiniRing pair={g.leadToHunter} label="L → H çevirme" tone={goalTone(g.leadToHunter)} size={mini} />
+          <MiniRing pair={g.hunterToFarmer} label="Hunter → Farmer" tone={goalTone(g.hunterToFarmer)} size={mini} />
+          <MiniRing pair={g.leadToHunter} label="Lead → Hunter" tone={goalTone(g.leadToHunter)} size={mini} />
         </>}
       >
         {owner.list ? <StatusDonut list={owner.list} size={ring} /> : <Ring pct={null} tone="neutral" big="—" sub="liste yok" size={ring} stroke={12} />}
@@ -1705,7 +1711,7 @@ export default function LiveBoard({ active }: { active: boolean }) {
       }
       const base = slide.type === 'team'
         ? { label: TEAM_SLIDE_TITLES[slide.key].title, short: SHORT_LABELS[slide.key] ?? slide.key }
-        : { label: data?.owners[slide.index]?.owner ?? '', short: data?.owners[slide.index]?.initials ?? '' };
+        : { label: data?.owners[slide.index]?.owner ?? '', short: stripName(data?.owners[slide.index]?.owner ?? '') };
       seen.set(key, { key, ...base, team: slide.type === 'team', pages: slide.pages, firstIndex: slideIndex, active: isCurrent });
     });
     return Array.from(seen.values());
