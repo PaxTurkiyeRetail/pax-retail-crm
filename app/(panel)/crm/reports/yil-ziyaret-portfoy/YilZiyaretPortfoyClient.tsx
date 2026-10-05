@@ -99,8 +99,8 @@ export default function YilZiyaretPortfoyClient() {
                   <span style={{ display: 'inline-block', minWidth: 26, textAlign: 'center' }}>H</span>
                   <span style={{ display: 'inline-block', minWidth: 26, textAlign: 'center' }}>F</span>
                   <span style={{ display: 'inline-block', minWidth: 26, textAlign: 'center' }}>K</span>
-                  <span style={{ display: 'inline-block', minWidth: 26, textAlign: 'center' }}>B</span>
                   <span style={{ display: 'inline-block', minWidth: 26, textAlign: 'center' }}>L</span>
+                  <span style={{ display: 'inline-block', minWidth: 26, textAlign: 'center' }}>B</span>
                 </div>
               </th>
               <th style={{ padding: '10px 14px', whiteSpace: 'nowrap' }} title="Hunter firmalardan Forecast / Engel&Etki girişi EKSİK olan sayısı (0 = tamam)">
@@ -194,17 +194,6 @@ export default function YilZiyaretPortfoyClient() {
                     </button>
                     <button
                       type="button"
-                      disabled={row.bankaFirmNames.length === 0}
-                      onClick={() => setOpenDetail(isBankaOpen ? null : { owner: row.owner, kind: 'banka' })}
-                      style={{ background: 'none', border: 'none', padding: 0, cursor: row.bankaFirmNames.length ? 'pointer' : 'default', font: 'inherit' }}
-                      title="Banka/Finans firmaları görmek için tıkla"
-                    >
-                      <span style={{ display: 'inline-block', minWidth: 26, padding: '2px 6px', borderRadius: 6, textAlign: 'center', fontWeight: 700, background: 'rgba(17, 161, 242,0.15)', color: '#07055b', textDecoration: row.bankaFirmNames.length ? 'underline' : 'none' }}>
-                        {row.bankaFirmNames.length}
-                      </span>
-                    </button>
-                    <button
-                      type="button"
                       disabled={row.leadFirmNames.length === 0}
                       onClick={() => setOpenDetail(isLeadOpen ? null : { owner: row.owner, kind: 'lead' })}
                       style={{ background: 'none', border: 'none', padding: 0, cursor: row.leadFirmNames.length ? 'pointer' : 'default', font: 'inherit' }}
@@ -212,6 +201,17 @@ export default function YilZiyaretPortfoyClient() {
                     >
                       <span style={{ display: 'inline-block', minWidth: 26, padding: '2px 6px', borderRadius: 6, textAlign: 'center', fontWeight: 700, background: 'rgba(100,116,139,0.15)', color: '#475569', textDecoration: row.leadFirmNames.length ? 'underline' : 'none' }}>
                         {row.leadFirmNames.length}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      disabled={row.bankaFirmNames.length === 0}
+                      onClick={() => setOpenDetail(isBankaOpen ? null : { owner: row.owner, kind: 'banka' })}
+                      style={{ background: 'none', border: 'none', padding: 0, cursor: row.bankaFirmNames.length ? 'pointer' : 'default', font: 'inherit' }}
+                      title="Banka/Finans firmaları görmek için tıkla"
+                    >
+                      <span style={{ display: 'inline-block', minWidth: 26, padding: '2px 6px', borderRadius: 6, textAlign: 'center', fontWeight: 700, background: 'rgba(17, 161, 242,0.15)', color: '#07055b', textDecoration: row.bankaFirmNames.length ? 'underline' : 'none' }}>
+                        {row.bankaFirmNames.length}
                       </span>
                     </button>
                   </div>
