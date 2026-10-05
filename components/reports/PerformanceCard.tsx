@@ -201,12 +201,16 @@ export default function PerformanceCard() {
   const [status, setStatus] = useState<'loading' | 'ok' | 'error' | 'forbidden'>('loading');
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<string>('');
-  // Ekip Özeti menüde yok; yalnız gizli adresle açılır: /performans-karnesi?gorunum=ekip (rol bağlı değil).
+  // Ekip Özeti menüde yok; gizli kısayol Ctrl+G ile aç/kapa (sayfa zaten yalnız karne yetkilisine açık).
   const [showTeam, setShowTeam] = useState(false);
   useEffect(() => {
-    const on = new URLSearchParams(window.location.search).get('gorunum') === 'ekip';
-    setShowTeam(on);
-    if (on) setSelected(TEAM);
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey && e.key.toLowerCase() === 'g')) return;
+      e.preventDefault();
+      setShowTeam((on) => { setSelected(on ? '' : TEAM); return !on; });
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
   }, []);
 
   const load = useCallback(async (p: PerfPeriodKind) => {
