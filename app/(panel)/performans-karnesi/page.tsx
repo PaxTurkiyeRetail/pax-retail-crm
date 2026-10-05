@@ -8,6 +8,6 @@ import PerformanceCard from '@/components/reports/PerformanceCard';
 // yönetilir). API de aynı izni ayrıca kontrol eder. Menü aynı kuralla gizlenir (PanelShell).
 export default async function PerformanceCardPage() {
   const user = await requireAllowedUserOrThrow();
-  if (!userHasPermission(user, 'screen.reports.performance.view') || !userHasPermission(user, 'report.performance.read')) redirect('/dashboard');
+  if (!userHasPermission(user, 'screen.reports.performance.view') || !userHasPermission(user, 'report.performance.read')) redirect('/crm');
   return <PerformanceCard />;
 }

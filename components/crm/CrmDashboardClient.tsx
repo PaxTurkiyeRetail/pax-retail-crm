@@ -245,7 +245,7 @@ export default function CrmDashboardClient() {
               </div>
             </div>
             <Link
-              href="/dashboard"
+              href="/canli-ekran"
               style={{
                 fontSize: 12,
                 fontWeight: 700,
