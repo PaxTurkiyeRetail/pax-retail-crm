@@ -4,10 +4,10 @@
  *
  * SKOR (100) — her boyut 0..1 orana indirilir, ağırlıkla çarpılır:
  *   Ticari Sonuç       40 · dönem cirosu + satılan cihaz (hedefe, dönemin geçen süresine göre)
- *   İş Geliştirme      20 · Hunter→Farmer, Lead→Hunter, kazanılan teklif
+ *   İş Geliştirme      15 · Hunter→Farmer, Lead→Hunter, kazanılan teklif
  *   Müşteri Yönetimi   15 · ort. görüşme/firma (hedef 5) + hareketsiz firma oranı
  *   Aktivite Disiplini 15 · görüşme (fiziki + online) hedefi
- *   CRM & Süreç        10 · 30+ gün dokunulmamış teklif, geçmiş kapanış/aksiyon, 30+ gün POC
+ *   Süreç Takibi       15 · 30+ gün dokunulmamış teklif, geçmiş kapanış/aksiyon, 30+ gün POC
  * Hedefi olmayan ölçüt hesaba katılmaz; ölçüsü olmayan boyut N/A yazar, toplam kalan ağırlıklarla
  * 100'e ölçeklenir (uydurma puan yok).
  */
@@ -29,10 +29,10 @@ export type PerfGrade = { label: string; tone: Tone };
 
 export const PERF_WEIGHTS: Array<{ key: PerfDimensionKey; label: string; weight: number; hint: string }> = [
   { key: 'commercial', label: 'Ticari Sonuç', weight: 40, hint: 'ciro + satılan cihaz' },
-  { key: 'bizdev', label: 'İş Geliştirme', weight: 20, hint: 'L→H · H→F · kazanılan teklif' },
+  { key: 'bizdev', label: 'İş Geliştirme', weight: 15, hint: 'L→H · H→F · kazanılan teklif' },
   { key: 'customer', label: 'Müşteri Yönetimi', weight: 15, hint: 'görüşme/firma · hareketsiz oranı' },
   { key: 'activity', label: 'Aktivite Oranı', weight: 15, hint: 'fiziki + online görüşme' },
-  { key: 'crm', label: 'Süreç Takibi', weight: 10, hint: 'bekleyen teklif · geçmiş tarih · POC' },
+  { key: 'crm', label: 'Süreç Takibi', weight: 15, hint: 'bekleyen teklif · geçmiş tarih · POC' },
 ];
 
 /** Skor bantları — TEK yer (iş emri: merkezi config). */

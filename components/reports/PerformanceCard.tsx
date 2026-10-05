@@ -80,7 +80,7 @@ function dimExplain(key: string, r: PerfOwnerReport, elapsed: number): string[] 
     case 'bizdev':
       return [
         pace('Lead → Hunter', r.leadToHunter), pace('Hunter → Farmer', r.hunterToFarmer),
-        pace('Kazanılan teklif', { actual: r.won.quotes, target: r.won.target }), 'Puan = oranların ortalaması × 20',
+        pace('Kazanılan teklif', { actual: r.won.quotes, target: r.won.target }), 'Puan = oranların ortalaması × 15',
       ];
     case 'customer': {
       const pf = r.meetingsPerFirm;
@@ -97,7 +97,7 @@ function dimExplain(key: string, r: PerfOwnerReport, elapsed: number): string[] 
       return [
         `Sorunlu kayıt: ${num(issues)} (30+ gün bekleyen teklif ${r.risks.staleQuotes}, kapanışı geçmiş ${r.risks.overdueClose}, aksiyonu geçmiş ${r.risks.overdueActions}, 30+ gün POC ${r.risks.longPoc})`,
         `Takip edilen kayıt: ${num(base)} (açık teklif + aktif POC + portföy)`,
-        base > 0 ? `Temiz oran: %${Math.max(0, Math.round((1 - issues / base) * 100))} → puan = oran × 10` : 'Kayıt yok → hesaba katılmaz',
+        base > 0 ? `Temiz oran: %${Math.max(0, Math.round((1 - issues / base) * 100))} → puan = oran × 15` : 'Kayıt yok → hesaba katılmaz',
       ];
     }
     default:
