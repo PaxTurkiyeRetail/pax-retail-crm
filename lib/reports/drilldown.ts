@@ -326,14 +326,9 @@ export async function loadDrilldown(params: DrilldownParams, today = new Date())
   const allRows = await safeQuery<{ customer_id: string; musteri: string; sorumlu: string; sektor: string; faz: number | null; faz_adi: string | null; son_hareket: string | null; satici_etiketi: string | null }>(
     Q_PORTFOLIO, [owner],
   );
-  // İki sekme şeridi birlikte süzer; her şeridin sayısı diğer şeridin seçimine göre hesaplanır.
-  const inSegment = (row: (typeof allRows)[number]) => !params.segment || sellerSegment(row.satici_etiketi) === params.segment;
-  const inSector = (row: (typeof allRows)[number]) => !params.sector || row.sektor === params.sector;
-  const segments = SELLER_SEGMENTS.map((key) => ({ key, count: allRows.filter((row) => inSector(row) && sellerSegment(row.satici_etiketi) === key).length }));
-  const sectorCounts = new Map<string, number>();
-  for (const row of allRows) if (inSegment(row)) sectorCounts.set(row.sektor, (sectorCounts.get(row.sektor) ?? 0) + 1);
-  const sectors = Array.from(sectorCounts, ([key, n]) => ({ key, count: n })).sort((a, b) => b.count - a.count || a.key.localeCompare(b.key, 'tr'));
-  const rows = allRows.filter((row) => inSegment(row) && inSector(row));
+  const inSegment = (row: (typeof allRows)[number]) => !params.segment || sellerSegment(row.satici_etiketi, row.sektor) === params.segment;
+  const segments = SELLER_SEGMENTS.map((key) => ({ key, count: allRows.filter((row) => sellerSegment(row.satici_etiketi, row.sektor) === key).length }));
+  const rows = allRows.filter(inSegment);
   const stale = rows.filter((row) => !row.son_hareket).length;
   return {
     title, subtitle: scope,
@@ -347,7 +342,7 @@ export async function loadDrilldown(params: DrilldownParams, today = new Date())
     ],
     rows: rows.map((row) => ({
       customerId: row.customer_id,
-      cells: [row.musteri, sellerSegment(row.satici_etiketi), row.sorumlu, row.sektor, row.faz == null ? '—' : `${row.faz}${row.faz_adi ? ` · ${row.faz_adi}` : ''}`, row.son_hareket],
+      cells: [row.musteri, sellerSegment(row.satici_etiketi, row.sektor), row.sorumlu, row.sektor, row.faz == null ? '—' : `${row.faz}${row.faz_adi ? ` · ${row.faz_adi}` : ''}`, row.son_hareket],
     })),
     stats: [
       { label: 'Firma', value: count(rows.length) },
@@ -355,7 +350,6 @@ export async function loadDrilldown(params: DrilldownParams, today = new Date())
     ],
     note: 'Takip etiketi müşteri künyesinden gelir; künyesi boş firma Hunter sayılır.',
     segments,
-    sectors,
   };
 }
 

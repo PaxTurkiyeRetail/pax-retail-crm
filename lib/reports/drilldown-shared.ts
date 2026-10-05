@@ -41,11 +41,9 @@ export type DrilldownParams = {
   year: number;
   /** portfoy: künye satıcı etiketi sekmesi (Hunter/Farmer/Lead/Kasa) */
   segment: SellerSegment | null;
-  /** portfoy: sektör sekmesi (Banka / Finans gibi) */
-  sector: string | null;
 };
 
-export const SELLER_SEGMENTS = ['Hunter', 'Farmer', 'Lead', 'Kasa'] as const;
+export const SELLER_SEGMENTS = ['Hunter', 'Farmer', 'Lead', 'Kasa', 'Banka'] as const;
 export type SellerSegment = (typeof SELLER_SEGMENTS)[number];
 /** Canlı Ekran "Müşteri Takip Statüsü" renkleriyle aynı. */
 export const SELLER_SEGMENT_COLOR: Record<SellerSegment, string> = {
@@ -53,9 +51,12 @@ export const SELLER_SEGMENT_COLOR: Record<SellerSegment, string> = {
   Farmer: '#22c55e',
   Lead: '#ea580c',
   Kasa: '#eab308',
+  Banka: '#8b5cf6',
 };
-/** Künye etiketi → segment; boş = Hunter (yeni müşteri varsayılanı, Çağdaş Bey 07.09). */
-export function sellerSegment(value: string | null | undefined): SellerSegment {
+/** Künye etiketi → segment; boş = Hunter (Çağdaş Bey 07.09). Sektör Banka / Finans ise etiketten bağımsız Banka
+ * (Yıl Ziyaret & Portföy Sağlığı raporuyla aynı öncelik, bkz. yil-ziyaret-portfoy.ts Q_PORTFOLIO_FIRMS). */
+export function sellerSegment(value: string | null | undefined, sector?: string | null): SellerSegment {
+  if (String(sector ?? '').trim() === 'Banka / Finans') return 'Banka';
   switch (String(value ?? '').trim().toLocaleLowerCase('tr')) {
     case 'farmer': return 'Farmer';
     case 'lead': return 'Lead';
@@ -84,8 +85,6 @@ export type DrilldownPayload = {
   note: string | null;
   /** Sekme şeridi (yalnız portföy): etiket başına kayıt sayısı. */
   segments?: Array<{ key: SellerSegment; count: number }>;
-  /** Sektör sekmeleri (yalnız portföy), çoktan aza. */
-  sectors?: Array<{ key: string; count: number }>;
 };
 
 export const KIND_TITLE: Record<DrilldownKind, string> = {
@@ -149,7 +148,6 @@ export function parseDrilldownParams(
     mode: isDeviceMode(modeRaw) ? modeRaw : null,
     model: one(raw.model).trim().toLocaleUpperCase('tr-TR') || null,
     segment: SELLER_SEGMENTS.find((key) => key.toLocaleLowerCase('tr') === one(raw.etiket).trim().toLocaleLowerCase('tr')) ?? null,
-    sector: one(raw.sektor).trim() || null,
     year: Number.isFinite(yearRaw) && yearRaw >= 2020 && yearRaw <= 2100 ? Math.floor(yearRaw) : fallbackYear,
   };
 }

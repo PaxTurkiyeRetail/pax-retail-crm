@@ -77,31 +77,11 @@ export default async function DrilldownPage({
             if (params.owner) qs.set('satisci', params.owner);
             qs.set('yil', String(params.year));
             if (seg.key) qs.set('etiket', seg.key.toLocaleLowerCase('tr'));
-            if (params.sector) qs.set('sektor', params.sector);
             const active = params.segment === seg.key;
             return (
               <Link key={seg.key ?? 'all'} href={`/crm/kirilim?${qs}`} className={`dd-seg${active ? ' active' : ''}`}>
                 {seg.key ? <i style={{ background: SELLER_SEGMENT_COLOR[seg.key] }} /> : null}
                 {seg.key ?? 'Tümü'} <b>{seg.count.toLocaleString('tr-TR')}</b>
-              </Link>
-            );
-          })}
-        </nav>
-      ) : null}
-
-      {data.sectors && data.sectors.length > 1 ? (
-        <nav className="dd-segs" aria-label="Sektör">
-          {[{ key: null as string | null, count: data.sectors.reduce((sum, s) => sum + s.count, 0) }, ...data.sectors].map((sec) => {
-            const qs = new URLSearchParams();
-            qs.set('tip', params.kind);
-            if (params.owner) qs.set('satisci', params.owner);
-            qs.set('yil', String(params.year));
-            if (params.segment) qs.set('etiket', params.segment.toLocaleLowerCase('tr'));
-            if (sec.key) qs.set('sektor', sec.key);
-            const active = params.sector === sec.key;
-            return (
-              <Link key={sec.key ?? 'all'} href={`/crm/kirilim?${qs}`} className={`dd-seg${active ? ' active' : ''}`}>
-                {sec.key ?? 'Tüm sektörler'} <b>{sec.count.toLocaleString('tr-TR')}</b>
               </Link>
             );
           })}

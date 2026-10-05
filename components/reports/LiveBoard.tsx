@@ -258,11 +258,11 @@ function Kpi({ label, value, sub, tone = 'neutral', small }: { label: string; va
 function CommercialBand({ r, invoices, invoicesHref }: { r: RevenueBlock; invoices: number; invoicesHref?: string }) {
   const items: Array<{ k: string; v: string; tone?: Tone; href?: string }> = [
     { k: `Yıllık Ciro Hedefi · ${r.year}`, v: fmtMoney(r.target) },
-    { k: 'Yılbaşından Bugüne Ciro', v: fmtMoney(r.actualYtd), tone: r.pace ?? 'neutral' },
+    { k: 'Yıl Başından Ciro', v: fmtMoney(r.actualYtd), tone: r.pace ?? 'neutral' },
     { k: 'Forecast · yıl sonu', v: fmtMoney(r.forecast) },
-    { k: 'Hedefe Kalan (Forecast − Hedef)', v: r.forecastGap == null ? '—' : fmtMoney(r.forecastGap, { sign: true }), tone: r.forecastGap == null ? 'neutral' : r.forecastGap >= 0 ? 'ok' : 'danger' },
+    { k: 'Hedefe Kalan', v: r.forecastGap == null ? '—' : fmtMoney(r.forecastGap, { sign: true }), tone: r.forecastGap == null ? 'neutral' : r.forecastGap >= 0 ? 'ok' : 'danger' },
     { k: 'Kesilen Fatura', v: fmt(invoices), tone: invoices ? 'ok' : 'neutral', href: invoicesHref },
-    { k: 'Teklif → Satış Oranı', v: r.conversionPct == null ? '—' : `%${r.conversionPct}`, tone: conversionTone(r.conversionPct) },
+    { k: 'Teklif→Satış', v: r.conversionPct == null ? '—' : `%${r.conversionPct}`, tone: conversionTone(r.conversionPct) },
   ];
   return (
     <div className="lb-band no-hints" aria-label="Ticari sonuç" style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}>
@@ -1362,7 +1362,6 @@ function OwnerSlide({ owner, todayKey, caps, ringSize }: { owner: LiveOwner; tod
 
       <DonutCard
         title="Müşteri Takip Statüsü"
-        sub="halka: firma dağılımı · sağ: hedefe göre statü yükselten firma"
         aside={<>
           <MiniRing pair={g.hunterToFarmer} label="Hunter → Farmer" tone={goalTone(g.hunterToFarmer)} size={mini} />
           <MiniRing pair={g.leadToHunter} label="Lead → Hunter" tone={goalTone(g.leadToHunter)} size={mini} />
