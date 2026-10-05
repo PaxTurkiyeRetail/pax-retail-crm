@@ -241,7 +241,7 @@ function routeMeta(pathname: string) {
       "Haftalık Yönetim Sunumu",
     ],
     ["/crm/reports/seller-presentation", "Rapor Merkezi", "Satışçı Sunumu"],
-    ["/crm/reports/seller-followup", "Genel", "Dashboard"],
+    ["/dashboard", "Genel", "Dashboard"],
     ["/crm/reports/entegrasyon-raporu", "Rapor Merkezi", "KasaPOS Entegrasyon Raporu"],    ["/crm/reports/yil-ziyaret-portfoy", "Rapor Merkezi", "Yıl Ziyaret & Portföy Sağlığı"],
     ["/crm/reports/forecast", "Rapor Merkezi", "Forecast Raporu"],
     ["/crm/reports/quotes", "Rapor Merkezi", "Teklif Raporları"],
@@ -348,7 +348,7 @@ export default function PanelShell({
     setMenuOpen(false);
     setUserMenuOpen(false);
     // Dashboard rapor URL'inde ama menüde ayrı: açılınca Raporlar grubu kapanır.
-    if (pathname.startsWith("/crm/reports/seller-followup")) setReportsOpen(false);
+    if (pathname.startsWith("/dashboard")) setReportsOpen(false);
     else if (pathname.startsWith("/crm/reports")) setReportsOpen(true);
   }, [pathname]);
 
@@ -424,7 +424,7 @@ export default function PanelShell({
     // Dashboard yetkisi olmayan kullanıcıda eski Genel Bakış (/crm) kalır — menüsüz kalmasın.
     if (canDashboard)
       overview.push({
-        href: "/crm/reports/seller-followup",
+        href: "/dashboard",
         label: "Dashboard",
         iconKey: "dashboard",
         exact: true,
@@ -511,7 +511,7 @@ export default function PanelShell({
     // Satıcı Özeti ve Kullanıcı Aktivite Sunumu (15.09'da tamamen kapatıldı — sayfaları 404).
     if (canDashboard) {
       // Canlı Ekran (Command Center) ve Faz Dashboard'un sekmeleridir (?tab=live / ?tab=faz).
-      // Dashboard (/crm/reports/seller-followup) 02.10'dan beri Genel grubunda en üstte.
+      // Dashboard 05.10'dan beri /dashboard adresinde, Genel grubunda en üstte.
       reports.push({
         href: "/crm/reports/quotes",
         label: "Teklif Raporları",
@@ -582,7 +582,7 @@ export default function PanelShell({
     .filter(Boolean)
     .join(" ");
   // Dashboard rapor URL'inde yaşar ama menüde ayrı; Raporlar grubunu aktif/açık yapmasın.
-  const reportsActive = pathname.startsWith("/crm/reports") && !pathname.startsWith("/crm/reports/seller-followup");
+  const reportsActive = pathname.startsWith("/crm/reports");
   const pageMeta = useMemo(() => routeMeta(pathname), [pathname]);
   const showParameterManagement = allowed('admin.parameters.manage') && allowed('screen.admin.parameters.view');
   const showReports = Boolean(

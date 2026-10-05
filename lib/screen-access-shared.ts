@@ -14,7 +14,7 @@ export type ScreenRule = {
 };
 
 export const SCREEN_RULES: ScreenRule[] = [
-  { group: 'Genel', label: 'Dashboard', href: '/crm/reports/seller-followup', all: ['screen.reports.view', 'report.read.all'], note: 'Açılış ekranı' },
+  { group: 'Genel', label: 'Dashboard', href: '/dashboard', all: ['screen.reports.view', 'report.read.all'], note: 'Açılış ekranı' },
   { group: 'Genel', label: 'Genel Bakış', href: '/crm', all: ['screen.crm.dashboard.view', 'customer.read'], note: 'Dashboard yetkisi yoksa açılış ekranı' },
 
   { group: 'Operasyon', label: 'Aktiviteler', href: '/crm/activities', all: ['screen.crm.activities.view', 'activity.read'] },

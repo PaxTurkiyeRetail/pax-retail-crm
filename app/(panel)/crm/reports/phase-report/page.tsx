@@ -7,5 +7,5 @@ import { redirect } from 'next/navigation';
  * oradan `embedded` modunda çağrılır.
  */
 export default async function PhaseReportPage() {
-  redirect('/crm/reports/seller-followup?tab=faz');
+  redirect('/dashboard?tab=faz');
 }

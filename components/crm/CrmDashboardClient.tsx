@@ -245,7 +245,7 @@ export default function CrmDashboardClient() {
               </div>
             </div>
             <Link
-              href="/crm/reports/seller-followup"
+              href="/dashboard"
               style={{
                 fontSize: 12,
                 fontWeight: 700,
