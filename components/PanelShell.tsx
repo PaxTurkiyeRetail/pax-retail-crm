@@ -6,7 +6,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import LogoutButton from "@/components/LogoutButton";
 import {
   hasPermission,
-  isAdminLike,
   type AllowedRole,
   type Permission,
 } from "@/lib/roles";
@@ -432,8 +431,8 @@ export default function PanelShell({
         exact: true,
       });
 
-    // Performans Karnesi (05.10.2026): ayrı birime açılan ekran — yalnız admin + super_admin.
-    if (isAdminLike(role))
+    // Performans Karnesi (05.10.2026): ayrı birime açılan ekran — izinle (admin + super_admin).
+    if (allowed('screen.reports.performance.view') && allowed('report.performance.read'))
       overview.push({
         href: "/performans-karnesi",
         label: "Performans Karnesi",

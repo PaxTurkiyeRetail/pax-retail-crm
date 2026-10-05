@@ -1,84 +1,89 @@
 /**
- * PERFORMANS KARNESİ — Dashboard'un açılış sekmesi (05.10.2026).
- * Müdürün hazırladığı "Retail Sales Performance Report" taslağının canlı veriye bağlanmış hali.
- * Yeni SQL yok: Canlı Ekran'ın kişi verisi (`LiveOwner`) kullanılır, sayılar Canlı Ekran ile birebir aynıdır.
+ * PERFORMANS KARNESİ — Retail Sales Performance Report V1 (05.10.2026).
+ * Saf kurallar + tipler (istemci, sunucu ve vitest ortak). Veri: lib/reports/performance-report.ts.
  *
- * SKOR (100 puan) — her boyut 0..1 arası bir orana indirilir, ağırlıkla çarpılır:
- *   Ticari Sonuç       40 · ciro ve cihaz gerçekleşmesi (YTD), yılın geçen süresine göre (hız)
- *   İş Geliştirme      20 · Hunter→Farmer, Lead→Hunter, kazanılan teklif hedefleri (hedefi girilenler)
- *   Müşteri Yönetimi   15 · temas edilen müşteri hedefi + hareketsiz firma oranı
- *   Aktivite Disiplini 15 · yıllık görüşme hedefi (hıza göre) + bu haftanın aktivite hedefi
- *   CRM & Süreç        10 · süresi geçmiş teklif, gecikmiş aksiyon, kritik bekleyen kayıt oranı
- * Hedefi girilmemiş ölçüt hesaba katılmaz; boyutun hiç ölçütü yoksa boyut ağırlığı dağıtılmaz,
- * "veri yok" yazar ve toplam skor kalan ağırlıklara göre 100'e ölçeklenir (uydurma puan yok).
+ * SKOR (100) — her boyut 0..1 orana indirilir, ağırlıkla çarpılır:
+ *   Ticari Sonuç       40 · dönem cirosu + satılan cihaz (hedefe, dönemin geçen süresine göre)
+ *   İş Geliştirme      20 · Hunter→Farmer, Lead→Hunter, kazanılan teklif
+ *   Müşteri Yönetimi   15 · ort. görüşme/firma (hedef 5) + hareketsiz firma oranı
+ *   Aktivite Disiplini 15 · görüşme (fiziki + online) hedefi
+ *   CRM & Süreç        10 · 30+ gün dokunulmamış teklif, geçmiş kapanış/aksiyon, 30+ gün POC
+ * Hedefi olmayan ölçüt hesaba katılmaz; ölçüsü olmayan boyut N/A yazar, toplam kalan ağırlıklarla
+ * 100'e ölçeklenir (uydurma puan yok).
  */
-import type { LiveOwner, LiveBoardPayload, Tone } from './live-board-shared';
-import type { GoalPair } from './targets-shared';
+import type { Tone } from './live-board-shared';
+
+export type PerfPeriodKind = 'month' | 'quarter' | 'ytd';
+export const PERF_PERIODS: Array<{ key: PerfPeriodKind; label: string }> = [
+  { key: 'month', label: 'Aylık' },
+  { key: 'quarter', label: '3 Aylık' },
+  { key: 'ytd', label: 'YTD' },
+];
+export function isPerfPeriod(value: unknown): value is PerfPeriodKind {
+  return value === 'month' || value === 'quarter' || value === 'ytd';
+}
 
 export type PerfDimensionKey = 'commercial' | 'bizdev' | 'customer' | 'activity' | 'crm';
 export type PerfDimension = { key: PerfDimensionKey; label: string; weight: number; score: number | null; hint: string };
 export type PerfGrade = { label: string; tone: Tone };
 
-export const PERF_WEIGHTS: Array<{ key: PerfDimensionKey; label: string; weight: number }> = [
-  { key: 'commercial', label: 'Ticari Sonuç', weight: 40 },
-  { key: 'bizdev', label: 'İş Geliştirme', weight: 20 },
-  { key: 'customer', label: 'Müşteri Yönetimi', weight: 15 },
-  { key: 'activity', label: 'Aktivite Disiplini', weight: 15 },
-  { key: 'crm', label: 'CRM & Süreç', weight: 10 },
+export const PERF_WEIGHTS: Array<{ key: PerfDimensionKey; label: string; weight: number; hint: string }> = [
+  { key: 'commercial', label: 'Ticari Sonuç', weight: 40, hint: 'ciro + satılan cihaz' },
+  { key: 'bizdev', label: 'İş Geliştirme', weight: 20, hint: 'H→F · L→H · kazanılan teklif' },
+  { key: 'customer', label: 'Müşteri Yönetimi', weight: 15, hint: 'görüşme/firma · hareketsiz oranı' },
+  { key: 'activity', label: 'Aktivite Disiplini', weight: 15, hint: 'fiziki + online görüşme' },
+  { key: 'crm', label: 'CRM & Süreç', weight: 10, hint: 'bekleyen teklif · geçmiş tarih · POC' },
 ];
+
+/** Skor bantları — TEK yer (iş emri: merkezi config). */
+export const PERF_BANDS: Array<{ min: number; label: string; tone: Tone }> = [
+  { min: 90, label: 'Üstün Performans', tone: 'ok' },
+  { min: 80, label: 'Güçlü Performans', tone: 'ok' },
+  { min: 70, label: 'Beklentiyi Karşılıyor', tone: 'info' },
+  { min: 60, label: 'Gelişim Gerekiyor', tone: 'warn' },
+  { min: 0, label: 'Kritik Gelişim Alanı', tone: 'danger' },
+];
+
+/** Hareketsizlik eşiği (gün): Lead/Hunter 15, Farmer/Kasa 30. */
+export const INACTIVE_DAYS_BY_CATEGORY: Record<'L' | 'H' | 'F' | 'K', number> = { L: 15, H: 15, F: 30, K: 30 };
+/** Ort. görüşme / firma hedefi (Hedefler ekranında ortak hedef yoksa). */
+export const DEFAULT_MEETINGS_PER_FIRM = 5;
+export const STALE_QUOTE_DAYS = 30;
+export const LONG_POC_DAYS = 30;
 
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 const avg = (values: Array<number | null>) => {
   const list = values.filter((v): v is number => v != null && Number.isFinite(v));
   return list.length ? list.reduce((s, v) => s + v, 0) / list.length : null;
 };
-/** Hedefe göre oran (0..1); hedef yoksa null. */
-export function goalRatio(pair: GoalPair | null | undefined): number | null {
-  if (!pair || pair.target == null || pair.target <= 0) return null;
-  return clamp01(pair.actual / pair.target);
+
+export type Measure = { actual: number; target: number | null };
+
+/** Gerçekleşme yüzdesi; hedef yoksa null (N/A — 0 değil). */
+export function attainmentPct(m: Measure | null | undefined): number | null {
+  if (!m || m.target == null || m.target <= 0) return null;
+  return Math.round((m.actual / m.target) * 100);
 }
-/** YTD hedefinde hıza göre oran: yılın %75'i geçtiyse %75 gerçekleşme tam puandır. */
-export function paceRatio(pair: GoalPair | null | undefined, elapsedPct: number): number | null {
-  const raw = goalRatio(pair);
-  if (raw == null) return null;
+
+/** Renk kuralı: ≥100 yeşil · 80–99 turuncu · <80 kırmızı · hedef yok nötr. */
+export function attainmentTone(pct: number | null): Tone {
+  if (pct == null) return 'neutral';
+  if (pct >= 100) return 'ok';
+  if (pct >= 80) return 'warn';
+  return 'danger';
+}
+
+/** Dönemin geçen süresine göre oran (0..1): dönemin %50'si geçtiyse %50 gerçekleşme tam puan. */
+export function paceRatio(m: Measure | null | undefined, elapsedPct: number): number | null {
+  if (!m || m.target == null || m.target <= 0) return null;
   const elapsed = Math.max(0.05, Math.min(1, elapsedPct / 100));
-  return clamp01(raw / elapsed);
+  return clamp01(m.actual / m.target / elapsed);
 }
 
-export function perfDimensions(owner: LiveOwner): PerfDimension[] {
-  const r = owner.revenue;
-  const g = owner.goals;
-  const elapsed = r.yearElapsedPct;
-  const revenue = paceRatio({ actual: r.actualYtd, target: r.target, pct: null }, elapsed);
-  const devices = paceRatio({ actual: r.deviceActualYtd, target: r.deviceTarget, pct: null }, elapsed);
-  const commercial = avg([revenue, devices]);
-
-  const bizdev = avg([goalRatio(g.hunterToFarmer), goalRatio(g.leadToHunter), paceRatio(g.wonQuotes, elapsed)]);
-
-  const portfolio = owner.portfolio.total;
-  const inactiveShare = portfolio > 0 ? clamp01(1 - owner.inactive.count / portfolio) : null;
-  const customer = avg([paceRatio(owner.coverage.covered, elapsed), inactiveShare]);
-
-  const weekly = owner.target.totalActivities ? clamp01((owner.achievementPct ?? 0) / 100) : null;
-  const activity = avg([paceRatio(g.visitsYear, elapsed), weekly]);
-
-  const issues = r.expiredOpenQuotes + owner.pipeline.overdueActions + owner.pipeline.staleCritical;
-  const base = g.openAll + owner.pipeline.activeCustomers;
-  const crm = base > 0 ? clamp01(1 - issues / base) : issues > 0 ? 0 : null;
-
-  const scores: Record<PerfDimensionKey, number | null> = { commercial, bizdev, customer, activity, crm };
-  const hints: Record<PerfDimensionKey, string> = {
-    commercial: 'ciro + cihaz hedefi (yılın hızına göre)',
-    bizdev: 'H→F · L→H çevirme, kazanılan teklif',
-    customer: 'temas edilen müşteri, hareketsiz firma',
-    activity: 'yıllık görüşme + haftalık aktivite',
-    crm: 'süresi geçen teklif, geciken aksiyon',
-  };
-  return PERF_WEIGHTS.map((w) => ({
-    ...w,
-    score: scores[w.key] == null ? null : Math.round(scores[w.key]! * w.weight),
-    hint: hints[w.key],
-  }));
+export function perfGrade(total: number | null): PerfGrade {
+  if (total == null) return { label: 'N/A · veri yetersiz', tone: 'neutral' };
+  const band = PERF_BANDS.find((b) => total >= b.min) ?? PERF_BANDS[PERF_BANDS.length - 1];
+  return { label: band.label, tone: band.tone };
 }
 
 /** Toplam skor: ölçülebilen boyutların ağırlığına göre 100'e ölçeklenir; hiçbiri yoksa null. */
@@ -89,105 +94,129 @@ export function perfTotal(dims: PerfDimension[]): number | null {
   return Math.round((measured.reduce((s, d) => s + (d.score ?? 0), 0) / weight) * 100);
 }
 
-export function perfGrade(total: number | null): PerfGrade {
-  if (total == null) return { label: 'Veri yetersiz', tone: 'neutral' };
-  if (total >= 85) return { label: 'Beklentinin Üstünde', tone: 'ok' };
-  if (total >= 70) return { label: 'Beklentiyi Karşılıyor', tone: 'info' };
-  if (total >= 55) return { label: 'Gelişim Gerekli', tone: 'warn' };
-  return { label: 'Risk', tone: 'danger' };
+/* --- Dönem ------------------------------------------------------------------ */
+
+export type PerfRange = {
+  kind: PerfPeriodKind;
+  from: string;
+  to: string;
+  /** Dönemin takvim sonu (ay/çeyrek/yıl sonu) — geçen süre oranı için. */
+  end: string;
+  label: string;
+  /** Yönetici değerlendirmesinin anahtarı: m-2026-10 · q4-2026 · ytd-2026. */
+  periodKey: string;
+  elapsedPct: number;
+  /** Dönemin kapsadığı ay sayısı (yıllık hedefi dönemlere bölmek için). */
+  months: number;
+};
+
+const MONTHS_LONG = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
+export const MONTHS_SHORT = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'];
+const pad = (n: number) => String(n).padStart(2, '0');
+const lastDay = (y: number, m: number) => new Date(Date.UTC(y, m, 0)).getUTCDate();
+const dayNum = (key: string) => Date.UTC(Number(key.slice(0, 4)), Number(key.slice(5, 7)) - 1, Number(key.slice(8, 10))) / 86_400_000;
+const fmtDay = (key: string) => `${key.slice(8, 10)} ${MONTHS_LONG[Number(key.slice(5, 7)) - 1]} ${key.slice(0, 4)}`;
+
+export function perfRange(kind: PerfPeriodKind, todayKey: string): PerfRange {
+  const y = Number(todayKey.slice(0, 4));
+  const m = Number(todayKey.slice(5, 7));
+  let from: string;
+  let end: string;
+  let label: string;
+  let periodKey: string;
+  let months: number;
+  if (kind === 'month') {
+    from = `${y}-${pad(m)}-01`;
+    end = `${y}-${pad(m)}-${pad(lastDay(y, m))}`;
+    label = `Aylık Performans · ${MONTHS_LONG[m - 1]} ${y}`;
+    periodKey = `m-${y}-${pad(m)}`;
+    months = 1;
+  } else if (kind === 'quarter') {
+    const q = Math.ceil(m / 3);
+    const qm = (q - 1) * 3 + 1;
+    from = `${y}-${pad(qm)}-01`;
+    end = `${y}-${pad(qm + 2)}-${pad(lastDay(y, qm + 2))}`;
+    label = `3 Aylık Performans · Q${q} ${y} (${MONTHS_SHORT[qm - 1]}–${MONTHS_SHORT[qm + 1]})`;
+    periodKey = `q${q}-${y}`;
+    months = 3;
+  } else {
+    from = `${y}-01-01`;
+    end = `${y}-12-31`;
+    label = `YTD Performans · 01 Ocak – ${fmtDay(todayKey)}`;
+    periodKey = `ytd-${y}`;
+    months = 12;
+  }
+  const elapsedPct = Math.round(((dayNum(todayKey) - dayNum(from) + 1) / (dayNum(end) - dayNum(from) + 1)) * 100);
+  return { kind, from, to: todayKey, end, label, periodKey, elapsedPct, months };
 }
 
-/** Yönetici değerlendirmesi: kurallarla üretilen kısa maddeler (İK görüşmesi özeti). */
-export function perfReview(owner: LiveOwner) {
-  const r = owner.revenue;
-  const g = owner.goals;
-  const strong: string[] = [];
-  const improve: string[] = [];
-  const focus: string[] = [];
-  const pct = (v: number | null) => (v == null ? null : Math.round(v * 100));
-  const elapsed = r.yearElapsedPct;
-
-  const rev = goalRatio({ actual: r.actualYtd, target: r.target, pct: null });
-  const dev = goalRatio({ actual: r.deviceActualYtd, target: r.deviceTarget, pct: null });
-  const visits = goalRatio(g.visitsYear);
-  const covered = goalRatio(owner.coverage.covered);
-  const onPace = (v: number | null) => v != null && v * 100 >= elapsed;
-
-  if (onPace(dev)) strong.push(`Cihaz hedefinde %${pct(dev)} gerçekleşme (yılın %${elapsed}'i geçti).`);
-  else if (dev != null) improve.push(`Cihaz hedefi gerçekleşmesi %${pct(dev)}, yılın hızının (%${elapsed}) altında.`);
-  if (onPace(rev)) strong.push(`Ciro hedefinde %${pct(rev)} gerçekleşme.`);
-  else if (rev != null) improve.push(`YTD ciro hedef gerçekleşmesi düşük (%${pct(rev)}).`);
-  if (onPace(visits)) strong.push(`Görüşme temposu hedefte (%${pct(visits)}).`);
-  else if (visits != null) improve.push(`Yıllık görüşme %${pct(visits)}; tempo artmalı.`);
-  if (onPace(covered)) strong.push('Yüksek müşteri temas hacmi.');
-  if (g.openAll > 0 && r.pipeline > 0) strong.push('Açık teklif havuzu ve aktif pipeline devam ediyor.');
-  const h2f = goalRatio(g.hunterToFarmer);
-  const l2h = goalRatio(g.leadToHunter);
-  if ((h2f != null && h2f < 0.5) || (l2h != null && l2h < 0.5)) improve.push('Hunter → Farmer ve Lead → Hunter dönüşümleri hızlandırılmalı.');
-  if (owner.inactive.count > 0) improve.push(`Hareketsiz müşteri sayısı (${owner.inactive.count}) azaltılmalı.`);
-  if (r.expiredOpenQuotes > 0) improve.push(`${r.expiredOpenQuotes} teklifin geçerlilik süresi dolmuş, kapatılmalı.`);
-
-  if (g.openAll > 0) focus.push(`${g.openAll} açık teklifin kapanış planını sıkı takip etmek.`);
-  if (owner.inactive.count > 0) focus.push('Hareketsiz portföyde öncelikli müşteri aksiyonlarını tamamlamak.');
-  if (owner.pipeline.overdueActions > 0) focus.push(`Tarihi geçmiş ${owner.pipeline.overdueActions} aksiyonu kapatmak.`);
-  focus.push(`${g.quarter.label} görüşme ve ciro temposunu yükseltmek.`);
-
-  return { strong: strong.slice(0, 4), improve: improve.slice(0, 4), focus: focus.slice(0, 4) };
+/** Son 6 ay (bu ay dahil) — 'YYYY-MM' anahtarları, eskiden yeniye. */
+export function trendMonths(todayKey: string, count = 6): string[] {
+  const y = Number(todayKey.slice(0, 4));
+  const m = Number(todayKey.slice(5, 7));
+  const out: string[] = [];
+  for (let i = count - 1; i >= 0; i -= 1) {
+    const d = new Date(Date.UTC(y, m - 1 - i, 1));
+    out.push(`${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}`);
+  }
+  return out;
 }
 
-/** Ekip Özeti: kişileri toplayıp sahte bir "ekip kişisi" üretir; skor, kişi skorlarının ortalamasıdır. */
-export function teamAsOwner(payload: LiveBoardPayload): LiveOwner | null {
-  const owners = payload.owners;
-  if (!owners.length) return null;
-  const sum = (pick: (o: LiveOwner) => number) => owners.reduce((s, o) => s + (pick(o) || 0), 0);
-  const sumNull = (pick: (o: LiveOwner) => number | null) => {
-    const vals = owners.map(pick).filter((v): v is number => v != null);
-    return vals.length ? vals.reduce((s, v) => s + v, 0) : null;
-  };
-  const pair = (pick: (o: LiveOwner) => GoalPair): GoalPair => {
-    const actual = sum((o) => pick(o).actual);
-    const target = sumNull((o) => pick(o).target);
-    return { actual, target, pct: target ? Math.round((actual / target) * 100) : null };
-  };
-  const first = owners[0];
-  const team = payload.team;
-  return {
-    ...first,
-    owner: 'Ekip Özeti',
-    initials: 'EK',
-    portfolio: {
-      total: sum((o) => o.portfolio.total), active: sum((o) => o.portfolio.active), hunter: sum((o) => o.portfolio.hunter),
-      farmer: sum((o) => o.portfolio.farmer), lead: sum((o) => o.portfolio.lead), kasa: sum((o) => o.portfolio.kasa),
-    },
-    revenue: team.revenue,
-    pipeline: team.pipeline,
-    actual: team.actual,
-    target: team.target,
-    achievementPct: team.achievementPct,
-    goals: {
-      ...first.goals,
-      visitsYear: pair((o) => o.goals.visitsYear),
-      visitsQuarter: pair((o) => o.goals.visitsQuarter),
-      budgetQuarter: pair((o) => o.goals.budgetQuarter),
-      hunterToFarmer: pair((o) => o.goals.hunterToFarmer),
-      leadToHunter: pair((o) => o.goals.leadToHunter),
-      wonQuotes: pair((o) => o.goals.wonQuotes),
-      openAll: sum((o) => o.goals.openAll),
-      draft: sum((o) => o.goals.draft),
-      lostQuotes: sum((o) => o.goals.lostQuotes),
-    },
-    coverage: {
-      covered: pair((o) => o.coverage.covered),
-      contactsPer: { actual: 0, target: null, pct: null },
-      activitiesYear: sum((o) => o.coverage.activitiesYear),
-    },
-    inactive: { count: sum((o) => o.inactive.count), days: first.inactive.days, unmatched: sum((o) => o.inactive.unmatched) },
-    quoteBox: {
-      open: { count: sum((o) => o.quoteBox.open.count), amount: sum((o) => o.quoteBox.open.amount) },
-      won: { count: sum((o) => o.quoteBox.won.count), amount: sum((o) => o.quoteBox.won.amount) },
-      lost: { count: sum((o) => o.quoteBox.lost.count), amount: sum((o) => o.quoteBox.lost.amount) },
-    },
-    devices: { ...first.devices, total: sum((o) => o.devices.total), sold: sum((o) => o.devices.sold), rental: sum((o) => o.devices.rental) },
-    invoices: sum((o) => o.invoices),
-  };
+/* --- Rapor verisi ------------------------------------------------------------ */
+
+export type PerfTrendPoint = { month: string; label: string; actual: number; target: number | null };
+export type PerfReview = { strong: string; improve: string; focus: string; updatedBy: string | null; updatedAt: string | null };
+
+export type PerfOwnerReport = {
+  owner: string;
+  /** Değerlendirme anahtarı (normalize ad; ekip için '__team__'). */
+  key: string;
+  revenue: Measure;
+  devices: Measure;
+  meetings: Measure;
+  /** Dönemde fiziki/online görüşme yapılan tekil müşteri. */
+  contacted: number;
+  meetingsPerFirm: Measure | null;
+  invoices: { count: number; amount: number };
+  won: { quotes: number; amount: number; customers: number; target: number | null };
+  hunterToFarmer: Measure;
+  leadToHunter: Measure;
+  pipeline: { forecast: number; weighted: number; openCount: number; openAmount: number };
+  service: { activeDevices: number; target: number | null; monthlyRevenue: number };
+  rentalDevices: number;
+  portfolio: { total: number; lead: number; hunter: number; farmer: number; kasa: number; listed: boolean };
+  activePoc: number;
+  risks: { inactive: number; staleQuotes: number; longPoc: number; overdueActions: number; overdueClose: number };
+  trend: PerfTrendPoint[];
+  review: PerfReview | null;
+};
+
+export type PerfPayload = {
+  generatedAt: string;
+  range: PerfRange;
+  owners: PerfOwnerReport[];
+  team: PerfOwnerReport;
+  notes: string[];
+  canEditReview: boolean;
+};
+
+export function perfDimensions(r: PerfOwnerReport, elapsedPct: number): PerfDimension[] {
+  const commercial = avg([paceRatio(r.revenue, elapsedPct), paceRatio(r.devices, elapsedPct)]);
+  const bizdev = avg([
+    paceRatio(r.hunterToFarmer, elapsedPct),
+    paceRatio(r.leadToHunter, elapsedPct),
+    paceRatio({ actual: r.won.quotes, target: r.won.target }, elapsedPct),
+  ]);
+  const perFirm = r.meetingsPerFirm && r.meetingsPerFirm.target ? clamp01(r.meetingsPerFirm.actual / r.meetingsPerFirm.target) : null;
+  const inactiveShare = r.portfolio.total > 0 ? clamp01(1 - r.risks.inactive / r.portfolio.total) : null;
+  const customer = avg([perFirm, inactiveShare]);
+  const activity = paceRatio(r.meetings, elapsedPct);
+  const issues = r.risks.staleQuotes + r.risks.overdueClose + r.risks.overdueActions + r.risks.longPoc;
+  const base = r.pipeline.openCount + r.activePoc + r.portfolio.total;
+  const crm = base > 0 ? clamp01(1 - issues / base) : null;
+  const scores: Record<PerfDimensionKey, number | null> = { commercial, bizdev, customer, activity, crm };
+  return PERF_WEIGHTS.map((w) => ({
+    key: w.key, label: w.label, weight: w.weight, hint: w.hint,
+    score: scores[w.key] == null ? null : Math.round(scores[w.key]! * w.weight),
+  }));
 }

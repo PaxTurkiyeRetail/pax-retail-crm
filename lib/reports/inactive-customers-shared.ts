@@ -11,7 +11,7 @@ export type InactiveRow = {
   owner: string;
   ownerUserId: string | null;
   /** Yalnız Müşteri Listesi'nin Hunter ve Farmer kategorileri sayılır (Lead ve Kasa sayılmaz). */
-  category: 'H' | 'F';
+  category: 'H' | 'F' | 'L' | 'K';
   firma: string;
   /** Eşleşen künye kaydı (varsa) — listede firma kartına bağlanır. */
   customerId: string | null;

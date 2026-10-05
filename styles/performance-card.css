@@ -52,5 +52,21 @@
 .pc-focus h3 { margin: 0 0 10px; font-size: 14px; }
 .pc-focus ul { margin: 0; padding-left: 18px; font-size: 13.5px; line-height: 1.65; }
 .pc-footer { text-align: right; color: var(--pc-muted); font-size: 11px; margin-top: 12px; }
+.pc-wrap.is-loading { opacity: .6; pointer-events: none; }
+.pc-filters select { border: 1px solid var(--pc-line); background: var(--pc-card); color: var(--pc-ink); padding: 9px 12px; border-radius: 10px; font: inherit; font-size: 13px; min-width: 180px; }
+.pc-legend { display: flex; gap: 12px; font-size: 12px; color: var(--pc-muted); }
+.pc-dot { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+.pc-dot.actual, .pc-bar.actual { background: var(--pc-info); }
+.pc-dot.target, .pc-bar.target { background: var(--pc-neutral); opacity: .55; }
+.pc-chart { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; align-items: end; height: 220px; padding-top: 8px; }
+.pc-month { display: flex; flex-direction: column; align-items: center; gap: 4px; height: 100%; min-width: 0; }
+.pc-month small { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.pc-bars { flex: 1; width: 100%; display: flex; align-items: flex-end; justify-content: center; gap: 4px; }
+.pc-bar { display: block; width: 38%; max-width: 26px; min-height: 2px; border-radius: 6px 6px 2px 2px; }
+.pc-btn { border: 1px solid var(--pc-line); background: var(--pc-card); color: var(--pc-ink); padding: 6px 12px; border-radius: 8px; cursor: pointer; font: inherit; font-size: 12.5px; margin-left: 8px; }
+.pc-btn.primary { background: var(--pc-info); border-color: var(--pc-info); color: #fff; margin-left: 0; }
+.pc-btn:disabled { opacity: .6; cursor: default; }
+.pc-actions { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
+.pc-textarea { width: 100%; box-sizing: border-box; border: 1px solid var(--pc-line); border-radius: 10px; padding: 8px 10px; background: var(--pc-soft); color: var(--pc-ink); font: inherit; font-size: 13px; resize: vertical; }
 @media (max-width: 1100px) { .pc-grid.g4, .pc-dims { grid-template-columns: repeat(2, minmax(0, 1fr)); } .pc-focus, .pc-grid.g2 { grid-template-columns: 1fr; } }
 @media (max-width: 700px) { .pc-grid.g4, .pc-dims { grid-template-columns: 1fr; } .pc-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

@@ -45,6 +45,8 @@ export type Permission =
   | 'report.read.own'
   | 'report.read.team'
   | 'report.read.all'
+  // Performans Karnesi (05.10.2026): yalnız admin + super_admin
+  | 'report.performance.read'
   | 'request.create'
   | 'request.read.own'
   | 'request.read.all'
@@ -70,7 +72,8 @@ export type Permission =
   | 'screen.crm.sales_process.view'
   | 'screen.crm.customer_status_guide.view'
   | 'screen.crm.approvals.view'
-  | 'screen.reports.user_activity.view';
+  | 'screen.reports.user_activity.view'
+  | 'screen.reports.performance.view';
 
 export const ALL_PERMISSIONS: readonly Permission[] = [
   'admin.users.manage',
@@ -111,6 +114,7 @@ export const ALL_PERMISSIONS: readonly Permission[] = [
   'report.read.own',
   'report.read.team',
   'report.read.all',
+  'report.performance.read',
   'request.create',
   'request.read.own',
   'request.read.all',
@@ -137,6 +141,7 @@ export const ALL_PERMISSIONS: readonly Permission[] = [
   'screen.crm.customer_status_guide.view',
   'screen.crm.approvals.view',
   'screen.reports.user_activity.view',
+  'screen.reports.performance.view',
 ];
 
 const ROLE_PERMISSIONS: Readonly<Record<AllowedRole, ReadonlySet<Permission>>> = {

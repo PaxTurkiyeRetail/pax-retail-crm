@@ -31,7 +31,7 @@ const Q_INACTIVE = `
     select l.satici, l.owner_user_id::text as owner_user_id, l.kategori, trim(l.firma) as firma,
            ${NORMALIZE_SQL.replace('%s', 'l.firma')} as key
     from public.crm_musteri_listesi l
-    where l.is_active and l.kategori in ('H', 'F')
+    where l.is_active and l.kategori = any($1::text[])
   ),
   cust as (
     select m.id, m.musteri, ${NORMALIZE_SQL.replace('%s', 'm.musteri')} as key
@@ -60,14 +60,17 @@ function isMissingTable(error: unknown) {
   return typeof error === 'object' && error !== null && (error as { code?: string }).code === '42P01';
 }
 
-/** Müşteri Listesi'ndeki tüm Hunter/Farmer satırları + son hareket bilgisi. Tablo yoksa boş. */
-export async function loadHunterFarmerActivity(today?: Date): Promise<InactiveRow[]> {
+/**
+ * Müşteri Listesi satırları + son hareket bilgisi. Tablo yoksa boş.
+ * Varsayılan Hunter/Farmer (Canlı Ekran); Performans Karnesi L/H/F/K ister (05.10.2026).
+ */
+export async function loadHunterFarmerActivity(today?: Date, categories: ReadonlyArray<'H' | 'F' | 'L' | 'K'> = ['H', 'F']): Promise<InactiveRow[]> {
   const todayKey = istanbulDayKey(today ?? new Date());
   try {
     const { rows } = await db.query<{
-      owner: string; owner_user_id: string | null; kategori: 'H' | 'F'; firma: string;
+      owner: string; owner_user_id: string | null; kategori: InactiveRow['category']; firma: string;
       customer_id: string | null; musteri: string | null; last_day: string | null;
-    }>(Q_INACTIVE);
+    }>(Q_INACTIVE, [[...categories]]);
     return rows.map((row) => {
       const last = row.last_day ? String(row.last_day).slice(0, 10) : null;
       return {

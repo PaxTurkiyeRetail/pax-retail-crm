@@ -27,7 +27,7 @@ import '@/styles/inactive.css';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-const CATEGORY_LABEL: Record<'H' | 'F', string> = { H: 'Hunter', F: 'Farmer' };
+const CATEGORY_LABEL: Record<'H' | 'F' | 'L' | 'K', string> = { H: 'Hunter', F: 'Farmer', L: 'Lead', K: 'Kasa' };
 
 function fmtDay(value: string | null) {
   if (!value) return 'hiç hareket yok';

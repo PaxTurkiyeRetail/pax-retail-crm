@@ -182,6 +182,11 @@ export async function requireTargetsAccessOrThrow() {
   return requirePermissionOrThrow('admin.targets.manage');
 }
 
+/** Performans Karnesi API (05.10.2026): yalnız report.performance.read (admin + super_admin). */
+export async function requirePerformanceAccessOrThrow() {
+  return requirePermissionOrThrow('report.performance.read');
+}
+
 export async function requireBackupAccessOrThrow() {
   return requirePermissionOrThrow('admin.backup.execute');
 }

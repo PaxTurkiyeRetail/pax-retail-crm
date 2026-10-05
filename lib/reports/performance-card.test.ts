@@ -1,18 +1,26 @@
 import { describe, expect, it } from 'vitest';
-import { goalRatio, paceRatio, perfGrade, perfTotal, type PerfDimension } from './performance-card';
+import {
+  attainmentPct, attainmentTone, paceRatio, perfGrade, perfRange, perfTotal, trendMonths, type PerfDimension,
+} from './performance-card';
 
-describe('goalRatio / paceRatio', () => {
-  it('hedef yoksa null', () => {
-    expect(goalRatio({ actual: 5, target: null, pct: null })).toBeNull();
-    expect(goalRatio({ actual: 5, target: 0, pct: null })).toBeNull();
+describe('attainmentPct / attainmentTone', () => {
+  it('hedef yoksa N/A (null), 0 değil', () => {
+    expect(attainmentPct({ actual: 5, target: null })).toBeNull();
+    expect(attainmentPct({ actual: 5, target: 0 })).toBeNull();
+    expect(attainmentTone(null)).toBe('neutral');
   });
-  it('oran 0..1 arasında kırpılır', () => {
-    expect(goalRatio({ actual: 150, target: 100, pct: null })).toBe(1);
-    expect(goalRatio({ actual: 25, target: 100, pct: null })).toBe(0.25);
+  it('renk eşikleri: ≥100 yeşil, 80-99 turuncu, <80 kırmızı', () => {
+    expect(attainmentTone(100)).toBe('ok');
+    expect(attainmentTone(80)).toBe('warn');
+    expect(attainmentTone(99)).toBe('warn');
+    expect(attainmentTone(79)).toBe('danger');
   });
-  it('hıza göre: yılın %50si geçtiyse %50 gerçekleşme tam puan', () => {
-    expect(paceRatio({ actual: 50, target: 100, pct: null }, 50)).toBe(1);
-    expect(paceRatio({ actual: 25, target: 100, pct: null }, 50)).toBe(0.5);
+});
+
+describe('paceRatio', () => {
+  it('dönemin %50si geçtiyse %50 gerçekleşme tam puan', () => {
+    expect(paceRatio({ actual: 50, target: 100 }, 50)).toBe(1);
+    expect(paceRatio({ actual: 25, target: 100 }, 50)).toBe(0.5);
   });
 });
 
@@ -27,11 +35,28 @@ describe('perfTotal', () => {
 });
 
 describe('perfGrade', () => {
-  it('eşikler', () => {
-    expect(perfGrade(90).label).toBe('Beklentinin Üstünde');
-    expect(perfGrade(78).label).toBe('Beklentiyi Karşılıyor');
-    expect(perfGrade(60).label).toBe('Gelişim Gerekli');
-    expect(perfGrade(40).label).toBe('Risk');
-    expect(perfGrade(null).label).toBe('Veri yetersiz');
+  it('bantlar 90/80/70/60', () => {
+    expect(perfGrade(90).label).toBe('Üstün Performans');
+    expect(perfGrade(85).label).toBe('Güçlü Performans');
+    expect(perfGrade(70).label).toBe('Beklentiyi Karşılıyor');
+    expect(perfGrade(60).label).toBe('Gelişim Gerekiyor');
+    expect(perfGrade(59).label).toBe('Kritik Gelişim Alanı');
+    expect(perfGrade(null).tone).toBe('neutral');
+  });
+});
+
+describe('perfRange / trendMonths', () => {
+  it('dönem anahtarları', () => {
+    expect(perfRange('month', '2026-10-05').periodKey).toBe('m-2026-10');
+    expect(perfRange('quarter', '2026-10-05').periodKey).toBe('q4-2026');
+    const ytd = perfRange('ytd', '2026-10-05');
+    expect(ytd.periodKey).toBe('ytd-2026');
+    expect(ytd.from).toBe('2026-01-01');
+  });
+  it('son 6 ay, eskiden yeniye', () => {
+    const m = trendMonths('2026-03-15');
+    expect(m).toHaveLength(6);
+    expect(m[5].startsWith('2026-03')).toBe(true);
+    expect(m[0].startsWith('2025-10')).toBe(true);
   });
 });
