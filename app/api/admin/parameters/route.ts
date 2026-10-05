@@ -43,6 +43,15 @@ function maskSensitiveRow(row: SystemParameter): SystemParameter {
   return { ...row, value: maskParameterValue(row.value) };
 }
 
+// sortOrder: undefined/null/"" -> undefined; sayı değilse 400.
+function parseSortOrder(raw: unknown): number | undefined {
+  if (raw === undefined || raw === null || raw === "") return undefined;
+  const n = Number(raw);
+  if (!Number.isFinite(n))
+    throw Object.assign(new Error("Sıra numarası geçersiz."), { status: 400 });
+  return Math.trunc(n);
+}
+
 function assertGroupManagementAccess(actor: AllowedUser, groupKey: string) {
   if (IDENTITY_GROUPS.has(groupKey) && !userHasPermission(actor, 'admin.identity.manage')) {
     throw Object.assign(new Error('Kurumsal kimlik parametreleri yalnız Super Admin tarafından yönetilebilir.'), { status: 403 });
@@ -98,7 +107,7 @@ export async function POST(req: Request) {
         ).trim(),
         owner: typeof body.owner === "string" ? body.owner : null,
         sortOrder:
-          body.sortOrder === undefined ? undefined : Number(body.sortOrder),
+          parseSortOrder(body.sortOrder),
       });
       await tryRecordAuditEvent({ actorId: actor.id, actorEmail: actor.email, action: 'parameter.created', resourceType: groupKey, resourceId: String(row?.id ?? body.fazNo), after: row });
       return NextResponse.json({ row });
@@ -106,7 +115,7 @@ export async function POST(req: Request) {
 
     const label = String(body.label ?? "").trim();
     const value = String(body.value ?? label).trim();
-    const sortOrder = Number(body.sortOrder ?? 999);
+    const sortOrder = parseSortOrder(body.sortOrder) ?? 999;
     if (!label || !value)
       return NextResponse.json(
         { message: "Ad ve değer zorunlu." },
@@ -147,7 +156,7 @@ export async function PATCH(req: Request) {
               : undefined,
         owner: typeof body.owner === "string" ? body.owner : undefined,
         sortOrder:
-          body.sortOrder === undefined ? undefined : Number(body.sortOrder),
+          parseSortOrder(body.sortOrder),
         isActive:
           typeof body.isActive === "boolean" ? body.isActive : undefined,
       });
@@ -173,7 +182,7 @@ export async function PATCH(req: Request) {
       label: typeof body.label === "string" ? body.label : undefined,
       value: typeof body.value === "string" ? body.value : undefined,
       sortOrder:
-        body.sortOrder === undefined ? undefined : Number(body.sortOrder),
+        parseSortOrder(body.sortOrder),
       isActive: typeof body.isActive === "boolean" ? body.isActive : undefined,
       updatedByUserId: actor.id,
       expectedVersion: body.expectedVersion === undefined ? undefined : Number(body.expectedVersion),
@@ -209,7 +218,7 @@ export async function DELETE(req: Request) {
           { status: 404 },
         );
       await tryRecordAuditEvent({ actorId: actor.id, actorEmail: actor.email, action: 'parameter.archived', resourceType: groupKey, resourceId: String(fazNo) });
-      return NextResponse.json({ ok: true });
+      return NextResponse.json({ ok: true, message: "Faz tanımı pasife alındı." });
     }
     const id = String(url.searchParams.get("id") ?? "").trim();
     if (!id)
@@ -226,7 +235,7 @@ export async function DELETE(req: Request) {
         { status: 404 },
       );
     await tryRecordAuditEvent({ actorId: actor.id, actorEmail: actor.email, action: 'parameter.archived', resourceType: groupKey || 'system_parameter', resourceId: id });
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, message: "Parametre pasife alındı." });
   } catch (error: any) {
     return NextResponse.json(
       { message: error?.message || "Parametre silinemedi." },

@@ -88,6 +88,8 @@ export default function SalesClient() {
   const [formNote, setFormNote] = useState('');
   const [formChannel, setFormChannel] = useState('');
   const [formOwner, setFormOwner] = useState('');
+  const [formRentalStart, setFormRentalStart] = useState('');
+  const [formRentalEnd, setFormRentalEnd] = useState('');
 
   // Yeni (teklifsiz) satış penceresi — 027
   const [creating, setCreating] = useState(false);
@@ -135,6 +137,8 @@ export default function SalesClient() {
     setFormNote(row.note ?? '');
     setFormChannel(row.sales_channel ?? '');
     setFormOwner(row.owner_name ?? '');
+    setFormRentalStart(String(row.rental_start_date ?? '').slice(0, 10));
+    setFormRentalEnd(String(row.rental_end_date ?? '').slice(0, 10));
     setMsg(null);
     if (!options) void loadOptions();
   };
@@ -203,6 +207,9 @@ export default function SalesClient() {
         note: formNote,
         sales_channel: formChannel || null,
         owner_name: formOwner || undefined,
+        ...(editing.sale_type !== 'sale'
+          ? { rental_start_date: formRentalStart || null, rental_end_date: formRentalEnd || null }
+          : {}),
       }),
     });
     const json = await res.json().catch(() => ({}));
@@ -404,6 +411,18 @@ export default function SalesClient() {
               <div style={{ padding: 12, borderRadius: 14, border: '1px solid var(--chip-gold-bd)', background: 'var(--chip-gold-bg)', marginBottom: 12, fontWeight: 800, fontSize: 13, color: 'var(--chip-gold-color)' }}>
                 {editing.sale_type === 'mixed' ? 'Satış + Kiralama' : 'Kiralama'} · aylık kira {usd(editing.rental_monthly_amount)}
               </div>
+            ) : null}
+            {editing.sale_type !== 'sale' ? (
+              <>
+                <label style={fieldStyle}>
+                  <span style={labelStyle}>Kira Başlangıç</span>
+                  <input type="date" value={formRentalStart} onChange={(e) => setFormRentalStart(e.target.value)} style={inputStyle} />
+                </label>
+                <label style={fieldStyle}>
+                  <span style={labelStyle}>Kira Bitiş</span>
+                  <input type="date" value={formRentalEnd} onChange={(e) => setFormRentalEnd(e.target.value)} style={inputStyle} />
+                </label>
+              </>
             ) : null}
             <label style={fieldStyle}>
               <span style={labelStyle}>Not</span>

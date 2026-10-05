@@ -71,6 +71,19 @@ const BILGISAYAR_MARKA_OPTIONS = ['HP', 'Posback', 'Echopos', 'Toshiba', 'Enpos'
 const ALIM_YILI_OPTIONS = ['1 yıldan az', '1-3 yıl', '3-5 yıl', '5+ yıl'] as const;
 const MEMNUNIYET_OPTIONS = ['Memnun', 'Orta', 'Memnun Değil'] as const;
 
+// Sistem parametreleri (getKunyeOptions) verilirse listeler oradan okunur;
+// grup boşsa / verilmezse yukarıdaki sabit listelere düşülür.
+export type KunyeOptionLists = Record<string, Array<{ label: string; value: string }>>;
+
+function optionValues(
+  options: KunyeOptionLists | null | undefined,
+  groupKey: string,
+  fallback: readonly string[],
+): readonly string[] {
+  const values = (options?.[groupKey] ?? []).map((item) => String(item.value ?? '').trim()).filter(Boolean);
+  return values.length ? values : fallback;
+}
+
 function normalizeSelectValue(
   value: unknown,
   options: readonly string[],
@@ -112,11 +125,11 @@ function normalizeRangeValue(value: unknown, allowYok = false) {
   return '500+';
 }
 
-function normalizeAlimYiliValue(value: unknown) {
+function normalizeAlimYiliValue(value: unknown, options: readonly string[] = ALIM_YILI_OPTIONS) {
   const raw = trimOrNull(value);
   if (!raw) return null;
 
-  const exact = normalizeSelectValue(raw, ALIM_YILI_OPTIONS);
+  const exact = normalizeSelectValue(raw, options);
   if (exact) return exact;
 
   const normalized = raw.toLocaleLowerCase('tr-TR');
@@ -144,9 +157,12 @@ function normalizeAlimYiliValue(value: unknown) {
   return null;
 }
 
-function normalizePosMarkasi(value: unknown) {
+function normalizePosMarkasi(value: unknown, options: readonly string[] = POS_MARKASI_OPTIONS) {
   const raw = trimOrNull(value);
   if (!raw) return null;
+
+  const listed = normalizeSelectValue(raw, options);
+  if (listed) return listed;
 
   const normalized = raw.toLocaleLowerCase('tr-TR');
 
@@ -167,9 +183,12 @@ function normalizePosMarkasi(value: unknown) {
   return 'Diğer';
 }
 
-function normalizeKasaposFirmasi(value: unknown) {
+function normalizeKasaposFirmasi(value: unknown, options: readonly string[] = KASAPOS_OPTIONS) {
   const raw = trimOrNull(value);
   if (!raw) return null;
+
+  const listed = normalizeSelectValue(raw, options);
+  if (listed) return listed;
 
   const normalized = raw.toLocaleLowerCase('tr-TR');
 
@@ -194,11 +213,11 @@ function normalizeKasaposFirmasi(value: unknown) {
   return 'Diğer';
 }
 
-function normalizeGenelMemnuniyet(value: unknown) {
+function normalizeGenelMemnuniyet(value: unknown, options: readonly string[] = MEMNUNIYET_OPTIONS) {
   const raw = trimOrNull(value);
   if (!raw) return null;
 
-  const exact = normalizeSelectValue(raw, MEMNUNIYET_OPTIONS);
+  const exact = normalizeSelectValue(raw, options);
   if (exact) return exact;
 
   const n = Number(raw);
@@ -293,8 +312,11 @@ export function normalizeKunyePayload(input: Record<string, unknown>): KunyePayl
 
 export function mapKunyeDbToUi(
   row: Record<string, any> | null | undefined,
+  options?: KunyeOptionLists | null,
 ): (KunyePayload & { has_kunye_record: boolean }) | null {
   if (!row) return null;
+
+  const alimYiliOptions = optionValues(options, 'kunye_alim_yili', ALIM_YILI_OPTIONS);
 
   const reyonCihazSayisi =
     row.reyon_cihaz_sayisi ?? row.reyon_cihazi_adedi ?? row.reyonda_kullanilan_cihaz_sayisi ?? null;
@@ -333,14 +355,20 @@ export function mapKunyeDbToUi(
 
     // Net sayı (KasaPOS raporu aktif satış kasası); eski aralık değerleri olduğu gibi gösterilir.
     sabit_kasa_adedi: trimOrNull(row.sabit_kasa_adedi),
-    kasapos_firmasi: normalizeKasaposFirmasi(kasaposFirmasi),
+    kasapos_firmasi: normalizeKasaposFirmasi(
+      kasaposFirmasi,
+      optionValues(options, 'kunye_kasapos_firmasi', KASAPOS_OPTIONS),
+    ),
     pos_modeli: trimOrNull(row.pos_modeli),
-    pos_markasi: normalizePosMarkasi(posMarkasiSource),
+    pos_markasi: normalizePosMarkasi(
+      posMarkasiSource,
+      optionValues(options, 'kunye_pos_markasi', POS_MARKASI_OPTIONS),
+    ),
     toplam_pos_adedi: row.toplam_pos_adedi == null ? null : String(row.toplam_pos_adedi),
-    pos_alim_yili: normalizeAlimYiliValue(row.pos_alim_yili),
+    pos_alim_yili: normalizeAlimYiliValue(row.pos_alim_yili, alimYiliOptions),
     sabit_bilgisayar_markasi: normalizeSelectValue(
       row.sabit_bilgisayar_markasi,
-      BILGISAYAR_MARKA_OPTIONS,
+      optionValues(options, 'kunye_bilgisayar_markasi', BILGISAYAR_MARKA_OPTIONS),
       'Diğer',
     ),
     pos_notu: trimOrNull(row.pos_notu),
@@ -349,13 +377,13 @@ export function mapKunyeDbToUi(
     reyon_odeme_yazilimi: trimOrNull(reyonOdemeYazilimi),
     reyon_cihaz_modeli: trimOrNull(reyonCihazModeli),
     reyon_cihaz_sayisi: reyonCihazSayisi == null ? null : String(reyonCihazSayisi),
-    reyon_alim_yili: normalizeAlimYiliValue(row.reyon_alim_yili),
+    reyon_alim_yili: normalizeAlimYiliValue(row.reyon_alim_yili, alimYiliOptions),
 
     el_terminali_kullaniliyor: derivedElTerminali,
     el_terminali_modeli: trimOrNull(row.el_terminali_modeli),
     el_terminali_yazilimi: trimOrNull(row.el_terminali_yazilimi),
     el_terminali_adedi: row.el_terminali_adedi == null ? null : String(row.el_terminali_adedi),
-    el_terminali_alim_yili: normalizeAlimYiliValue(row.el_terminali_alim_yili),
+    el_terminali_alim_yili: normalizeAlimYiliValue(row.el_terminali_alim_yili, alimYiliOptions),
 
     erp: trimOrNull(row.erp),
     bankalar: normalizeDelimitedList(row.bankalar),
@@ -363,7 +391,10 @@ export function mapKunyeDbToUi(
     pos_mulkiyet_bankalari: normalizeDelimitedList(row.pos_mulkiyet_bankalari),
     saha_hizmeti_firmasi: trimOrNull(row.saha_hizmeti_firmasi),
 
-    genel_memnuniyet: normalizeGenelMemnuniyet(row.genel_memnuniyet),
+    genel_memnuniyet: normalizeGenelMemnuniyet(
+      row.genel_memnuniyet,
+      optionValues(options, 'kunye_memnuniyet', MEMNUNIYET_OPTIONS),
+    ),
     risk: trimOrNull(row.risk),
     entegrasyon_yapisi: trimOrNull(row.entegrasyon_yapisi),
     is_kolu: trimOrNull(row.is_kolu),

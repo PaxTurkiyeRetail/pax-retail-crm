@@ -10,6 +10,7 @@ import {
   PERF_PERIODS, attainmentPct, attainmentTone, perfDimensions, perfGrade, perfTotal,
   type Measure, type PerfOwnerReport, type PerfPayload, type PerfPeriodKind,
 } from '@/lib/reports/performance-card';
+import { PERF_EVENT_TYPES, type PerfEventType, type PerfEventsPayload } from '@/lib/reports/performance-activity-shared';
 import '@/styles/performance-card.css';
 
 const TEAM = '__team__';
@@ -78,7 +79,7 @@ function dimExplain(key: string, r: PerfOwnerReport, elapsed: number): string[] 
       return [pace('Ciro', r.revenue, fmtMoney), pace('Satılan cihaz', r.devices), 'Puan = iki oranın ortalaması × 40'];
     case 'bizdev':
       return [
-        pace('Hunter → Farmer', r.hunterToFarmer), pace('Lead → Hunter', r.leadToHunter),
+        pace('Lead → Hunter', r.leadToHunter), pace('Hunter → Farmer', r.hunterToFarmer),
         pace('Kazanılan teklif', { actual: r.won.quotes, target: r.won.target }), 'Puan = oranların ortalaması × 20',
       ];
     case 'customer': {
@@ -104,68 +105,92 @@ function dimExplain(key: string, r: PerfOwnerReport, elapsed: number): string[] 
   }
 }
 
-const REVIEW_FIELDS = [
-  { key: 'strong', title: 'Güçlü Alanlar', tone: 'ok' },
-  { key: 'improve', title: 'Gelişim Alanları', tone: 'warn' },
-  { key: 'focus', title: 'Sonraki Dönem Odağı', tone: 'info' },
-] as const;
-type ReviewKey = (typeof REVIEW_FIELDS)[number]['key'];
+/** Hareket Dökümü: seçilen satıcı dönemde neyi, ne kadar, ne zaman yaptı (müdür, 05.10.2026). */
+function Events({ period, owner }: { period: PerfPeriodKind; owner: string | null }) {
+  const [data, setData] = useState<PerfEventsPayload | null>(null);
+  const [state, setState] = useState<'loading' | 'ok' | 'error'>('loading');
+  const [filter, setFilter] = useState<PerfEventType | 'all'>('all');
+  useEffect(() => {
+    let alive = true;
+    setState('loading');
+    const qs = new URLSearchParams({ period, detail: 'events' });
+    if (owner) qs.set('owner', owner);
+    fetch(`/api/reports/performance?${qs.toString()}`, { cache: 'no-store' })
+      .then(async (res) => { if (!res.ok) throw new Error(String(res.status)); return res.json(); })
+      .then((json: PerfEventsPayload) => { if (alive) { setData(json); setState('ok'); } })
+      .catch(() => { if (alive) setState('error'); });
+    return () => { alive = false; };
+  }, [period, owner]);
 
-function Review({ report, periodKey, canEdit, onSaved }: { report: PerfOwnerReport; periodKey: string; canEdit: boolean; onSaved: () => void }) {
-  const initial = useMemo(() => ({ strong: report.review?.strong ?? '', improve: report.review?.improve ?? '', focus: report.review?.focus ?? '' }), [report]);
-  const [draft, setDraft] = useState(initial);
-  const [editing, setEditing] = useState(false);
-  const [state, setState] = useState<'idle' | 'saving' | 'error'>('idle');
-  useEffect(() => { setDraft(initial); setEditing(false); }, [initial]);
-
-  const save = async () => {
-    setState('saving');
-    try {
-      const res = await fetch('/api/reports/performance', {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ownerKey: report.key, periodKey, ...draft }),
-      });
-      if (!res.ok) throw new Error(String(res.status));
-      setState('idle');
-      setEditing(false);
-      onSaved();
-    } catch {
-      setState('error');
+  const counts = useMemo(() => {
+    const m = new Map<string, { n: number; amount: number; devices: number }>();
+    for (const e of data?.events ?? []) {
+      const c = m.get(e.type) ?? { n: 0, amount: 0, devices: 0 };
+      c.n += 1; c.amount += e.amount ?? 0; c.devices += e.devices ?? 0;
+      m.set(e.type, c);
     }
+    return m;
+  }, [data]);
+  const rows = (data?.events ?? []).filter((e) => filter === 'all' || e.type === filter);
+  const label = (t: PerfEventType) => PERF_EVENT_TYPES.find((x) => x.key === t)?.label ?? t;
+  const c = (t: PerfEventType) => counts.get(t);
+
+  const exportCsv = () => {
+    const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const lines = [['Tarih', 'Tür', 'Satıcı', 'Firma', 'Detay', 'Tutar', 'Cihaz'].join(';'),
+      ...rows.map((e) => [e.date, label(e.type), e.owner, e.customer, e.detail, e.amount ?? '', e.devices ?? ''].map(esc).join(';'))];
+    const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `hareket-dokumu-${owner ?? 'ekip'}-${data?.range.from ?? ''}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
   };
-  const lines = (text: string) => text.split('\n').map((t) => t.replace(/^[-•*]\s*/, '').trim()).filter(Boolean);
 
   return (
-    <div className="pc-section">
+    <div className="pc-section pc-card">
       <div className="pc-title">
-        <h2>Yönetici Değerlendirmesi</h2>
+        <h2>Hareket Dökümü</h2>
         <span>
-          İK görüşmesi için kısa özet · {report.review?.updatedAt ? `${report.review.updatedBy ?? ''} · ${new Date(report.review.updatedAt).toLocaleString('tr-TR')}` : 'henüz yazılmadı'}
-          {canEdit && !editing ? <button type="button" className="pc-btn" onClick={() => setEditing(true)}>Düzenle</button> : null}
+          {owner ?? 'Ekip'} · {data?.range.label ?? ''} · kim, neyi, ne kadar, ne zaman
+          <button type="button" className="pc-btn" disabled={!rows.length} onClick={exportCsv}>Excel&apos;e aktar</button>
         </span>
       </div>
-      <div className="pc-focus">
-        {REVIEW_FIELDS.map((f) => (
-          <div className="pc-card" key={f.key}>
-            <h3 className={`tone-${f.tone}`}>{f.title}</h3>
-            {editing ? (
-              <textarea
-                className="pc-textarea" rows={5} value={draft[f.key as ReviewKey]} placeholder="Her satır bir madde"
-                onChange={(e) => setDraft((d) => ({ ...d, [f.key]: e.target.value }))}
-              />
-            ) : lines(initial[f.key as ReviewKey]).length ? (
-              <ul>{lines(initial[f.key as ReviewKey]).map((t, i) => <li key={i}>{t}</li>)}</ul>
-            ) : <div className="pc-mini">Değerlendirme girilmemiş.</div>}
+      {state === 'loading' ? <div className="pc-mini">Yükleniyor…</div> : state === 'error' ? <div className="tone-danger">Hareketler alınamadı.</div> : (
+        <>
+          <div className="pc-mini">
+            {fmt(c('gorusme')?.n ?? 0)} görüşme · {fmt(c('aktivite')?.n ?? 0)} diğer aktivite · {fmt(c('teklif')?.n ?? 0)} teklif ({money(c('teklif')?.amount ?? 0)})
+            {' · '}{fmt(c('kazanim')?.n ?? 0)} kazanım ({money(c('kazanim')?.amount ?? 0)}) · {fmt(c('fatura')?.n ?? 0)} fatura ({money(c('fatura')?.amount ?? 0)}, {fmt(c('fatura')?.devices ?? 0)} cihaz)
+            {' · '}{fmt(c('cevirme')?.n ?? 0)} kategori değişimi
           </div>
-        ))}
-      </div>
-      {editing ? (
-        <div className="pc-actions">
-          <button type="button" className="pc-btn primary" disabled={state === 'saving'} onClick={() => void save()}>{state === 'saving' ? 'Kaydediliyor…' : 'Kaydet'}</button>
-          <button type="button" className="pc-btn" onClick={() => { setDraft(initial); setEditing(false); setState('idle'); }}>Vazgeç</button>
-          {state === 'error' ? <span className="tone-danger">Kaydedilemedi.</span> : null}
-        </div>
-      ) : null}
+          <div className="pc-filters pc-chips">
+            <button type="button" className={filter === 'all' ? 'active' : ''} onClick={() => setFilter('all')}>Tümü ({fmt(data?.events.length ?? 0)})</button>
+            {PERF_EVENT_TYPES.map((t) => (
+              <button type="button" key={t.key} className={filter === t.key ? 'active' : ''} onClick={() => setFilter(t.key)}>{t.label} ({fmt(c(t.key)?.n ?? 0)})</button>
+            ))}
+          </div>
+          <div className="pc-table-wrap">
+            <table className="pc-table">
+              <thead><tr><th>Tarih</th><th>Tür</th>{owner ? null : <th>Satıcı</th>}<th>Firma</th><th>Detay</th><th className="r">Tutar</th><th className="r">Cihaz</th></tr></thead>
+              <tbody>
+                {rows.map((e, i) => (
+                  <tr key={i}>
+                    <td className="nowrap">{new Date(`${e.date}T00:00:00`).toLocaleDateString('tr-TR')}</td>
+                    <td><span className={`pc-tag t-${e.type}`}>{label(e.type)}</span></td>
+                    {owner ? null : <td>{e.owner}</td>}
+                    <td>{e.customerId ? <a href={`/crm/${e.customerId}`} target="_blank" rel="noreferrer">{e.customer}</a> : e.customer}</td>
+                    <td>{e.detail}</td>
+                    <td className="r">{e.amount == null ? '' : money(e.amount)}</td>
+                    <td className="r">{e.devices == null ? '' : fmt(e.devices)}</td>
+                  </tr>
+                ))}
+                {!rows.length ? <tr><td colSpan={7} className="pc-mini">Bu dönemde hareket yok.</td></tr> : null}
+              </tbody>
+            </table>
+          </div>
+          {data?.truncated ? <div className="pc-mini">İlk {fmt(data.events.length)} kayıt gösteriliyor (toplam {fmt(data.total)}).</div> : null}
+        </>
+      )}
     </div>
   );
 }
@@ -175,7 +200,14 @@ export default function PerformanceCard() {
   const [data, setData] = useState<PerfPayload | null>(null);
   const [status, setStatus] = useState<'loading' | 'ok' | 'error' | 'forbidden'>('loading');
   const [error, setError] = useState<string | null>(null);
-  const [selected, setSelected] = useState<string>(TEAM);
+  const [selected, setSelected] = useState<string>('');
+  // Ekip Özeti menüde yok; yalnız gizli adresle açılır: /performans-karnesi?gorunum=ekip (rol bağlı değil).
+  const [showTeam, setShowTeam] = useState(false);
+  useEffect(() => {
+    const on = new URLSearchParams(window.location.search).get('gorunum') === 'ekip';
+    setShowTeam(on);
+    if (on) setSelected(TEAM);
+  }, []);
 
   const load = useCallback(async (p: PerfPeriodKind) => {
     setStatus('loading');
@@ -197,8 +229,8 @@ export default function PerformanceCard() {
   if (status === 'error') return <div className="pc-wrap"><div className="pc-card">Veri alınamadı: {error} <button type="button" className="pc-btn" onClick={() => void load(period)}>Tekrar dene</button></div></div>;
   if (!data) return <div className="pc-wrap"><div className="pc-card">Yükleniyor…</div></div>;
 
-  const isTeam = selected === TEAM;
-  const r = isTeam ? data.team : data.owners.find((o) => o.owner === selected) ?? data.team;
+  const isTeam = showTeam && selected === TEAM;
+  const r = isTeam ? data.team : data.owners.find((o) => o.owner === selected) ?? data.owners[0] ?? data.team;
   const elapsed = data.range.elapsedPct;
   const dims = perfDimensions(r, elapsed);
   const total = isTeam
@@ -233,16 +265,16 @@ export default function PerformanceCard() {
           {PERF_PERIODS.map((x) => (
             <button type="button" key={x.key} className={period === x.key ? 'active' : ''} onClick={() => setPeriod(x.key)}>{x.label}</button>
           ))}
-          <select value={selected} onChange={(e) => setSelected(e.target.value)} aria-label="Satıcı">
+          <select value={isTeam ? TEAM : r.owner} onChange={(e) => setSelected(e.target.value)} aria-label="Satıcı">
             {data.owners.map((o) => <option key={o.owner} value={o.owner}>{o.owner}</option>)}
-            <option value={TEAM}>Ekip Özeti</option>
+            {showTeam ? <option value={TEAM}>Ekip Özeti</option> : null}
           </select>
         </div>
       </div>
 
       <div className="pc-grid g4">
         <div className="pc-card pc-score">
-          <div className={`pc-ring tone-${grade.tone}`} style={ringStyle}><b>{total ?? NA}</b></div>
+          <div className={`pc-ring tone-${grade.tone}`} style={ringStyle}><b>{total == null ? NA : `%${total}`}</b></div>
           <div>
             <div className="pc-label">Genel Performans</div>
             <span className={`pc-grade tone-${grade.tone}`}>{grade.label}</span>
@@ -336,7 +368,7 @@ export default function PerformanceCard() {
         </div>
       </div>
 
-      <Review report={r} periodKey={data.range.periodKey} canEdit={data.canEditReview} onSaved={() => void load(period)} />
+      <Events period={period} owner={isTeam ? null : r.owner} />
 
       <div className="pc-footer">
         Canlı CRM verisi · {new Date(data.generatedAt).toLocaleString('tr-TR')}

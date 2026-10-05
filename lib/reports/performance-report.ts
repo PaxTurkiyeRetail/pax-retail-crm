@@ -8,7 +8,7 @@ import { activityTargetKind } from '@/lib/reports/weekly-targets-shared';
 import {
   DEFAULT_MEETINGS_PER_FIRM, INACTIVE_DAYS_BY_CATEGORY, LONG_POC_DAYS, MONTHS_SHORT, STALE_QUOTE_DAYS,
   perfRange, trendMonths,
-  type Measure, type PerfOwnerReport, type PerfPayload, type PerfPeriodKind, type PerfReview,
+  type Measure, type PerfOwnerReport, type PerfPayload, type PerfPeriodKind,
 } from '@/lib/reports/performance-card';
 
 /**
@@ -127,12 +127,7 @@ const Q_TARGETS = `
          tv.period_start::text as period_start, tv.period_end::text as period_end, tv.target_value::float8 as value
   from public.crm_target_values tv
   join public.crm_target_definitions td on td.id = tv.definition_id
-  where td.is_active = true and tv.period_start <= $2::date and tv.period_end >= $1::date
-`;
-
-const Q_REVIEWS = `
-  select owner_key, strong, improve, focus, updated_by, updated_at
-  from public.crm_perf_reviews where period_key = $1
+  where td.is_active = true and tv.target_value > 0 and tv.period_start <= $2::date and tv.period_end >= $1::date
 `;
 
 const Q_SNAPSHOT = `
@@ -171,7 +166,7 @@ function monthsBetween(from: string, to: string): string[] {
   return out;
 }
 
-export async function buildPerformanceReport(options: { period: PerfPeriodKind; today?: Date; canEditReview: boolean }): Promise<PerfPayload> {
+export async function buildPerformanceReport(options: { period: PerfPeriodKind; today?: Date }): Promise<PerfPayload> {
   const today = options.today ?? new Date();
   const todayKey = istanbulDayKey(today);
   const range = perfRange(options.period, todayKey);
@@ -180,7 +175,7 @@ export async function buildPerformanceReport(options: { period: PerfPeriodKind; 
   const salesFrom = trendFrom < range.from ? trendFrom : range.from;
   const periodMonths = monthsBetween(range.from, range.end);
 
-  const [live, ownerRes, salesRes, deviceRes, wonRes, quoteRiskRes, pocRes, meetingRes, convRes, targetRes, reviewRes, listRows] = await Promise.all([
+  const [live, ownerRes, salesRes, deviceRes, wonRes, quoteRiskRes, pocRes, meetingRes, convRes, targetRes, listRows] = await Promise.all([
     buildLiveBoard({ today }),
     db.query(Q_OWNERS),
     db.query(Q_SALES, [salesFrom, todayKey]),
@@ -191,7 +186,6 @@ export async function buildPerformanceReport(options: { period: PerfPeriodKind; 
     db.query(Q_MEETINGS, [range.from, todayKey]),
     safe(db.query(Q_CONVERSIONS, [range.from, todayKey])),
     db.query(Q_TARGETS, [salesFrom < range.from ? salesFrom : range.from, range.end]),
-    safe(db.query(Q_REVIEWS, [range.periodKey])),
     loadHunterFarmerActivity(today, ['L', 'H', 'F', 'K']),
   ]);
 
@@ -294,12 +288,6 @@ export async function buildPerformanceReport(options: { period: PerfPeriodKind; 
     return row && num(row.value) > 0 ? num(row.value) : DEFAULT_MEETINGS_PER_FIRM;
   })();
 
-  const reviews = new Map((reviewRes.rows as Row[]).map((r) => [String(r.owner_key), {
-    strong: String(r.strong ?? ''), improve: String(r.improve ?? ''), focus: String(r.focus ?? ''),
-    updatedBy: r.updated_by ? String(r.updated_by) : null,
-    updatedAt: r.updated_at ? new Date(r.updated_at).toISOString() : null,
-  } satisfies PerfReview]));
-
   const build = (
     name: string, key: string, a: Acc, target: (code: string) => number | null,
     state: Pick<LiveOwner, 'revenue' | 'goals' | 'pipeline'> & { split: { lead: number; hunter: number; farmer: number; kasa: number }; listed: boolean; inactive: number; trendTarget: (month: string) => number | null },
@@ -326,7 +314,6 @@ export async function buildPerformanceReport(options: { period: PerfPeriodKind; 
       activePoc: state.pipeline.poc,
       risks: { inactive: state.inactive, staleQuotes: a.stale, longPoc: a.longPoc, overdueActions: state.pipeline.overdueActions, overdueClose: a.overdueClose },
       trend: trend.map((m) => ({ month: m, label: MONTHS_SHORT[Number(m.slice(5, 7)) - 1], actual: Math.round(a.amountByMonth.get(m) ?? 0), target: state.trendTarget(m) })),
-      review: reviews.get(key) ?? null,
     };
   };
 
@@ -381,22 +368,7 @@ export async function buildPerformanceReport(options: { period: PerfPeriodKind; 
     owners: ownerReports,
     team: teamReport,
     notes,
-    canEditReview: options.canEditReview,
   };
-}
-
-export async function savePerformanceReview(input: { ownerKey: string; periodKey: string; strong: string; improve: string; focus: string; actor: string }) {
-  const clip = (v: string) => String(v ?? '').slice(0, 4000);
-  const { rows } = await db.query(
-    `insert into public.crm_perf_reviews (owner_key, period_key, strong, improve, focus, updated_by, updated_at)
-     values ($1, $2, $3, $4, $5, $6, now())
-     on conflict (owner_key, period_key) do update
-       set strong = excluded.strong, improve = excluded.improve, focus = excluded.focus,
-           updated_by = excluded.updated_by, updated_at = now()
-     returning updated_by, updated_at`,
-    [input.ownerKey, input.periodKey, clip(input.strong), clip(input.improve), clip(input.focus), input.actor],
-  );
-  return { updatedBy: rows[0]?.updated_by ?? input.actor, updatedAt: rows[0]?.updated_at ? new Date(rows[0].updated_at).toISOString() : null };
 }
 
 export type { Measure };

@@ -36,8 +36,9 @@ export default function CustomerDetailPage() {
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [kunye, setKunye] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Müşteri + künye verisi. Künye formu kaydedilince ve İş Kolu rozetten
+  //Müşteri + künye verisi. Künye formu kaydedilince ve İş Kolu rozetten
   // değiştirilince yeniden çağrılır: üstteki kart ile alttaki form aynı değeri gösterir.
   const loadData = useCallback(async () => {
     try {
@@ -49,6 +50,9 @@ export default function CustomerDetailPage() {
       if (customerRes.ok) {
         const data = await customerRes.json();
         setCustomer(data.musteri);
+        setError(null);
+      } else if (customerRes.status !== 404) {
+        setError(`Müşteri bilgisi alınamadı (${customerRes.status}).`);
       }
 
       if (kunyeRes.ok) {
@@ -57,6 +61,7 @@ export default function CustomerDetailPage() {
       }
     } catch (err) {
       console.error('Veri yükleme hatası:', err);
+      setError('Veri yüklenemedi. Bağlantınızı kontrol edip tekrar deneyin.');
     } finally {
       setLoading(false);
     }
@@ -69,6 +74,24 @@ export default function CustomerDetailPage() {
       <div className="pax-page-container">
         <div className="pax-card pax-loading" style={{ padding: 60, textAlign: 'center' }}>
           Yükleniyor...
+        </div>
+      </div>
+    );
+  }
+
+  if (error && !customer) {
+    return (
+      <div className="pax-page-container">
+        <div className="pax-card" style={{ padding: 60, textAlign: 'center' }}>
+          <h2 style={{ marginBottom: 16 }}>Veri yüklenemedi</h2>
+          <p style={{ color: 'var(--text-3)', marginBottom: 16 }}>{error}</p>
+          <button
+            type="button"
+            onClick={() => { setLoading(true); setError(null); void loadData(); }}
+            style={{ minHeight: 40, padding: '0 14px', border: '1px solid var(--border)', borderRadius: 11, background: 'var(--surface)', color: 'var(--text-2)', fontSize: 13, fontWeight: 850, cursor: 'pointer' }}
+          >
+            Tekrar Dene
+          </button>
         </div>
       </div>
     );

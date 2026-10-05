@@ -389,7 +389,7 @@ export default function ParametersClient() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Parametre silinemedi.");
       setRows((items) => items.filter((item) => item.id !== row.id));
-      setMessage("Parametre silindi.");
+      setMessage(data.message || "Parametre pasife alındı.");
     } catch (err: any) {
       setError(err.message || "Parametre silinemedi.");
     }

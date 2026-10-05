@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { assertActiveParameterValue } from '@/lib/system-parameters';
+import { assertActiveParameterValue, getKunyeOptions } from '@/lib/system-parameters';
 import { revalidatePath } from 'next/cache';
 import { requireCrmAccessOrThrow } from '@/lib/authz';
 import { createPgAdminClient } from '@/lib/pg/admin';
@@ -53,10 +53,13 @@ export async function GET(request: Request) {
       );
     }
 
-    const mappedKunye = mapKunyeDbToUi({
-      ...data,
-      firma_adi: data?.firma_adi ?? musteri.musteri ?? null,
-    });
+    const mappedKunye = mapKunyeDbToUi(
+      {
+        ...data,
+        firma_adi: data?.firma_adi ?? musteri.musteri ?? null,
+      },
+      await getKunyeOptions(),
+    );
 
     return NextResponse.json({
       kunye: mappedKunye,

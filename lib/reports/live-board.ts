@@ -350,7 +350,7 @@ const Q_TARGETS = `
   select tv.scope_type, tv.scope_user_id::text as user_id, td.code, tv.period_type, tv.target_value::float8 as value
   from public.crm_target_values tv
   join public.crm_target_definitions td on td.id = tv.definition_id
-  where td.is_active = true
+  where td.is_active = true and tv.target_value > 0
     and tv.period_type in ('year', 'quarter')
     and tv.period_start <= $1::date and tv.period_end >= $1::date
 `;

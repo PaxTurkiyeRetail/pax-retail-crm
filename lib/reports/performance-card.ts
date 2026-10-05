@@ -29,10 +29,10 @@ export type PerfGrade = { label: string; tone: Tone };
 
 export const PERF_WEIGHTS: Array<{ key: PerfDimensionKey; label: string; weight: number; hint: string }> = [
   { key: 'commercial', label: 'Ticari Sonuç', weight: 40, hint: 'ciro + satılan cihaz' },
-  { key: 'bizdev', label: 'İş Geliştirme', weight: 20, hint: 'H→F · L→H · kazanılan teklif' },
+  { key: 'bizdev', label: 'İş Geliştirme', weight: 20, hint: 'L→H · H→F · kazanılan teklif' },
   { key: 'customer', label: 'Müşteri Yönetimi', weight: 15, hint: 'görüşme/firma · hareketsiz oranı' },
-  { key: 'activity', label: 'Aktivite Disiplini', weight: 15, hint: 'fiziki + online görüşme' },
-  { key: 'crm', label: 'CRM & Süreç', weight: 10, hint: 'bekleyen teklif · geçmiş tarih · POC' },
+  { key: 'activity', label: 'Aktivite Oranı', weight: 15, hint: 'fiziki + online görüşme' },
+  { key: 'crm', label: 'Süreç Takibi', weight: 10, hint: 'bekleyen teklif · geçmiş tarih · POC' },
 ];
 
 /** Skor bantları — TEK yer (iş emri: merkezi config). */
@@ -165,7 +165,6 @@ export function trendMonths(todayKey: string, count = 6): string[] {
 /* --- Rapor verisi ------------------------------------------------------------ */
 
 export type PerfTrendPoint = { month: string; label: string; actual: number; target: number | null };
-export type PerfReview = { strong: string; improve: string; focus: string; updatedBy: string | null; updatedAt: string | null };
 
 export type PerfOwnerReport = {
   owner: string;
@@ -188,7 +187,6 @@ export type PerfOwnerReport = {
   activePoc: number;
   risks: { inactive: number; staleQuotes: number; longPoc: number; overdueActions: number; overdueClose: number };
   trend: PerfTrendPoint[];
-  review: PerfReview | null;
 };
 
 export type PerfPayload = {
@@ -197,7 +195,6 @@ export type PerfPayload = {
   owners: PerfOwnerReport[];
   team: PerfOwnerReport;
   notes: string[];
-  canEditReview: boolean;
 };
 
 export function perfDimensions(r: PerfOwnerReport, elapsedPct: number): PerfDimension[] {

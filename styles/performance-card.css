@@ -83,3 +83,16 @@
 .pc-textarea { width: 100%; box-sizing: border-box; border: 1px solid var(--pc-line); border-radius: 10px; padding: 8px 10px; background: var(--pc-soft); color: var(--pc-ink); font: inherit; font-size: 13px; resize: vertical; }
 @media (max-width: 1100px) { .pc-grid.g4, .pc-dims { grid-template-columns: repeat(2, minmax(0, 1fr)); } .pc-focus, .pc-grid.g2 { grid-template-columns: 1fr; } }
 @media (max-width: 700px) { .pc-grid.g4, .pc-dims { grid-template-columns: 1fr; } .pc-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.pc-chips { margin: 12px 0 10px; }
+.pc-chips button { padding: 6px 10px; font-size: 12px; }
+.pc-table-wrap { max-height: 560px; overflow: auto; border: 1px solid var(--pc-line); border-radius: 12px; }
+.pc-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.pc-table th { position: sticky; top: 0; background: var(--pc-soft); text-align: left; padding: 8px 10px; color: var(--pc-muted); font-weight: 800; border-bottom: 1px solid var(--pc-line); }
+.pc-table td { padding: 7px 10px; border-bottom: 1px dashed var(--pc-line); vertical-align: top; }
+.pc-table .r { text-align: right; white-space: nowrap; }
+.pc-table .nowrap { white-space: nowrap; }
+.pc-tag { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 800; white-space: nowrap; background: color-mix(in srgb, var(--pc-neutral) 18%, transparent); }
+.pc-tag.t-gorusme { color: var(--pc-info); background: color-mix(in srgb, var(--pc-info) 12%, transparent); }
+.pc-tag.t-teklif { color: var(--pc-warn); background: color-mix(in srgb, var(--pc-warn) 12%, transparent); }
+.pc-tag.t-kazanim, .pc-tag.t-fatura { color: var(--pc-ok); background: color-mix(in srgb, var(--pc-ok) 12%, transparent); }
+.pc-tag.t-kayip { color: var(--pc-danger); background: color-mix(in srgb, var(--pc-danger) 12%, transparent); }

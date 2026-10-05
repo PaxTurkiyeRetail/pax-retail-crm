@@ -1077,6 +1077,22 @@ export async function updatePhaseParameter(input: {
       ? mapPhaseRow(result.rows[0], "business_partner")
       : null;
   }
+  // faz_tanimlari tablosunda is_active / sort_order kolonu yok (sıra = faz_no).
+  // Sessizce yutmak yerine açık hata dön.
+  if (input.isActive === false)
+    throw Object.assign(
+      new Error("Müşteri faz tanımları pasife alınamaz; adını güncelleyin."),
+      { status: 400 },
+    );
+  if (
+    input.sortOrder !== undefined &&
+    input.sortOrder !== null &&
+    Number(input.sortOrder) !== fazNo
+  )
+    throw Object.assign(
+      new Error("Müşteri faz sırası faz numarasına bağlıdır; ayrıca değiştirilemez."),
+      { status: 400 },
+    );
   const result = await db.query(
     `
     update public.faz_tanimlari

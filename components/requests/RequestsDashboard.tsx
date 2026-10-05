@@ -42,7 +42,7 @@ export default function RequestsDashboard() {
   useEffect(() => {
     setLoading(true);
     fetch('/api/requests/stats', { cache: 'no-store' })
-      .then(r => r.json())
+      .then(r => { if (!r.ok) throw new Error(`İstatistikler alınamadı (${r.status})`); return r.json(); })
       .then(data => {
         setStats({
           kpis:        data.kpis       ?? EMPTY.kpis,

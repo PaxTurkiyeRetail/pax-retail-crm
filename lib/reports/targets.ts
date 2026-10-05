@@ -49,7 +49,7 @@ const Q_COMPANY = `
   select td.code, tv.target_value::float8 as value
   from public.crm_target_values tv
   join public.crm_target_definitions td on td.id = tv.definition_id
-  where tv.scope_type = 'company' and tv.period_type = 'year'
+  where tv.scope_type = 'company' and tv.period_type = 'year' and tv.target_value > 0
     and tv.period_start >= make_date($1::int, 1, 1) and tv.period_end <= make_date($1::int, 12, 31)
 `;
 
@@ -57,7 +57,7 @@ const Q_VALUES = `
   select tv.scope_user_id::text as user_id, td.code, tv.period_type, tv.period_start::text as period_start, tv.target_value::float8 as value
   from public.crm_target_values tv
   join public.crm_target_definitions td on td.id = tv.definition_id
-  where tv.scope_type = 'user'
+  where tv.scope_type = 'user' and tv.target_value > 0
     and tv.period_type in ('year', 'quarter')
     and tv.period_start >= make_date($1::int, 1, 1) and tv.period_end <= make_date($1::int, 12, 31)
 `;
@@ -131,27 +131,15 @@ export async function saveCompanyTargets(actor: Actor, input: SaveCompanyTargets
       if (!(definition.code in (input.values ?? {}))) continue;
       const definitionId = definitionIdByCode.get(definition.code);
       if (!definitionId) throw new ApiError('TARGET_DEFINITION_MISSING', `Hedef tanımı eksik (migration 033 uygulanmalı): ${definition.code}`, 409);
-      const value = normalizeTargetValue(input.values[definition.code]);
-      if (value == null) {
-        await client.query(
-          `delete from public.crm_target_values
-           where definition_id = $1 and scope_type = 'company' and period_type = 'year'
-             and period_start = $2::date and period_end = $3::date`,
-          [definitionId, start, end],
-        );
-        continue;
-      }
-      // scope_user_id null olduğu için benzersiz kısıt eşleşmez; önce sil, sonra yaz.
-      await client.query(
-        `delete from public.crm_target_values
-         where definition_id = $1 and scope_type = 'company' and period_type = 'year'
-           and period_start = $2::date and period_end = $3::date`,
-        [definitionId, start, end],
-      );
+      // Silme yok (proje kuralı): boş değer = target_value 0 (okuyucular > 0 filtreler).
+      // Benzersiz kısıt "nulls not distinct" olduğundan scope_user_id null iken de ON CONFLICT eşleşir.
+      const value = normalizeTargetValue(input.values[definition.code]) ?? 0;
       await client.query(
         `insert into public.crm_target_values
            (definition_id, scope_type, scope_user_id, period_type, period_start, period_end, target_value, created_by, updated_by)
-         values ($1, 'company', null, 'year', $2::date, $3::date, $4, $5, $5)`,
+         values ($1, 'company', null, 'year', $2::date, $3::date, $4, $5, $5)
+         on conflict (definition_id, scope_type, scope_user_id, period_type, period_start, period_end)
+         do update set target_value = excluded.target_value, updated_by = excluded.updated_by, updated_at = now()`,
         [definitionId, start, end, value, actor.id],
       );
     }
@@ -202,22 +190,14 @@ async function upsertValue(
   end: string,
   value: number | null,
 ) {
-  if (value == null) {
-    await client.query(
-      `delete from public.crm_target_values
-       where definition_id = $1 and scope_type = 'user' and scope_user_id = $2
-         and period_type = $3 and period_start = $4::date and period_end = $5::date`,
-      [definitionId, userId, periodType, start, end],
-    );
-    return;
-  }
+  // Silme yok (proje kuralı): boş değer = target_value 0; okuyucular yalnız > 0 satırları alır.
   await client.query(
     `insert into public.crm_target_values
        (definition_id, scope_type, scope_user_id, period_type, period_start, period_end, target_value, created_by, updated_by)
      values ($1, 'user', $2, $3, $4::date, $5::date, $6, $7, $7)
      on conflict (definition_id, scope_type, scope_user_id, period_type, period_start, period_end)
      do update set target_value = excluded.target_value, updated_by = excluded.updated_by, updated_at = now()`,
-    [definitionId, userId, periodType, start, end, value, actor.id],
+    [definitionId, userId, periodType, start, end, value ?? 0, actor.id],
   );
 }
 
