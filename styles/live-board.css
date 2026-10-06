@@ -795,3 +795,83 @@
 .lb-strip { padding-top: 10px; }
 .lb-dot { background: var(--lb-skin-card); border-color: var(--lb-skin-line); box-shadow: 0 2px 6px rgba(20, 32, 51, .04); transition: background .2s, color .2s; }
 .lb-dot.active { background: var(--lb-info); border-color: var(--lb-info); color: #fff; box-shadow: 0 6px 16px rgba(37, 99, 235, .28); }
+/* ===== KARNE DÜZENİ (lb-kv) — Performans Karnesi yapı taşları ===== */
+.lb-kv { display: grid; grid-template-rows: auto auto minmax(0, 1fr); gap: 12px; min-height: 0; min-width: 0; }
+.lb-pulse .lb-kv { grid-column: 1 / 9; grid-row: 2 / 4; }
+.lb-kv-card { background: var(--lb-skin-card); border: 1px solid var(--lb-skin-line); border-radius: 18px; box-shadow: 0 10px 28px rgba(20, 32, 51, .06); padding: 14px 18px; min-width: 0; color: var(--text); text-decoration: none; }
+a.lb-kv-card:hover { border-color: var(--lb-info); box-shadow: 0 6px 18px rgba(37, 99, 235, .14); }
+.lb-kv-hero { display: grid; grid-template-columns: 1.25fr 1fr 1fr 1fr; gap: 12px; }
+.lb-kv-score { display: flex; align-items: center; gap: 14px; }
+.lb-kv-score p { margin: 6px 0 0; font-size: 13px; color: var(--text-3); font-weight: 600; line-height: 1.4; }
+.lb-kv-label { font-size: 12px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--text-3); }
+.lb-kv-heroitem { display: grid; gap: 6px; align-content: start; }
+.lb-kv-big { font-size: clamp(26px, 2.3vw, 40px); font-weight: 900; letter-spacing: -.02em; line-height: 1.1; }
+.lb-kv-heroitem small, .lb-kv-dim small { font-size: 12.5px; color: var(--text-3); font-weight: 600; }
+.lb-kv-bar { display: block; height: 9px; border-radius: 999px; background: #e9eef5; overflow: hidden; }
+[data-theme="dark"] .lb-kv-bar { background: #1f2937; }
+.lb-kv-bar > span { display: block; height: 100%; border-radius: 999px; background: var(--lb-neutral); transition: width .9s ease; }
+.lb-kv-bar > span.tone-ok { background: var(--lb-ok); } .lb-kv-bar > span.tone-info { background: var(--lb-info); }
+.lb-kv-bar > span.tone-warn { background: var(--lb-warn); } .lb-kv-bar > span.tone-danger { background: var(--lb-danger); }
+.lb-kv-dims { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; }
+.lb-kv-dim { display: grid; gap: 6px; padding: 12px 14px; background: #fbfcfe; }
+[data-theme="dark"] .lb-kv-dim { background: var(--lb-skin-card); }
+.lb-kv-dimhead { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.lb-kv-dimhead b { font-size: 13.5px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lb-kv-dimhead strong { font-size: clamp(18px, 1.5vw, 24px); font-weight: 900; }
+.lb-kv-lists { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; min-height: 0; }
+.lb-kv-lists .lb-kv-card { overflow: hidden; display: grid; align-content: start; gap: 2px; }
+.lb-kv-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 6px; }
+.lb-kv-head b { font-size: 16px; font-weight: 900; }
+.lb-kv-head span { font-size: 12px; color: var(--text-3); font-weight: 600; }
+.lb-kv-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px dashed var(--lb-skin-line); font-size: 14px; }
+.lb-kv-row:last-child { border-bottom: 0; }
+.lb-kv-row > span { display: flex; align-items: center; gap: 8px; color: var(--text-2); font-weight: 600; }
+.lb-kv-row > span i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+.lb-kv-row > b { font-weight: 900; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--lb-skin-line); }
+.lb-kv .tone-ok { color: var(--lb-ok); } .lb-kv .tone-info { color: var(--lb-info); } .lb-kv .tone-warn { color: var(--lb-warn); } .lb-kv .tone-danger { color: var(--lb-danger); }
+@media (max-width: 1100px) { .lb-kv-hero, .lb-kv-dims, .lb-kv-lists { grid-template-columns: repeat(2, minmax(0, 1fr)); } }.lb-owner .lb-kv-owner { grid-column: 1 / -1; grid-row: 2; grid-template-rows: auto auto; align-content: start; }
+.lb-kv-chips { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 8px; font-size: 13.5px; color: var(--text-2); font-weight: 600; }
+.lb-kv-chips span { display: inline-flex; align-items: center; gap: 6px; }
+.lb-kv-chips i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+.lb-kv-chips b { color: var(--text); font-weight: 900; }
+/* ===== KARNE STİLİ — tüm slaytların ortak parçaları (06.10.2026) =====
+   Yükseklikler (--lb-row-h, --lb-item-h, --lb-hot-h) DEĞİŞMEZ: sayfalama kapasitesi bunlara bağlı. */
+.lb-card-head h3, .lb-pulse .lb-card-head h3 { text-transform: none; letter-spacing: -.01em; font-size: clamp(16px, 1.25vw, 22px); font-weight: 900; color: var(--text); }
+.lb-card-head span { font-weight: 600; }
+.lb-card-head { padding-bottom: 8px; border-bottom: 1px solid var(--lb-skin-line); }
+
+/* Satırlar: karne tablosu — kutu yok, kesik ayraç, ince renk şeridi */
+.lb-tr, .lb-item { background: transparent; border: 0; border-bottom: 1px dashed var(--lb-skin-line); border-left: 4px solid var(--lb-neutral); border-radius: 0 10px 10px 0; box-shadow: none; }
+.lb-tr:hover, .lb-item:hover { background: var(--lb-skin-bg); transform: none; box-shadow: none; }
+.lb-tr.tone-ok, .lb-item.tone-ok { border-left-color: var(--lb-ok); }
+.lb-tr.tone-info, .lb-item.tone-info { border-left-color: var(--lb-info); }
+.lb-tr.tone-warn, .lb-item.tone-warn { border-left-color: var(--lb-warn); }
+.lb-tr.tone-danger, .lb-item.tone-danger { border-left-color: var(--lb-danger); }
+.lb-tr.lb-th { border-left-color: transparent; border-bottom: 1px solid var(--lb-skin-line); background: transparent; font-size: 11.5px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: var(--text-3); }
+.lb-hot { background: #fbfcfe; }
+[data-theme="dark"] .lb-hot { background: var(--lb-skin-card); }
+
+/* Çubuklar: karne progress */
+.lb-bar { height: 10px; border-radius: 999px; }
+.lb-hbar .lb-bar { height: 12px; }
+.lb-bar > span { border-radius: 999px; transition: width .9s ease; }
+.lb-hbar-label, .lb-channel-label { color: var(--text-2); font-weight: 700; }
+
+/* Sayı kutuları: karne mini kutusu (açık zemin, üstte etiket, altta büyük değer) */
+.lb-pools .lb-pool-stat, .lb-figure { background: #fbfcfe; border: 1px solid var(--lb-skin-line); border-radius: 14px; }
+[data-theme="dark"] .lb-pools .lb-pool-stat, [data-theme="dark"] .lb-figure { background: var(--lb-skin-card); }
+.lb-pools .lb-pool-stat span, .lb-figure > span { text-transform: none; letter-spacing: 0; font-weight: 700; }
+.lb-pool-stat.tone-ok strong { color: var(--lb-ok); } .lb-pool-stat.tone-info strong { color: var(--lb-info); }
+.lb-pool-stat.tone-warn strong { color: var(--lb-warn); } .lb-pool-stat.tone-danger strong { color: var(--lb-danger); }
+
+/* Pill: karne etiketi */
+.lb-pill { border-radius: 999px; font-weight: 800; }
+.lb-pill.tone-ok { background: var(--lb-ok-soft); color: var(--lb-ok); border-color: transparent; }
+.lb-pill.tone-info { background: var(--lb-info-soft); color: var(--lb-info); border-color: transparent; }
+.lb-pill.tone-warn { background: var(--lb-warn-soft); color: var(--lb-warn); border-color: transparent; }
+.lb-pill.tone-danger { background: var(--lb-danger-soft); color: var(--lb-danger); border-color: transparent; }
+
+/* Sıralama (Kim hedefinde): karne listesi gibi */
+.lb-row.rich { padding: 10px 12px; border-radius: 14px; border: 1px solid var(--lb-skin-line); background: #fbfcfe; }
+[data-theme="dark"] .lb-row.rich { background: var(--lb-skin-card); }
+.lb-row-num { font-size: clamp(22px, 1.8vw, 30px); }

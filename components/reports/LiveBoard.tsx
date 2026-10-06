@@ -281,6 +281,35 @@ function CommercialBand({ r, invoices, invoicesHref }: { r: RevenueBlock; invoic
   );
 }
 
+/* Karne düzeni yapı taşları (Performans Karnesi görünümü, 06.10.2026). */
+function KvHero({ label, value, pair, tone, money = false, href }: { label: string; value: string; pair: GoalPair; tone: Tone; money?: boolean; href?: string }) {
+  const body = (<>
+    <span className="lb-kv-label">{label}</span>
+    <b className={`lb-kv-big tone-${tone}`}>{value}</b>
+    <small>{pair.target != null ? `${money ? fmtMoney(pair.target) : fmt(pair.target)} hedef · %${pair.pct ?? 0} gerçekleşme` : 'hedef girilmemiş'}</small>
+    <span className="lb-kv-bar"><span className={`tone-${tone}`} style={{ width: `${Math.min(100, pair.pct ?? 0)}%` }} /></span>
+  </>);
+  return href ? <a className="lb-kv-card lb-kv-heroitem" href={href} target="_blank" rel="noreferrer">{body}</a> : <div className="lb-kv-card lb-kv-heroitem">{body}</div>;
+}
+function KvDim({ label, pair, tone, money = false }: { label: string; pair: GoalPair; tone: Tone; money?: boolean }) {
+  const v = (n: number) => (money ? fmtMoney(n) : fmt(n));
+  return (
+    <div className="lb-kv-card lb-kv-dim">
+      <div className="lb-kv-dimhead"><b>{label}</b><strong className={`tone-${tone}`}>{pair.pct == null ? '—' : `%${pair.pct}`}</strong></div>
+      <small>{v(pair.actual)}{pair.target != null ? ` / ${v(pair.target)}` : ' · hedef yok'}</small>
+      <span className="lb-kv-bar"><span className={`tone-${tone}`} style={{ width: `${Math.min(100, pair.pct ?? 0)}%` }} /></span>
+    </div>
+  );
+}
+function KvRow({ k, v, tone, dot }: { k: string; v: string; tone?: Tone; dot?: string }) {
+  return (
+    <div className="lb-kv-row">
+      <span>{dot ? <i style={{ background: dot }} /> : null}{k}</span>
+      <b className={tone ? `tone-${tone}` : undefined}>{v}</b>
+    </div>
+  );
+}
+
 /** Dönüşüm satırı: Aktivite → Firma → Faz ilerledi → Teklif → Sipariş. */
 /**
  * ÖZET SLAYDI — v3.2 (Çağdaş Bey, 15.09.2026). Eski adı "Business Pulse".
@@ -313,7 +342,6 @@ function PulseSlide({ data, caps, page, rollup, ringSize }: {
   const left = page % PULSE_LEFT_PAGES;
   const r = team.revenue;
   const g = rollup;
-  const mini = Math.round(ringSize * 0.42);
   const q = g.quarter?.label ?? '';
   const deviceGoal: GoalPair = { actual: r.deviceActualYtd, target: r.deviceTarget, pct: pctOf(r.deviceActualYtd, r.deviceTarget) };
   const weeklyTarget = team.target.totalActivities || 0;
@@ -327,74 +355,56 @@ function PulseSlide({ data, caps, page, rollup, ringSize }: {
       <CommercialBand r={r} invoices={g.invoices} invoicesHref={link('fatura')} />
 
       {left === 0 ? (
-        <>
-          <DonutCard
-            title="Aktivite Hedefi · Takım"
-            aside={<>
-              <MiniRing pair={g.visitsQuarter} label={`${q} ziyaret`} tone={goalTone(g.visitsQuarter, g.quarter?.elapsedPct)} size={mini} />
-              <MiniRing pair={g.visitsYear} label="Yıl ziyaret" tone={goalTone(g.visitsYear, r.yearElapsedPct)} size={mini} />
-            </>}
-          >
-            <Ring
-              pct={weeklyTarget ? team.achievementPct : null}
-              tone={weeklyTone}
-              big={weeklyTarget ? `%${team.achievementPct ?? 0}` : fmt(team.actual.totalActivities)}
-              sub={weeklyTarget ? `${fmt(team.actual.totalActivities)} / ${fmt(weeklyTarget)}` : 'bu hafta'}
-              size={ringSize}
-              stroke={12}
-            />
-          </DonutCard>
-
-          <DonutCard
-            title={`Yıllık Bütçe Hedefi · ${r.year}`}
-            aside={<>
-              <MiniRing pair={g.budgetQuarter} label={`${q} bütçe`} tone={goalTone(g.budgetQuarter, g.quarter?.elapsedPct)} size={mini} money />
-              <MiniRing pair={deviceGoal} label="Cihaz" tone={goalTone(deviceGoal, r.yearElapsedPct)} size={mini} />
-            </>}
-          >
-            <Ring
-              pct={r.target != null ? r.attainmentPct : null}
-              tone={r.target != null ? (r.pace ?? 'neutral') : 'neutral'}
-              big={r.target != null ? `%${r.attainmentPct ?? 0}` : fmtMoney(r.actualYtd)}
-              sub={r.target != null ? `${fmtMoney(r.actualYtd)} / ${fmtMoney(r.target)}` : 'YTD ciro'}
-              size={ringSize}
-              stroke={12}
-            />
-          </DonutCard>
-
-          {/* Entegrasyon = CİHAZ ADEDİ, hizmet faturası kalemlerinden (17.09). 18.09: üç halka da
-              KÜMÜLATİF (YTD / ay sonu · yıl · çeyrek sonu hedefi); alt satırda ayın adedi + kazanılan $.
-              Kişilerin toplamıdır. */}
-          <DonutCard
-            title="Entegrasyon Hedefi · Takım"
-            aside={<IntegrationAside g={g} year={r.year} q={q} size={mini} yearElapsedPct={r.yearElapsedPct} />}
-            foot={<IntegrationFoot g={g} />}
-          >
-            <IntegrationMonthRing g={g} size={ringSize} />
-          </DonutCard>
-
-          {/* 17.09 (Sinan: "301 firma sayısını nereden buldun, Genel Bakış'takiyle neden farklı? iki farklı
-              sonuç istemiyoruz, fark neyse orada küçük yazıyla belirtilsin"): donut'un toplamı artık
-              **CRM firma sayısı** — Genel Bakış'taki "Toplam Müşteri" ile birebir. Account Atama'da
-              karşılığı olmayan firmalar gri "Listede yok" dilimine düşer; eşleşmeyen liste satırı varsa
-              kart başlığında not çıkar. Eskiden burası kişi slaytlarının toplamıydı, o yüzden kullanıcı
-              hesabı olmayan Cem Koç + Seda Kesikoğlu ile havuz/iş ortakları/yemek kartları düşüyordu. */}
-          <DonutCard
-            title="Müşteri Takip Statüsü · Takım"
-            sub={data.customerList?.unmatchedRows
-              ? `Account Atama · ${fmt(data.customerList.unmatchedRows)} liste satırı künyeyle eşleşmedi`
-              : 'Account Atama · tüm portföy'}
-            aside={<>
-              <MiniRing pair={g.hunterToFarmer} label="Hunter → Farmer" tone={goalTone(g.hunterToFarmer)} size={mini} />
-              <MiniRing pair={g.leadToHunter} label="Lead → Hunter" tone={goalTone(g.leadToHunter)} size={mini} />
-            </>}
-          >
-            {data.customerList
-              ? <StatusDonut list={data.customerList} size={ringSize} />
-              : <Ring pct={null} tone="neutral" big="—" sub="liste yok" size={ringSize} stroke={12} />}
-          </DonutCard>
-        </>
-      ) : (
+        <div className="lb-kv">
+          {/* Karne düzeni (06.10.2026): hero satırı → boyut kartları → satır listeleri. Veri aynı (teamRollup). */}
+          <div className="lb-kv-hero">
+            <div className="lb-kv-card lb-kv-score">
+              <Ring
+                pct={r.target != null ? r.attainmentPct : null}
+                tone={r.target != null ? (r.pace ?? 'neutral') : 'neutral'}
+                big={r.target != null ? `%${r.attainmentPct ?? 0}` : '—'}
+                sub="ciro"
+                size={Math.round(ringSize * 0.55)}
+                stroke={10}
+              />
+              <div>
+                <span className="lb-kv-label">Genel Durum · {r.year}</span>
+                <p>Yılın %{r.yearElapsedPct}&apos;i geçti · forecast {fmtMoney(r.forecast)}{r.forecastPct != null ? ` (%${r.forecastPct})` : ''}</p>
+              </div>
+            </div>
+            <KvHero label="YTD Ciro" value={fmtMoney(r.actualYtd)} pair={{ actual: r.actualYtd, target: r.target, pct: r.attainmentPct }} tone={r.target != null ? (r.pace ?? 'neutral') : 'neutral'} money href={link('fatura')} />
+            <KvHero label="Satılan Cihaz" value={fmt(r.deviceActualYtd)} pair={deviceGoal} tone={goalTone(deviceGoal, r.yearElapsedPct)} href={link('cihaz')} />
+            <KvHero label="Aktivite · bu hafta" value={fmt(team.actual.totalActivities)} pair={{ actual: team.actual.totalActivities, target: weeklyTarget || null, pct: weeklyTarget ? team.achievementPct : null }} tone={weeklyTone} />
+          </div>
+          <div className="lb-kv-dims">
+            <KvDim label={`${q} Ziyaret`} pair={g.visitsQuarter} tone={goalTone(g.visitsQuarter, g.quarter?.elapsedPct)} />
+            <KvDim label="Yıl Ziyaret" pair={g.visitsYear} tone={goalTone(g.visitsYear, r.yearElapsedPct)} />
+            <KvDim label={`${q} Bütçe`} pair={g.budgetQuarter} tone={goalTone(g.budgetQuarter, g.quarter?.elapsedPct)} money />
+            <KvDim label="Entegrasyon · yıl" pair={g.integration} tone={goalTone(g.integration, r.yearElapsedPct)} />
+            <KvDim label="Hunter → Farmer" pair={g.hunterToFarmer} tone={goalTone(g.hunterToFarmer)} />
+            <KvDim label="Lead → Hunter" pair={g.leadToHunter} tone={goalTone(g.leadToHunter)} />
+          </div>
+          <div className="lb-kv-lists">
+            <div className="lb-kv-card">
+              <div className="lb-kv-head"><b>Müşteri Takip Statüsü</b><span>{data.customerList ? `${fmt(data.customerList.total)} firma · Account Atama` : 'liste yok'}</span></div>
+              {data.customerList ? (<>
+                <KvRow k="Hunter" v={fmt(data.customerList.hunter)} dot="var(--lb-hunter)" />
+                <KvRow k="Farmer" v={fmt(data.customerList.farmer)} dot="var(--lb-farmer)" />
+                <KvRow k="Lead" v={fmt(data.customerList.lead)} dot="var(--lb-lead)" />
+                <KvRow k="Kasa" v={fmt(data.customerList.kasa)} dot="var(--lb-kasa)" />
+                {data.customerList.unlisted ? <KvRow k="Listede yok" v={fmt(data.customerList.unlisted)} dot="var(--lb-neutral)" /> : null}
+              </>) : <div className="lb-muted">Account Atama listesi doldurulmamış.</div>}
+            </div>
+            <div className="lb-kv-card">
+              <div className="lb-kv-head"><b>Entegrasyon</b><span>cihaz adedi · kümülatif</span></div>
+              <KvRow k={`${g.integrationMonthLabel} sonu`} v={`${fmt(g.integrationMonth.actual)}${g.integrationMonth.target != null ? ` / ${fmt(g.integrationMonth.target)}` : ''}`} tone={goalTone(g.integrationMonth, g.integrationMonthElapsedPct)} />
+              <KvRow k={`${q} sonu`} v={`${fmt(g.integrationQuarter.actual)}${g.integrationQuarter.target != null ? ` / ${fmt(g.integrationQuarter.target)}` : ''}`} tone={goalTone(g.integrationQuarter, g.quarter?.elapsedPct)} />
+              <KvRow k={`${r.year} toplam`} v={`${fmt(g.integration.actual)}${g.integration.target != null ? ` / ${fmt(g.integration.target)}` : ''}`} tone={goalTone(g.integration, r.yearElapsedPct)} />
+              <KvRow k="Bu ay yeni cihaz" v={`+${fmt(g.integrationMonthDevices)}`} />
+              <KvRow k="Kazanılan · ay / yıl" v={`${fmtMoney(g.integrationRevenue.usdMonth)} / ${fmtMoney(g.integrationRevenue.usdYear)}`} />
+            </div>
+          </div>
+        </div>      ) : (
         <>
           <div className="lb-card lb-owner-output lb-pulse-output">
             <div className="lb-card-head"><h3>Satış Çıktısı · Takım</h3><span>teklif · cihaz · {range.label}</span></div>
@@ -1299,7 +1309,6 @@ function OwnerSlide({ owner, todayKey, caps, ringSize }: { owner: LiveOwner; tod
   // (15.09 akşam — yalnız yüksekliğe bakılınca büyük halka kartın soluna dayanıp sağdaki
   // küçük halkanın üstüne biniyordu; Sinan'ın işaretlediği hata).
   const ring = ringSize;
-  const mini = Math.round(ring * 0.44);
   const recentRows = owner.recentActivities.slice(0, Math.min(5, caps.recent));
   const hasRevenueTarget = r.target != null;
   const weeklyTarget = owner.target.totalActivities || 0;
@@ -1314,62 +1323,44 @@ function OwnerSlide({ owner, todayKey, caps, ringSize }: { owner: LiveOwner; tod
     <div className="lb-slide lb-owner" key={owner.owner}>
       <CommercialBand r={r} invoices={owner.invoices} invoicesHref={link('fatura')} />
 
-      <DonutCard
-        title="Aktivite Hedefi"
-        aside={<>
-          <MiniRing pair={g.visitsQuarter} label={`${q} ziyaret`} tone={goalTone(g.visitsQuarter, g.quarter.elapsedPct)} size={mini} />
-          <MiniRing pair={g.visitsYear} label="Yıl ziyaret" tone={goalTone(g.visitsYear, r.yearElapsedPct)} size={mini} />
-        </>}
-      >
-        <Ring
-          pct={weeklyTarget ? weeklyPct : null}
-          tone={weeklyTone}
-          big={weeklyTarget ? `%${weeklyPct ?? 0}` : fmt(owner.actual.totalActivities)}
-          sub={weeklyTarget ? `${fmt(owner.actual.totalActivities)} / ${fmt(weeklyTarget)}` : 'bu hafta'}
-          size={ring}
-          stroke={12}
-        />
-      </DonutCard>
-
-      <DonutCard
-        title={`Yıllık Bütçe Hedefi · ${r.year}`}
-        aside={<>
-          <MiniRing pair={g.budgetQuarter} label={`${q} bütçe`} tone={goalTone(g.budgetQuarter, g.quarter.elapsedPct)} size={mini} money />
-          <MiniRing pair={deviceGoal} label="Cihaz" tone={goalTone(deviceGoal, r.yearElapsedPct)} size={mini} />
-        </>}
-      >
-        <Ring
-          pct={hasRevenueTarget ? r.attainmentPct : null}
-          tone={hasRevenueTarget ? (r.pace ?? 'neutral') : 'neutral'}
-          big={hasRevenueTarget ? `%${r.attainmentPct ?? 0}` : fmtMoney(r.actualYtd)}
-          sub={hasRevenueTarget ? `${fmtMoney(r.actualYtd)} / ${fmtMoney(r.target)}` : 'YTD ciro'}
-          size={ring}
-          stroke={12}
-        />
-      </DonutCard>
-
-      {/* Entegrasyon: büyükte yüzde, altında adet (Çağdaş Bey: "burası yüzde olsun, altında adet
-          yazsın"). 17.09 (Sinan): birim CİHAZ ADEDİ (hizmet faturası kalemleri). 18.09 (Sinan):
-          KÜMÜLATİF — YTD / ay sonu hedefi; sağ üst yıl, sağ alt çeyrek sonu; alt satırda ayın
-          adedi ve entegrasyondan kazanılan para ($). */}
-      <DonutCard
-        title="Entegrasyon Hedefi"
-        aside={<IntegrationAside g={g} year={r.year} q={q} size={mini} yearElapsedPct={r.yearElapsedPct} />}
-        foot={<IntegrationFoot g={g} />}
-      >
-        <IntegrationMonthRing g={g} size={ring} />
-      </DonutCard>
-
-      <DonutCard
-        title="Müşteri Takip Statüsü"
-        aside={<>
-          <MiniRing pair={g.hunterToFarmer} label="Hunter → Farmer" tone={goalTone(g.hunterToFarmer)} size={mini} />
-          <MiniRing pair={g.leadToHunter} label="Lead → Hunter" tone={goalTone(g.leadToHunter)} size={mini} />
-        </>}
-      >
-        {owner.list ? <StatusDonut list={owner.list} size={ring} /> : <Ring pct={null} tone="neutral" big="—" sub="liste yok" size={ring} stroke={12} />}
-      </DonutCard>
-
+      {/* Karne düzeni (06.10.2026): hero satırı + boyut kartları. Veri aynı (owner.goals / revenue). */}
+      <div className="lb-kv lb-kv-owner">
+        <div className="lb-kv-hero">
+          <div className="lb-kv-card lb-kv-score">
+            <Ring
+              pct={hasRevenueTarget ? r.attainmentPct : null}
+              tone={hasRevenueTarget ? (r.pace ?? 'neutral') : 'neutral'}
+              big={hasRevenueTarget ? `%${r.attainmentPct ?? 0}` : '—'}
+              sub="ciro"
+              size={Math.round(ring * 0.5)}
+              stroke={10}
+            />
+            <div>
+              <span className="lb-kv-label">Müşteri Takip Statüsü</span>
+              {owner.list ? (
+                <div className="lb-kv-chips">
+                  <span><i style={{ background: 'var(--lb-hunter)' }} />Hunter <b>{fmt(owner.list.hunter)}</b></span>
+                  <span><i style={{ background: 'var(--lb-farmer)' }} />Farmer <b>{fmt(owner.list.farmer)}</b></span>
+                  <span><i style={{ background: 'var(--lb-lead)' }} />Lead <b>{fmt(owner.list.lead)}</b></span>
+                  <span><i style={{ background: 'var(--lb-kasa)' }} />Kasa <b>{fmt(owner.list.kasa)}</b></span>
+                </div>
+              ) : <p>Account Atama listesi yok.</p>}
+              <p>Entegrasyon {g.integrationMonthLabel}: {fmt(g.integrationMonth.actual)}{g.integrationMonth.target != null ? ` / ${fmt(g.integrationMonth.target)}` : ''} · {q} {fmt(g.integrationQuarter.actual)}{g.integrationQuarter.target != null ? ` / ${fmt(g.integrationQuarter.target)}` : ''} · ay +{fmt(g.integrationMonthDevices)} cihaz · kazanılan {fmtMoney(g.integrationRevenue.usdMonth)} / yıl {fmtMoney(g.integrationRevenue.usdYear)}</p>
+            </div>
+          </div>
+          <KvHero label="YTD Ciro" value={fmtMoney(r.actualYtd)} pair={{ actual: r.actualYtd, target: r.target, pct: r.attainmentPct }} tone={hasRevenueTarget ? (r.pace ?? 'neutral') : 'neutral'} money href={link('fatura')} />
+          <KvHero label="Satılan Cihaz" value={fmt(r.deviceActualYtd)} pair={deviceGoal} tone={goalTone(deviceGoal, r.yearElapsedPct)} href={link('cihaz')} />
+          <KvHero label="Aktivite · bu hafta" value={fmt(owner.actual.totalActivities)} pair={{ actual: owner.actual.totalActivities, target: weeklyTarget || null, pct: weeklyTarget ? weeklyPct : null }} tone={weeklyTone} />
+        </div>
+        <div className="lb-kv-dims">
+          <KvDim label={`${q} Ziyaret`} pair={g.visitsQuarter} tone={goalTone(g.visitsQuarter, g.quarter.elapsedPct)} />
+          <KvDim label="Yıl Ziyaret" pair={g.visitsYear} tone={goalTone(g.visitsYear, r.yearElapsedPct)} />
+          <KvDim label={`${q} Bütçe`} pair={g.budgetQuarter} tone={goalTone(g.budgetQuarter, g.quarter.elapsedPct)} money />
+          <KvDim label="Entegrasyon · yıl" pair={g.integration} tone={goalTone(g.integration, r.yearElapsedPct)} />
+          <KvDim label="Hunter → Farmer" pair={g.hunterToFarmer} tone={goalTone(g.hunterToFarmer)} />
+          <KvDim label="Lead → Hunter" pair={g.leadToHunter} tone={goalTone(g.leadToHunter)} />
+        </div>
+      </div>
       <div className="lb-card lb-owner-recent">
         <div className="lb-card-head"><h3>Son Hareketler</h3><span>bu hafta</span></div>
         <MiniActivityList rows={recentRows} todayKey={todayKey} />
