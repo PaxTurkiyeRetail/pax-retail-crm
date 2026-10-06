@@ -1,10 +1,11 @@
 import { requireReportsAccessOrThrow, requireScreenAccessOrThrow } from '@/lib/authz';
-import CommandCenter from '@/components/reports/CommandCenter';
+import LiveBoard from '@/components/reports/LiveBoard';
 
-// Canlı Ekran (05.10.2026): dönen slaytlar ve sekmeler kalktı; takım durumu tek sayfada, karne tasarımında.
-// Eski pano kodu (SellerFollowupClient / LiveBoard) duruyor, artık bağlı değil.
+// Canlı Ekran (06.10.2026): eski panonun ekranları ve verisi aynen (Genel Özet, kişi kişi, Teklifler, Uyarılar…);
+// görünüm Performans Karnesi tasarımında (styles/live-board.css sonundaki "KARNE GÖRÜNÜMÜ").
+// Tek sayfa alternatif görünüm: components/reports/CommandCenter.tsx (şu an bağlı değil).
 export default async function CanliEkranPage() {
   await requireReportsAccessOrThrow();
   await requireScreenAccessOrThrow('screen.reports.view');
-  return <CommandCenter />;
+  return <LiveBoard active />;
 }

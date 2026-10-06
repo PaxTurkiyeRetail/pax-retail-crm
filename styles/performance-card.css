@@ -165,3 +165,11 @@ tr.cc-sel td { background: rgba(37, 99, 235, .08); }
 .cc-dots { display: flex; align-items: center; justify-content: center; gap: 8px; }
 .cc-dots button { width: 10px; height: 10px; border-radius: 50%; border: 0; padding: 0; background: var(--pc-line, #cbd5e1); cursor: pointer; }
 .cc-dots button.active { background: var(--pc-accent, #2563eb); width: 26px; border-radius: 6px; }
+/* Canlı Ekran canlı kart: üst renk şeridi + hafif gölge (göze hitap) */
+.cc-live { position: relative; border-top: 4px solid var(--pc-neutral); transition: transform .25s ease, box-shadow .25s ease; }
+.cc-live:hover { transform: translateY(-3px); box-shadow: 0 12px 28px rgba(20, 32, 51, .12); }
+.cc-live.tone-b-ok { border-top-color: var(--pc-ok); background: linear-gradient(180deg, rgba(22,138,91,.06), var(--pc-card) 38%); }
+.cc-live.tone-b-info { border-top-color: var(--pc-info); background: linear-gradient(180deg, rgba(37,99,235,.06), var(--pc-card) 38%); }
+.cc-live.tone-b-warn { border-top-color: var(--pc-warn); background: linear-gradient(180deg, rgba(217,119,6,.07), var(--pc-card) 38%); }
+.cc-live.tone-b-danger { border-top-color: var(--pc-danger); background: linear-gradient(180deg, rgba(200,30,30,.06), var(--pc-card) 38%); }
+.cc-live .pc-ov-name { display: flex; flex-direction: column; }

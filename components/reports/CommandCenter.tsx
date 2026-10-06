@@ -9,9 +9,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { drilldownHref } from '@/lib/reports/drilldown-shared';
 import { fmtMoney, normalizeName, type AlertItem, type Distribution, type LiveBoardPayload, type Tone } from '@/lib/reports/live-board-shared';
 import { attainmentTone } from '@/lib/reports/performance-card';
-import { WEEKLY_TARGET_LABELS } from '@/lib/reports/weekly-targets-shared';
-import { Box, OwnerOverviewCard, Row } from '@/components/reports/PerformanceCard';
-import { perfDimensions, perfTotal, type PerfPayload } from '@/lib/reports/performance-card';
+import { WEEKLY_TARGET_LABELS, sumKinds } from '@/lib/reports/weekly-targets-shared';
+import { Box, Row } from '@/components/reports/PerformanceCard';
 import '@/styles/performance-card.css';
 
 type FollowupRow = {
@@ -79,29 +78,60 @@ function useMore(limit: number) {
   return { take: <T,>(rows: T[]) => (all ? rows : rows.slice(0, limit)), more };
 }
 
-/** Kişi kartları: karne özet kartları, kaydırmasız; sayfalar yavaşça (fade) geçer, üzerine gelince durur. */
+/** Kişi kartları (Canlı Ekran verisi, karne tasarımı): kaydırmasız; sayfalar yavaşça geçer, üzerine gelince durur. */
 const CARD_PAGE = 6;
 const CARD_MS = 12000;
-function PersonCards({ onOpen }: { onOpen: (owner: string) => void }) {
-  const [perf, setPerf] = useState<PerfPayload | null>(null);
-  const [failed, setFailed] = useState(false);
+const pctOf = (a: number, b: number | null | undefined) => (b && b > 0 ? Math.round((a / b) * 100) : null);
+const toneOf = (p: number | null) => (p == null ? 'neutral' : p >= 90 ? 'ok' : p >= 60 ? 'info' : p >= 35 ? 'warn' : 'danger');
+
+function LiveCard({ o, rank, onOpen }: { o: LiveBoardPayload['owners'][number]; rank: number; onOpen: () => void }) {
+  const rv = o.revenue;
+  const ring = rv.attainmentPct;
+  const meet = sumKinds(o.actual, ['salesPhysical', 'salesOnline']);
+  const meetT = sumKinds(o.target, ['salesPhysical', 'salesOnline']);
+  const cont = sumKinds(o.actual, ['salesPhone', 'salesEmail']);
+  const contT = sumKinds(o.target, ['salesPhone', 'salesEmail']);
+  const bars: Array<{ label: string; v: string; p: number | null }> = [
+    { label: 'Görüşme (hafta)', v: `${meet}/${meetT || '–'}`, p: pctOf(meet, meetT) },
+    { label: 'Temas (hafta)', v: `${cont}/${contT || '–'}`, p: pctOf(cont, contT) },
+    { label: 'Cihaz (yıl)', v: `${rv.deviceActualYtd}/${rv.deviceTarget ?? '–'}`, p: pctOf(rv.deviceActualYtd, rv.deviceTarget) },
+    { label: 'Forecast', v: fmtMoney(rv.forecast), p: rv.forecastPct },
+    { label: 'Aktif portföy', v: `${o.portfolio.active}/${o.portfolio.total}`, p: pctOf(o.portfolio.active, o.portfolio.total) },
+  ];
+  const kpi = (label: string, v: string, sub: string, tone: string) => (
+    <div className="pc-ov-kpi"><span>{label}</span><b>{v}</b><small className={`tone-${tone}`}>{sub}</small></div>
+  );
+  return (
+    <button type="button" className={`pc-card pc-ov cc-live tone-b-${toneOf(ring)}`} onClick={onOpen}>
+      <div className="pc-ov-head">
+        <span className="pc-ov-rank">{rank}</span>
+        <div className={`pc-ring sm tone-${toneOf(ring)}`} style={{ ['--pc-pct' as string]: `${Math.min(100, ring ?? 0)}%` }}><b>{ring == null ? '–' : `%${ring}`}</b></div>
+        <div className="pc-ov-name"><strong>{o.owner}</strong><small className="pc-mini">bugün {o.todayActivities} aktivite{o.jira ? ` · Jira ${o.jira.open}` : ''}</small></div>
+      </div>
+      <div className="pc-ov-kpis">
+        {kpi('Ciro', fmtMoney(rv.actualYtd), rv.target ? `hedef ${fmtMoney(rv.target)}` : 'hedef yok', toneOf(ring))}
+        {kpi('Açık teklif', String(rv.openQuotes), fmtMoney(rv.pipeline), rv.expiredOpenQuotes ? 'warn' : 'neutral')}
+        {kpi('Haftalık', `${o.actual.totalActivities}`, o.achievementPct == null ? 'hedef yok' : `%${o.achievementPct}`, toneOf(o.achievementPct))}
+      </div>
+      <div className="pc-ov-dims">
+        {bars.map((b) => (
+          <div key={b.label} title={`${b.label}: ${b.v}`}>
+            <span>{b.label}</span>
+            <span className="pc-progress"><span className={`tone-${toneOf(b.p)}`} style={{ width: `${Math.min(100, b.p ?? 0)}%` }} /></span>
+            <small>{b.p == null ? b.v : `%${b.p}`}</small>
+          </div>
+        ))}
+      </div>
+      <div className="pc-ov-foot">Bu hafta {o.quotes.weekCount} teklif · {fmtMoney(o.quotes.weekAmount)}{rv.expiredOpenQuotes ? ` · süresi geçmiş ${rv.expiredOpenQuotes}` : ''} → Detayı aç</div>
+    </button>
+  );
+}
+
+function PersonCards({ owners, onOpen }: { owners: LiveBoardPayload['owners']; onOpen: (owner: string) => void }) {
   const [page, setPage] = useState(0);
   const [fade, setFade] = useState(true);
   const [paused, setPaused] = useState(false);
-  useEffect(() => {
-    let alive = true;
-    fetch('/api/reports/performance?period=ytd', { cache: 'no-store' })
-      .then(async (r) => { if (!r.ok) throw new Error(String(r.status)); return r.json(); })
-      .then((j: PerfPayload) => { if (alive) setPerf(j); })
-      .catch(() => { if (alive) setFailed(true); });
-    return () => { alive = false; };
-  }, []);
-  const ranked = useMemo(() => {
-    if (!perf) return [];
-    const el = perf.range.elapsedPct;
-    return perf.owners.map((o) => ({ o, t: perfTotal(perfDimensions(o, el)) })).sort((a, b) => (b.t ?? -1) - (a.t ?? -1));
-  }, [perf]);
-  const pages = Math.max(1, Math.ceil(ranked.length / CARD_PAGE));
+  const pages = Math.max(1, Math.ceil(owners.length / CARD_PAGE));
   useEffect(() => {
     if (paused || pages < 2) return;
     let swap: ReturnType<typeof setTimeout> | undefined;
@@ -111,14 +141,12 @@ function PersonCards({ onOpen }: { onOpen: (owner: string) => void }) {
     }, CARD_MS);
     return () => { clearInterval(id); if (swap) clearTimeout(swap); };
   }, [paused, pages]);
-  if (failed) return null;
-  if (!perf) return <div className="pc-card pc-mini">Kişi kartları yükleniyor…</div>;
   const cur = page % pages;
   return (
     <div className="cc-cards" onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}>
       <div className={`pc-overview cc-cards-page${fade ? ' is-in' : ''}`}>
-        {ranked.slice(cur * CARD_PAGE, cur * CARD_PAGE + CARD_PAGE).map(({ o }, i) => (
-          <OwnerOverviewCard key={o.owner} o={o} elapsed={perf.range.elapsedPct} rank={cur * CARD_PAGE + i + 1} onOpen={() => onOpen(o.owner)} />
+        {owners.slice(cur * CARD_PAGE, cur * CARD_PAGE + CARD_PAGE).map((o, i) => (
+          <LiveCard key={o.owner} o={o} rank={cur * CARD_PAGE + i + 1} onOpen={() => onOpen(o.owner)} />
         ))}
       </div>
       {pages > 1 ? (
@@ -211,7 +239,7 @@ export default function CommandCenter() {
         </div>
       </div>
 
-      {view === 'cards' ? <PersonCards onOpen={(o) => { setSel(o); setAlertKind(null); setView('detail'); }} /> : (<>
+      {view === 'cards' ? <PersonCards owners={owners} onOpen={(o) => { setSel(o); setAlertKind(null); setView('detail'); }} /> : (<>
       {/* 1 — Ana göstergeler */}
       <div className="pc-grid cc-g5">
         <Kpi label="Ciro (YTD)" value={fmtMoney(rv.actualYtd)} target={rv.target != null ? fmtMoney(rv.target) : null} ratio={rv.attainmentPct} href={dd('fatura')} />

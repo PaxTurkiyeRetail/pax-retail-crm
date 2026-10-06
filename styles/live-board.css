@@ -750,3 +750,48 @@
 /* Kompakt (dizüstü) ekranlarda Son Hareketler kutusu dar: aktivite türü çipi gizlenir,
    firma adı tam görünür (tür bilgisi başlık ipucunda kalır). */
 .lb[data-compact="1"] .lb-mini-kind { display: none; }
+
+/* ===== KARNE GÖRÜNÜMÜ (06.10.2026) =====
+   Veri ve ekranlar aynı; görünüm Performans Karnesi tasarım diline çekildi:
+   açık zemin, beyaz kart, yumuşak gölge, renkli üst şerit, yavaş (fade) geçiş. */
+.lb {
+  --lb-ok: #168a5b; --lb-info: #2563eb; --lb-accent: #2563eb; --lb-warn: #d97706; --lb-danger: #c81e1e; --lb-neutral: #94a3b8;
+  --lb-ok-soft: rgba(22, 138, 91, .10); --lb-info-soft: rgba(37, 99, 235, .10); --lb-warn-soft: rgba(217, 119, 6, .12); --lb-danger-soft: rgba(200, 30, 30, .10);
+  --lb-skin-bg: #f4f7fb; --lb-skin-card: #fff; --lb-skin-line: #e6ebf2;
+  background: var(--lb-skin-bg); border-color: var(--lb-skin-line); border-radius: 22px; box-shadow: 0 18px 48px rgba(20, 32, 51, .08);
+}
+[data-theme="dark"] .lb { --lb-skin-bg: #0b1220; --lb-skin-card: #111827; --lb-skin-line: #1f2937; }
+.lb-top { background: var(--lb-skin-card); border-bottom: 1px solid var(--lb-skin-line); }
+.lb-title { font-size: clamp(20px, 1.8vw, 30px); }
+.lb-progress { height: 3px; }
+.lb-slide { animation: lb-skin-in .9s ease both; }
+@keyframes lb-skin-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+/* Kartlar: karne kartı */
+.lb-card { background: var(--lb-skin-card); border: 1px solid var(--lb-skin-line); border-radius: 18px; box-shadow: 0 10px 28px rgba(20, 32, 51, .06); padding: 16px 18px; }
+.lb-card-head h3, .lb-card-head > b, .lb-card-head > span:first-child { letter-spacing: .06em; }
+
+/* KPI: karne hero kutusu gibi, renkli üst şerit */
+.lb-kpi, .lb-band, .lb-alert-chip, .lb-figure, .lb-jira-net {
+  background: var(--lb-skin-card); border: 1px solid var(--lb-skin-line); border-radius: 16px; box-shadow: 0 6px 18px rgba(20, 32, 51, .05);
+}
+.lb-kpi, .lb-alert-chip, .lb-figure { border-top: 4px solid var(--lb-neutral); }
+.lb-kpi.tone-ok, .lb-alert-chip.tone-ok, .lb-figure.tone-ok { border-top-color: var(--lb-ok); background: linear-gradient(180deg, rgba(22,138,91,.07), var(--lb-skin-card) 55%); }
+.lb-kpi.tone-info, .lb-alert-chip.tone-info, .lb-figure.tone-info { border-top-color: var(--lb-info); background: linear-gradient(180deg, rgba(37,99,235,.07), var(--lb-skin-card) 55%); }
+.lb-kpi.tone-warn, .lb-alert-chip.tone-warn, .lb-figure.tone-warn { border-top-color: var(--lb-warn); background: linear-gradient(180deg, rgba(217,119,6,.08), var(--lb-skin-card) 55%); }
+.lb-kpi.tone-danger, .lb-alert-chip.tone-danger, .lb-figure.tone-danger { border-top-color: var(--lb-danger); background: linear-gradient(180deg, rgba(200,30,30,.07), var(--lb-skin-card) 55%); }
+.lb-band-item { border-left-color: var(--lb-skin-line); }
+
+/* Liste satırları: karne tablosu satırı gibi sade, sol renk şeridi */
+.lb-item, .lb-tr, .lb-hot { background: var(--lb-skin-card); border-color: var(--lb-skin-line); border-radius: 14px; box-shadow: 0 3px 10px rgba(20, 32, 51, .04); transition: transform .2s ease, box-shadow .2s ease; }
+.lb-item:hover, .lb-tr:hover, .lb-hot:hover { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(20, 32, 51, .09); }
+.lb-leader-pool { background: var(--lb-skin-bg); border: 1px solid var(--lb-skin-line); }
+
+/* Çubuklar: karne progress */
+.lb-bar, .lb-model-bar { height: 10px; background: #e9eef5; border: 0; }
+[data-theme="dark"] .lb-bar, [data-theme="dark"] .lb-model-bar { background: #1f2937; }
+
+/* Alt gezinme: karne çipleri */
+.lb-strip { padding-top: 10px; }
+.lb-dot { background: var(--lb-skin-card); border-color: var(--lb-skin-line); box-shadow: 0 2px 6px rgba(20, 32, 51, .04); transition: background .2s, color .2s; }
+.lb-dot.active { background: var(--lb-info); border-color: var(--lb-info); color: #fff; box-shadow: 0 6px 16px rgba(37, 99, 235, .28); }
