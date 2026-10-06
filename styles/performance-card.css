@@ -134,3 +134,25 @@
 .pc-rank-item { display: flex; align-items: center; gap: 10px; cursor: pointer; text-align: left; font: inherit; color: inherit; }
 .pc-rank-item strong { flex: 1; }
 .pc-rank-item.active { outline: 2px solid #2563eb; }
+/* CANLI EKRAN (05.10.2026) — tek sayfa takım durumu (components/reports/CommandCenter.tsx) */
+.cc-g5 { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+.cc-alerts { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
+.cc-alert { display: flex; flex-direction: column; gap: 2px; text-align: left; font: inherit; color: inherit; cursor: pointer; border-left: 4px solid #ddd; }
+.cc-alert:disabled { cursor: default; opacity: .6; }
+.cc-alert b { font-size: 26px; line-height: 1.1; }
+.cc-alert span { font-weight: 600; font-size: 13px; }
+.cc-alert small { font-size: 11px; opacity: .7; }
+.cc-alert.active { outline: 2px solid #2563eb; }
+.cc-alert.tone-b-ok { border-left-color: #16a34a; }
+.cc-alert.tone-b-warn { border-left-color: #d97706; }
+.cc-alert.tone-b-danger { border-left-color: #dc2626; }
+.cc-list { margin-top: 10px; max-height: 420px; overflow: auto; }
+.cc-bars { display: flex; flex-direction: column; gap: 6px; margin: 8px 0 12px; }
+.cc-bar { display: grid; grid-template-columns: minmax(90px, 160px) 1fr 56px; align-items: center; gap: 10px; font-size: 13px; color: inherit; text-decoration: none; }
+.cc-bar b { text-align: right; }
+.cc-bar-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cc-more { margin-top: 8px; }
+@media (max-width: 640px) { .cc-bar { grid-template-columns: 90px 1fr 44px; } }
+.cc-scroll { overflow-x: auto; }
+tr.cc-sel td { background: rgba(37, 99, 235, .08); }
+.cc-detail { border-top: 3px solid #2563eb; }
