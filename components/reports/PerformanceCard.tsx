@@ -65,6 +65,44 @@ export function Trend({ points, href }: { points: PerfOwnerReport['trend']; href
   );
 }
 
+/** Satıcı özet kartı (karne listesi + Canlı Ekran kişi kartları ortak). */
+export function OwnerOverviewCard({ o, elapsed, rank, onOpen }: { o: PerfOwnerReport; elapsed: number; rank: number; onOpen: () => void }) {
+  const d = perfDimensions(o, elapsed);
+  const t = perfTotal(d);
+  const g = perfGrade(t);
+  const kpi = (label: string, m: Measure, render: (v: number) => string) => {
+    const pct = attainmentPct(m);
+    return <div className="pc-ov-kpi"><span>{label}</span><b>{render(m.actual)}</b><small className={`tone-${attainmentTone(pct)}`}>{pct == null ? 'hedef yok' : `%${pct}`}</small></div>;
+  };
+  return (
+    <button type="button" className="pc-card pc-ov" onClick={onOpen}>
+      <div className="pc-ov-head">
+        <span className="pc-ov-rank">{rank}</span>
+        <div className={`pc-ring sm tone-${g.tone}`} style={{ ['--pc-pct' as string]: `${t ?? 0}%` }}><b>{t == null ? NA : `%${t}`}</b></div>
+        <div className="pc-ov-name"><strong>{o.owner}</strong></div>
+      </div>
+      <div className="pc-ov-kpis">
+        {kpi('Ciro', o.revenue, fmtMoney)}
+        {kpi('Cihaz', o.devices, (v) => v.toLocaleString('tr-TR'))}
+        {kpi('Görüşme', o.meetings, (v) => v.toLocaleString('tr-TR'))}
+      </div>
+      <div className="pc-ov-dims">
+        {d.map((x) => {
+          const pct = x.score == null ? null : Math.round((x.score / x.weight) * 100);
+          return (
+            <div key={x.key} title={`${x.label}: ${pct == null ? NA : `%${pct}`}`}>
+              <span>{x.label}</span>
+              <span className="pc-progress"><span className={`tone-${perfGrade(pct).tone}`} style={{ width: `${pct ?? 0}%` }} /></span>
+              <small>{pct == null ? NA : `%${pct}`}</small>
+            </div>
+          );
+        })}
+      </div>
+      <div className="pc-ov-foot">Açık teklif {o.pipeline.openCount} · {fmtMoney(o.pipeline.openAmount)} · hareketsiz {o.risks.inactive} → Detayı aç</div>
+    </button>
+  );
+}
+
 /** Boyut kartı hover açıklaması: puanın hangi rakamlardan, nasıl çıktığı (perfDimensions ile aynı formül). */
 function dimExplain(key: string, r: PerfOwnerReport, elapsed: number): string[] {
   const num = (v: number) => v.toLocaleString('tr-TR');
@@ -270,40 +308,7 @@ export default function PerformanceCard() {
           <div className="pc-filters">{periodButtons}</div>
         </div>
         <div className="pc-overview">
-          {ranked.map(({ o, d, t }, i) => {
-            const g = perfGrade(t);
-            const kpi = (label: string, m: Measure, render: (v: number) => string) => {
-              const pct = attainmentPct(m);
-              return <div className="pc-ov-kpi"><span>{label}</span><b>{render(m.actual)}</b><small className={`tone-${attainmentTone(pct)}`}>{pct == null ? 'hedef yok' : `%${pct}`}</small></div>;
-            };
-            return (
-              <button type="button" key={o.owner} className="pc-card pc-ov" onClick={() => setSelected(o.owner)}>
-                <div className="pc-ov-head">
-                  <span className="pc-ov-rank">{i + 1}</span>
-                  <div className={`pc-ring sm tone-${g.tone}`} style={{ ['--pc-pct' as string]: `${t ?? 0}%` }}><b>{t == null ? NA : `%${t}`}</b></div>
-                  <div className="pc-ov-name"><strong>{o.owner}</strong></div>
-                </div>
-                <div className="pc-ov-kpis">
-                  {kpi('Ciro', o.revenue, fmtMoney)}
-                  {kpi('Cihaz', o.devices, (v) => v.toLocaleString('tr-TR'))}
-                  {kpi('Görüşme', o.meetings, (v) => v.toLocaleString('tr-TR'))}
-                </div>
-                <div className="pc-ov-dims">
-                  {d.map((x) => {
-                    const pct = x.score == null ? null : Math.round((x.score / x.weight) * 100);
-                    return (
-                      <div key={x.key} title={`${x.label}: ${pct == null ? NA : `%${pct}`}`}>
-                        <span>{x.label}</span>
-                        <span className="pc-progress"><span className={`tone-${perfGrade(pct).tone}`} style={{ width: `${pct ?? 0}%` }} /></span>
-                        <small>{pct == null ? NA : `%${pct}`}</small>
-                      </div>
-                    );
-                  })}
-                </div>
-                <div className="pc-ov-foot">Açık teklif {o.pipeline.openCount} · {fmtMoney(o.pipeline.openAmount)} · hareketsiz {o.risks.inactive} → Karneyi aç</div>
-              </button>
-            );
-          })}
+          {ranked.map(({ o }, i) => <OwnerOverviewCard key={o.owner} o={o} elapsed={elapsed} rank={i + 1} onOpen={() => setSelected(o.owner)} />)}
         </div>
       </div>
     );

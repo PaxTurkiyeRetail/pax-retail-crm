@@ -156,3 +156,12 @@
 .cc-scroll { overflow-x: auto; }
 tr.cc-sel td { background: rgba(37, 99, 235, .08); }
 .cc-detail { border-top: 3px solid #2563eb; }
+
+/* Canlı Ekran kişi kartları: kaydırmasız, yavaş geçiş */
+.cc-cards { height: calc(100vh - 190px); min-height: 420px; overflow: hidden; display: flex; flex-direction: column; gap: 10px; }
+.cc-cards-page { flex: 1; grid-template-rows: repeat(2, minmax(0, 1fr)); opacity: 0; transform: translateY(6px); transition: opacity .9s ease, transform .9s ease; }
+.cc-cards-page.is-in { opacity: 1; transform: none; }
+.cc-cards-page .pc-ov { overflow: hidden; }
+.cc-dots { display: flex; align-items: center; justify-content: center; gap: 8px; }
+.cc-dots button { width: 10px; height: 10px; border-radius: 50%; border: 0; padding: 0; background: var(--pc-line, #cbd5e1); cursor: pointer; }
+.cc-dots button.active { background: var(--pc-accent, #2563eb); width: 26px; border-radius: 6px; }

@@ -7,5 +7,5 @@ import { redirect } from 'next/navigation';
  * oradan `embedded` modunda çağrılır.
  */
 export default async function PhaseReportPage() {
-  redirect('/canli-ekran?tab=faz');
+  redirect('/dashboard?tab=faz');
 }

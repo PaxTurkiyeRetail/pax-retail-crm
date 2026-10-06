@@ -7,10 +7,11 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { drilldownHref } from '@/lib/reports/drilldown-shared';
-import { fmtMoney, type AlertItem, type Distribution, type LiveBoardPayload, type Tone } from '@/lib/reports/live-board-shared';
+import { fmtMoney, normalizeName, type AlertItem, type Distribution, type LiveBoardPayload, type Tone } from '@/lib/reports/live-board-shared';
 import { attainmentTone } from '@/lib/reports/performance-card';
 import { WEEKLY_TARGET_LABELS } from '@/lib/reports/weekly-targets-shared';
-import { Box, Row } from '@/components/reports/PerformanceCard';
+import { Box, OwnerOverviewCard, Row } from '@/components/reports/PerformanceCard';
+import { perfDimensions, perfTotal, type PerfPayload } from '@/lib/reports/performance-card';
 import '@/styles/performance-card.css';
 
 type FollowupRow = {
@@ -78,6 +79,60 @@ function useMore(limit: number) {
   return { take: <T,>(rows: T[]) => (all ? rows : rows.slice(0, limit)), more };
 }
 
+/** Kişi kartları: karne özet kartları, kaydırmasız; sayfalar yavaşça (fade) geçer, üzerine gelince durur. */
+const CARD_PAGE = 6;
+const CARD_MS = 12000;
+function PersonCards({ onOpen }: { onOpen: (owner: string) => void }) {
+  const [perf, setPerf] = useState<PerfPayload | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [page, setPage] = useState(0);
+  const [fade, setFade] = useState(true);
+  const [paused, setPaused] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    fetch('/api/reports/performance?period=ytd', { cache: 'no-store' })
+      .then(async (r) => { if (!r.ok) throw new Error(String(r.status)); return r.json(); })
+      .then((j: PerfPayload) => { if (alive) setPerf(j); })
+      .catch(() => { if (alive) setFailed(true); });
+    return () => { alive = false; };
+  }, []);
+  const ranked = useMemo(() => {
+    if (!perf) return [];
+    const el = perf.range.elapsedPct;
+    return perf.owners.map((o) => ({ o, t: perfTotal(perfDimensions(o, el)) })).sort((a, b) => (b.t ?? -1) - (a.t ?? -1));
+  }, [perf]);
+  const pages = Math.max(1, Math.ceil(ranked.length / CARD_PAGE));
+  useEffect(() => {
+    if (paused || pages < 2) return;
+    let swap: ReturnType<typeof setTimeout> | undefined;
+    const id = setInterval(() => {
+      setFade(false);
+      swap = setTimeout(() => { setPage((p) => (p + 1) % pages); setFade(true); }, 900);
+    }, CARD_MS);
+    return () => { clearInterval(id); if (swap) clearTimeout(swap); };
+  }, [paused, pages]);
+  if (failed) return null;
+  if (!perf) return <div className="pc-card pc-mini">Kişi kartları yükleniyor…</div>;
+  const cur = page % pages;
+  return (
+    <div className="cc-cards" onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}>
+      <div className={`pc-overview cc-cards-page${fade ? ' is-in' : ''}`}>
+        {ranked.slice(cur * CARD_PAGE, cur * CARD_PAGE + CARD_PAGE).map(({ o }, i) => (
+          <OwnerOverviewCard key={o.owner} o={o} elapsed={perf.range.elapsedPct} rank={cur * CARD_PAGE + i + 1} onOpen={() => onOpen(o.owner)} />
+        ))}
+      </div>
+      {pages > 1 ? (
+        <div className="cc-dots">
+          {Array.from({ length: pages }, (_, i) => (
+            <button type="button" key={i} className={i === cur ? 'active' : ''} aria-label={`Sayfa ${i + 1}`} onClick={() => { setPage(i); setFade(true); }} />
+          ))}
+          <span className="pc-mini">{paused ? 'durdu' : `${CARD_MS / 1000} sn'de geçer`}</span>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export default function CommandCenter() {
   const [data, setData] = useState<LiveBoardPayload | null>(null);
   const [follow, setFollow] = useState<FollowupPayload | null>(null);
@@ -85,6 +140,7 @@ export default function CommandCenter() {
   const [error, setError] = useState('');
   const [alertKind, setAlertKind] = useState<AlertItem['kind'] | null>(null);
   const [sel, setSel] = useState('');
+  const [view, setView] = useState<'cards' | 'detail'>('cards');
   const hot = useMore(6);
   const poc = useMore(6);
   const fol = useMore(10);
@@ -117,13 +173,22 @@ export default function CommandCenter() {
   if (!data) return <div className="pc-wrap"><div className="pc-card">Yükleniyor…</div></div>;
 
   const t = data.team;
-  const rv = t.revenue;
+  // Kişi seçiliyse tüm sayfa o kişiye süzülür (takım verisi yerine kişinin bloğu).
+  const so = sel ? data.owners.find((x) => x.owner === sel) ?? null : null;
+  const same = (n: string | null | undefined) => !so || (!!n && normalizeName(n) === normalizeName(so.owner));
+  const rv = so?.revenue ?? t.revenue;
+  const act = so?.actual ?? t.actual;
+  const tgt = so?.target ?? t.target;
+  const alerts = t.alerts.filter((a) => same(a.owner));
+  const hotRows = t.hot.filter((h) => same(h.owner));
+  const pocRows = t.poc.filter((p) => same(p.owner));
+  const folRows = followRows.filter((r) => same(r.sorumlu));
   const year = data.range.year;
-  const dd = (kind: Parameters<typeof drilldownHref>[0]['kind'], extra: Omit<Parameters<typeof drilldownHref>[0], 'kind'> = {}) => drilldownHref({ kind, year, ...extra });
-  const meet = t.actual.salesPhysical + t.actual.salesOnline;
-  const meetT = t.target.salesPhysical + t.target.salesOnline;
+  const dd = (kind: Parameters<typeof drilldownHref>[0]['kind'], extra: Omit<Parameters<typeof drilldownHref>[0], 'kind'> = {}) => drilldownHref({ kind, year, owner: so?.owner ?? null, ...extra });
+  const meet = act.salesPhysical + act.salesOnline;
+  const meetT = tgt.salesPhysical + tgt.salesOnline;
   const cl = data.customerList;
-  const alertRows = alertKind ? t.alerts.filter((a) => a.kind === alertKind) : [];
+  const alertRows = alertKind ? alerts.filter((a) => a.kind === alertKind) : [];
   const q = data.quotes;
   const owners = [...data.owners].sort((a, b) => (b.revenue.attainmentPct ?? -1) - (a.revenue.attainmentPct ?? -1));
 
@@ -131,15 +196,22 @@ export default function CommandCenter() {
     <div className={`pc-wrap${status === 'loading' ? ' is-loading' : ''}`}>
       <div className="pc-top">
         <div>
-          <div className="pc-eyebrow">Takım Durumu</div>
-          <h1>Canlı Ekran</h1>
-          <div className="pc-sub">{year} · yılın %{rv.yearElapsedPct}&apos;i geçti · {t.ownerCount} satıcı · bu hafta {data.range.label} · güncelleme {new Date(data.generatedAt).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}</div>
+          <div className="pc-eyebrow">Canlı Ekran · {so ? 'Kişi' : 'Takım'}</div>
+          <h1>{so ? so.owner : 'Takım Durumu'}</h1>
+          <div className="pc-sub">{year} · yılın %{rv.yearElapsedPct}&apos;i geçti · {so ? `ekipte ciro sırası ${owners.findIndex((x) => x.owner === so.owner) + 1}/${owners.length}` : `${t.ownerCount} satıcı`} · bu hafta {data.range.label} · güncelleme {new Date(data.generatedAt).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}</div>
         </div>
         <div className="pc-filters">
+          <button type="button" className={view === 'cards' ? 'active' : ''} onClick={() => { setView('cards'); setSel(''); }}>Kişi Kartları</button>
+          <button type="button" className={view === 'detail' ? 'active' : ''} onClick={() => setView('detail')}>Detay</button>
+          <select value={sel} onChange={(e) => { setSel(e.target.value); setAlertKind(null); setView('detail'); }} aria-label="Satıcı">
+            <option value="">Tüm ekip</option>
+            {owners.map((o) => <option key={o.owner} value={o.owner}>{o.owner}</option>)}
+          </select>
           <button type="button" onClick={() => void load()} disabled={status === 'loading'}>{status === 'loading' ? 'Yükleniyor…' : 'Yenile'}</button>
         </div>
       </div>
 
+      {view === 'cards' ? <PersonCards onOpen={(o) => { setSel(o); setAlertKind(null); setView('detail'); }} /> : (<>
       {/* 1 — Ana göstergeler */}
       <div className="pc-grid cc-g5">
         <Kpi label="Ciro (YTD)" value={fmtMoney(rv.actualYtd)} target={rv.target != null ? fmtMoney(rv.target) : null} ratio={rv.attainmentPct} href={dd('fatura')} />
@@ -158,11 +230,11 @@ export default function CommandCenter() {
           <div><span>Kalan hedef</span><b className="tone-warn">{rv.remaining == null ? NA : fmtMoney(rv.remaining)}</b></div>
         </div>
         <div className="pc-rows">
-          <Row k="Aktif satış sürecindeki firma" v={fmt(t.pipeline.activeCustomers)} href={dd('portfoy')} />
-          <Row k="Potansiyel cihaz / değer" v={`${fmt(t.pipeline.potentialDevices)} · ${fmtMoney(t.pipeline.potentialValue)}`} href="/crm/forecast" />
-          <Row k="Planlı aksiyon / geciken" v={`${fmt(t.pipeline.plannedActions)} / ${fmt(t.pipeline.overdueActions)}`} tone={t.pipeline.overdueActions ? 'danger' : 'ok'} href="/crm/activities" />
-          <Row k="Bugün girilen aktivite" v={fmt(t.todayActivities)} href="/crm/activities" />
-          <Row k="Bu hafta / bu ay açılan teklif" v={`${fmt(t.quotes.weekCount)} · ${fmtMoney(t.quotes.weekAmount)} / ${fmt(t.quotes.monthCount)} · ${fmtMoney(t.quotes.monthAmount)}`} href={dd('teklif', { state: 'acik' })} />
+          <Row k="Aktif satış sürecindeki firma" v={fmt((so ?? t).pipeline.activeCustomers)} href={dd('portfoy')} />
+          <Row k="Potansiyel cihaz / değer" v={`${fmt((so ?? t).pipeline.potentialDevices)} · ${fmtMoney((so ?? t).pipeline.potentialValue)}`} href="/crm/forecast" />
+          <Row k="Planlı aksiyon / geciken" v={`${fmt((so ?? t).pipeline.plannedActions)} / ${fmt((so ?? t).pipeline.overdueActions)}`} tone={(so ?? t).pipeline.overdueActions ? 'danger' : 'ok'} href="/crm/activities" />
+          <Row k="Bugün girilen aktivite" v={fmt((so ?? t).todayActivities)} href="/crm/activities" />
+          <Row k="Bu hafta / bu ay açılan teklif" v={`${fmt((so ?? t).quotes.weekCount)} · ${fmtMoney((so ?? t).quotes.weekAmount)} / ${fmt((so ?? t).quotes.monthCount)} · ${fmtMoney((so ?? t).quotes.monthAmount)}`} href={dd('teklif', { state: 'acik' })} />
           <Row k="İptal edilen satış (YTD)" v={fmt(rv.saleCancelled)} />
         </div>
       </div>
@@ -172,7 +244,7 @@ export default function CommandCenter() {
         <div className="pc-title"><h2>Yönetim Uyarıları</h2><span>aksiyon gerektiren başlıklar · karta bas, liste açılsın</span></div>
         <div className="cc-alerts">
           {ALERTS.map((a) => {
-            const n = t.alertCounts[a.kind] ?? 0;
+            const n = so ? alerts.filter((x) => x.kind === a.kind).length : t.alertCounts[a.kind] ?? 0;
             const tone: Tone = n === 0 ? 'ok' : a.kind === 'overdue' || a.kind === 'poc_delay' || a.kind === 'target_gap' ? 'danger' : 'warn';
             return (
               <button type="button" key={a.kind} disabled={!n} className={`pc-card cc-alert tone-b-${tone}${alertKind === a.kind ? ' active' : ''}`} onClick={() => setAlertKind(alertKind === a.kind ? null : a.kind)}>
@@ -200,11 +272,11 @@ export default function CommandCenter() {
       {/* 3 — Hot Pipeline + POC */}
       <div className="pc-grid g2 pc-section">
         <div className="pc-card">
-          <div className="pc-title"><h2>Hot Pipeline</h2><span>sonuçlanmaya yakın · {t.hot.length} fırsat</span></div>
+          <div className="pc-title"><h2>Hot Pipeline</h2><span>sonuçlanmaya yakın · {hotRows.length} fırsat</span></div>
           <table className="pc-table">
             <thead><tr><th>Müşteri</th><th>Faz</th><th>Adet</th><th>Değer</th><th>Hedef</th></tr></thead>
             <tbody>
-              {hot.take(t.hot).map((h) => (
+              {hot.take(hotRows).map((h) => (
                 <tr key={h.customerId} className="pc-click" onClick={() => window.open(`/crm/${h.customerId}`, '_blank', 'noopener')}>
                   <td><b>{h.musteri}</b><div className="pc-mini">{h.owner ?? NA}{h.nextAction ? ` · ${h.nextAction}` : ''}</div></td>
                   <td>{h.phaseName ?? NA}</td>
@@ -215,14 +287,14 @@ export default function CommandCenter() {
               ))}
             </tbody>
           </table>
-          {hot.more(t.hot.length)}
+          {hot.more(hotRows.length)}
         </div>
         <div className="pc-card">
-          <div className="pc-title"><h2>POC · Pilot · Rollout</h2><span>canlıya yakın · {t.poc.length} proje</span></div>
+          <div className="pc-title"><h2>POC · Pilot · Rollout</h2><span>canlıya yakın · {pocRows.length} proje</span></div>
           <table className="pc-table">
             <thead><tr><th>Müşteri</th><th>Faz</th><th>Adet</th><th>Son temas</th><th>Hedef</th></tr></thead>
             <tbody>
-              {poc.take(t.poc).map((p) => (
+              {poc.take(pocRows).map((p) => (
                 <tr key={p.customerId} className="pc-click" onClick={() => window.open(`/crm/${p.customerId}`, '_blank', 'noopener')}>
                   <td><b>{p.musteri}</b><div className="pc-mini">{p.owner ?? NA}</div></td>
                   <td>{p.phaseName ?? NA}</td>
@@ -233,7 +305,7 @@ export default function CommandCenter() {
               ))}
             </tbody>
           </table>
-          {poc.more(t.poc.length)}
+          {poc.more(pocRows.length)}
         </div>
       </div>
 
@@ -251,7 +323,7 @@ export default function CommandCenter() {
             <table className="pc-table">
               <thead><tr><th>Satıcı</th><th>Açık</th><th>Pasif</th><th>Satış</th><th>Kayıp</th><th>Dönüşüm</th></tr></thead>
               <tbody>
-                {q.byOwner.map((o) => (
+                {q.byOwner.filter((o) => same(o.owner)).map((o) => (
                   <tr key={o.owner} className="pc-click" onClick={() => window.open(drilldownHref({ kind: 'teklif', owner: o.owner, year, state: 'acik' }), '_blank', 'noopener')}>
                     <td><b>{o.owner}</b></td>
                     <td>{fmt(o.open)} · {fmtMoney(o.openAmount)}</td>
@@ -335,7 +407,7 @@ export default function CommandCenter() {
           <table className="pc-table">
             <thead><tr><th>Satıcı</th>{WEEKLY_TARGET_LABELS.map((l) => <th key={l.key}>{l.label}</th>)}<th>Toplam</th><th>Tekil firma</th><th>Bugün</th><th>Ciro (YTD)</th><th>Hareketsiz</th></tr></thead>
             <tbody>
-              {owners.map((o) => {
+              {owners.filter((o) => same(o.owner)).map((o) => {
                 const cell = (a: number, tg: number) => <span className={`tone-${tg ? attainmentTone(pct(a, tg)) : 'info'}`}>{fmt(a)}{tg ? ` / ${fmt(tg)}` : ''}</span>;
                 return (
                   <tr key={o.owner} className={`pc-click${sel === o.owner ? ' cc-sel' : ''}`} onClick={() => setSel(sel === o.owner ? '' : o.owner)}>
@@ -420,12 +492,12 @@ export default function CommandCenter() {
           <h2>Takip Listesi</h2>
           <span>{follow ? `${fmt(follow.summary.openFollowupCount)} açık engel · ${fmt(follow.summary.totalQuantity)} adet · yakın vadede ${fmt(follow.summary.nearTermQuantity)} adet · tarihi geçen önce` : 'yüklenemedi'}</span>
         </div>
-        {followRows.length ? (
+        {folRows.length ? (
           <>
             <table className="pc-table">
               <thead><tr><th>Müşteri</th><th>Konu kimde</th><th>Model / Adet</th><th>Takip konusu</th><th>Çözüm</th></tr></thead>
               <tbody>
-                {fol.take(followRows).map((r) => (
+                {fol.take(folRows).map((r) => (
                   <tr key={r.customerId} className="pc-click" onClick={() => window.open(cust(r.customerId), '_blank', 'noopener')}>
                     <td><b>{r.musteri}</b><div className="pc-mini">{r.sorumlu ?? ''}</div></td>
                     <td>{r.konuKimde}</td>
@@ -436,7 +508,7 @@ export default function CommandCenter() {
                 ))}
               </tbody>
             </table>
-            {fol.more(followRows.length)}
+            {fol.more(folRows.length)}
           </>
         ) : <div className="pc-mini">Açık takip yok.</div>}
       </div>
@@ -463,6 +535,7 @@ export default function CommandCenter() {
           ) : null}
         </div>
       ) : null}
+      </>)}
     </div>
   );
 }
