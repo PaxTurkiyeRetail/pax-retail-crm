@@ -26,12 +26,16 @@ export function middleware(request: NextRequest) {
   const isPublicApi =
     pathname.startsWith('/api/auth/') ||
     pathname === '/api/health' ||
-    pathname === '/api/healthz';
+    pathname === '/api/healthz' ||
+    pathname === '/api/tv/pair' ||
+    // TV cihazı: cookie geçerliliği route içinde DB'den doğrulanır (lib/tv-devices).
+    (pathname === '/api/reports/live-board' && Boolean(request.cookies.get('crm_tv')?.value));
   const isPublicPage =
     pathname === '/login' ||
     pathname === '/forgot-password' ||
     pathname === '/reset-password' ||
     pathname === '/auth/callback' ||
+    pathname === '/tv' ||
     pathname === '/manifest.webmanifest';
   const isProtected = (isApi && !isPublicApi) || (!isApi && !isPublicPage);
 

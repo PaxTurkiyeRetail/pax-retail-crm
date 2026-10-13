@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireReportsAccessOrThrow } from '@/lib/authz';
 import { buildLiveBoard } from '@/lib/reports/live-board';
+import { getActiveTvDevice } from '@/lib/tv-devices';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -14,7 +15,8 @@ const SERVER_STARTED_AT = new Date().toISOString();
 // Yetki: rapor merkezindeki diğer uçlarla aynı (report.read.all).
 export async function GET() {
   try {
-    await requireReportsAccessOrThrow();
+    // Eşleştirilmiş TV cihazı (crm_tv) kullanıcı oturumu olmadan yalnız bu ucu okuyabilir.
+    if (!(await getActiveTvDevice())) await requireReportsAccessOrThrow();
     const payload = await buildLiveBoard();
     return NextResponse.json({ ...payload, server: { startedAt: SERVER_STARTED_AT } }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error: any) {

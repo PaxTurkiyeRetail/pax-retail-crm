@@ -880,6 +880,14 @@ export default function PanelShell({
                             Kullanıcı Yönetimi
                           </Link>
                         )}
+                        {showUsers && (
+                          <Link
+                            href="/admin/tv-devices"
+                            className="pax-user-dropdown-link"
+                          >
+                            TV Cihazları
+                          </Link>
+                        )}
                         {showRbac && (
                           <Link
                             href="/admin/rbac"
