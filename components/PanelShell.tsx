@@ -423,18 +423,12 @@ export default function PanelShell({
 
     // MENÜ (Taha, 02.10.2026): Dashboard en üstte "Genel Bakış" yerine; Talepler menünün en altında.
     // Dashboard yetkisi olmayan kullanıcıda eski Genel Bakış (/crm) kalır — menüsüz kalmasın.
-    // Dashboard (eski pano) 06.10.2026'da geri açıldı; yanında yeni tek sayfa Canlı Ekran.
+    // Dashboard (eski pano) 06.10.2026'da geri açıldı. Ayrı Canlı Ekran menüsü 13.10.2026'da kaldırıldı
+    // (/canli-ekran → /dashboard yönlenir).
     if (canDashboard)
       overview.push({
         href: "/dashboard",
         label: "Dashboard",
-        iconKey: "dashboard",
-        exact: true,
-      });
-    if (canDashboard)
-      overview.push({
-        href: "/canli-ekran",
-        label: "Canlı Ekran",
         iconKey: "dashboard",
         exact: true,
       });
