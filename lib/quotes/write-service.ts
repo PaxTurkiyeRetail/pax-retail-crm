@@ -17,7 +17,8 @@ type QuoteDates = {
   followUpDate: string;
 };
 
-async function insertQuoteItems(client: PoolClient, quoteId: string, items: ResolvedQuoteLine[]) {
+// price_source / catalog_unit_price / price_set_by: özel fiyat izi (migration 044). Katalog satırında price_set_by null.
+async function insertQuoteItems(client: PoolClient, quoteId: string, items: ResolvedQuoteLine[], actorEmail: string | null) {
   for (const [index, item] of items.entries()) {
     await client.query(
       `
@@ -25,8 +26,9 @@ async function insertQuoteItems(client: PoolClient, quoteId: string, items: Reso
           quote_id, line_no, product_id, product_code_snapshot, product_name_snapshot,
           product_type, category, is_recurring, billing_period, quantity, unit_price,
           total_price, rule_min_qty, rule_max_qty,
-          sale_type, rental_start_date, rental_end_date, rental_monthly_price
-        ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+          sale_type, rental_start_date, rental_end_date, rental_monthly_price,
+          price_source, catalog_unit_price, price_set_by
+        ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
       `,
       [
         quoteId,
@@ -47,6 +49,9 @@ async function insertQuoteItems(client: PoolClient, quoteId: string, items: Reso
         item.rental_start_date,
         item.rental_end_date,
         item.rental_monthly_price,
+        item.price_source,
+        item.catalog_unit_price,
+        item.price_source === 'manual' ? actorEmail : null,
       ],
     );
   }
@@ -124,7 +129,7 @@ export async function createQuoteTransaction(args: {
       ],
     );
     const quote = quoteResult.rows[0];
-    await insertQuoteItems(client, quote.id, args.items);
+    await insertQuoteItems(client, quote.id, args.items, args.ownerEmail);
 
     let activityId: string | null = null;
     if (args.status === 'sent') {
@@ -183,6 +188,7 @@ export async function updateQuoteTransaction(args: {
   totals: QuoteTotals;
   items: ResolvedQuoteLine[];
   activityNote: (quote: { quote_no: string; valid_until: string | null }) => string;
+  actorEmail?: string | null;
 }) {
   return runInTransaction(async (client) => {
     const quoteResult = await client.query<{
@@ -214,7 +220,7 @@ export async function updateQuoteTransaction(args: {
       ],
     );
     await client.query('delete from quote_items where quote_id = $1', [args.quoteId]);
-    await insertQuoteItems(client, args.quoteId, args.items);
+    await insertQuoteItems(client, args.quoteId, args.items, args.actorEmail ?? null);
 
     if (quote.status === 'sent' && quote.activity_event_id) {
       await client.query('update pipeline_eventleri set notlar = $1 where id = $2', [args.activityNote(quote), quote.activity_event_id]);

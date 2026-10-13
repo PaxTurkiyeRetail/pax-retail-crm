@@ -40,7 +40,7 @@ export async function POST(request: Request) {
     }
 
     const catalog = await getQuoteCatalog(admin);
-    const resolved = resolveQuoteLines(items, catalog);
+    const resolved = resolveQuoteLines(items, catalog, { allowManualPrice: userHasPermission(me, 'quote.price.override') });
     const proposalDate = getTurkeyTodayIso();
     const validUntil = addDaysToIsoDate(proposalDate, 15);
     const followUpDate = addDaysToIsoDate(proposalDate, 30);

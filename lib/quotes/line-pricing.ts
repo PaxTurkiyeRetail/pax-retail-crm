@@ -21,6 +21,11 @@ export type LineDraft = {
   rental_end_date?: string | null;
   /** Aylık birim kira (USD). Boşsa ürünün katalog tarifesi (rental_monthly_price) kullanılır. */
   rental_monthly_price?: number | null;
+  /**
+   * Satışta özel birim fiyat (USD, 13.10.2026): katalog dışı fiyatla çalışan ekipler için.
+   * Doluysa kademe fiyatının yerine geçer; yetki (quote.price.override) sunucuda kontrol edilir.
+   */
+  manual_unit_price?: number | null;
 };
 
 export type PricingRuleLike = { product_id: string; min_qty: number; max_qty: number | null; unit_price: number };
@@ -45,6 +50,10 @@ export type PricedLine = {
   monthly_total: number;
   /** Aylık kira katalog tarifesinden mi (true) yoksa satırda elle mi girildi (false). Satışta false. */
   rental_from_catalog: boolean;
+  /** 'manual' = satışta özel birim fiyat girildi (katalog kademesi ezildi). Kiralamada hep 'catalog'. */
+  price_source: 'catalog' | 'manual';
+  /** Satışta katalog kademe birim fiyatı (özel fiyatla karşılaştırma için); kademe yoksa/kiralamada null. */
+  catalog_unit_price: number | null;
   /** Fiyatlanabildi mi (kademe bulundu / kira bedeli var). */
   priced: boolean;
   problem: string | null;
@@ -80,6 +89,12 @@ export function resolveRentalMonthly(draft: Pick<LineDraft, 'rental_monthly_pric
   return { monthly: 0, fromCatalog: false };
 }
 
+/** Satış satırındaki özel birim fiyat; boş/0/negatif/geçersiz → null (katalog kullanılır). */
+export function manualUnitPrice(draft: Pick<LineDraft, 'manual_unit_price'>): number | null {
+  const value = draft.manual_unit_price == null ? NaN : Number(draft.manual_unit_price);
+  return Number.isFinite(value) && value > 0 ? round2(value) : null;
+}
+
 export function priceLine(draft: LineDraft, rules: PricingRuleLike[], product?: ProductLike | null): PricedLine {
   const quantity = Math.max(0, Math.floor(Number(draft.quantity ?? 0)));
   const saleType = normalizeSaleType(draft.sale_type);
@@ -105,20 +120,42 @@ export function priceLine(draft: LineDraft, rules: PricingRuleLike[], product?: 
       rental_months: hasDates ? months : 0,
       monthly_total: round2(monthlyTotal),
       rental_from_catalog: fromCatalog,
+      price_source: 'catalog',
+      catalog_unit_price: null,
       priced: !problem,
       problem,
     };
   }
   const rule = findRule(rules, quantity);
+  const catalogUnit = rule ? Number(rule.unit_price) : null;
+  const manual = manualUnitPrice(draft);
+  if (manual != null) {
+    return {
+      sale_type: 'sale',
+      rule,
+      rule_label: 'özel fiyat',
+      unit_price: manual,
+      total_price: round2(manual * quantity),
+      rental_months: 0,
+      monthly_total: 0,
+      rental_from_catalog: false,
+      price_source: 'manual',
+      catalog_unit_price: catalogUnit,
+      priced: true,
+      problem: null,
+    };
+  }
   return {
     sale_type: 'sale',
     rule,
     rule_label: rule ? `${rule.min_qty}${rule.max_qty ? `-${rule.max_qty}` : '+'}` : '-',
-    unit_price: rule ? Number(rule.unit_price) : 0,
+    unit_price: catalogUnit ?? 0,
     total_price: rule ? round2(Number(rule.unit_price) * quantity) : 0,
     rental_months: 0,
     monthly_total: 0,
     rental_from_catalog: false,
+    price_source: 'catalog',
+    catalog_unit_price: catalogUnit,
     priced: Boolean(rule),
     problem: rule ? null : 'Bu adet için fiyat kademesi bulunamadı.',
   };

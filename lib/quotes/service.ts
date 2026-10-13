@@ -1,7 +1,7 @@
 import 'server-only';
 import type { PgClient } from '@/lib/pg/client';
 import { STATIC_QUOTE_PRICING_RULES, STATIC_QUOTE_PRODUCTS, normalizeQuoteProduct, type QuotePricingRule, type QuoteProduct } from '@/lib/quotes/catalog';
-import { normalizeSaleType, priceLine, sumLineTotals, type SaleType } from '@/lib/quotes/line-pricing';
+import { manualUnitPrice, normalizeSaleType, priceLine, sumLineTotals, type SaleType } from '@/lib/quotes/line-pricing';
 
 export type QuoteLineInput = {
   product_id: string;
@@ -11,6 +11,8 @@ export type QuoteLineInput = {
   rental_start_date?: string | null;
   rental_end_date?: string | null;
   rental_monthly_price?: number | null;
+  /** Satışta özel birim fiyat — yalnız quote.price.override izniyle kabul edilir. */
+  manual_unit_price?: number | null;
 };
 
 export type ResolvedQuoteLine = {
@@ -32,6 +34,10 @@ export type ResolvedQuoteLine = {
   rental_end_date: string | null;
   rental_monthly_price: number | null;
   rental_months: number;
+  /** 'manual' = özel birim fiyat (katalog dışı). */
+  price_source: 'catalog' | 'manual';
+  /** Satırın katalog kademe birim fiyatı (özel fiyat farkı için); yoksa null. */
+  catalog_unit_price: number | null;
 };
 
 export function isMissingRelationError(error: unknown) {
@@ -107,7 +113,17 @@ export async function getQuoteCatalog(admin?: PgClient) {
   };
 }
 
-export function resolveQuoteLines(items: QuoteLineInput[], catalog: { products: QuoteProduct[]; rules: QuotePricingRule[] }) {
+export function resolveQuoteLines(
+  items: QuoteLineInput[],
+  catalog: { products: QuoteProduct[]; rules: QuotePricingRule[] },
+  options: {
+    allowManualPrice?: boolean;
+    /** Düzenlemede: teklifte zaten olan özel fiyatlı satırlar — yetkisiz kullanıcı bunları değiştirmeden koruyabilir. */
+    existingManual?: Array<{ product_id: string; unit_price: number }>;
+  } = {},
+) {
+  const keepsExisting = (productId: string, price: number) =>
+    (options.existingManual ?? []).some((row) => row.product_id === productId && Math.abs(Number(row.unit_price) - price) < 0.005);
   const productMap = new Map(catalog.products.map((product) => [product.id, product]));
   const rulesByProduct = new Map<string, QuotePricingRule[]>();
   catalog.rules.forEach((rule) => {
@@ -125,6 +141,10 @@ export function resolveQuoteLines(items: QuoteLineInput[], catalog: { products: 
       const saleType = normalizeSaleType(item.sale_type);
       if (saleType === 'rental' && product.is_recurring) throw new Error(`Aylık hizmet kalemi kiralama olarak girilemez: ${product.name}`);
       const rules = rulesByProduct.get(item.product_id) ?? [];
+      const manual = saleType === 'sale' ? manualUnitPrice(item) : null;
+      if (manual != null && !options.allowManualPrice && !keepsExisting(item.product_id, manual)) {
+        throw Object.assign(new Error('Özel fiyat girme yetkiniz yok; katalog fiyatı kullanılır.'), { status: 403 });
+      }
       // İstemciyle aynı hesap (lib/quotes/line-pricing.ts): satış = kademe,
       // kiralama = aylık kira (katalog tarifesi ya da satırda ezilen) × adet; tarih isteğe bağlı.
       const priced = priceLine({
@@ -134,6 +154,7 @@ export function resolveQuoteLines(items: QuoteLineInput[], catalog: { products: 
         rental_start_date: normalizeDateOnly(item.rental_start_date, null),
         rental_end_date: normalizeDateOnly(item.rental_end_date, null),
         rental_monthly_price: item.rental_monthly_price == null ? null : Number(item.rental_monthly_price),
+        manual_unit_price: manual,
       }, rules, product);
       if (!priced.priced) {
         throw new Error(saleType === 'rental'
@@ -157,6 +178,8 @@ export function resolveQuoteLines(items: QuoteLineInput[], catalog: { products: 
         rental_end_date: saleType === 'rental' ? normalizeDateOnly(item.rental_end_date, null) : null,
         rental_monthly_price: saleType === 'rental' ? priced.unit_price : null,
         rental_months: priced.rental_months,
+        price_source: priced.price_source,
+        catalog_unit_price: priced.catalog_unit_price,
       } satisfies ResolvedQuoteLine;
     });
 
@@ -166,6 +189,7 @@ export function resolveQuoteLines(items: QuoteLineInput[], catalog: { products: 
     priced: priceLine({
       product_id: row.product_id, quantity: row.quantity, sale_type: row.sale_type,
       rental_start_date: row.rental_start_date, rental_end_date: row.rental_end_date, rental_monthly_price: row.rental_monthly_price,
+      manual_unit_price: row.price_source === 'manual' ? row.unit_price : null,
     }, rulesByProduct.get(row.product_id) ?? [], productMap.get(row.product_id) ?? null),
   })));
 

@@ -47,6 +47,9 @@ type QuoteDetail = {
     rental_start_date?: string | null;
     rental_end_date?: string | null;
     rental_monthly_price?: number | null;
+    /** 'manual' = özel birim fiyat (13.10.2026). */
+    price_source?: 'catalog' | 'manual' | null;
+    catalog_unit_price?: number | null;
   }>;
 };
 
@@ -68,8 +71,10 @@ type EditItem = {
   uid: string; product_id: string; quantity: number;
   /** Kiralama: aylık kira katalog tarifesinden; tarih ve kira girişi yok — sadece adet (08.09). */
   sale_type: SaleType;
+  /** Özel birim fiyat; boş = katalog. */
+  manual_unit_price: string;
 };
-const emptyEditLine = (): EditItem => ({ uid: randomId(), product_id: '', quantity: 1, sale_type: 'sale' });
+const emptyEditLine = (): EditItem => ({ uid: randomId(), product_id: '', quantity: 1, sale_type: 'sale', manual_unit_price: '' });
 
 function randomId() {
   return Math.random().toString(36).slice(2, 10);
@@ -107,6 +112,7 @@ export default function QuoteDetailClient({ quoteId }: { quoteId: string }) {
   const [products, setProducts] = useState<Product[]>([]);
   const [rules, setRules] = useState<Rule[]>([]);
   const [probabilities, setProbabilities] = useState<number[]>([10, 30, 60, 90]);
+  const [canOverridePrice, setCanOverridePrice] = useState(false);
   const [editTitle, setEditTitle] = useState('');
   const [editProbability, setEditProbability] = useState(60);
   const [editNote, setEditNote] = useState('');
@@ -133,6 +139,7 @@ export default function QuoteDetailClient({ quoteId }: { quoteId: string }) {
       setProducts(json.products ?? []);
       setRules(json.rules ?? []);
       setProbabilities(json.probabilities ?? [10, 30, 60, 90]);
+      setCanOverridePrice(Boolean(json.canOverridePrice));
       setLossReasons((json.lossReasons ?? []) as Array<{ key: string; label: string }>);
     }
   };
@@ -151,6 +158,7 @@ export default function QuoteDetailClient({ quoteId }: { quoteId: string }) {
         product_id: resolveProductId(item, products),
         quantity: Number(item.quantity ?? 1) || 1,
         sale_type: item.sale_type === 'rental' ? 'rental' as SaleType : 'sale' as SaleType,
+        manual_unit_price: item.price_source === 'manual' && item.unit_price != null ? String(Number(item.unit_price)) : '',
       }))
     );
   }, [quote, products]);
@@ -179,6 +187,7 @@ export default function QuoteDetailClient({ quoteId }: { quoteId: string }) {
     const product = productMap.get(item.product_id) ?? null;
     const priced = priceLine({
       product_id: item.product_id, quantity: item.quantity, sale_type: item.sale_type,
+      manual_unit_price: item.manual_unit_price.trim() ? Number(item.manual_unit_price) : null,
     }, rulesByProduct.get(item.product_id) ?? [], product);
     return { ...item, product, priced, rule: priced.rule, rule_label: priced.rule_label, unit_price: priced.unit_price, total_price: priced.total_price };
   }), [editItems, productMap, rulesByProduct]);
@@ -242,6 +251,7 @@ export default function QuoteDetailClient({ quoteId }: { quoteId: string }) {
         items: editItems.map((item) => ({
           product_id: item.product_id, quantity: Number(item.quantity), sale_type: item.sale_type,
           rental_monthly_price: null,
+          manual_unit_price: item.sale_type === 'sale' && item.manual_unit_price.trim() ? Number(item.manual_unit_price) : null,
         })),
       }),
     });
@@ -429,7 +439,7 @@ export default function QuoteDetailClient({ quoteId }: { quoteId: string }) {
                   </div>
                   <div>
                     <label style={labelStyle}>{item.sale_type === 'rental' ? 'Kira' : 'Barem'}</label>
-                    <div style={readonlyBox}>{item.sale_type === 'rental' ? `${money(item.unit_price)} / ay` : item.rule_label}</div>
+                    <div style={readonlyBox}>{item.sale_type === 'rental' ? `${money(item.unit_price)} / ay` : item.priced.price_source === 'manual' ? 'Özel fiyat' : item.rule_label}</div>
                   </div>
                   <div>
                     <label style={labelStyle}>{item.sale_type === 'rental' ? 'Aylık' : 'Toplam'}</label>
@@ -447,6 +457,13 @@ export default function QuoteDetailClient({ quoteId }: { quoteId: string }) {
                       ))}
                     </div>
                   </div>
+                  {item.sale_type === 'sale' && item.product && !item.product.is_recurring && (canOverridePrice || item.manual_unit_price.trim()) ? (
+                    <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                      <label style={labelStyle}>Özel birim fiyat (USD)</label>
+                      <input type="number" min={0} step="0.01" disabled={!canOverridePrice} value={item.manual_unit_price} onChange={(event) => patchEditLine(item.uid, { manual_unit_price: event.target.value })} placeholder={item.priced.catalog_unit_price != null ? `Katalog: ${item.priced.catalog_unit_price}` : 'Katalogda kademe yok'} style={{ ...inputStyle, width: 180 }} />
+                      {item.priced.price_source === 'manual' && item.priced.catalog_unit_price != null ? <span style={{ color: 'var(--text-3)', fontSize: 12 }}>Katalog {money(item.priced.catalog_unit_price)} · fark {money(item.unit_price - item.priced.catalog_unit_price)} / adet</span> : null}
+                    </div>
+                  ) : null}
                   {item.sale_type === 'rental' && item.product && !item.product.rental_monthly_price ? (
                     <div style={{ gridColumn: '1 / -1', padding: 10, borderRadius: 12, border: '1px solid var(--chip-red-bd)', background: 'var(--chip-red-bg)', color: 'var(--chip-red-color)', fontSize: 12, fontWeight: 800 }}>
                       Bu ürünün kiralama tarifesi yok (Ürün &amp; Fiyat Yönetimi → Aylık kira).
@@ -496,6 +513,7 @@ export default function QuoteDetailClient({ quoteId }: { quoteId: string }) {
                 <div style={{ fontWeight: 800, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                   {item.product_name_snapshot}
                   {item.sale_type === 'rental' ? <span style={rentalPill}>Kiralama</span> : null}
+                  {item.price_source === 'manual' ? <span style={{ ...rentalPill, background: '#fef3c7', color: '#92400e' }}>Özel fiyat{item.catalog_unit_price != null ? ` · katalog ${money(Number(item.catalog_unit_price))}` : ''}</span> : null}
                 </div>
                 {item.sale_type === 'rental' ? (
                   <div style={{ marginTop: 4, color: 'var(--text-3)', fontSize: 13 }}>

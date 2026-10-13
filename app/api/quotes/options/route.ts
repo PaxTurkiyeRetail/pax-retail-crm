@@ -25,6 +25,8 @@ export async function GET() {
     return NextResponse.json({
       products,
       rules,
+      // Teklif satırında özel birim fiyat girebilir mi (quote.price.override, 13.10.2026).
+      canOverridePrice: userHasPermission(me, 'quote.price.override'),
       probabilities: (parameterOptions.quote_probability ?? []).map((item) => Number(item.value)).filter(Number.isFinite),
       // Kayıp nedenleri (Liste Yönetimleri → Teklif); kapatma penceresinde zorunlu seçim.
       lossReasons: (parameterOptions.quote_loss_reason ?? []).map((item) => ({ key: String(item.value), label: String(item.label) })),

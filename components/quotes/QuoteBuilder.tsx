@@ -17,8 +17,10 @@ type QuoteItem = {
   uid: string; product_id: string; quantity: number;
   /** Satış (katalog kademesi) ya da Kiralama (aylık kira katalog tarifesinden; tarih yok, kira girişi yok — sadece adet). */
   sale_type: SaleType;
+  /** Özel birim fiyat (yalnız satış, quote.price.override); boş = katalog kademesi. */
+  manual_unit_price: string;
 };
-const emptyLine = (): QuoteItem => ({ uid: randomId(), product_id: '', quantity: 1, sale_type: 'sale' });
+const emptyLine = (): QuoteItem => ({ uid: randomId(), product_id: '', quantity: 1, sale_type: 'sale', manual_unit_price: '' });
 
 function randomId() { return Math.random().toString(36).slice(2, 10); }
 function money(value: number) {
@@ -45,6 +47,7 @@ export default function QuoteBuilder({ showHero = false }: Props) {
   const [saving, setSaving] = useState<'draft' | 'sent' | null>(null);
   const [error, setError] = useState('');
   const [loaded, setLoaded] = useState(false);
+  const [canOverridePrice, setCanOverridePrice] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -56,6 +59,7 @@ export default function QuoteBuilder({ showHero = false }: Props) {
         setRules(json.rules ?? []);
         setCustomers(json.customers ?? []);
         setProbabilities(json.probabilities ?? [10, 30, 60, 90]);
+        setCanOverridePrice(Boolean(json.canOverridePrice));
         setLoaded(true);
       } catch (err: any) { setError(err.message); }
     };
@@ -79,9 +83,10 @@ export default function QuoteBuilder({ showHero = false }: Props) {
     const product = productMap.get(item.product_id) ?? null;
     const priced = priceLine({
       product_id: item.product_id, quantity: item.quantity, sale_type: item.sale_type,
+      manual_unit_price: canOverridePrice && item.manual_unit_price.trim() ? Number(item.manual_unit_price) : null,
     }, rulesByProduct.get(item.product_id) ?? [], product);
     return { ...item, product, priced, rule: priced.rule, rule_label: priced.rule_label, unit_price: priced.unit_price, total_price: priced.total_price };
-  }), [items, productMap, rulesByProduct]);
+  }), [items, productMap, rulesByProduct, canOverridePrice]);
 
   const totals = useMemo(() => {
     const t = sumLineTotals(resolvedItems.map(item => ({ quantity: item.quantity, product: item.product, priced: item.priced })));
@@ -117,6 +122,7 @@ export default function QuoteBuilder({ showHero = false }: Props) {
             product_id: i.product_id, quantity: Number(i.quantity), sale_type: i.sale_type,
             // Kira katalog tarifesinden (sunucu aynı modülle çözer ve satıra kopyalar); UI'da kira girişi yok (Sinan, 08.09).
             rental_monthly_price: null,
+            manual_unit_price: canOverridePrice && i.sale_type === 'sale' && i.manual_unit_price.trim() ? Number(i.manual_unit_price) : null,
           })),
         }),
       });
@@ -235,6 +241,13 @@ export default function QuoteBuilder({ showHero = false }: Props) {
               <input type="number" min={1} value={item.quantity} onChange={(e) => setLine(item.uid, { quantity: Math.max(1, Number(e.target.value || 1)) })} className="pax-input" required style={{ width: '100%', minHeight: 48, fontSize: 16 }} />
             </div>
 
+            {canOverridePrice && item.sale_type === 'sale' && item.product && !item.product.is_recurring && (
+              <div>
+                <label className="pax-label" style={{ display: 'block', marginBottom: 8 }}>Özel birim fiyat (USD) <span style={{ fontWeight: 400, color: 'var(--text-3)' }}>— boş bırakılırsa katalog fiyatı</span></label>
+                <input type="number" min={0} step="0.01" value={item.manual_unit_price} onChange={(e) => setLine(item.uid, { manual_unit_price: e.target.value })} className="pax-input" placeholder={item.priced.catalog_unit_price != null ? `Katalog: ${item.priced.catalog_unit_price}` : 'Katalogda kademe yok'} style={{ width: '100%', minHeight: 48, fontSize: 16 }} />
+              </div>
+            )}
+
             {item.sale_type === 'rental' && item.product && !item.product.rental_monthly_price && (
               <div style={{ padding: 12, borderRadius: 'var(--radius-sm)', border: '1px solid var(--chip-red-bd)', background: 'var(--chip-red-bg)', color: 'var(--chip-red-color)', fontSize: 13, fontWeight: 800 }}>
                 Bu ürünün kiralama tarifesi yok (Ürün &amp; Fiyat Yönetimi → Aylık kira).
@@ -249,8 +262,11 @@ export default function QuoteBuilder({ showHero = false }: Props) {
                   </>
                 ) : (
                   <>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}><span style={{ color: 'var(--text-3)' }}>Barem:</span><span style={{ fontWeight: 600 }}>{item.rule_label}</span></div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}><span style={{ color: 'var(--text-3)' }}>Barem:</span><span style={{ fontWeight: 600 }}>{item.priced.price_source === 'manual' ? <span style={{ color: '#b45309' }}>Özel fiyat</span> : item.rule_label}</span></div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}><span style={{ color: 'var(--text-3)' }}>Birim Fiyat:</span><span style={{ fontWeight: 600 }}>{money(item.unit_price)}</span></div>
+                    {item.priced.price_source === 'manual' && item.priced.catalog_unit_price != null && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--text-3)' }}><span>Katalog fiyatı:</span><span>{money(item.priced.catalog_unit_price)} ({item.unit_price >= item.priced.catalog_unit_price ? '+' : ''}{money(item.unit_price - item.priced.catalog_unit_price)} / adet)</span></div>
+                    )}
                   </>
                 )}
                 {item.priced.problem && <div style={{ fontSize: 12, color: '#b91c1c', fontWeight: 700 }}>{item.priced.problem}</div>}

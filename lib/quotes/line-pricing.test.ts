@@ -13,6 +13,18 @@ describe('line pricing', () => {
     expect(priceLine({ product_id: 'p1', quantity: 100 }, rules).rule_label).toBe('100+');
     expect(priceLine({ product_id: 'p1', quantity: 5 }, []).priced).toBe(false);
   });
+  it('uses the manual unit price on sale lines and keeps the catalog price for comparison', () => {
+    const line = priceLine({ product_id: 'p1', quantity: 50, manual_unit_price: 175.5 }, rules);
+    expect(line.price_source).toBe('manual');
+    expect(line.unit_price).toBe(175.5);
+    expect(line.total_price).toBe(8_775);
+    expect(line.catalog_unit_price).toBe(200);
+    // Kademe yoksa da özel fiyatla fiyatlanır.
+    expect(priceLine({ product_id: 'p1', quantity: 5, manual_unit_price: 90 }, []).priced).toBe(true);
+    // Boş / 0 → katalog.
+    expect(priceLine({ product_id: 'p1', quantity: 50, manual_unit_price: 0 }, rules).price_source).toBe('catalog');
+    expect(priceLine({ product_id: 'p1', quantity: 50, manual_unit_price: null }, rules).unit_price).toBe(200);
+  });
   it('counts rental months from the period (min 1, ~30.44 days per month)', () => {
     expect(rentalMonths('2026-10-01', '2027-09-30')).toBe(12);
     expect(rentalMonths('2026-10-01', '2026-10-15')).toBe(1);

@@ -37,6 +37,7 @@ export type Permission =
   | 'quote.status.own'
   | 'quote.status.any'
   | 'quote.catalog.manage'
+  | 'quote.price.override'
   | 'forecast.read'
   | 'forecast.read.any'
   | 'forecast.write.own'
@@ -106,6 +107,7 @@ export const ALL_PERMISSIONS: readonly Permission[] = [
   'quote.status.own',
   'quote.status.any',
   'quote.catalog.manage',
+  'quote.price.override',
   'forecast.read',
   'forecast.read.any',
   'forecast.write.own',

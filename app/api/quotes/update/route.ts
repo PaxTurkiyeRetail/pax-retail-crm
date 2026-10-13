@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
-import { assertOwnedResourceAccess, requireCrmAccessOrThrow } from '@/lib/authz';
+import { assertOwnedResourceAccess, requireCrmAccessOrThrow, userHasPermission } from '@/lib/authz';
 import { createPgAdminClient } from '@/lib/pg/admin';
 import { buildQuoteActivityNote, buildQuoteSummaryText, getQuoteCatalog, getQuoteDetailById, isMissingRelationError, normalizeDateOnly, resolveQuoteLines, type QuoteLineInput } from '@/lib/quotes/service';
 import { tryRecordAuditEvent } from '@/lib/audit';
@@ -37,7 +37,13 @@ export async function POST(request: Request) {
     if (!existing) return NextResponse.json({ message: 'Teklif bulunamadı.' }, { status: 404 });
     assertOwnedResourceAccess({ user: me, resource: existing, ownPermission: 'quote.update.own', anyPermission: 'quote.update.any' });
     const catalog = await getQuoteCatalog(admin);
-    const resolved = resolveQuoteLines(items, catalog);
+    const existingManual = ((existing as any).items ?? [])
+      .filter((row: any) => row.price_source === 'manual')
+      .map((row: any) => ({ product_id: String(row.product_id), unit_price: Number(row.unit_price) }));
+    const resolved = resolveQuoteLines(items, catalog, {
+      allowManualPrice: userHasPermission(me, 'quote.price.override'),
+      existingManual,
+    });
     const summaryText = buildQuoteSummaryText(resolved.items.map((item) => ({ product_name: item.product_name, quantity: item.quantity })));
     await updateQuoteTransaction({
       quoteId,
@@ -46,6 +52,7 @@ export async function POST(request: Request) {
       note,
       totals: resolved,
       items: resolved.items,
+      actorEmail: me.email,
       activityNote: (quote) => buildQuoteActivityNote({
         quoteNo: quote.quote_no,
         summaryText,
