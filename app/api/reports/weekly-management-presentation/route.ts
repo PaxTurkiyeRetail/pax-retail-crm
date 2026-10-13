@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireReportsAccessOrThrow } from '@/lib/authz';
+import { requireTvScreenOrReportsAccess } from '@/lib/tv-devices';
 import { createPgAdminClient } from '@/lib/pg/admin';
 import { buildWeeklyManagementPresentation } from '@/lib/weekly-management-presentation';
 
@@ -8,7 +8,7 @@ export const revalidate = 0;
 
 export async function GET(request: Request) {
   try {
-    await requireReportsAccessOrThrow();
+    await requireTvScreenOrReportsAccess('activity');
     const admin = createPgAdminClient();
     const url = new URL(request.url);
     const payload = await buildWeeklyManagementPresentation(admin, {

@@ -5,6 +5,14 @@ const AUTH_COOKIE_NAME = process.env.AUTH_COOKIE_NAME ?? 'crm_session';
 // lib/auth.ts AUTH_SESSION_TTL_HOURS ile aynı formül (middleware DB'li modülü import edemez).
 const SESSION_TTL_HOURS = Math.min(720, Math.max(1, Number(process.env.AUTH_SESSION_TTL_HOURS ?? '720')));
 
+// TV cihazının (crm_tv) okuyabileceği Dashboard uçları; sekme izni route içinde DB'den kontrol edilir.
+const TV_READABLE_APIS = [
+  '/api/reports/live-board',
+  '/api/reports/seller-followup',
+  '/api/reports/weekly-management-presentation',
+  '/api/reports/phase-report',
+];
+
 function getPublicOrigin(request: NextRequest) {
   const forwardedProto = request.headers
     .get('x-forwarded-proto')
@@ -29,7 +37,7 @@ export function middleware(request: NextRequest) {
     pathname === '/api/healthz' ||
     pathname === '/api/tv/pair' ||
     // TV cihazı: cookie geçerliliği route içinde DB'den doğrulanır (lib/tv-devices).
-    (pathname === '/api/reports/live-board' && Boolean(request.cookies.get('crm_tv')?.value));
+    (TV_READABLE_APIS.includes(pathname) && Boolean(request.cookies.get('crm_tv')?.value));
   const isPublicPage =
     pathname === '/login' ||
     pathname === '/forgot-password' ||

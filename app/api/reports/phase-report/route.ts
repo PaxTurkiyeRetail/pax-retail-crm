@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireReportsAccessOrThrow } from '@/lib/authz';
+import { requireTvScreenOrReportsAccess } from '@/lib/tv-devices';
 import { createPgAdminClient } from '@/lib/pg/admin';
 import { getKunyeStatus, mapKunyeDbToUi } from '@/lib/kunye';
 import { fetchAllByCustomerIds, fetchAllRows } from '@/lib/reporting';
@@ -51,7 +51,7 @@ export type PhaseReportPayload = {
 
 export async function GET(request: Request) {
   try {
-    await requireReportsAccessOrThrow();
+    await requireTvScreenOrReportsAccess('faz');
     const admin = createPgAdminClient();
     const url = new URL(request.url);
 

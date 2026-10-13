@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireReportsAccessOrThrow } from '@/lib/authz';
+import { requireTvScreenOrReportsAccess } from '@/lib/tv-devices';
 import { buildSellerFollowupReport } from '@/lib/reports/seller-followup';
 
 export const dynamic = 'force-dynamic';
@@ -9,7 +9,7 @@ export const revalidate = 0;
 // Yetki: rapor merkezindeki diğer uçlarla aynı (report.read.all).
 export async function GET(request: Request) {
   try {
-    await requireReportsAccessOrThrow();
+    await requireTvScreenOrReportsAccess('followup');
     const url = new URL(request.url);
     const payload = await buildSellerFollowupReport({
       owner: String(url.searchParams.get('owner') ?? '').trim(),

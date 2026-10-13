@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSessionEmailOrNull, requireAdminOrThrow } from '@/lib/authz';
-import { approvePairCode, listDevices, revokeDevice } from '@/lib/tv-devices';
+import { approvePairCode, listDevices, revokeDevice, updateDeviceScreens } from '@/lib/tv-devices';
+import { normalizeTvScreens } from '@/lib/tv-screens-shared';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,7 +19,13 @@ export async function POST(req: Request) {
   try {
     await requireAdminOrThrow();
     const actor = (await getSessionEmailOrNull()) ?? 'admin';
-    const body = (await req.json().catch(() => ({}))) as { action?: string; code?: string; name?: string; id?: string };
+    const body = (await req.json().catch(() => ({}))) as { action?: string; code?: string; name?: string; id?: string; screens?: unknown };
+    const screens = normalizeTvScreens(body.screens);
+    if (body.action === 'screens') {
+      if (!body.id) return NextResponse.json({ message: 'Cihaz seçilmedi.' }, { status: 400 });
+      const ok = await updateDeviceScreens(body.id, screens);
+      return NextResponse.json({ ok }, { status: ok ? 200 : 404 });
+    }
     if (body.action === 'revoke') {
       if (!body.id) return NextResponse.json({ message: 'Cihaz seçilmedi.' }, { status: 400 });
       const ok = await revokeDevice(body.id, actor);
@@ -28,7 +35,7 @@ export async function POST(req: Request) {
     if (code.replace(/[^A-Za-z0-9]/g, '').length !== 6) {
       return NextResponse.json({ message: 'Kod 6 karakter olmalı.' }, { status: 400 });
     }
-    const id = await approvePairCode(code, String(body.name ?? '').slice(0, 80), actor);
+    const id = await approvePairCode(code, String(body.name ?? '').slice(0, 80), actor, screens);
     if (!id) return NextResponse.json({ message: 'Kod geçersiz veya süresi doldu. TV ekranındaki yeni kodu girin.' }, { status: 404 });
     return NextResponse.json({ ok: true, id });
   } catch (error: any) {

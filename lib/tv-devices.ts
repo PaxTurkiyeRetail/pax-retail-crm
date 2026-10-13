@@ -2,6 +2,8 @@ import crypto from 'crypto';
 import { cookies } from 'next/headers';
 import { db } from './db';
 import { hashOpaqueToken } from './auth';
+import { requireReportsAccessOrThrow } from './authz';
+import { normalizeTvScreens, type TvScreen } from './tv-screens-shared';
 
 // TV cihaz oturumu: kullanıcı oturumundan tamamen ayrı, yalnız Canlı Ekran verisini okur.
 export const TV_COOKIE_NAME = 'crm_tv';
@@ -19,6 +21,7 @@ export type TvDevice = {
   last_seen_at: string | null;
   last_ip: string | null;
   created_at: string;
+  screens: string[];
 };
 
 function newPairCode() {
@@ -38,7 +41,7 @@ type DeviceRow = TvDevice & { pair_code: string | null; pair_code_expires_at: st
 
 export async function findDeviceByToken(token: string): Promise<DeviceRow | null> {
   const result = await db.query<DeviceRow>(
-    `select id, name, pair_code, pair_code_expires_at, approved_at, approved_by, revoked_at, last_seen_at, last_ip, created_at
+    `select id, name, pair_code, pair_code_expires_at, approved_at, approved_by, revoked_at, last_seen_at, last_ip, created_at, screens
        from public.tv_devices where token_hash = $1`,
     [hashOpaqueToken(token)],
   );
@@ -61,22 +64,30 @@ export async function startPairing(token: string, meta: { ip: string | null; use
   const inserted = await db.query<DeviceRow>(
     `insert into public.tv_devices (token_hash, pair_code, pair_code_expires_at, last_ip, user_agent)
      values ($1, $2, $3, $4, $5)
-     returning id, name, pair_code, pair_code_expires_at, approved_at, approved_by, revoked_at, last_seen_at, last_ip, created_at`,
+     returning id, name, pair_code, pair_code_expires_at, approved_at, approved_by, revoked_at, last_seen_at, last_ip, created_at, screens`,
     [hashOpaqueToken(token), code, expiresAt, meta.ip, meta.userAgent],
   );
   return { device: inserted.rows[0], code, expiresAt };
 }
 
-export async function approvePairCode(code: string, name: string, approvedBy: string) {
+export async function approvePairCode(code: string, name: string, approvedBy: string, screens: TvScreen[]) {
   const normalized = code.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
   const result = await db.query<{ id: string }>(
     `update public.tv_devices
-        set approved_at = now(), approved_by = $3, name = $2, pair_code = null, pair_code_expires_at = null
+        set approved_at = now(), approved_by = $3, name = $2, screens = $4, pair_code = null, pair_code_expires_at = null
       where pair_code = $1 and pair_code_expires_at > now() and approved_at is null and revoked_at is null
       returning id`,
-    [normalized, name.trim() || 'TV', approvedBy],
+    [normalized, name.trim() || 'TV', approvedBy, normalizeTvScreens(screens)],
   );
   return result.rows[0]?.id ?? null;
+}
+
+export async function updateDeviceScreens(id: string, screens: TvScreen[]) {
+  const result = await db.query(
+    `update public.tv_devices set screens = $2 where id = $1 and revoked_at is null`,
+    [id, normalizeTvScreens(screens)],
+  );
+  return (result.rowCount ?? 0) > 0;
 }
 
 export async function revokeDevice(id: string, revokedBy: string) {
@@ -89,7 +100,7 @@ export async function revokeDevice(id: string, revokedBy: string) {
 
 export async function listDevices(): Promise<TvDevice[]> {
   const result = await db.query<TvDevice>(
-    `select id, name, approved_at, approved_by, revoked_at, last_seen_at, last_ip, created_at
+    `select id, name, approved_at, approved_by, revoked_at, last_seen_at, last_ip, created_at, screens
        from public.tv_devices where approved_at is not null
       order by revoked_at nulls first, created_at desc`,
   );
@@ -104,4 +115,14 @@ export async function getActiveTvDevice(): Promise<DeviceRow | null> {
   if (!device || !device.approved_at || device.revoked_at) return null;
   await db.query(`update public.tv_devices set last_seen_at = now() where id = $1`, [device.id]);
   return device;
+}
+
+/**
+ * Rapor ucu yetkisi: eşleşmiş TV cihazı bu sekmeyi gösterebiliyorsa geçer (salt okuma),
+ * değilse normal kullanıcı rapor yetkisi aranır.
+ */
+export async function requireTvScreenOrReportsAccess(screen: TvScreen) {
+  const device = await getActiveTvDevice();
+  if (device && normalizeTvScreens(device.screens).includes(screen)) return;
+  await requireReportsAccessOrThrow();
 }

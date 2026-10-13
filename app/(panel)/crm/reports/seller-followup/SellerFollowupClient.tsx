@@ -128,20 +128,25 @@ function TargetCell({ actual, target }: { actual: number; target: number }) {
   );
 }
 
-export default function SellerFollowupClient() {
-  const [tab, setTab] = useState<TabKey>('live');
+// tvScreens: TV cihazı modu (/tv) — yalnız admin'in seçtiği sekmeler, URL/sunum indirme yok.
+export default function SellerFollowupClient({ tvScreens }: { tvScreens?: TabKey[] } = {}) {
+  const isTv = Boolean(tvScreens);
+  const allowedTabs = tvScreens?.length ? tvScreens : TAB_KEYS;
+  const showFollowupData = allowedTabs.includes('followup');
+  const [tab, setTab] = useState<TabKey>(allowedTabs.includes('live') ? 'live' : allowedTabs[0]);
 
   // Yer imiyle açılış (?tab=live) + sekme değişince URL'yi sessizce güncelle.
-  useEffect(() => { setTab(tabFromUrl()); }, []);
+  useEffect(() => { if (!isTv) setTab(tabFromUrl()); }, [isTv]);
   const switchTab = useCallback((next: TabKey) => {
     setTab(next);
+    if (isTv) return;
     try {
       const url = new URL(window.location.href);
       if (next === 'live') url.searchParams.delete('tab'); else url.searchParams.set('tab', next);
       window.history.replaceState(null, '', url.toString());
       window.dispatchEvent(new Event('pax:locationchange')); // menü aktifliği güncellensin
     } catch {}
-  }, []);
+  }, [isTv]);
   const [owner, setOwner] = useState('');
   const [payload, setPayload] = useState<FollowupPayload>(EMPTY_FOLLOWUP);
   const [downloadingPptx, setDownloadingPptx] = useState(false);
@@ -199,7 +204,7 @@ export default function SellerFollowupClient() {
     }
   }, [from, to]);
 
-  useEffect(() => { void loadFollowup(owner); }, [loadFollowup, owner]);
+  useEffect(() => { if (showFollowupData) void loadFollowup(owner); }, [loadFollowup, owner, showFollowupData]);
   useEffect(() => { if (tab === 'activity') void loadContact(); }, [tab, loadContact]);
 
   const totalPages = Math.max(1, Math.ceil(payload.rows.length / PAGE_SIZE));
@@ -275,6 +280,7 @@ export default function SellerFollowupClient() {
 
   return (
     <main className="sfu-page pax-page-container">
+      {showFollowupData && (<>
       <section className="sfu-hero">
         <div className="sfu-hero-copy">
           <span className="sfu-eyebrow">Rapor Merkezi · Dashboard</span>
@@ -292,7 +298,7 @@ export default function SellerFollowupClient() {
           <button type="button" className="sfu-btn light" onClick={() => void loadFollowup(owner)} disabled={loading}>
             {loading ? 'Yükleniyor…' : 'Yenile'}
           </button>
-          <button
+          {!isTv && <button
             type="button"
             className="sfu-btn"
             onClick={() => void downloadFollowupPptx()}
@@ -300,7 +306,7 @@ export default function SellerFollowupClient() {
             title={owner ? `${owner} portföyünü PPTX indir` : 'Tüm satıcıları tek PPTX dosyasında indir'}
           >
             {downloadingPptx ? 'Hazırlanıyor…' : owner ? 'Sunum indir' : 'Sunum indir (hepsi)'}
-          </button>
+          </button>}
         </div>
       </section>
 
@@ -321,27 +327,28 @@ export default function SellerFollowupClient() {
           <div className="sfu-kpi-hint">{nearTermHint}</div>
         </div>
       </section>
+      </>)}
 
-      <div className="sfu-tabs">
-        <button type="button" className={`sfu-tab ${tab === 'followup' ? 'active' : ''}`} onClick={() => switchTab('followup')}>
+      {allowedTabs.length > 1 && <div className="sfu-tabs">
+        {allowedTabs.includes('followup') && <button type="button" className={`sfu-tab ${tab === 'followup' ? 'active' : ''}`} onClick={() => switchTab('followup')}>
           Takip Listesi
-        </button>
-        <button type="button" className={`sfu-tab ${tab === 'activity' ? 'active' : ''}`} onClick={() => switchTab('activity')}>
+        </button>}
+        {allowedTabs.includes('activity') && <button type="button" className={`sfu-tab ${tab === 'activity' ? 'active' : ''}`} onClick={() => switchTab('activity')}>
           Kişi Bazlı Aktivite
-        </button>
-        <button type="button" className={`sfu-tab ${tab === 'faz' ? 'active' : ''}`} onClick={() => switchTab('faz')} title="Firmaların faz dağılımı">
+        </button>}
+        {allowedTabs.includes('faz') && <button type="button" className={`sfu-tab ${tab === 'faz' ? 'active' : ''}`} onClick={() => switchTab('faz')} title="Firmaların faz dağılımı">
           Faz
-        </button>
-        <button type="button" className={`sfu-tab ${tab === 'live' ? 'active' : ''}`} onClick={() => switchTab('live')} title="Kendi kendine dönen yönetici panosu">
+        </button>}
+        {allowedTabs.includes('live') && <button type="button" className={`sfu-tab ${tab === 'live' ? 'active' : ''}`} onClick={() => switchTab('live')} title="Kendi kendine dönen yönetici panosu">
           ● Canlı Ekran
-        </button>
-      </div>
+        </button>}
+      </div>}
 
       {/* Canlı Ekran her zaman bağlı kalır (sekme dışındayken zamanlayıcıları durur);
           böylece sekmeye dönüşte veri anında hazır. */}
-      <div style={{ display: tab === 'live' ? 'contents' : 'none' }}>
+      {allowedTabs.includes('live') && <div style={{ display: tab === 'live' ? 'contents' : 'none' }}>
         <LiveBoard active={tab === 'live'} />
-      </div>
+      </div>}
 
       {tab === 'faz' ? <PhaseReport embedded /> : null}
 

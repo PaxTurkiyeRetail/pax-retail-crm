@@ -8,6 +8,7 @@ import {
   newDeviceToken,
   startPairing,
 } from '@/lib/tv-devices';
+import { normalizeTvScreens } from '@/lib/tv-screens-shared';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -19,7 +20,8 @@ export async function GET() {
     const token = await getTvTokenFromCookies();
     const device = token ? await findDeviceByToken(token) : null;
     const status = !device ? 'none' : device.revoked_at ? 'revoked' : device.approved_at ? 'active' : 'pending';
-    return NextResponse.json({ status, name: device?.approved_at ? device.name : null }, { headers: { 'Cache-Control': 'no-store' } });
+    const active = status === 'active' && device;
+    return NextResponse.json({ status, name: active ? device.name : null, screens: active ? normalizeTvScreens(device.screens) : [] },{ headers: { 'Cache-Control': 'no-store' } });
   } catch (error: any) {
     return NextResponse.json({ message: error?.message || 'Durum alınamadı.' }, { status: 500 });
   }
