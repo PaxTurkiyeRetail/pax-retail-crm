@@ -72,6 +72,7 @@ export default function SalesClient() {
   const [canEdit, setCanEdit] = useState(false);
   const [canSeeAll, setCanSeeAll] = useState(false);
   const [canCreate, setCanCreate] = useState(false);
+  const [canOverridePrice, setCanOverridePrice] = useState(false);
   const [channels, setChannels] = useState<ChannelOption[]>([]);
   const [owner, setOwner] = useState('');
   const [status, setStatus] = useState('active');
@@ -123,6 +124,7 @@ export default function SalesClient() {
     setCanEdit(Boolean(json.canEdit));
     setCanSeeAll(Boolean(json.canSeeAll));
     setCanCreate(Boolean(json.canCreate));
+    setCanOverridePrice(Boolean(json.canOverridePrice));
     setChannels((json.channels ?? []) as ChannelOption[]);
     setLoading(false);
   }, [owner, status, q]);
@@ -181,7 +183,7 @@ export default function SalesClient() {
         sale_date: newDate,
         sales_channel: newChannel || null,
         note: newNote || null,
-        agreed_amount: newAgreed.trim() === '' ? null : Number(newAgreed),
+        agreed_amount: !canOverridePrice || newAgreed.trim() === '' ? null : Number(newAgreed),
         lines,
       }),
     });
@@ -381,7 +383,7 @@ export default function SalesClient() {
             </label>
             <label style={fieldStyle}>
               <span style={labelStyle}>Anlaşma Fiyatı (USD) — opsiyonel</span>
-              <input type="number" min={0} step="0.01" value={formManual} onChange={(e) => setFormManual(e.target.value)} placeholder="Boş = katalogdan hesapla" style={inputStyle} />
+              <input type="number" min={0} step="0.01" disabled={!canOverridePrice} title={canOverridePrice ? undefined : 'Özel fiyat yetkisi gerekli'} value={formManual} onChange={(e) => setFormManual(e.target.value)} placeholder="Boş = katalogdan hesapla" style={inputStyle} />
               <small style={hintStyle}>Doldurursan katalog hesabı ezilir ve kayıt &quot;anlaşma fiyatı&quot; olarak işaretlenir.</small>
             </label>
             <label style={fieldStyle}>
@@ -464,10 +466,10 @@ export default function SalesClient() {
                   {channels.map((channel) => <option key={channel.value} value={channel.value}>{channel.label}</option>)}
                 </select>
               </label>
-              <label style={fieldStyle}>
+              {canOverridePrice ? <label style={fieldStyle}>
                 <span style={labelStyle}>Anlaşma Fiyatı (USD) — opsiyonel</span>
                 <input inputMode="numeric" value={newAgreed} onChange={(e) => setNewAgreed(e.target.value.replace(/[^\d.]/g, ''))} placeholder="Boş = katalogdan hesapla" style={inputStyle} />
-              </label>
+              </label> : null}
             </div>
 
             <div style={{ marginTop: 6 }}>

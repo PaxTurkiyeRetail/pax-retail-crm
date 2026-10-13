@@ -36,6 +36,7 @@ export async function GET(request: Request) {
         canEdit: userHasPermission(me, 'quote.update.own') || userHasPermission(me, 'quote.update.any'),
         // Teklifsiz satış kaydı açma (027): account_manager kendi müşterisine, admin kısıtsız.
         canCreate: userHasPermission(me, 'sale.create'),
+        canOverridePrice: userHasPermission(me, 'quote.price.override'),
       },
       { headers: { 'Cache-Control': 'no-store, max-age=0' } },
     );

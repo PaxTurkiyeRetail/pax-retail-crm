@@ -52,6 +52,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: 'Bu firma sizin portföyünüzde değil; satış kaydını firmanın sorumlusu ya da yönetim açabilir.' }, { status: 403 });
     }
 
+    // Anlaşma fiyatı yalnız quote.price.override ile (13.10.2026).
+    if (input.agreed_amount != null && !userHasPermission(me, 'quote.price.override')) {
+      return NextResponse.json({ message: 'Anlaşma fiyatı girme yetkiniz yok; tutar katalogdan hesaplanır.' }, { status: 403 });
+    }
+
     const result = await createDirectSale(
       { id: me.id, name: String(me.full_name ?? me.email ?? '').trim() || 'Bilinmiyor', email: me.email },
       {

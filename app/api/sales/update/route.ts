@@ -68,6 +68,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: 'Anlaşma fiyatı geçersiz.' }, { status: 400 });
     }
 
+    // Anlaşma fiyatı yalnız quote.price.override ile (13.10.2026). Yetkisiz kullanıcı mevcut anlaşma fiyatını değiştirmeden kaydedebilir (form mevcut değeri geri gönderir).
+    if (manualAmountRaw != null && !userHasPermission(me, 'quote.price.override')) {
+      const unchanged = (sale as any).price_source === 'manual' && Math.abs(Number((sale as any).amount ?? 0) - manualAmountRaw) < 0.005;
+      if (!unchanged) return NextResponse.json({ message: 'Anlaşma fiyatı girme yetkiniz yok.' }, { status: 403 });
+    }
+
     // Kiralama dönemi: gönderilmediyse mevcut değer, gönderildiyse doğrulanır.
     const hasRental = String((sale as any).sale_type ?? 'sale') !== 'sale';
     const rentalStart = Object.prototype.hasOwnProperty.call(body, 'rental_start_date') ? isoDate(body.rental_start_date) : ((sale as any).rental_start_date ?? null);
