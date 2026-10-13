@@ -114,7 +114,7 @@ export default function TvDevicesClient() {
           <input className="pax-input" value={name} onChange={(e) => setName(e.target.value)} maxLength={80} />
         </label>
         <div style={{ display: 'grid', gap: 4, flexBasis: '100%' }}>
-          <span>TV'de gösterilecek sekmeler</span>
+          <span>TV&apos;de gösterilecek sekmeler</span>
           <ScreenPicker value={screens} onChange={setScreens} />
         </div>
         <button type="submit" className="pax-btn pax-btn-primary" disabled={busy}>Bağla</button>
