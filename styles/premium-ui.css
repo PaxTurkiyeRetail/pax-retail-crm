@@ -48,7 +48,7 @@ body {
 }
 
 .pax-main-inner {
-  max-width: 1600px;
+  max-width: none;
   padding: 28px 32px 44px;
 }
 
