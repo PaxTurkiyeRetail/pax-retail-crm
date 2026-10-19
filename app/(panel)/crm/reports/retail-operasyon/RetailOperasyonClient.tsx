@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import type { RetailOperasyonPayload, RetailOpportunity } from '@/lib/reports/retail-operasyon';
+import ForecastQuickAdd, { loadForecastQuickAddOptions, type ForecastQuickAddOptions } from '@/components/forecast/ForecastQuickAdd';
 import { Checkbox, DataTable, Field, Input, Notice, Range, KpiStrip, Page, PageHeader, Section, Tabs, Toolbar, cn, numCls, td, th, type Column } from '@/components/ui';
 
 const ACCESSORY = new Set(['S210']);
@@ -29,7 +30,8 @@ const oppCols: Column<Opp>[] = [
   { key: 'model', label: 'Model', value: (r) => r.model },
   { key: 'qty', label: 'Adet', value: (r) => r.qty, num: true },
   { key: 'month', label: 'Ay', value: (r) => r.month, render: (r) => MONTHS[r.month - 1] ?? '–' },
-  { key: 'channel', label: 'İş modeli', value: (r) => r.channel },
+  { key: 'saleType', label: 'Tip', value: (r) => (r.saleType === 'rental' ? 'Kiralama' : 'Satış') },
+  { key: 'channel', label: 'Kanal', value: (r) => r.channel },
   { key: 'prob', label: 'Olasılık %', value: (r) => r.prob, num: true },
   { key: 'weighted', label: 'Senaryo adet', value: (r) => r.weighted, num: true },
   { key: 'owner', label: 'Sorumlu', value: (r) => r.owner },
@@ -68,13 +70,13 @@ function MonthlyResult({ title, actual, forecast, refMonth }: { title: string; a
     return { v, cum, isActual };
   });
   const total = cells.reduce((s, c) => s + c.v, 0);
-  const tone = (a: boolean) => (a ? 'text-text' : 'bg-warn-soft text-warn');
+  const tone = (a: boolean) => (a ? 'bg-ok-soft text-ok' : 'bg-warn-soft text-warn');
   return (
     <Section
       title={title}
       actions={
         <span className="flex items-center gap-3 text-xs text-text-3">
-          <span className="flex items-center gap-1.5"><i className="inline-block size-2.5 bg-text-3" />Gerçekleşen</span>
+          <span className="flex items-center gap-1.5"><i className="inline-block size-2.5 bg-ok" />Gerçekleşen</span>
           <span className="flex items-center gap-1.5"><i className="inline-block size-2.5 bg-warn" />Tahmin</span>
         </span>
       }
@@ -126,8 +128,18 @@ export default function RetailOperasyonClient() {
       .catch((e) => setError(e.message));
   }, []);
 
-  const oppNow = useScenario(data?.opportunities.current ?? [], pct, weighted);
-  const oppNext = useScenario(data?.opportunities.next ?? [], pctNext, weightedNext);
+  // Forecast'te "Retail planı: Hariç" işaretli kayıtlar panele girmez.
+  const planNow = useMemo(() => (data?.opportunities.current ?? []).filter((o) => o.includeInRetailPlan !== false), [data]);
+  const planNext = useMemo(() => (data?.opportunities.next ?? []).filter((o) => o.includeInRetailPlan !== false), [data]);
+  const oppNow = useScenario(planNow, pct, weighted);
+  const oppNext = useScenario(planNext, pctNext, weightedNext);
+  const [quickOptions, setQuickOptions] = useState<ForecastQuickAddOptions | null>(null);
+  useEffect(() => {
+    if (tab === 3 && !quickOptions) loadForecastQuickAddOptions().then(setQuickOptions).catch(() => undefined);
+  }, [tab, quickOptions]);
+  const reload = () => {
+    fetch('/api/reports/retail-operasyon', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).then((j) => j && setData(j));
+  };
 
   const calc = useMemo(() => {
     const sales = data?.sales ?? [];
@@ -203,6 +215,29 @@ export default function RetailOperasyonClient() {
               { key: 'rate', label: 'Kullanım %', value: (r) => r.rate, num: true },
             ]}
           />
+          <KpiStrip
+            items={[
+              { label: 'Aktif kiralama', value: data?.rental ? nf.format(data.rental.activeQty) : '–' },
+              { label: 'Kiralama aylık gelir', value: data?.rental ? usdf.format(data.rental.monthlyRevenue) : '–' },
+              { label: 'Ort. aylık bedel', value: data?.rental?.avgMonthlyPrice != null ? usdf.format(data.rental.avgMonthlyPrice) : '–' },
+              ...(data?.rental?.byStatus ?? []).filter((b) => b.contracts > 0 && b.status !== 'aktif').map((b) => ({ label: b.label, value: nf.format(b.qty), sub: `${b.contracts} sözleşme` })),
+            ]}
+          />
+          <DataTable
+            title="Kiralama durumu"
+            csvName={`retail-kiralama-${year}`}
+            loading={loading}
+            rows={data?.rental?.contracts ?? []}
+            emptyText="Kiralama kaydı yok — Satışlar ekranında satır tipini Kiralama seçin."
+            columns={[
+              { key: 'firm', label: 'Firma', value: (r) => r.firm },
+              { key: 'status', label: 'Durum', value: (r) => r.statusLabel },
+              { key: 'qty', label: 'Adet', value: (r) => r.qty, num: true },
+              { key: 'monthly', label: 'Aylık (USD)', value: (r) => r.monthly, render: (r) => usdf.format(r.monthly), num: true },
+              { key: 'start', label: 'Başlangıç', value: (r) => r.start?.slice(0, 10) ?? '' },
+              { key: 'note', label: 'Not', value: (r) => r.note },
+            ]}
+          />
         </>
       )}
 
@@ -255,6 +290,14 @@ export default function RetailOperasyonClient() {
               { key: 'banks', label: 'Bankalar', value: (r) => r.banks },
               { key: 'status', label: 'Faz', value: (r) => r.status },
               { key: 'owner', label: 'Sorumlu', value: (r) => r.owner },
+              {
+                key: 'plan',
+                label: `Forecast'e ekle`,
+                value: () => '',
+                render: (r) => (
+                  <ForecastQuickAdd customerId={r.id} customerName={r.name} options={quickOptions} defaultYear={year + 1} compact onSaved={reload} />
+                ),
+              },
             ]}
           />
         </>

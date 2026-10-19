@@ -30,7 +30,7 @@ if command -v pm2 >/dev/null; then
   pm2 save
   pm2 status
 
-  HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:${PORT:-3000}/api/health}"
+  HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:${PORT:-5043}/api/health}"
   for attempt in 1 2 3 4 5; do
     if curl --fail --silent --show-error "$HEALTH_URL" >/dev/null; then
       echo "Canli saglik kontrolu basarili: $HEALTH_URL"
