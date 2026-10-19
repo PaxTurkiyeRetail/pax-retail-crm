@@ -19,6 +19,16 @@ Read `.claude/CLAUDE.md` first. Rules:
 - **Read-only DB check:** write a `.cjs` file into the app directory, start it with `begin read only`, and run it with `node --env-file-if-exists=.env.local x.cjs`. Delete the file afterwards.
 - Vitest also picks up the `.claude/worktrees/*` copies, so ignore failures from there or run with `--exclude ".claude/**"`.
 
+## Local changes — 2026-10-19 (not deployed)
+- Report Center: search, category filters, resilient partial loading, retry and scoped styles. Structured API validation errors no longer render `[object Object]`.
+- The Retail gallery card opens `/crm/reports/retail-operasyon` directly, rather than creating the more limited generic page template.
+- Report definitions persist `style.accent` and `style.conditional`; the wizard loads, saves and exports the same rules. No migration needed (definition JSON).
+- Retail: six reference sections, model/month matrices, opportunity model summaries, financial reconciliation, sales/rental tables, KasaPOS charts, CRM distributions/filters, saved plan columns and inline Forecast entry. Next-year opportunity month changes use the existing authenticated update API.
+- Real sources remain CRM sales, Forecast, KasaPOS invoices and Retail customers. USD averages use USD-only quantities; missing live prices remain unavailable. Static HTML customer records and prices were not imported.
+- Intentional arithmetic corrections over the reference: December actuals and forecast are shown separately and added consistently; next-year firm scenario quantities are allocated from rounded model/month totals so details reconcile with the matrix.
+- Local visual verification uses the real client components with synthetic API responses in ignored `.theme-audit/retail-review/`; it does not bypass production authentication. Production AD/session and live totals still need verification after deployment approval.
+- Remaining: scheduled-report runner/UI, dashboard hero, Görkem's department, and the separately requested source assets below.
+
 ## Live (main = 4ece5f2+, deployed)
 - **Retail Operasyon Paneli:** `/crm/reports/retail-operasyon`. Code: `lib/reports/retail-operasyon.ts` and `RetailOperasyonClient.tsx`.
   - Sales, opportunities, KasaPOS and the CRM pool are live data.
@@ -51,7 +61,7 @@ Read `.claude/CLAUDE.md` first. Rules:
      - Advanced layer: comparison, top-N, filters, formulas, conditional colour.
      - Drill-down, `?report=` / `?page=` links, "Kayıtlı rapor ekle" in the dashboard designer.
    - Remaining:
-     - (a) Conditional colour is not persisted. Add a `style` field to the report definition schema in `lib/report-builder/types.ts`.
+     - (a) Conditional colour persistence is implemented locally above; deployment pending.
      - (b) Scheduled reports: the `report_schedules` table exists, but there is no runner or UI. Build a cron/pm2 job plus the "Zamanla" UI.
      - (c) No Playwright verification yet.
 2. **UI taste:** the user said "too colourful" and then "too pale". The current balance is in the last commit; the request is "advanced, polished, product feel".
@@ -62,10 +72,5 @@ Read `.claude/CLAUDE.md` first. Rules:
    - The rental contract list, for import.
    - The letterhead image (upload through Report Builder → Antetler).
    - `public/fonts/DejaVuSans*.ttf` for Turkish characters in PDFs.
-6. **Retail panel vs. the HTML:** the remaining items from the original `Retail_2026_2027.html`.
-   - Model×month result tables with a "Fırsat" column.
-   - Reconciliation table.
-   - Model sales / average price table.
-   - KasaPOS monthly card and Kasa/POS distribution charts.
-   - Planned model/qty/month and Account columns.
+6. **Retail panel vs. the HTML:** the previously missing tables/charts/plan columns are implemented locally above; deployment and AD live verification pending. Reference details and deliberate live-data adaptations: `docs/report-builder/RETAIL_PARITY.md`.
 7. **Security:** `C:\Users\mustafa.bitim\.claude\settings.json` contains a plaintext `PGPASSWORD` (Pax Portal local DB) in old allow rules. Delete those lines and rotate the password.

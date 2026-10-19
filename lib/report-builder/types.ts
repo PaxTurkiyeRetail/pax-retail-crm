@@ -3,6 +3,24 @@
 // Anahtarlar burada yalnız biçim olarak doğrulanır, beyaz liste kontrolü derleyicidedir.
 import { z } from 'zod';
 
+export const COLOR_TOKENS = ['primary', 'success', 'warning', 'danger', 'info', 'neutral', 'accent'] as const;
+export type ColorToken = (typeof COLOR_TOKENS)[number];
+
+export const conditionalRuleSchema = z.object({
+  column: z.string().max(80),
+  op: z.enum(['gt', 'gte', 'lt', 'lte', 'eq', 'between']),
+  value: z.number().finite(),
+  value2: z.number().finite().optional(),
+  color: z.enum(COLOR_TOKENS),
+});
+export type ConditionalRule = z.infer<typeof conditionalRuleSchema>;
+
+
+export const reportStyleSchema = z.object({
+  accent: z.enum(COLOR_TOKENS).optional(),
+  conditional: z.array(conditionalRuleSchema).max(20).default([]),
+});
+
 export const MAX_ROW_LIMIT = 5000;
 export const DEFAULT_ROW_LIMIT = 500;
 
@@ -88,6 +106,7 @@ export const reportDefinitionSchema = z.object({
   sort: z.array(z.object({ field: key, dir: z.enum(['asc', 'desc']) })).max(4).default([]),
   limit: z.number().int().min(1).max(MAX_ROW_LIMIT).default(DEFAULT_ROW_LIMIT),
   compare: z.enum(['none', 'previous_period', 'yoy']).default('none'),
+  style: reportStyleSchema.optional(),
   visualization: visualizationSchema.default({ type: 'table' }),
 });
 

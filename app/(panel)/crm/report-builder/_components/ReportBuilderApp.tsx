@@ -1,7 +1,8 @@
 'use client';
 // Rapor Merkezi kabuğu: galeri (hazır raporlar, raporlarım, panolar) → sihirbaz / pano / antetler / uzman ekranı.
 import { useCallback, useEffect, useState } from 'react';
-import { ChevronRight, FileStack, LayoutDashboard, Plus, Sparkles, Stamp, Wrench } from 'lucide-react';
+import styles from './ReportCenter.module.css';
+import { Search, RefreshCw, ChevronRight, FileStack, LayoutDashboard, Plus, Sparkles, Stamp, Wrench } from 'lucide-react';
 import type { DatasetCatalogEntry } from '@/lib/report-builder/datasets';
 import type { ReportDefinitionInput } from '@/lib/report-builder/types';
 import { api, type LetterheadLite, type SavedDefinitionLite, type SavedPageLite } from './api';
@@ -32,21 +33,31 @@ export default function ReportBuilderApp({ canDesign, canManageLetterheads }: { 
   const [view, setView] = useState<View>({ kind: 'hub' });
   const [datasets, setDatasets] = useState<DatasetCatalogEntry[]>([]);
   const [pages, setPages] = useState<SavedPageLite[]>([]);
-  const [templates, setTemplates] = useState<{ key: string; label: string }[]>([]);
+  const [templates, setTemplates] = useState<{ key: string; label: string }[]>([{ key: 'retail_operasyon', label: 'Retail Operasyon Paneli' }]);
   const [defs, setDefs] = useState<SavedDefinitionLite[]>([]);
   const [userId, setUserId] = useState<string | null>(null);
   const [letterheads, setLetterheads] = useState<LetterheadLite[]>([]);
   const [queryEdit, setQueryEdit] = useState<{ query: ReportDefinitionInput; apply: (q: ReportDefinitionInput) => void } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [category, setCategory] = useState('all');
+  const [refreshing, setRefreshing] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
-    try {
-      const [d, p, l, r] = await Promise.all([api.datasets(), api.pages(), api.letterheads(), api.definitions()]);
-      setDatasets(d.datasets); setPages(p.pages); setTemplates(p.templates); setLetterheads(l.letterheads);
-      setDefs(r.definitions); setUserId(r.userId);
-    } catch (e) { setError(friendlyError(e)); } finally { setLoaded(true); }
+    setRefreshing(true);
+    setError(null);
+    const results = await Promise.allSettled([api.datasets(), api.pages(), api.letterheads(), api.definitions()]);
+    const [d, p, l, r] = results;
+    if (d.status === 'fulfilled') setDatasets(d.value.datasets);
+    if (p.status === 'fulfilled') { setPages(p.value.pages); setTemplates([{ key: 'retail_operasyon', label: 'Retail Operasyon Paneli' }, ...p.value.templates.filter((template) => template.key !== 'retail_operasyon')]); }
+    if (l.status === 'fulfilled') setLetterheads(l.value.letterheads);
+    if (r.status === 'fulfilled') { setDefs(r.value.definitions); setUserId(r.value.userId); }
+    const failed = results.find((result) => result.status === 'rejected');
+    if (failed?.status === 'rejected') setError(friendlyError(failed.reason));
+    setLoaded(true);
+    setRefreshing(false);
   }, []);
   useEffect(() => { reload(); }, [reload]);
 
@@ -72,7 +83,9 @@ export default function ReportBuilderApp({ canDesign, canManageLetterheads }: { 
   const back = () => { go({ kind: 'hub' }); reload(); };
 
   const openTemplate = async (key: string, label: string) => {
-    const existing = pages.find((p) => p.title === label);
+    if (key === 'retail_operasyon') { window.location.assign('/crm/reports/retail-operasyon'); return; }
+    if (busy) return;
+    const existing = pages.find((p) => p.template_key === key || p.title === label);
     if (existing) { go({ kind: 'page', id: existing.id }); return; }
     if (!canDesign) { setError('Bu hazır pano henüz kurulmamış. Kurulum için rapor tasarım yetkisi olan birine başvur.'); return; }
     setBusy(key);
@@ -126,37 +139,47 @@ export default function ReportBuilderApp({ canDesign, canManageLetterheads }: { 
     );
   }
 
-  const mine = defs.filter((d) => d.owner_user_id === userId);
-  const shared = defs.filter((d) => d.owner_user_id !== userId);
+  const matches = (value: string) => value.toLocaleLowerCase('tr-TR').includes(search.trim().toLocaleLowerCase('tr-TR'));
+  const mine = defs.filter((d) => d.owner_user_id === userId && matches(d.title));
+  const shared = defs.filter((d) => d.owner_user_id !== userId && matches(d.title));
   const templatePages = new Set(templates.map((t) => t.label));
-  const boards = pages.filter((p) => !p.is_template);
+  const boards = pages.filter((p) => !p.is_template && matches(p.title));
+  const visibleTemplates = templates.filter((t) => (category === 'all' || category === 'boards') && matches(t.label + ' ' + (TEMPLATE_DESC[t.key] ?? '')));
+  const visibleQuickReports = QUICK_REPORTS.filter((q) => datasets.some((d) => d.key === q.def.dataset) && (category === 'all' || category === q.def.dataset) && matches(q.title + ' ' + q.desc));
 
   return (
-    <div className="pax-page-container space-y-6">
-      <section className="pax-card flex flex-col gap-4 p-5 md:flex-row md:items-center">
+    <div className={`${styles.center} pax-page-container space-y-6`}>
+      <section className={`${styles.hero} pax-card flex flex-col gap-4 p-5 md:flex-row md:items-center`}>
         <div className="min-w-0 flex-1 space-y-1">
           <h1 className="text-2xl font-semibold">Rapor Merkezi</h1>
           <p className="text-sm text-[var(--muted)]">Hazır bir raporu tek tıkla aç ya da 3 adımda kendi raporunu oluştur. Kod, formül veya teknik bilgi gerekmez.</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button type="button" className="pax-btn pax-btn-primary inline-flex items-center gap-2 px-5 py-2.5 text-base" onClick={() => go({ kind: 'wizard' })}><Plus size={18} aria-hidden />Yeni rapor</button>
-          {canDesign && <button type="button" className="pax-btn inline-flex items-center gap-2 px-4 py-2.5" disabled={busy === 'board'} onClick={newBoard}><LayoutDashboard size={18} aria-hidden />Pano oluştur</button>}
+          <button type="button" className="pax-btn pax-btn-primary inline-flex items-center gap-2 px-5 py-2.5 text-base" disabled={!loaded || !datasets.length} onClick={() => go({ kind: 'wizard' })}><Plus size={18} aria-hidden />Yeni rapor</button>
+          {canDesign && <button type="button" className="pax-btn inline-flex items-center gap-2 px-4 py-2.5" disabled={!!busy || !loaded} onClick={newBoard}><LayoutDashboard size={18} aria-hidden />Pano oluştur</button>}
         </div>
       </section>
 
-      {error && <p role="alert" className="rounded-lg p-3 text-sm" style={{ background: TOKEN_SOFT.danger, color: TOKEN_CSS.danger }}>{error}</p>}
+      {error && <p role="alert" className="rounded-lg p-3 text-sm" style={{ background: TOKEN_SOFT.danger, color: TOKEN_CSS.danger }}>{error} <button type="button" className="pax-btn" disabled={refreshing} onClick={reload}><RefreshCw size={14} aria-hidden />Tekrar dene</button></p>}
 
-      <section className="space-y-3" aria-labelledby="h-quick">
+      <div className={styles.toolbar}>
+        <label className={styles.search}><Search size={18} aria-hidden /><input aria-label="Rapor ve pano ara" placeholder="Rapor veya pano ara…" value={search} onChange={(event) => setSearch(event.target.value)} />{search && <button type="button" aria-label="Aramayı temizle" onClick={() => setSearch('')}>×</button>}</label>
+        <button type="button" className="pax-btn" disabled={refreshing} onClick={reload}><RefreshCw size={16} aria-hidden />{refreshing ? 'Yenileniyor…' : 'Yenile'}</button>
+      </div>
+      <section className="space-y-3" aria-labelledby="h-quick" aria-busy={refreshing}>
         <div><h2 id="h-quick" className="flex items-center gap-2 text-lg font-semibold"><Sparkles size={18} aria-hidden style={{ color: TOKEN_CSS.warning }} />Hazır raporlar</h2>
           <p className="text-xs text-[var(--muted)]">“Aç”a bas, rapor anında çalışsın. İstersen içinde değiştirip kendi raporun olarak kaydedebilirsin.</p></div>
+        <div className={styles.filters} role="group" aria-label="Hazır rapor kategorisi">{[['all', 'Tümü'], ['boards', 'Panolar'], ...datasets.filter((d) => QUICK_REPORTS.some((q) => q.def.dataset === d.key)).map((d) => [d.key, uiFor(d.key).title])].map(([key, label]) => <button type="button" key={key} aria-pressed={category === key} onClick={() => setCategory(key)}>{label}</button>)}</div>
+        {!loaded && <p role="status" className="pax-card p-5">Raporlar yükleniyor…</p>}
+        {loaded && !visibleTemplates.length && !visibleQuickReports.length && <p role="status" className="pax-card p-5 text-sm">Bu seçimle eşleşen hazır rapor yok. Aramayı veya kategoriyi değiştirebilirsin.</p>}
         <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {templates.map((t) => (
+          {visibleTemplates.map((t) => (
             <li key={t.key}>
               <Card icon={<LayoutDashboard size={20} aria-hidden />} tone="primary" title={t.label} desc={TEMPLATE_DESC[t.key] ?? 'Çok kartlı hazır pano.'} badge="Pano"
-                action={busy === t.key ? 'Hazırlanıyor…' : 'Aç'} onClick={() => openTemplate(t.key, t.label)} />
+                disabled={!!busy} action={busy === t.key ? 'Hazırlanıyor…' : 'Panoyu aç'} onClick={() => openTemplate(t.key, t.label)} />
             </li>
           ))}
-          {QUICK_REPORTS.filter((q) => datasets.some((d) => d.key === q.def.dataset)).map((q) => {
+          {visibleQuickReports.map((q) => {
             const u = uiFor(q.def.dataset); const Icon = u.icon;
             return (
               <li key={q.key}>
@@ -169,9 +192,9 @@ export default function ReportBuilderApp({ canDesign, canManageLetterheads }: { 
       </section>
 
       <div className="grid gap-6 xl:grid-cols-2">
-        <ReportList title="Raporlarım" empty="Henüz kaydettiğin rapor yok. “+ Yeni rapor” ile başla, 3. adımda “Kaydet”e bas." items={mine}
+        <ReportList title="Raporlarım" loaded={loaded} searching={!!search.trim()} empty="Henüz kaydettiğin rapor yok. “+ Yeni rapor” ile başla, 3. adımda “Kaydet”e bas." items={mine}
           onOpen={(s) => go({ kind: 'wizard', initial: { def: s.definition, title: s.title, saved: s, step: 3 } })} />
-        <ReportList title="Benimle paylaşılanlar" empty="Seninle paylaşılan rapor yok." items={shared}
+        <ReportList title="Benimle paylaşılanlar" loaded={loaded} searching={!!search.trim()} empty="Seninle paylaşılan rapor yok." items={shared}
           onOpen={(s) => go({ kind: 'wizard', initial: { def: s.definition, title: s.title, saved: s.owner_user_id === userId ? s : null, step: 3 } })} />
       </div>
 
@@ -200,9 +223,9 @@ export default function ReportBuilderApp({ canDesign, canManageLetterheads }: { 
   );
 }
 
-function Card({ icon, tone, title, desc, badge, action, onClick }: { icon: React.ReactNode; tone: keyof typeof TOKEN_CSS; title: string; desc: string; badge: string; action: string; onClick: () => void }) {
+function Card({ icon, tone, title, desc, badge, action, onClick, disabled }: { icon: React.ReactNode; tone: keyof typeof TOKEN_CSS; title: string; desc: string; badge: string; action: string; onClick: () => void; disabled?: boolean }) {
   return (
-    <button type="button" onClick={onClick} className="pax-card flex h-full w-full flex-col gap-2 p-4 text-left transition hover:-translate-y-0.5 hover:shadow-md">
+    <button type="button" disabled={disabled} onClick={onClick} className="pax-card flex h-full w-full flex-col gap-2 p-4 text-left transition hover:-translate-y-0.5 hover:shadow-md">
       <div className="flex items-center gap-2">
         <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg" style={{ background: TOKEN_SOFT[tone], color: TOKEN_CSS[tone] }}>{icon}</span>
         <span className="ml-auto rounded-full px-2 py-0.5 text-[11px] text-[var(--muted)]" style={{ border: '1px solid var(--border)' }}>{badge}</span>
@@ -214,11 +237,11 @@ function Card({ icon, tone, title, desc, badge, action, onClick }: { icon: React
   );
 }
 
-function ReportList({ title, empty, items, onOpen }: { title: string; empty: string; items: SavedDefinitionLite[]; onOpen: (s: SavedDefinitionLite) => void }) {
+function ReportList({ title, empty, items, onOpen, loaded, searching }: { title: string; empty: string; items: SavedDefinitionLite[]; loaded: boolean; searching: boolean; onOpen: (s: SavedDefinitionLite) => void }) {
   return (
     <section className="space-y-3">
       <h2 className="flex items-center gap-2 text-lg font-semibold"><FileStack size={18} aria-hidden style={{ color: TOKEN_CSS.accent }} />{title} <span className="text-sm font-normal text-[var(--muted)]">({items.length})</span></h2>
-      {!items.length ? <p className="pax-card pax-empty p-5 text-sm">{empty}</p> : (
+      {!items.length ? <p className="pax-card pax-empty p-5 text-sm">{loaded ? searching ? 'Aramana uygun rapor bulunamadı.' : empty : 'Raporlar yükleniyor…'}</p> : (
         <ul className="pax-card divide-y p-0" style={{ borderColor: 'var(--border)' }}>
           {items.map((s) => {
             const u = uiFor(s.definition.dataset); const Icon = u.icon;

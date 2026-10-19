@@ -15,7 +15,11 @@ async function call<T>(url: string, init?: RequestInit): Promise<T> {
   if (!res.ok) {
     const body = await res.json().catch(() => null);
     const err = body?.error ?? body;
-    const details = Array.isArray(err?.details) ? err.details.map(String) : undefined;
+    const details = Array.isArray(err?.details) ? err.details.flatMap((detail: unknown) => {
+      if (typeof detail === 'string') return [detail];
+      if (detail && typeof detail === 'object' && 'message' in detail && typeof detail.message === 'string') return [detail.message];
+      return [];
+    }) : undefined;
     throw new ApiFailure(err?.message ?? `İstek başarısız (${res.status})`, res.status, details);
   }
   return res.json() as Promise<T>;
@@ -69,5 +73,5 @@ export function saveBlob(blob: Blob, name: string) {
 }
 
 export type SavedDefinitionLite = { id: string; title: string; description: string; owner_user_id?: string; owner_name: string | null; visibility: string; is_favorite?: boolean; definition: ReportDefinitionInput; updated_at: string; version: number };
-export type SavedPageLite = { id: string; title: string; owner_name: string | null; visibility: 'private' | 'roles' | 'everyone'; shared_roles: string[]; is_template: boolean; version: number; letterhead_id: string | null; updated_at: string; can_edit: boolean };
+export type SavedPageLite = { id: string; title: string; owner_name: string | null; visibility: 'private' | 'roles' | 'everyone'; shared_roles: string[]; is_template: boolean; template_key?: string | null; version: number; letterhead_id: string | null; updated_at: string; can_edit: boolean };
 export type LetterheadLite = { id: string; name: string; mimeType: string; byteSize: number; orientation: 'portrait' | 'landscape'; margins: { top: number; right: number; bottom: number; left: number }; safeArea: { top: number; bottom: number }; showTitle: boolean; showDate: boolean; showPageNumbers: boolean; footerText: string; isDefault: boolean };

@@ -14,12 +14,13 @@ import { summarizeRental, type RentalItemRow } from './retail-rental';
 
 export const ACCESSORY_MODELS = ['S210'];
 
-export type RetailSaleLine = { firm: string; model: string; month: number; qty: number; usd: number; saleType: 'sale' | 'rental' };
+export type RetailSaleLine = { firm: string; model: string; month: number; qty: number; usd: number; usdQty?: number; saleType: 'sale' | 'rental' };
 export type RetailOpportunity = {
   firm: string; model: string; qty: number; month: number; channel: string; prob: number; note: string; owner: string;
   /** 045 — forecast satırı satış/kiralama, fiyat ve Retail planı kuralı. Liste FİLTRELENMEZ; istemci `includeInRetailPlan` ile süzer. */
   id?: string;
   customerId?: string;
+  productId?: string;
   saleType?: 'sale' | 'rental';
   unitPrice?: number | null;
   rentalMonthlyPrice?: number | null;
@@ -44,7 +45,13 @@ export type RetailCrmRow = {
   id: string; name: string; sector: string; kasa: string; register: number | null; owner: string;
   status: string; pos: string; posOwner: string; banks: string;
 };
-export type RetailKasaRow = { firm: string; active: number | null; billed: number; gap: number | null; rate: number | null };
+export type RetailKasaRow = {
+  firm: string; active: number | null; billed: number; gap: number | null; rate: number | null;
+  /** Aynı hizmet faturası kaynağından firma × ay mutabakatı; eksik ay null kalır. */
+  monthly?: Array<{ month: string; billed: number; usd: number } | null>;
+  yearBilled?: number;
+  totalUsd?: number;
+};
 export type RetailOperasyonPayload = {
   year: number;
   generatedAt: string;
@@ -69,6 +76,7 @@ async function fetchSales(year: number): Promise<RetailSaleLine[]> {
     `
       select m.musteri as firm, i.product_code, extract(month from s.sale_date)::int as ay,
              i.sale_type, sum(i.quantity)::int as qty,
+             coalesce(sum(i.quantity) filter (where s.currency = 'USD'), 0)::int as usd_qty,
              coalesce(sum(i.total_price) filter (where s.currency = 'USD'), 0)::numeric as usd
       from public.crm_sales s
       join public.crm_sale_items i on i.sale_id = s.id
@@ -86,6 +94,7 @@ async function fetchSales(year: number): Promise<RetailSaleLine[]> {
     month: Number(x.ay),
     qty: Number(x.qty) || 0,
     usd: Math.round((Number(x.usd) || 0) * 100) / 100,
+    usdQty: Number(x.usd_qty) || 0,
     saleType: x.sale_type === 'rental' ? 'rental' : 'sale',
   }));
 }
@@ -96,7 +105,7 @@ async function fetchOpportunities(years: number[]): Promise<Map<number, RetailOp
       select f.forecast_year, f.forecast_month, m.musteri as firm,
              coalesce(nullif(btrim(f.product_code_snapshot), ''), f.product_name_snapshot) as model,
              f.quantity, f.sales_channel, f.probability, f.note, f.owner_name,
-             f.id::text as id, f.customer_id::text as customer_id,
+             f.id::text as id, f.customer_id::text as customer_id, f.product_id::text as product_id,
              -- 045 kolonları to_jsonb ile: migration öncesinde de sorgu kırılmaz.
              to_jsonb(f) ->> 'sale_type' as sale_type,
              to_jsonb(f) ->> 'unit_price' as unit_price,
@@ -122,6 +131,7 @@ async function fetchOpportunities(years: number[]): Promise<Map<number, RetailOp
       owner: txt(x.owner_name),
       id: String(x.id),
       customerId: String(x.customer_id),
+      productId: x.product_id == null ? undefined : String(x.product_id),
       saleType: x.sale_type === 'rental' ? 'rental' : 'sale',
       unitPrice: numOrNull(x.unit_price),
       rentalMonthlyPrice: numOrNull(x.rental_monthly_price),
@@ -235,6 +245,11 @@ export async function buildRetailOperasyon(options?: { year?: number }): Promise
           billed: f.refAdet,
           gap: f.firsatAdet,
           rate: f.kullanimPct,
+          monthly: f.monthly.map((cell, index) => cell == null ? null : ({
+            month: kasa.months[index], billed: cell.adet, usd: cell.tutar,
+          })),
+          yearBilled: f.toplamAdet,
+          totalUsd: f.toplamTutar,
         }))
         .sort((a, b) => b.billed - a.billed),
       monthly: kasa.monthlyTotals.map((m, i) => ({ month: kasa.months[i], billed: m.adet, usd: m.tutar })),

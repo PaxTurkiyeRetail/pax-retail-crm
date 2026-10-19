@@ -2,7 +2,7 @@
 // Widget'lar ya bir rapor tanımı (inline `query`) ya da metin/filtre/sekme gibi sunum öğesidir.
 // Renkler serbest hex DEĞİL: yalnız tema token'ları (COLOR_TOKENS).
 import { z } from 'zod';
-import { DEPARTMENT_VALUES, reportDefinitionSchema, ReportDefinitionError, type Department } from '@/lib/report-builder/types';
+import { COLOR_TOKENS, conditionalRuleSchema, DEPARTMENT_VALUES, reportDefinitionSchema, ReportDefinitionError, type Department } from '@/lib/report-builder/types';
 
 /** Departman çözümü: görüntüleyen seçimi > widget sorgusunun kendi değeri > sayfa varsayılanı. */
 export function resolveDepartment(pageDefault: Department, widgetValue: Department | undefined, viewerValue: unknown): Department {
@@ -12,8 +12,7 @@ export function resolveDepartment(pageDefault: Department, widgetValue: Departme
 }
 
 export const GRID_COLUMNS = 12;
-export const COLOR_TOKENS = ['primary', 'success', 'warning', 'danger', 'info', 'neutral', 'accent'] as const;
-export type ColorToken = (typeof COLOR_TOKENS)[number];
+export { COLOR_TOKENS, conditionalRuleSchema, type ColorToken, type ConditionalRule } from '@/lib/report-builder/types';
 export const BREAKPOINTS = ['lg', 'md', 'sm'] as const;
 export type Breakpoint = (typeof BREAKPOINTS)[number];
 /** Breakpoint başına sütun sayısı: masaüstü 12, tablet 6, mobil 1 (otomatik tek sütun). */
@@ -39,14 +38,6 @@ export const layoutSchema = z.object({
 
 export const numberFormatSchema = z.enum(['number', 'money', 'percent', 'compact']);
 
-export const conditionalRuleSchema = z.object({
-  column: z.string().max(80),
-  op: z.enum(['gt', 'gte', 'lt', 'lte', 'eq', 'between']),
-  value: z.number().finite(),
-  value2: z.number().finite().optional(),
-  color: z.enum(COLOR_TOKENS),
-});
-export type ConditionalRule = z.infer<typeof conditionalRuleSchema>;
 
 export const columnSettingSchema = z.object({
   key: z.string().max(80),

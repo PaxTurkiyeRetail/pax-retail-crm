@@ -66,7 +66,10 @@ export default function ReportWizard({ datasets, letterheads, initial, onClose, 
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [advanced, setAdvanced] = useState(false);
-  const [rules, setRules] = useState<ConditionalRule[]>([]);
+  const rules = def?.style?.conditional ?? [];
+  const setRules = (conditional: ConditionalRule[]) => setDef((current) => current ? {
+    ...current, style: { ...current.style, conditional },
+  } : current);
   const [drill, setDrill] = useState<{ label: string; def: Def }[]>([]);
   const [letterheadId, setLetterheadId] = useState<string>(letterheads.find((l) => l.isDefault)?.id ?? '');
   const reqId = useRef(0);
@@ -93,7 +96,7 @@ export default function ReportWizard({ datasets, letterheads, initial, onClose, 
   const pickDataset = (d: DatasetCatalogEntry) => {
     setDef(defaultDefinition(d.key, d.measures.map((m) => m.key), d.dimensions, d.defaultDateField));
     if (!title) setTitle(uiFor(d.key).title || d.label);
-    setDrill([]); setRules([]); setStep(2);
+    setDrill([]); setStep(2);
   };
 
   const groupChips = useMemo(() => {
@@ -169,7 +172,7 @@ export default function ReportWizard({ datasets, letterheads, initial, onClose, 
     patch({ ...p, dimensions: [{ field: nextGroup.key }, ...dims.slice(1)] });
   } : undefined;
 
-  const style = { accent: ui.tone, conditional: rules };
+  const style = { ...def.style, accent: def.style?.accent ?? ui.tone, conditional: rules };
   const pdfBody = () => {
     const wType = viz === 'kpi' ? 'kpi_strip' : viz;
     return {

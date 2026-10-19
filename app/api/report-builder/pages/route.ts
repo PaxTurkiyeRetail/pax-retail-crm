@@ -22,7 +22,13 @@ export async function GET() {
   }
 }
 
-const createSchema = savePageSchema.extend({ templateKey: z.string().regex(/^[a-z_]{1,40}$/).optional() });
+const createSchema = savePageSchema.extend({
+  // Zod 4 requires unknown fields; templates provide the page server-side.
+  page: z.unknown().default(null),
+  templateKey: z.string().regex(/^[a-z_]{1,40}$/).optional(),
+}).refine((input) => Boolean(input.templateKey) || input.page != null, {
+  path: ['page'], message: 'Bir pano veya hazır pano seçin.',
+});
 
 export async function POST(request: Request) {
   try {
