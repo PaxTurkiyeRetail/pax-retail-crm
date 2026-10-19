@@ -1,0 +1,340 @@
+// SEMANTİK KATMAN — dataset registry (beyaz liste).
+// Buradaki SQL parçaları yalnız geliştirici tarafından yazılır; kullanıcı girdisi ASLA buraya
+// karışmaz. Derleyici yalnız bu anahtarları kabul eder, değerleri parametre ($n) olarak geçer.
+//
+// Metrik tanımları mevcut raporlardaki "doğru" tanımla hizalanmıştır (DESIGN.md §1.3):
+//  - Satış: yalnız status='active'; tarih = sale_date.
+//  - Cihaz adedi: kalem varsa crm_sale_item_is_device() kalemlerinin adedi, kalemsiz eski satışta
+//    crm_sales.device_count (performance-report / live-board ile aynı).
+//  - Aktivite: tarih = coalesce(aktivite_tarihi, created_at@Istanbul); planlanan "sonraki aksiyon"
+//    kayıtları (Başlamadı + hedef tarihli) sayılmaz (weekly-targets / live-board ile aynı).
+import type { Permission } from '@/lib/roles';
+import { INTEGRATION_DEVICE_SERVICE_KEYS } from '@/lib/sales/service-invoices-shared';
+import type { TimeGrain } from '@/lib/report-builder/types';
+
+export type FieldType = 'string' | 'number' | 'date' | 'boolean';
+
+export type DimensionDef = {
+  label: string;
+  sql: string;
+  type: FieldType;
+  group?: string;
+  description?: string;
+  /** Tarih alanlarında izin verilen zaman kırılımları. */
+  grains?: readonly TimeGrain[];
+  /** Arayüzde öneri listesi (sabit kümeler). */
+  options?: readonly string[];
+};
+
+export type MeasureDef = {
+  label: string;
+  /** Toplulaştırılmış SQL ifadesi (sum/count/avg/...). */
+  sql: string;
+  format: 'number' | 'money' | 'percent';
+  description?: string;
+};
+
+export type OwnerColumns = {
+  /** text'e çevrilmiş kanonik sahip id ifadesi. */
+  userId: string;
+  email?: string;
+  name?: string;
+};
+
+export type DatasetDef = {
+  key: string;
+  label: string;
+  description: string;
+  /** Dataset'e erişim için gereken action permission (screen.* değil). */
+  permission: Permission;
+  from: string;
+  baseWhere: readonly string[];
+  defaultDateField: string;
+  owner: OwnerColumns;
+  dimensions: Readonly<Record<string, DimensionDef>>;
+  measures: Readonly<Record<string, MeasureDef>>;
+};
+
+const ALL_GRAINS: readonly TimeGrain[] = ['day', 'week', 'month', 'quarter', 'year'];
+const DEVICE = 'public.crm_sale_item_is_device(i.product_type, i.is_recurring)';
+const ACTIVITY_DATE = `coalesce(pe.aktivite_tarihi, (pe.created_at at time zone 'Europe/Istanbul')::date)`;
+const ACTIVITY_LABEL = `nullif(trim(regexp_replace(coalesce(pe.aksiyon, ''), '^AKTIVITE:', '')), '')`;
+// lib/activity-channels.ts normalizeChannel ile aynı eşleme.
+const ACTIVITY_CHANNEL = `case
+  when ${ACTIVITY_LABEL} in ('Telefon','Yerinde Ziyaret','Online Toplantı','Teknik Ziyaret','Teknik Online','POM','E-posta') then ${ACTIVITY_LABEL}
+  when ${ACTIVITY_LABEL} in ('Entegrasyon Süreci','İş Ortaklığı Aktivitesi') then 'Entegrasyon Süreci'
+  else 'Diğer' end`;
+// app/api/reports/phase-report macroGroup ile aynı aralıklar.
+const PHASE_GROUP = `case
+  when mp.aktif_faz_no is null then 'Fazsız'
+  when mp.aktif_faz_no between 1 and 4 then 'Fırsat'
+  when mp.aktif_faz_no between 5 and 9 then 'İlk Temas'
+  when mp.aktif_faz_no between 10 and 14 then 'Business'
+  when mp.aktif_faz_no between 15 and 23 then 'Operasyon'
+  when mp.aktif_faz_no between 24 and 25 then 'Yayılım'
+  else 'Diğer' end`;
+
+export const DEPARTMENTS = ['Retail', 'Vertical', 'Bank'] as const;
+
+const customerDims = (alias = 'm'): Record<string, DimensionDef> => ({
+  customer: { label: 'Müşteri', sql: `${alias}.musteri`, type: 'string', group: 'Müşteri' },
+  customer_owner: { label: 'Müşteri sorumlusu', sql: `coalesce(nullif(trim(${alias}.sorumlu), ''), 'Havuz')`, type: 'string', group: 'Müşteri' },
+  sector: { label: 'Sektör', sql: `coalesce(nullif(trim(${alias}.sektor), ''), '—')`, type: 'string', group: 'Müşteri' },
+  /** Departman = musteriler.is_kolu (kişi değil, departman bazlı ayrım). */
+  department: { label: 'Departman', sql: `coalesce(nullif(trim(${alias}.is_kolu), ''), '—')`, type: 'string', group: 'Müşteri', options: DEPARTMENTS },
+  /** Geriye uyum: eski anahtar; department ile aynı ifade. */
+  business_line: { label: 'İş kolu', sql: `coalesce(nullif(trim(${alias}.is_kolu), ''), '—')`, type: 'string', group: 'Müşteri', options: DEPARTMENTS },
+  customer_type: { label: 'Müşteri tipi', sql: `${alias}.customer_type`, type: 'string', group: 'Müşteri' },
+});
+
+const SALES: DatasetDef = {
+  key: 'sales',
+  label: 'Satışlar',
+  description: 'Aktif satış kayıtları (satış başına bir satır). Ciro, cihaz adedi, satış kanalı.',
+  permission: 'quote.read',
+  from: `public.crm_sales s
+    join public.musteriler m on m.id = s.customer_id
+    left join lateral (
+      select count(*)::int as n,
+             coalesce(sum(i.quantity) filter (where ${DEVICE}), 0)::int as dev
+      from public.crm_sale_items i where i.sale_id = s.id
+    ) si on true`,
+  baseWhere: [`s.status = 'active'`],
+  defaultDateField: 'sale_date',
+  owner: { userId: 's.owner_user_id::text', email: 's.owner_email', name: 's.owner_name' },
+  dimensions: {
+    sale_date: { label: 'Satış tarihi', sql: 's.sale_date', type: 'date', grains: ALL_GRAINS, group: 'Satış' },
+    owner: { label: 'Satıcı', sql: `coalesce(nullif(trim(s.owner_name), ''), 'Havuz Account')`, type: 'string', group: 'Satış' },
+    sales_channel: { label: 'Satış kanalı', sql: `coalesce(s.sales_channel, '—')`, type: 'string', group: 'Satış' },
+    source: { label: 'Kaynak', sql: 's.source', type: 'string', group: 'Satış', options: ['quote', 'direct'] },
+    sale_type: { label: 'Satış tipi', sql: 's.sale_type', type: 'string', group: 'Satış', options: ['sale', 'rental'] },
+    currency: { label: 'Para birimi', sql: 's.currency', type: 'string', group: 'Satış' },
+    price_source: { label: 'Fiyat kaynağı', sql: 's.price_source', type: 'string', group: 'Satış', options: ['catalog', 'manual'] },
+    quote_no: { label: 'Teklif no', sql: 's.quote_no', type: 'string', group: 'Satış' },
+    ...customerDims(),
+  },
+  measures: {
+    sale_count: { label: 'Satış adedi', sql: 'count(*)', format: 'number' },
+    amount_usd: { label: 'Ciro (USD)', sql: `coalesce(sum(s.amount) filter (where s.currency = 'USD'), 0)`, format: 'money', description: 'Yalnız USD satışlar' },
+    amount_total: { label: 'Ciro (tüm para birimleri)', sql: 'coalesce(sum(s.amount), 0)', format: 'money', description: 'Para birimi karışık — kırılımda currency kullanın' },
+    avg_amount: { label: 'Ortalama satış tutarı', sql: 'avg(s.amount)', format: 'money' },
+    device_count: { label: 'Cihaz adedi', sql: 'coalesce(sum(case when si.n > 0 then si.dev else s.device_count end), 0)', format: 'number', description: 'Kalem varsa cihaz kalemleri, yoksa device_count' },
+    customer_count: { label: 'Firma sayısı', sql: 'count(distinct s.customer_id)', format: 'number' },
+  },
+};
+
+const SALE_ITEMS: DatasetDef = {
+  key: 'sale_items',
+  label: 'Satış kalemleri',
+  description: 'Aktif satışların kalemleri (model/ürün kırılımı). Kalemsiz eski satışlar burada görünmez.',
+  permission: 'quote.read',
+  from: `public.crm_sale_items i
+    join public.crm_sales s on s.id = i.sale_id
+    join public.musteriler m on m.id = s.customer_id`,
+  baseWhere: [`s.status = 'active'`],
+  defaultDateField: 'sale_date',
+  owner: { userId: 's.owner_user_id::text', email: 's.owner_email', name: 's.owner_name' },
+  dimensions: {
+    sale_date: { label: 'Satış tarihi', sql: 's.sale_date', type: 'date', grains: ALL_GRAINS, group: 'Satış' },
+    owner: { label: 'Satıcı', sql: `coalesce(nullif(trim(s.owner_name), ''), 'Havuz Account')`, type: 'string', group: 'Satış' },
+    sales_channel: { label: 'Satış kanalı', sql: `coalesce(s.sales_channel, '—')`, type: 'string', group: 'Satış' },
+    product_code: { label: 'Model / ürün kodu', sql: `upper(trim(i.product_code))`, type: 'string', group: 'Kalem' },
+    product_name: { label: 'Ürün adı', sql: `coalesce(i.product_name, i.product_code)`, type: 'string', group: 'Kalem' },
+    product_type: { label: 'Ürün tipi', sql: 'i.product_type', type: 'string', group: 'Kalem', options: ['device', 'peripheral', 'bundle', 'service', 'license'] },
+    item_sale_type: { label: 'Satış / kiralama', sql: `case when i.sale_type = 'rental' then 'Kiralama' else 'Satış' end`, type: 'string', group: 'Kalem', options: ['Satış', 'Kiralama'] },
+    is_device: { label: 'Cihaz mı', sql: DEVICE, type: 'boolean', group: 'Kalem' },
+    currency: { label: 'Para birimi', sql: 's.currency', type: 'string', group: 'Satış' },
+    ...customerDims(),
+  },
+  measures: {
+    line_count: { label: 'Kalem sayısı', sql: 'count(*)', format: 'number' },
+    quantity: { label: 'Adet (tüm kalemler)', sql: 'coalesce(sum(i.quantity), 0)', format: 'number' },
+    device_quantity: { label: 'Cihaz adedi', sql: `coalesce(sum(i.quantity) filter (where ${DEVICE}), 0)`, format: 'number' },
+    total_usd: { label: 'Kalem tutarı (USD)', sql: `coalesce(sum(i.total_price) filter (where s.currency = 'USD'), 0)`, format: 'money' },
+    avg_unit_price: { label: 'Ortalama birim fiyat', sql: 'avg(i.unit_price)', format: 'money' },
+    sale_count: { label: 'Satış sayısı', sql: 'count(distinct s.id)', format: 'number' },
+    customer_count: { label: 'Firma sayısı', sql: 'count(distinct s.customer_id)', format: 'number' },
+  },
+};
+
+const FORECAST: DatasetDef = {
+  key: 'forecast',
+  label: 'Forecast',
+  description: 'Aktif forecast satırları; tarih = forecast yılı/ayı.',
+  permission: 'forecast.read',
+  from: `public.crm_forecasts f join public.musteriler m on m.id = f.customer_id`,
+  baseWhere: ['f.is_active = true'],
+  defaultDateField: 'forecast_month',
+  owner: { userId: 'f.owner_user_id::text', email: 'f.owner_email', name: 'f.owner_name' },
+  dimensions: {
+    forecast_month: { label: 'Forecast ayı', sql: 'make_date(f.forecast_year, f.forecast_month, 1)', type: 'date', grains: ['month', 'quarter', 'year'], group: 'Forecast' },
+    owner: { label: 'Satıcı', sql: `coalesce(nullif(trim(f.owner_name), ''), '—')`, type: 'string', group: 'Forecast' },
+    sales_channel: { label: 'Satış kanalı', sql: 'f.sales_channel', type: 'string', group: 'Forecast' },
+    probability: { label: 'Olasılık (%)', sql: 'f.probability', type: 'number', group: 'Forecast', options: ['30', '60', '90'] },
+    product: { label: 'Ürün', sql: `coalesce(nullif(trim(f.product_code_snapshot), ''), f.product_name_snapshot)`, type: 'string', group: 'Forecast' },
+    ...customerDims(),
+  },
+  measures: {
+    quantity: { label: 'Forecast adedi', sql: 'coalesce(sum(f.quantity), 0)', format: 'number' },
+    weighted_quantity: { label: 'Ağırlıklı adet', sql: 'coalesce(sum(f.quantity * f.probability / 100.0), 0)', format: 'number', description: 'adet × olasılık' },
+    line_count: { label: 'Forecast satırı', sql: 'count(*)', format: 'number' },
+    customer_count: { label: 'Firma sayısı', sql: 'count(distinct f.customer_id)', format: 'number' },
+    avg_probability: { label: 'Ortalama olasılık', sql: 'avg(f.probability)', format: 'number' },
+  },
+};
+
+const ACTIVITIES: DatasetDef = {
+  key: 'activities',
+  label: 'Aktiviteler',
+  description: 'Gerçekleşmiş aktiviteler (planlanan sonraki aksiyonlar hariç). Tarih = aktivite tarihi.',
+  permission: 'activity.read',
+  from: `public.pipeline_eventleri pe left join public.musteriler m on m.id = pe.musteri_id`,
+  baseWhere: [`not (pe.durum = 'Başlamadı' and pe.hedef_tarihi is not null)`],
+  defaultDateField: 'activity_date',
+  owner: { userId: `coalesce(pe.owner_user_id, pe.created_by_user_id::text)`, email: 'pe.created_by_email', name: 'pe.created_by' },
+  dimensions: {
+    activity_date: { label: 'Aktivite tarihi', sql: ACTIVITY_DATE, type: 'date', grains: ALL_GRAINS, group: 'Aktivite' },
+    created_by: { label: 'Giren kişi', sql: `coalesce(nullif(trim(pe.created_by), ''), '—')`, type: 'string', group: 'Aktivite' },
+    channel: { label: 'Aktivite tipi', sql: ACTIVITY_CHANNEL, type: 'string', group: 'Aktivite', options: ['Telefon', 'Yerinde Ziyaret', 'Online Toplantı', 'Teknik Ziyaret', 'Teknik Online', 'POM', 'E-posta', 'Entegrasyon Süreci', 'Diğer'] },
+    is_activity_record: { label: 'AKTIVITE: kaydı mı', sql: `coalesce(pe.aksiyon, '') like 'AKTIVITE:%'`, type: 'boolean', group: 'Aktivite' },
+    status: { label: 'Durum', sql: 'pe.durum::text', type: 'string', group: 'Aktivite' },
+    phase_no: { label: 'Faz no', sql: 'pe.faz_no', type: 'number', group: 'Aktivite' },
+    scope: { label: 'Kapsam', sql: 'pe.activity_scope', type: 'string', group: 'Aktivite', options: ['account', 'technical'] },
+    ...customerDims(),
+  },
+  measures: {
+    activity_count: { label: 'Aktivite sayısı', sql: 'count(*)', format: 'number' },
+    customer_count: { label: 'Temas edilen firma', sql: 'count(distinct pe.musteri_id)', format: 'number' },
+    sales_activity_count: { label: 'Satış görüşmesi', sql: `count(*) filter (where (${ACTIVITY_CHANNEL}) in ('Telefon','Yerinde Ziyaret','Online Toplantı'))`, format: 'number' },
+    technical_activity_count: { label: 'Teknik aktivite', sql: `count(*) filter (where (${ACTIVITY_CHANNEL}) in ('Teknik Ziyaret','Teknik Online','POM'))`, format: 'number' },
+    visit_count: { label: 'Yerinde ziyaret', sql: `count(*) filter (where (${ACTIVITY_CHANNEL}) = 'Yerinde Ziyaret')`, format: 'number' },
+    late_entry_count: { label: 'Geç girilen', sql: `count(*) filter (where pe.aktivite_tarihi < (pe.created_at at time zone 'Europe/Istanbul')::date)`, format: 'number' },
+  },
+};
+
+const CUSTOMERS: DatasetDef = {
+  key: 'customers',
+  label: 'Müşteriler',
+  description: 'Müşteri kartı + aktif faz (faz dağılımı, portföy).',
+  permission: 'customer.read',
+  from: `public.musteriler m
+    left join public.musteri_pipeline mp on mp.musteri_id = m.id
+    left join lateral (select ft.asama_adi from public.faz_tanimlari ft where ft.faz_no = mp.aktif_faz_no limit 1) ft on true`,
+  baseWhere: [],
+  defaultDateField: 'created_date',
+  owner: { userId: 'm.owner_user_id::text', name: 'm.sorumlu' },
+  dimensions: {
+    created_date: { label: 'Kayıt tarihi', sql: `(m.created_at at time zone 'Europe/Istanbul')::date`, type: 'date', grains: ALL_GRAINS, group: 'Müşteri' },
+    phase_no: { label: 'Aktif faz no', sql: 'mp.aktif_faz_no', type: 'number', group: 'Faz' },
+    phase_name: { label: 'Aktif faz', sql: `coalesce(ft.asama_adi, 'Fazsız')`, type: 'string', group: 'Faz' },
+    phase_group: { label: 'Faz grubu', sql: PHASE_GROUP, type: 'string', group: 'Faz', options: ['Fazsız', 'Fırsat', 'İlk Temas', 'Business', 'Operasyon', 'Yayılım'] },
+    pipeline_status: { label: 'Pipeline durumu', sql: 'mp.durum::text', type: 'string', group: 'Faz' },
+    integration_type: { label: 'Entegrasyon tipi', sql: 'm.entegrasyon_tipi::text', type: 'string', group: 'Müşteri' },
+    ...customerDims(),
+  },
+  measures: {
+    customer_count: { label: 'Müşteri sayısı', sql: 'count(*)', format: 'number' },
+    with_phase_count: { label: 'Fazı olan', sql: 'count(*) filter (where mp.aktif_faz_no is not null)', format: 'number' },
+    active_kasa_total: { label: 'Aktif satış kasası (toplam)', sql: 'coalesce(sum(m.aktif_satis_kasasi), 0)', format: 'number' },
+    active_kasa_avg: { label: 'Aktif satış kasası (ort.)', sql: 'avg(m.aktif_satis_kasasi)', format: 'number' },
+  },
+};
+
+const QUOTES: DatasetDef = {
+  key: 'quotes',
+  label: 'Teklifler',
+  description: 'Teklifler; tarih = teklif tarihi (proposal_date).',
+  permission: 'quote.read',
+  from: `public.quotes q join public.musteriler m on m.id = q.customer_id`,
+  baseWhere: [],
+  defaultDateField: 'proposal_date',
+  owner: { userId: 'q.owner_user_id::text', email: 'q.owner_email', name: 'q.owner_name' },
+  dimensions: {
+    proposal_date: { label: 'Teklif tarihi', sql: 'q.proposal_date', type: 'date', grains: ALL_GRAINS, group: 'Teklif' },
+    closed_date: { label: 'Kapanış tarihi', sql: `(coalesce(q.closed_at, q.updated_at) at time zone 'Europe/Istanbul')::date`, type: 'date', grains: ALL_GRAINS, group: 'Teklif' },
+    owner: { label: 'Satıcı', sql: `coalesce(nullif(trim(q.owner_name), ''), '—')`, type: 'string', group: 'Teklif' },
+    status: { label: 'Durum', sql: 'q.status', type: 'string', group: 'Teklif' },
+    closed_reason: { label: 'Kapanış nedeni', sql: `coalesce(q.closed_reason, '—')`, type: 'string', group: 'Teklif' },
+    probability: { label: 'Olasılık (%)', sql: 'q.probability', type: 'number', group: 'Teklif' },
+    ...customerDims(),
+  },
+  measures: {
+    quote_count: { label: 'Teklif sayısı', sql: 'count(*)', format: 'number' },
+    total_amount: { label: 'Teklif tutarı', sql: 'coalesce(sum(q.total_amount), 0)', format: 'money' },
+    device_count: { label: 'Teklif cihaz adedi', sql: 'coalesce(sum(q.total_device_count), 0)', format: 'number' },
+    won_count: { label: 'Kazanılan', sql: `count(*) filter (where q.status = 'closed' and q.closed_reason = 'won')`, format: 'number' },
+    customer_count: { label: 'Firma sayısı', sql: 'count(distinct q.customer_id)', format: 'number' },
+  },
+};
+
+// Geliştirici sabiti (kullanıcı girdisi değil) → literal dizi; tırnaklar kaçırılır.
+const INTEGRATION_KEYS_SQL = (() => {
+  const arr = `array[${INTEGRATION_DEVICE_SERVICE_KEYS.map((k) => `'${k.replace(/'/g, "''")}'`).join(', ')}]::text[]`;
+  return `(lower(btrim(i.service_key)) = any(${arr}) or lower(btrim(i.service_label)) = any(${arr}))`;
+})();
+
+// Hizmet faturası kalemleri (KasaPOS entegrasyonu vb.). Tarih = fatura dönemi (period_month).
+// lib/reports/kasapos-entegrasyon ile aynı kaynak; KasaPOS kalem kümesi service_key filtresiyle seçilir.
+const SERVICE_INVOICE_ITEMS: DatasetDef = {
+  key: 'service_invoice_items',
+  label: 'Hizmet faturası kalemleri',
+  description: 'Aktif hizmet faturalarının kalemleri; tarih = fatura dönemi (ay). Cihaz cirosuna dahil değil.',
+  permission: 'quote.read',
+  from: `public.crm_service_invoice_items i
+    join public.crm_service_invoices s on s.id = i.invoice_id
+    join public.musteriler m on m.id = s.customer_id`,
+  baseWhere: [`s.status = 'active'`],
+  defaultDateField: 'period_month',
+  owner: { userId: 's.owner_user_id::text', name: 's.owner_name' },
+  dimensions: {
+    period_month: { label: 'Fatura dönemi', sql: 's.period_month', type: 'date', grains: ['month', 'quarter', 'year'], group: 'Fatura' },
+    owner: { label: 'Satıcı', sql: `coalesce(nullif(trim(s.owner_name), ''), '—')`, type: 'string', group: 'Fatura' },
+    service_key: { label: 'Hizmet kalemi', sql: 'lower(btrim(i.service_key))', type: 'string', group: 'Kalem' },
+    service_label: { label: 'Hizmet adı', sql: 'i.service_label', type: 'string', group: 'Kalem' },
+    is_integration_device: { label: 'KasaPOS entegrasyon kalemi', sql: INTEGRATION_KEYS_SQL, type: 'boolean', group: 'Kalem', description: 'Canlı Ekran / KasaPOS raporuyla aynı kalem kümesi' },
+    currency: { label: 'Para birimi', sql: 's.currency', type: 'string', group: 'Fatura', options: ['TRY', 'USD'] },
+    invoice_no: { label: 'Fatura no', sql: 's.invoice_no', type: 'string', group: 'Fatura' },
+    ...customerDims(),
+  },
+  measures: {
+    quantity: { label: 'Adet', sql: 'coalesce(sum(i.quantity), 0)', format: 'number' },
+    total_usd: { label: 'Tutar (USD)', sql: `coalesce(sum(i.total_price) filter (where s.currency = 'USD'), 0)`, format: 'money' },
+    total_try: { label: 'Tutar (TRY)', sql: `coalesce(sum(i.total_price) filter (where s.currency = 'TRY'), 0)`, format: 'money' },
+    invoice_count: { label: 'Fatura sayısı', sql: 'count(distinct s.id)', format: 'number' },
+    customer_count: { label: 'Firma sayısı', sql: 'count(distinct s.customer_id)', format: 'number' },
+  },
+};
+
+export const DATASETS: Readonly<Record<string, DatasetDef>> = Object.freeze({
+  service_invoice_items: SERVICE_INVOICE_ITEMS,
+  sales: SALES,
+  sale_items: SALE_ITEMS,
+  forecast: FORECAST,
+  activities: ACTIVITIES,
+  customers: CUSTOMERS,
+  quotes: QUOTES,
+});
+
+export function getDataset(key: string): DatasetDef | null {
+  return Object.prototype.hasOwnProperty.call(DATASETS, key) ? DATASETS[key] : null;
+}
+
+/** İstemciye giden katalog: SQL parçaları dışarı sızmaz. */
+export function datasetCatalog(canAccess: (permission: Permission) => boolean) {
+  return Object.values(DATASETS)
+    .filter((dataset) => canAccess(dataset.permission))
+    .map((dataset) => ({
+      key: dataset.key,
+      label: dataset.label,
+      description: dataset.description,
+      defaultDateField: dataset.defaultDateField,
+      dimensions: Object.entries(dataset.dimensions).map(([key, d]) => ({
+        key, label: d.label, type: d.type, group: d.group ?? null, grains: d.grains ?? null, options: d.options ?? null, description: d.description ?? null,
+      })),
+      measures: Object.entries(dataset.measures).map(([key, m]) => ({
+        key, label: m.label, format: m.format, description: m.description ?? null,
+      })),
+    }));
+}
+
+export type DatasetCatalogEntry = ReturnType<typeof datasetCatalog>[number];
