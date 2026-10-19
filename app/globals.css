@@ -199,7 +199,8 @@
 }
 
 /* ── BASE ── */
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+/* Reset base katmanında: Tailwind utility sınıfları (margin/padding) bunu ezebilsin. */
+@layer base { *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; } }
 html { -webkit-text-size-adjust: 100%; font-size: 16px; }
 
 body {

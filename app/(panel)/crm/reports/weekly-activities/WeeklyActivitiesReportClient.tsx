@@ -1,8 +1,8 @@
 'use client';
-import '@/styles/weekly-activities.css';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { formatDate } from '@/lib/utils';
+import { Button, DataTable, FilterGrid, Input, KpiStrip, Notice, Page, PageHeader, Select, StackField, Tabs, type Column } from '@/components/ui';
 
 type Kpis = {
   totalActivities: number; activePeople: number; distinctCustomers: number;
@@ -18,22 +18,19 @@ type FilterBag = {
   channelOptions: string[]; phaseOptions: string[]; waitingOptions: string[]; statusOptions: string[];
 };
 
-type ByPerson = {
-  kisi: string; total: number; phone: number; face: number; online: number;
-  technicalVisit: number; technicalOnline: number; pom: number; email: number; other: number; sales: number; technical: number;
+type Channels = { phone: number; face: number; online: number; technicalVisit: number; technicalOnline: number; pom: number; email: number; other: number };
+
+type ByPerson = Channels & {
+  kisi: string; total: number; sales: number; technical: number;
   customerCount: number; lastActivity: string; busiestCustomer: string; dailyAverage: number;
 };
 
-type ByCustomer = {
+type ByCustomer = Channels & {
   customer: string; responsible: string; total: number;
-  phone: number; face: number; online: number; technicalVisit: number; technicalOnline: number; pom: number; email: number; other: number;
   lastActivity: string; lastOwner: string; lastChannel: string; phase: string; waiting: string; notes: string;
 };
 
-type ByDay = {
-  day: string; total: number; phone: number; face: number; online: number;
-  technicalVisit: number; technicalOnline: number; pom: number; email: number; other: number; activePeople: number; customerCount: number;
-};
+type ByDay = Channels & { day: string; total: number; activePeople: number; customerCount: number };
 
 type DetailRow = {
   id: string; created_at: string; created_by: string; responsible: string;
@@ -54,6 +51,13 @@ const EMPTY: Payload = {
 
 type TabKey = 'person' | 'customer' | 'day' | 'detail';
 
+const TABS: { key: TabKey; label: string }[] = [
+  { key: 'person', label: 'Kişi Bazlı' },
+  { key: 'customer', label: 'Firma Bazlı' },
+  { key: 'day', label: 'Günlük Kırılım' },
+  { key: 'detail', label: 'Detay Liste' },
+];
+
 function thisWeekRange() {
   const now = new Date();
   const day = now.getDay();
@@ -67,6 +71,68 @@ function thisWeekRange() {
     `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   return { from: fmt(start), to: fmt(end) };
 }
+
+function channelCols<T extends Channels>(): Column<T>[] {
+  return [
+    { key: 'phone', label: 'Telefon', num: true, value: (r) => r.phone },
+    { key: 'face', label: 'Yüz Yüze', num: true, value: (r) => r.face },
+    { key: 'online', label: 'Online', num: true, value: (r) => r.online },
+    { key: 'tv', label: 'Tek. Ziyaret', num: true, value: (r) => r.technicalVisit },
+    { key: 'to', label: 'Tek. Online', num: true, value: (r) => r.technicalOnline },
+    { key: 'pom', label: 'POM', num: true, value: (r) => r.pom ?? 0 },
+    { key: 'email', label: 'E-posta', num: true, value: (r) => r.email },
+    { key: 'other', label: 'Diğer', num: true, value: (r) => r.other },
+  ];
+}
+
+const dt = (v: string) => (v ? formatDate(v) : '-');
+
+const personCols: Column<ByPerson>[] = [
+  { key: 'kisi', label: 'Kişi', value: (r) => r.kisi },
+  { key: 'total', label: 'Toplam', num: true, value: (r) => r.total },
+  ...channelCols<ByPerson>(),
+  { key: 'sales', label: 'Satış', num: true, value: (r) => r.sales },
+  { key: 'technical', label: 'Teknik', num: true, value: (r) => r.technical },
+  { key: 'cc', label: 'Firma', num: true, value: (r) => r.customerCount },
+  { key: 'avg', label: 'Gün Ort.', num: true, value: (r) => r.dailyAverage },
+  { key: 'busy', label: 'En Yoğun Firma', value: (r) => r.busiestCustomer },
+  { key: 'last', label: 'Son Aktivite', value: (r) => r.lastActivity, render: (r) => dt(r.lastActivity) },
+];
+
+const customerCols: Column<ByCustomer>[] = [
+  { key: 'customer', label: 'Firma', value: (r) => r.customer },
+  { key: 'responsible', label: 'Sorumlu', value: (r) => r.responsible },
+  { key: 'total', label: 'Toplam', num: true, value: (r) => r.total },
+  ...channelCols<ByCustomer>(),
+  { key: 'last', label: 'Son Aktivite', value: (r) => r.lastActivity, render: (r) => dt(r.lastActivity) },
+  { key: 'lastOwner', label: 'Son Kişi', value: (r) => r.lastOwner },
+  { key: 'lastChannel', label: 'Son Kanal', value: (r) => r.lastChannel },
+  { key: 'phase', label: 'Faz', value: (r) => r.phase },
+  { key: 'waiting', label: 'Bekleyen', value: (r) => r.waiting },
+  { key: 'notes', label: 'Not', value: (r) => r.notes, cellClass: () => 'max-w-[320px] truncate' },
+];
+
+const dayCols: Column<ByDay>[] = [
+  { key: 'day', label: 'Gün', value: (r) => r.day, render: (r) => dt(r.day) },
+  { key: 'total', label: 'Toplam', num: true, value: (r) => r.total },
+  ...channelCols<ByDay>(),
+  { key: 'ap', label: 'Aktif Kişi', num: true, value: (r) => r.activePeople },
+  { key: 'cc', label: 'Firma', num: true, value: (r) => r.customerCount },
+];
+
+const detailCols: Column<DetailRow>[] = [
+  { key: 'created_at', label: 'Tarih', value: (r) => r.created_at, render: (r) => dt(r.created_at) },
+  { key: 'created_by', label: 'Kişi', value: (r) => r.created_by },
+  { key: 'responsible', label: 'Sorumlu', value: (r) => r.responsible },
+  { key: 'customer', label: 'Firma', value: (r) => r.customer },
+  { key: 'sector', label: 'Sektör', value: (r) => r.sector },
+  { key: 'integration', label: 'Entegrasyon', value: (r) => r.integration },
+  { key: 'channel', label: 'Kanal', value: (r) => r.channel },
+  { key: 'phase', label: 'Faz', value: (r) => r.phase },
+  { key: 'waiting', label: 'Bekleyen', value: (r) => r.waiting },
+  { key: 'status', label: 'Durum', value: (r) => r.status },
+  { key: 'notes', label: 'Not', value: (r) => r.notes, cellClass: () => 'max-w-[360px] truncate' },
+];
 
 export default function WeeklyActivitiesReportPage() {
   const defaults = useMemo(() => thisWeekRange(), []);
@@ -110,290 +176,58 @@ export default function WeeklyActivitiesReportPage() {
     setChannel(''); setPhase(''); setWaiting(''); setStatus('');
   };
 
-  const kpiCards = [
-    { label: 'Toplam Aktivite',  value: payload.kpis.totalActivities,   hint: 'Haftalık toplam' },
-    { label: 'Aktif Kişi',       value: payload.kpis.activePeople,       hint: 'En az 1 kayıt' },
-    { label: 'Görüşülen Firma',  value: payload.kpis.distinctCustomers,  hint: 'Unique müşteri' },
-    { label: 'Telefon',          value: payload.kpis.phone,              hint: 'Satış kanalı' },
-    { label: 'Yüz Yüze',        value: payload.kpis.faceToFace,         hint: 'Yerinde ziyaret' },
-    { label: 'Online',           value: payload.kpis.online,             hint: 'Online toplantı' },
-    { label: 'Teknik Ziyaret',   value: payload.kpis.technicalVisit,     hint: 'Teknik saha' },
-    { label: 'Teknik Online',    value: payload.kpis.technicalOnline,    hint: 'Teknik uzaktan' },
-    { label: 'POM',              value: payload.kpis.pom ?? 0,             hint: 'POM' },
-    { label: 'En Yoğun Kişi',   value: payload.kpis.topPerformer,       hint: 'Top performer' },
-    { label: 'En Yoğun Firma',  value: payload.kpis.topCustomer,        hint: 'En çok aktivite' },
+  const k = payload.kpis;
+  const kpis = [
+    { label: 'Toplam Aktivite', value: k.totalActivities },
+    { label: 'Aktif Kişi', value: k.activePeople },
+    { label: 'Görüşülen Firma', value: k.distinctCustomers },
+    { label: 'Telefon', value: k.phone },
+    { label: 'Yüz Yüze', value: k.faceToFace },
+    { label: 'Online', value: k.online },
+    { label: 'Teknik Ziyaret', value: k.technicalVisit },
+    { label: 'Teknik Online', value: k.technicalOnline },
+    { label: 'POM', value: k.pom ?? 0 },
+    { label: 'En Yoğun Kişi', value: k.topPerformer },
+    { label: 'En Yoğun Firma', value: k.topCustomer },
   ];
 
-  const TABS: { key: TabKey; label: string }[] = [
-    { key: 'person',   label: 'Kişi Bazlı' },
-    { key: 'customer', label: 'Firma Bazlı' },
-    { key: 'day',      label: 'Günlük Kırılım' },
-    { key: 'detail',   label: 'Detay Liste' },
-  ];
+  const f = payload.filters;
+  const sel = (label: string, v: string, set: (s: string) => void, list: string[]) => (
+    <StackField label={label}>
+      <Select value={v} onChange={(e) => set(e.target.value)}>
+        <option value="">Tümü</option>
+        {list.map((o) => <option key={o} value={o}>{o}</option>)}
+      </Select>
+    </StackField>
+  );
 
   return (
-    <main className="pax-page-container wa-page">
-
-      {/* Hero */}
-      <div className="pax-hero">
-        <span className="pax-hero-eyebrow">Rapor Merkezi · Aktivite Analizi</span>
-        <h1 className="pax-hero-title">Haftalık Aktivite Raporu</h1>
-        <p className="pax-hero-description">
-          Kişi bazlı ve ekip bazlı aktivite yoğunluğu, teknik aktivite kırılımı ve firma bazlı temas özeti tek sayfada.
-        </p>
-      </div>
-
-      {/* KPI Grid */}
-      <div className="wa-kpi-grid">
-        {kpiCards.map((item) => (
-          <div key={item.label} className="wa-kpi-card">
-            <div className="wa-kpi-label">{item.label}</div>
-            <div className="wa-kpi-value">{item.value}</div>
-            <div className="wa-kpi-hint">{item.hint}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* Filtreler */}
-      <div className="wa-filter-panel">
-        <div className="wa-filter-grid">
-          <div className="wa-field">
-            <span className="wa-field-label">Başlangıç</span>
-            <input className="wa-input" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
-          </div>
-          <div className="wa-field">
-            <span className="wa-field-label">Bitiş</span>
-            <input className="wa-input" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
-          </div>
-          <div className="wa-field">
-            <span className="wa-field-label">Aktiviteyi Giren</span>
-            <select className="wa-input" value={owner} onChange={(e) => setOwner(e.target.value)}>
-              <option value="">Tümü</option>
-              {payload.filters.ownerOptions.map((v) => <option key={v} value={v}>{v}</option>)}
-            </select>
-          </div>
-          <div className="wa-field">
-            <span className="wa-field-label">Sorumlu</span>
-            <select className="wa-input" value={responsible} onChange={(e) => setResponsible(e.target.value)}>
-              <option value="">Tümü</option>
-              {payload.filters.responsibleOptions.map((v) => <option key={v} value={v}>{v}</option>)}
-            </select>
-          </div>
-          <div className="wa-field">
-            <span className="wa-field-label">Firma</span>
-            <select className="wa-input" value={customer} onChange={(e) => setCustomer(e.target.value)}>
-              <option value="">Tümü</option>
-              {payload.filters.customerOptions.map((v) => <option key={v} value={v}>{v}</option>)}
-            </select>
-          </div>
-          <div className="wa-field">
-            <span className="wa-field-label">Kanal</span>
-            <select className="wa-input" value={channel} onChange={(e) => setChannel(e.target.value)}>
-              <option value="">Tümü</option>
-              {payload.filters.channelOptions.map((v) => <option key={v} value={v}>{v}</option>)}
-            </select>
-          </div>
-          <div className="wa-field">
-            <span className="wa-field-label">Faz</span>
-            <select className="wa-input" value={phase} onChange={(e) => setPhase(e.target.value)}>
-              <option value="">Tümü</option>
-              {payload.filters.phaseOptions.map((v) => <option key={v} value={v}>{v}</option>)}
-            </select>
-          </div>
-          <div className="wa-field">
-            <span className="wa-field-label">Bekleyen Taraf</span>
-            <select className="wa-input" value={waiting} onChange={(e) => setWaiting(e.target.value)}>
-              <option value="">Tümü</option>
-              {payload.filters.waitingOptions.map((v) => <option key={v} value={v}>{v}</option>)}
-            </select>
-          </div>
-          <div className="wa-field">
-            <span className="wa-field-label">Durum</span>
-            <select className="wa-input" value={status} onChange={(e) => setStatus(e.target.value)}>
-              <option value="">Tümü</option>
-              {payload.filters.statusOptions.map((v) => <option key={v} value={v}>{v}</option>)}
-            </select>
-          </div>
-        </div>
-
-        <div className="wa-filter-footer">
-          <span className="wa-record-count">
-            {loading ? 'Yükleniyor…' : <><strong>{payload.list.length}</strong> kayıt</>}
-          </span>
-          <button className="wa-btn-clear" onClick={clearFilters}>Filtreyi Temizle</button>
-        </div>
-      </div>
-
-      {/* Tab Bar */}
-      <div className="wa-tabs">
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            className={`wa-tab ${tab === t.key ? 'wa-tab-active' : ''}`}
-            onClick={() => setTab(t.key)}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      {msg && <div className="wa-message">{msg}</div>}
-
-     
-      {/* Kişi Bazlı */}
-      {tab === 'person' && (
-        <div className="wa-table-panel">
-          <div className="wa-table-wrap">
-            <table className="wa-table">
-              <thead>
-                <tr>
-                  {['Kişi', 'Toplam', 'Telefon', 'Yüz Yüze', 'Online', 'Teknik Ziyaret', 'Teknik Online', 'POM', 'E-posta', 'Diğer', 'Firma Sayısı', 'En Yoğun Firma', 'Ort. Günlük', 'Son Aktivite'].map((h) => (
-                    <th key={h}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {payload.byPerson.map((row) => (
-                  <tr key={row.kisi}>
-                    <td className="wa-bold">{row.kisi}</td>
-                    <td>{row.total}</td>
-                    <td>{row.phone}</td>
-                    <td>{row.face}</td>
-                    <td>{row.online}</td>
-                    <td>{row.technicalVisit}</td>
-                    <td>{row.technicalOnline}</td>
-                    <td>{row.pom ?? 0}</td>
-                    <td>{row.email}</td>
-                    <td>{row.other}</td>
-                    <td>{row.customerCount}</td>
-                    <td>{row.busiestCustomer}</td>
-                    <td>{row.dailyAverage}</td>
-                    <td className="wa-muted">{formatDate(row.lastActivity)}</td>
-                  </tr>
-                ))}
-                {!loading && !payload.byPerson.length && (
-                  <tr><td colSpan={14} className="wa-empty-td">Bu dönemde kayıt yok.</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* Firma Bazlı */}
-      {tab === 'customer' && (
-        <div className="wa-table-panel">
-          <div className="wa-table-wrap">
-            <table className="wa-table">
-              <thead>
-                <tr>
-                  {['Firma', 'Sorumlu', 'Toplam', 'Telefon', 'Yüz Yüze', 'Online', 'Teknik Ziyaret', 'Teknik Online', 'POM', 'E-posta', 'Diğer', 'Son Aktivite', 'Son Kanal', 'Son Yapan', 'Faz', 'Bekleyen'].map((h) => (
-                    <th key={h}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {payload.byCustomer.map((row) => (
-                  <tr key={row.customer}>
-                    <td className="wa-bold">{row.customer}</td>
-                    <td>{row.responsible}</td>
-                    <td>{row.total}</td>
-                    <td>{row.phone}</td>
-                    <td>{row.face}</td>
-                    <td>{row.online}</td>
-                    <td>{row.technicalVisit}</td>
-                    <td>{row.technicalOnline}</td>
-                    <td>{row.pom ?? 0}</td>
-                    <td>{row.email}</td>
-                    <td>{row.other}</td>
-                    <td className="wa-muted">{formatDate(row.lastActivity)}</td>
-                    <td><span className="wa-pill">{row.lastChannel}</span></td>
-                    <td>{row.lastOwner}</td>
-                    <td>{row.phase}</td>
-                    <td>{row.waiting}</td>
-                  </tr>
-                ))}
-                {!loading && !payload.byCustomer.length && (
-                  <tr><td colSpan={16} className="wa-empty-td">Bu dönemde kayıt yok.</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* Günlük Kırılım */}
-      {tab === 'day' && (
-        <div className="wa-table-panel">
-          <div className="wa-table-wrap">
-            <table className="wa-table">
-              <thead>
-                <tr>
-                  {['Gün', 'Toplam', 'Telefon', 'Yüz Yüze', 'Online', 'Teknik Ziyaret', 'Teknik Online', 'POM', 'E-posta', 'Diğer', 'Aktif Kişi', 'Firma Sayısı'].map((h) => (
-                    <th key={h}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {payload.byDay.map((row) => (
-                  <tr key={row.day}>
-                    <td className="wa-bold">{row.day}</td>
-                    <td>{row.total}</td>
-                    <td>{row.phone}</td>
-                    <td>{row.face}</td>
-                    <td>{row.online}</td>
-                    <td>{row.technicalVisit}</td>
-                    <td>{row.technicalOnline}</td>
-                    <td>{row.pom ?? 0}</td>
-                    <td>{row.email}</td>
-                    <td>{row.other}</td>
-                    <td>{row.activePeople}</td>
-                    <td>{row.customerCount}</td>
-                  </tr>
-                ))}
-                {!loading && !payload.byDay.length && (
-                  <tr><td colSpan={12} className="wa-empty-td">Bu dönemde kayıt yok.</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* Detay Liste */}
-      {tab === 'detail' && (
-        <div className="wa-table-panel">
-          <div className="wa-table-wrap">
-            <table className="wa-table">
-              <thead>
-                <tr>
-                  {['Tarih', 'Firma', 'Sorumlu', 'Aktiviteyi Giren', 'Kanal', 'Faz', 'Bekleyen', 'Durum', 'Not'].map((h) => (
-                    <th key={h}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {payload.list.map((row) => (
-                  <tr key={row.id}>
-                    <td className="wa-muted">{formatDate(row.created_at)}</td>
-                    <td className="wa-bold">{row.customer}</td>
-                    <td>{row.responsible}</td>
-                    <td>{row.created_by}</td>
-                    <td><span className="wa-pill">{row.channel}</span></td>
-                    <td>{row.phase}</td>
-                    <td>{row.waiting}</td>
-                    <td>{row.status}</td>
-                    <td className="wa-muted">{row.notes || '—'}</td>
-                  </tr>
-                ))}
-                {!loading && !payload.list.length && (
-                  <tr><td colSpan={11} className="wa-empty-td">Bu dönemde kayıt yok.</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-    </main>
+    <Page>
+      <PageHeader
+        title="Haftalık Aktiviteler"
+        meta={`${dt(from)} – ${dt(to)}`}
+        actions={<Button variant="secondary" size="sm" onClick={() => void load()} disabled={loading}>{loading ? 'Yükleniyor' : 'Yenile'}</Button>}
+      />
+      {msg && <Notice>{msg}</Notice>}
+      <FilterGrid
+        footer={<><span>{payload.list.length} kayıt</span><Button variant="ghost" size="sm" onClick={clearFilters}>Filtreleri temizle</Button></>}
+      >
+        <StackField label="Başlangıç"><Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></StackField>
+        <StackField label="Bitiş"><Input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></StackField>
+        {sel('Kişi', owner, setOwner, f.ownerOptions)}
+        {sel('Sorumlu', responsible, setResponsible, f.responsibleOptions)}
+        {sel('Firma', customer, setCustomer, f.customerOptions)}
+        {sel('Kanal', channel, setChannel, f.channelOptions)}
+        {sel('Faz', phase, setPhase, f.phaseOptions)}
+        {sel('Bekleyen', waiting, setWaiting, f.waitingOptions)}
+        {sel('Durum', status, setStatus, f.statusOptions)}
+      </FilterGrid>
+      <KpiStrip items={kpis} />
+      <Tabs items={TABS} value={tab} onChange={setTab} />
+      {tab === 'person' && <DataTable rows={payload.byPerson} columns={personCols} csvName="haftalik-kisi" loading={loading} />}
+      {tab === 'customer' && <DataTable rows={payload.byCustomer} columns={customerCols} csvName="haftalik-firma" loading={loading} />}
+      {tab === 'day' && <DataTable rows={payload.byDay} columns={dayCols} csvName="haftalik-gun" loading={loading} />}
+      {tab === 'detail' && <DataTable rows={payload.list} columns={detailCols} csvName="haftalik-detay" loading={loading} tall />}
+    </Page>
   );
 }

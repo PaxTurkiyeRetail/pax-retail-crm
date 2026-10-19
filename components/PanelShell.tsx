@@ -10,7 +10,6 @@ import {
   type Permission,
 } from "@/lib/roles";
 import "@/styles/globals.css";
-import "@/styles/sidebar.css";
 import "@/styles/premium-ui.css";
 import "@/styles/premium-enterprise.css";
 import "@/styles/mobile-hardening.css";
@@ -188,7 +187,7 @@ function IconChevronRight() {
 function IconChevronDown({ open }: { open: boolean }) {
   return (
     <svg
-      className={`pax-group-chevron${open ? " open" : ""}`}
+      className={`shrink-0 transition-transform duration-150 ${open ? "rotate-180" : ""}`}
       width="14"
       height="14"
       {...SVG}
@@ -589,16 +588,6 @@ export default function PanelShell({
   const displayName = (fullName ?? "").trim() || "Demo Kullanıcı";
   const displaySub = email?.trim() || roleLabel(role);
   const initials = getInitials(displayName);
-  const sidebarClass = [
-    "pax-sidebar",
-    collapsed ? "collapsed" : "",
-    menuOpen ? "mobile-open" : "",
-  ]
-    .filter(Boolean)
-    .join(" ");
-  const shellClass = ["pax-shell", collapsed ? "sidebar-collapsed" : ""]
-    .filter(Boolean)
-    .join(" ");
   // Dashboard rapor URL'inde yaşar ama menüde ayrı; Raporlar grubunu aktif/açık yapmasın.
   const reportsActive = pathname.startsWith("/crm/reports");
   const pageMeta = useMemo(() => routeMeta(pathname), [pathname]);
@@ -606,22 +595,48 @@ export default function PanelShell({
   const showReports = Boolean(
     reportsGroup && (reportsOpen || reportsActive || collapsed),
   );
+  // Tasarım sistemine (components/ui) geçmiş ekranlar eski .pax-main/.pax-main-inner
+  // global kurallarından (tablo, buton, input !important) yalıtılır.
+  const dsPage = DS_ROUTES.some((r) => pathname === r || pathname.startsWith(`${r}/`));
+  const hideLabel = collapsed ? "lg:hidden" : "";
+
+  const navLink = (item: NavItem, sub = false) => {
+    const active = isActive(pathname, item, search);
+    return (
+      <Link
+        key={item.href}
+        href={item.href}
+        prefetch
+        onMouseEnter={() => prefetchRoute(item.href)}
+        onFocus={() => prefetchRoute(item.href)}
+        className={cx(navItemCls, sub && !collapsed && "pl-8", active && navActiveCls)}
+        title={collapsed ? item.label : undefined}
+        aria-current={active ? "page" : undefined}
+      >
+        {!sub && (
+          <span className="flex size-4 shrink-0 items-center justify-center">
+            <NavIcon k={item.iconKey} />
+          </span>
+        )}
+        {sub && collapsed && <span className="hidden size-4 shrink-0 items-center justify-center text-[10px] lg:flex">•</span>}
+        <span className={cx("truncate", sub && collapsed && "lg:hidden")}>{item.label}</span>
+      </Link>
+    );
+  };
+
+  const sectionLabel = (title: string) => (
+    <div className={cx("px-2.5 pt-4 pb-1 text-[11px] font-medium tracking-wider text-text-4 uppercase", hideLabel)}>{title}</div>
+  );
 
   return (
-    <div className={shellClass}>
-      <div className="pax-mobile-bar">
-        <div className="pax-mobile-brand">
-          <div className="pax-mobile-mark">P</div>
-          <img
-            src="/pax-logo.svg"
-            alt="PAX Türkiye"
-            className="pax-mobile-logo"
-            draggable={false}
-          />
-        </div>
-        <div className="pax-mobile-actions">
+    <div className="min-h-dvh bg-app-bg text-text lg:flex">
+      {/* Mobil üst bar */}
+      <div className="sticky top-0 z-40 flex h-12 items-center justify-between border-0 border-b border-solid border-border bg-surface px-4 lg:hidden">
+        <img src="/pax-logo.svg" alt="PAX Türkiye" className="h-5 w-auto dark:brightness-0 dark:invert" draggable={false} />
+        <div className="flex items-center gap-1">
           <button
-            className="pax-mobile-theme-btn"
+            type="button"
+            className={iconBtnCls}
             onClick={() => setDark((v) => !v)}
             aria-label="Tema değiştir"
             title={dark ? "Açık tema" : "Koyu tema"}
@@ -629,8 +644,9 @@ export default function PanelShell({
             {dark ? <IconSun /> : <IconMoon />}
           </button>
           <button
+            type="button"
             ref={mobileMenuButtonRef}
-            className="pax-mobile-menu-btn"
+            className={iconBtnCls}
             onClick={() => setMenuOpen((v) => !v)}
             aria-label="Menü"
             aria-expanded={menuOpen}
@@ -641,36 +657,28 @@ export default function PanelShell({
         </div>
       </div>
 
-      <div
-        className={`pax-overlay${menuOpen ? " visible" : ""}`}
-        onClick={() => setMenuOpen(false)}
-        aria-hidden="true"
-      />
+      {menuOpen && (
+        <div className="fixed inset-0 z-40 bg-black/40 lg:hidden" onClick={() => setMenuOpen(false)} aria-hidden="true" />
+      )}
 
       <aside
         ref={sidebarRef}
         id="pax-primary-sidebar"
-        className={sidebarClass}
+        className={cx(
+          "fixed inset-y-0 left-0 z-50 box-border flex w-[272px] max-w-[85vw] flex-col border-0 border-r border-solid border-border bg-surface transition-transform duration-200",
+          "lg:sticky lg:top-0 lg:h-dvh lg:max-w-none lg:shrink-0 lg:translate-x-0 lg:transition-[width]",
+          collapsed ? "lg:w-14" : "lg:w-[232px]",
+          menuOpen ? "translate-x-0" : "-translate-x-full",
+        )}
         aria-label="Ana menü"
         role={menuOpen ? "dialog" : undefined}
         aria-modal={menuOpen || undefined}
       >
-        <div className="pax-sidebar-header">
-          <div className="pax-brand">
-            <div className="pax-brand-mark" aria-hidden={!collapsed}>
-              <img src="/pax-icon.svg" alt="PAX" draggable={false} />
-            </div>
-            <div className="pax-brand-logo">
-              <img
-                src="/pax-logo.svg"
-                alt="PAX Türkiye"
-                className="pax-logo-img"
-                draggable={false}
-              />
-            </div>
-          </div>
+        <div className={cx("flex h-12 shrink-0 items-center justify-between gap-2 border-0 border-b border-solid border-border px-3", collapsed && "lg:justify-center lg:px-0")}>
+          <img src="/pax-logo.svg" alt="PAX Türkiye" className={cx("h-6 w-auto max-w-[130px] dark:brightness-0 dark:invert", hideLabel)} draggable={false} />
           <button
-            className="pax-toggle"
+            type="button"
+            className="hidden size-8 cursor-pointer items-center justify-center rounded-[3px]! border-0 bg-transparent text-text-3 hover:bg-surface-2 hover:text-text lg:inline-flex"
             onClick={toggleCollapse}
             aria-label={collapsed ? "Genişlet" : "Daralt"}
           >
@@ -678,174 +686,101 @@ export default function PanelShell({
           </button>
         </div>
 
-        <div className="pax-nav-area">
+        <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-2 pb-3">
           {groups.filter((g) => !g.tail).map((group) => (
-            <div className="pax-nav-section" key={group.title}>
-              <div className="pax-section-label tw-nav-label">{group.title}</div>
-              <nav className="pax-nav-list">
-                {group.items.map((item) => {
-                  const active = isActive(pathname, item, search);
-                  return (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      prefetch
-                      onMouseEnter={() => prefetchRoute(item.href)}
-                      onFocus={() => prefetchRoute(item.href)}
-                      className={`pax-nav-link tw-nav-link${active ? " active tw-nav-active" : ""}`}
-                      title={collapsed ? item.label : undefined}
-                      aria-current={active ? "page" : undefined}
-                    >
-                      <span className="pax-nav-icon">
-                        <NavIcon k={item.iconKey} />
-                      </span>
-                      <span className="pax-nav-label">{item.label}</span>
-                    </Link>
-                  );
-                })}
-              </nav>
+            <div key={group.title}>
+              {sectionLabel(group.title)}
+              <nav className="flex flex-col gap-px">{group.items.map((item) => navLink(item))}</nav>
             </div>
           ))}
 
           {reportsGroup && (
-            <div className="pax-nav-section pax-report-section">
+            <div className="mt-3">
               <button
                 type="button"
-                className={`pax-nav-link tw-nav-link pax-nav-group-trigger${reportsActive ? " active tw-nav-active" : ""}`}
+                className={cx(navItemCls, "w-full", reportsActive && "text-text font-semibold")}
                 onClick={() => setReportsOpen((value) => !value)}
                 aria-expanded={showReports}
                 title={collapsed ? reportsGroup.title : undefined}
               >
-                <span className="pax-nav-icon">
+                <span className="flex size-4 shrink-0 items-center justify-center">
                   <NavIcon k={reportsGroup.iconKey} />
                 </span>
-                <span className="pax-nav-label">{reportsGroup.title}</span>
-                <span className="pax-nav-chevron">
+                <span className={cx("flex-1 truncate text-left", hideLabel)}>{reportsGroup.title}</span>
+                <span className={cx("text-text-4", hideLabel)}>
                   <IconChevronDown open={showReports} />
                 </span>
               </button>
-
               {showReports && (
-                <nav
-                  className="pax-nav-list pax-subnav-list"
-                  aria-label="Raporlar"
-                >
-                  {reportsGroup.items.map((item) => {
-                    const active = isActive(pathname, item, search);
-                    return (
-                      <Link
-                        key={item.href}
-                        href={item.href}
-                        prefetch
-                        onMouseEnter={() => prefetchRoute(item.href)}
-                        onFocus={() => prefetchRoute(item.href)}
-                        className={`pax-subnav-link tw-subnav-link${active ? " active tw-nav-active" : ""}`}
-                        title={collapsed ? item.label : undefined}
-                        aria-current={active ? "page" : undefined}
-                      >
-                        <span className="pax-subnav-dot" />
-                        <span className="pax-nav-label">{item.label}</span>
-                      </Link>
-                    );
-                  })}
+                <nav className="mt-px flex flex-col gap-px" aria-label="Raporlar">
+                  {reportsGroup.items.map((item) => navLink(item, true))}
                 </nav>
               )}
             </div>
           )}
 
           {groups.filter((g) => g.tail).map((group) => (
-            <div className="pax-nav-section" key={group.title}>
-              <div className="pax-section-label tw-nav-label">{group.title}</div>
-              <nav className="pax-nav-list">
-                {group.items.map((item) => {
-                  const active = isActive(pathname, item, search);
-                  return (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      prefetch
-                      onMouseEnter={() => prefetchRoute(item.href)}
-                      onFocus={() => prefetchRoute(item.href)}
-                      className={`pax-nav-link tw-nav-link${active ? " active tw-nav-active" : ""}`}
-                      title={collapsed ? item.label : undefined}
-                      aria-current={active ? "page" : undefined}
-                    >
-                      <span className="pax-nav-icon">
-                        <NavIcon k={item.iconKey} />
-                      </span>
-                      <span className="pax-nav-label">{item.label}</span>
-                    </Link>
-                  );
-                })}
-              </nav>
+            <div key={group.title}>
+              {sectionLabel(group.title)}
+              <nav className="flex flex-col gap-px">{group.items.map((item) => navLink(item))}</nav>
             </div>
           ))}
         </div>
 
-        <div className="pax-sep" />
-
-        <button
-          className="pax-theme-btn"
-          onClick={() => setDark((v) => !v)}
-          title={dark ? "Açık temaya geç" : "Koyu temaya geç"}
-        >
-          <span className="pax-theme-icon">
-            {dark ? <IconSun /> : <IconMoon />}
-          </span>
-          <span className="pax-theme-label">
-            {dark ? "Açık Tema" : "Koyu Tema"}
-          </span>
-        </button>
-
-        <div className="pax-sidebar-footer">
-          <div className="pax-profile">
-            <div className="pax-avatar">{initials || "U"}</div>
-            <div className="pax-profile-info">
-              <div className="pax-profile-name">{displayName}</div>
-              <div className="pax-profile-sub">{displaySub}</div>
+        <div className="shrink-0 border-0 border-t border-solid border-border p-2">
+          <button
+            type="button"
+            className={cx(navItemCls, "w-full")}
+            onClick={() => setDark((v) => !v)}
+            title={dark ? "Açık temaya geç" : "Koyu temaya geç"}
+          >
+            <span className="flex size-4 shrink-0 items-center justify-center">{dark ? <IconSun /> : <IconMoon />}</span>
+            <span className={cx("truncate", hideLabel)}>{dark ? "Açık tema" : "Koyu tema"}</span>
+          </button>
+          <div className={cx("mt-1 flex items-center gap-2.5 px-2.5 py-1.5", collapsed && "lg:justify-center lg:px-0")}>
+            <span className={avatarCls}>{initials || "U"}</span>
+            <div className={cx("min-w-0", hideLabel)}>
+              <div className="truncate text-[13px] font-medium text-text">{displayName}</div>
+              <div className="truncate text-[11px] text-text-3">{displaySub}</div>
             </div>
           </div>
         </div>
       </aside>
 
-      <main className="pax-main">
-        <header className="pax-topbar">
-          <div className="pax-topbar-title flex min-w-0 flex-col gap-1">
-            <nav className="tw-crumb" aria-label="Breadcrumb">
-              <span className="truncate font-medium text-text-3">{pageMeta.section}</span>
-              <span className="text-text-4" aria-hidden="true">/</span>
-              <strong className="truncate font-semibold tracking-tight text-text">{pageMeta.title}</strong>
-            </nav>
-            <small>{roleLabel(role)}</small>
-          </div>
-          <div className="pax-topbar-actions">
+      <main className={cx("min-w-0 flex-1", !dsPage && "pax-main")}>
+        <header className="sticky top-0 z-30 hidden h-12 items-center justify-between gap-4 border-0 border-b border-solid border-border bg-surface px-6 lg:flex">
+          <nav className="flex min-w-0 items-center gap-1.5 text-[13px]" aria-label="Breadcrumb">
+            <span className="truncate text-text-3">{pageMeta.section}</span>
+            <span className="text-text-4" aria-hidden="true">/</span>
+            <strong className="truncate font-semibold text-text">{pageMeta.title}</strong>
+          </nav>
+          <div className="flex items-center gap-1">
             <button
-              className="pax-topbar-theme"
+              type="button"
+              className={cx(iconBtnCls, "size-8")}
               onClick={() => setDark((v) => !v)}
               aria-label="Tema değiştir"
               title={dark ? "Açık temaya geç" : "Koyu temaya geç"}
             >
               {dark ? <IconSun /> : <IconMoon />}
             </button>
-            <div className="pax-user-menu">
+            <div className="relative">
               <button
-                className="pax-user-trigger"
                 type="button"
+                className="flex h-8 cursor-pointer items-center gap-2 rounded-[3px]! border-0 bg-transparent px-2 text-text-2 hover:bg-surface-2"
                 onClick={() => setUserMenuOpen((value) => !value)}
                 aria-expanded={userMenuOpen}
               >
-                <span className="pax-avatar">{initials || "U"}</span>
-                <span className="pax-user-trigger-text">
-                  <strong>{displayName}</strong>
-                  <small>{displaySub}</small>
-                </span>
+                <span className={avatarCls}>{initials || "U"}</span>
+                <span className="max-w-[180px] truncate text-[13px] font-medium">{displayName}</span>
                 <IconChevronDown open={userMenuOpen} />
               </button>
               {userMenuOpen && (
-                <div className="pax-user-dropdown">
-                  <div className="pax-user-dropdown-head">
-                    <strong>{displayName}</strong>
-                    <span>{email?.trim() || roleLabel(role)}</span>
+                <div className="absolute top-full right-0 z-50 mt-1 w-64 rounded-[4px] border border-solid border-border bg-surface py-1 shadow-card-md">
+                  <div className="border-0 border-b border-solid border-border px-3 py-2">
+                    <div className="truncate text-[13px] font-semibold text-text">{displayName}</div>
+                    <div className="truncate text-xs text-text-3">{email?.trim() || roleLabel(role)}</div>
+                    <div className="mt-0.5 text-[11px] tracking-wide text-text-4 uppercase">{roleLabel(role)}</div>
                   </div>
                   {(() => {
                     const showBackup = allowed('admin.backup.execute') && allowed('screen.admin.backup.view');
@@ -853,68 +788,55 @@ export default function PanelShell({
                     const showRbac = allowed('admin.rbac.manage') && allowed('screen.admin.rbac.view');
                     const showIdentity = allowed('admin.identity.manage') && allowed('screen.admin.identity.view');
                     // Hedefler yalnız sol menüde (Operasyon) — burada tekrar etmez.
-                    if (!(showParameterManagement || showBackup || showUsers || showRbac || showIdentity)) return null;
+                    const links: Array<[boolean, string, string]> = [
+                      [showParameterManagement, "/admin/parameters", "Parametre Yönetimi"],
+                      [showBackup, "/admin/db-backup", "DB Yedeği"],
+                      [showUsers, "/admin/users", "Kullanıcı Yönetimi"],
+                      [showUsers, "/admin/tv-devices", "TV Cihazları"],
+                      [showRbac, "/admin/rbac", "Rol ve Yetki Yönetimi"],
+                      [showIdentity, "/admin/identity", "Kimlik ve Erişim Yönetimi"],
+                    ];
+                    const visible = links.filter(([show]) => show);
+                    if (!visible.length) return null;
                     return (
-                      <div className="pax-user-dropdown-section">
-                        {showParameterManagement && (
-                          <Link
-                            href="/admin/parameters"
-                            className="pax-user-dropdown-link"
-                          >
-                            Parametre Yönetimi
+                      <div className="border-0 border-b border-solid border-border py-1">
+                        {visible.map(([, href, label]) => (
+                          <Link key={href} href={href} className={menuLinkCls}>
+                            {label}
                           </Link>
-                        )}
-                        {showBackup && (
-                          <Link
-                            href="/admin/db-backup"
-                            className="pax-user-dropdown-link"
-                          >
-                            DB Yedeği
-                          </Link>
-                        )}
-                        {showUsers && (
-                          <Link
-                            href="/admin/users"
-                            className="pax-user-dropdown-link"
-                          >
-                            Kullanıcı Yönetimi
-                          </Link>
-                        )}
-                        {showUsers && (
-                          <Link
-                            href="/admin/tv-devices"
-                            className="pax-user-dropdown-link"
-                          >
-                            TV Cihazları
-                          </Link>
-                        )}
-                        {showRbac && (
-                          <Link
-                            href="/admin/rbac"
-                            className="pax-user-dropdown-link"
-                          >
-                            Rol ve Yetki Yönetimi
-                          </Link>
-                        )}
-                        {showIdentity && (
-                          <Link
-                            href="/admin/identity"
-                            className="pax-user-dropdown-link"
-                          >
-                            Kimlik ve Erişim Yönetimi
-                          </Link>
-                        )}
+                        ))}
                       </div>
                     );
                   })()}
-                  <LogoutButton />
+                  <div className="py-1">
+                    <LogoutButton className={menuLinkCls} />
+                  </div>
                 </div>
               )}
             </div>
           </div>
         </header>
-        <div className="pax-main-inner">{children}</div>
+        {dsPage ? <div className="min-w-0">{children}</div> : <div className="pax-main-inner">{children}</div>}
       </main>
     </div>
   );
 }
+
+function cx(...parts: Array<string | false | null | undefined>) {
+  return parts.filter(Boolean).join(" ");
+}
+
+/** components/ui tasarım sistemine taşınmış rotalar (legacy .pax-main-inner kurallarından muaf). */
+const DS_ROUTES = ["/crm/reports/retail-operasyon", "/crm/reports/weekly-activities", "/crm/reports/management"];
+
+// Not: legacy premium-ui.css `button:not(...)` 14px radius kuralı katmansız olduğu için
+// köşe yarıçapı önemli (!) işaretiyle verilir.
+const navItemCls =
+  "flex h-10 cursor-pointer items-center gap-2.5 overflow-hidden rounded-[3px]! border-0 bg-transparent px-2.5 text-[13px]! whitespace-nowrap text-text-2 no-underline transition-colors hover:bg-surface-2 hover:text-text lg:h-8";
+const navActiveCls = "bg-surface-2 font-semibold text-text shadow-[inset_2px_0_0_var(--accent)]";
+const iconBtnCls =
+  "inline-flex size-10 cursor-pointer items-center justify-center rounded-[3px]! border-0 bg-transparent text-text-3 hover:bg-surface-2 hover:text-text";
+const avatarCls =
+  "inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-text-2 text-[10px] font-semibold text-surface";
+const menuLinkCls =
+  "flex h-10 w-full cursor-pointer items-center rounded-none! border-0 bg-transparent px-3 text-left text-[13px]! text-text-2 no-underline hover:bg-surface-2 hover:text-text lg:h-8";

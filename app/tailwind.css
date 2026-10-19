@@ -97,3 +97,29 @@
     @apply flex min-w-0 items-center gap-1.5 text-[13px];
   }
 }
+
+/* ===== Tasarım sistemi (components/ui) — durum renkleri, light/dark ===== */
+:root {
+  --ds-ok: #15803d;      --ds-ok-soft: #ecfdf3;
+  --ds-warn: #a16207;    --ds-warn-soft: #fefce8;
+  --ds-danger: #b91c1c;  --ds-danger-soft: #fef2f2;
+  --ds-row-hover: rgba(15, 23, 42, .035);
+}
+[data-theme="dark"] {
+  --ds-ok: #4ade80;      --ds-ok-soft: rgba(74, 222, 128, .10);
+  --ds-warn: #facc15;    --ds-warn-soft: rgba(250, 204, 21, .10);
+  --ds-danger: #f87171;  --ds-danger-soft: rgba(248, 113, 113, .10);
+  --ds-row-hover: rgba(255, 255, 255, .04);
+}
+@theme inline {
+  --color-ok: var(--ds-ok);
+  --color-ok-soft: var(--ds-ok-soft);
+  --color-warn: var(--ds-warn);
+  --color-warn-soft: var(--ds-warn-soft);
+  --color-danger: var(--ds-danger);
+  --color-danger-soft: var(--ds-danger-soft);
+  --color-row-hover: var(--ds-row-hover);
+}
+
+/* dark: varyantı uygulamanın data-theme anahtarına bağlı */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
