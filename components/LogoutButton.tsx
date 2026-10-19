@@ -1,6 +1,6 @@
 'use client';
 
-export default function LogoutButton() {
+export default function LogoutButton({ className = 'pax-logout-btn' }: { className?: string }) {
   async function handleLogout() {
     try {
       await fetch('/api/auth/logout', { method: 'POST', cache: 'no-store' });
@@ -12,7 +12,7 @@ export default function LogoutButton() {
   }
 
   return (
-    <button type="button" className="pax-logout-btn" onClick={handleLogout}>
+    <button type="button" className={className} onClick={handleLogout}>
       Çıkış Yap
     </button>
   );
