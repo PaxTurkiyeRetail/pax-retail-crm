@@ -29,4 +29,6 @@ Unit tests cover backend mapping, currency coverage, pricing, grouping, rounding
 
 Playwright reviews the real React components and shared styles with synthetic API responses in an isolated local harness. Checks cover all six Retail tabs, CRM search and inline plan save request, scenario/finance controls, report search/categories, Retail navigation and 390px mobile overflow. Screenshots are under ignored `.theme-audit/retail-review/`.
 
-These checks do not verify production AD login, actual user permissions, live database totals or successful production writes. Deployment and live verification require approval per `.claude/CLAUDE.md`.
+Deployed with user approval on 2026-10-19: code commit `cabde5d`. Server checks passed (37 test files, 355 tests, typecheck/lint/build/preflight); predeploy database backup completed and PM2 reloaded. Both internal health and public HTTPS health returned `ok: true`, database connected. Live read-only source queries succeeded. Unauthenticated page/API returned 307/401 as expected.
+
+An authenticated AD visual session and production write behavior remain unverified. No production Forecast records were changed for testing. Public URL: `https://crm.paxturkiye.com:5042/crm/reports/retail-operasyon`.
