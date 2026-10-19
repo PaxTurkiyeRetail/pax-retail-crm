@@ -14,6 +14,14 @@
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import Link from 'next/link';
 import SalesReportDownload from '@/components/sales/SalesReportDownload';
+import { DEFAULT_RENTAL_OPS_STATUS, RENTAL_OPS_STATUSES, rentalOpsLabel } from '@/lib/sales/rental-ops';
+
+/** Tutar tutarlılık uyarılarını (045, engellemez) ekrandaki bilgi satırına çevirir. */
+const warningText = (json: any, base?: string | null) => {
+  const list = Array.isArray(json?.amount_warnings) ? (json.amount_warnings as string[]) : [];
+  const parts = [base, list.length ? `Tutar kontrolü: ${list.join(' ')}` : null].filter(Boolean);
+  return parts.length ? parts.join(' · ') : null;
+};
 
 type SaleRow = {
   id: string;
@@ -43,6 +51,11 @@ type SaleRow = {
   sales_channel: string | null;
   /** quote = kazanılan teklifden · direct = teklifsiz girildi (027). */
   source: 'quote' | 'direct';
+  /** Kiralama operasyon takibi (045): boş = hazırlık. */
+  rental_ops_status?: string | null;
+  rental_ops_note?: string | null;
+  rental_ops_updated_at?: string | null;
+  rental_ops_updated_by?: string | null;
 };
 
 type ChannelOption = { value: string; label: string };
@@ -91,6 +104,8 @@ export default function SalesClient() {
   const [formOwner, setFormOwner] = useState('');
   const [formRentalStart, setFormRentalStart] = useState('');
   const [formRentalEnd, setFormRentalEnd] = useState('');
+  const [formOpsStatus, setFormOpsStatus] = useState<string>(DEFAULT_RENTAL_OPS_STATUS);
+  const [formOpsNote, setFormOpsNote] = useState('');
 
   // Yeni (teklifsiz) satış penceresi — 027
   const [creating, setCreating] = useState(false);
@@ -141,6 +156,8 @@ export default function SalesClient() {
     setFormOwner(row.owner_name ?? '');
     setFormRentalStart(String(row.rental_start_date ?? '').slice(0, 10));
     setFormRentalEnd(String(row.rental_end_date ?? '').slice(0, 10));
+    setFormOpsStatus(row.rental_ops_status || DEFAULT_RENTAL_OPS_STATUS);
+    setFormOpsNote(row.rental_ops_note ?? '');
     setMsg(null);
     if (!options) void loadOptions();
   };
@@ -191,6 +208,7 @@ export default function SalesClient() {
     setBusy(false);
     if (!res.ok) { setMsg(json?.message || 'Satış kaydı oluşturulamadı.'); return; }
     setCreating(false);
+    setMsg(warningText(json));
     await load();
   }
 
@@ -210,7 +228,12 @@ export default function SalesClient() {
         sales_channel: formChannel || null,
         owner_name: formOwner || undefined,
         ...(editing.sale_type !== 'sale'
-          ? { rental_start_date: formRentalStart || null, rental_end_date: formRentalEnd || null }
+          ? {
+            rental_start_date: formRentalStart || null,
+            rental_end_date: formRentalEnd || null,
+            rental_ops_status: formOpsStatus || null,
+            rental_ops_note: formOpsNote,
+          }
           : {}),
       }),
     });
@@ -218,7 +241,7 @@ export default function SalesClient() {
     setBusy(false);
     if (!res.ok) { setMsg(json?.message || 'Satış güncellenemedi.'); return; }
     setEditing(null);
-    setMsg(json?.warning || null);
+    setMsg(warningText(json, json?.warning || null));
     await load();
   }
 
@@ -347,7 +370,13 @@ export default function SalesClient() {
                         {row.sale_type !== 'sale' ? <span style={{ ...pillBase, ...pillRental }}>{row.sale_type === 'mixed' ? 'Satış + Kiralama' : 'Kiralama'}</span> : null}
                       </div>
                       {row.sale_type !== 'sale' ? (
-                        <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 4 }}>aylık kira {usd(row.rental_monthly_amount)}</div>
+                        <>
+                          <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 4 }}>aylık kira {usd(row.rental_monthly_amount)}</div>
+                          <div style={{ fontSize: 12, color: 'var(--text-2)', marginTop: 2, fontWeight: 700 }}>
+                            Operasyon: {rentalOpsLabel(row.rental_ops_status || DEFAULT_RENTAL_OPS_STATUS)}
+                          </div>
+                          {row.rental_ops_note ? <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>{row.rental_ops_note}</div> : null}
+                        </>
                       ) : null}
                     </td>
                     <td style={{ ...tableCell, whiteSpace: 'nowrap' }}>
@@ -423,6 +452,18 @@ export default function SalesClient() {
                 <label style={fieldStyle}>
                   <span style={labelStyle}>Kira Bitiş</span>
                   <input type="date" value={formRentalEnd} onChange={(e) => setFormRentalEnd(e.target.value)} style={inputStyle} />
+                </label>
+                <label style={fieldStyle}>
+                  <span style={labelStyle}>Kiralama Operasyon Durumu</span>
+                  <select value={formOpsStatus} onChange={(e) => setFormOpsStatus(e.target.value)} style={inputStyle}>
+                    {RENTAL_OPS_STATUSES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+                  </select>
+                  <small style={hintStyle}>Aktif = cihaz sahada, kira işliyor. Retail panelindeki aktif kiralık adet ve aylık gelir bu duruma göre sayılır.</small>
+                </label>
+                <label style={fieldStyle}>
+                  <span style={labelStyle}>Operasyon Notu</span>
+                  <input value={formOpsNote} onChange={(e) => setFormOpsNote(e.target.value)} placeholder="Örn. SIM kart eksik · sözleşme imzası bekleniyor" style={inputStyle} />
+                  {editing.rental_ops_updated_by ? <small style={hintStyle}>Son güncelleme: {editing.rental_ops_updated_by} · {fmtDate(editing.rental_ops_updated_at ?? null)}</small> : null}
                 </label>
               </>
             ) : null}

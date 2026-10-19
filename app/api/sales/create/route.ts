@@ -8,7 +8,7 @@ import { requirePermissionOrThrow, userHasPermission } from '@/lib/authz';
 import { tryRecordAuditEvent } from '@/lib/audit';
 import { apiErrorResponse, parseJsonBody } from '@/lib/http/api-error';
 import { db } from '@/lib/db';
-import { createDirectSale } from '@/lib/quotes/sales-service';
+import { createDirectSale, saleAmountWarnings } from '@/lib/quotes/sales-service';
 
 // DOĞRUDAN SATIŞ (teklifsiz) — Sinan/Furkan, 10.09; migration 027.
 // "Tekliften satış girilebilir ve direkt satışta eklenebilir olsun."
@@ -81,7 +81,9 @@ export async function POST(request: Request) {
     });
 
     revalidatePath('/crm/sales');
-    return NextResponse.json({ ok: true, ...result }, { status: 201 });
+    // Tutar tutarlılık uyarısı (engellemez) — 045.
+    const amountWarnings = result.id ? await saleAmountWarnings(result.id, result.amount, result.deviceCount) : [];
+    return NextResponse.json({ ok: true, ...result, amount_warnings: amountWarnings }, { status: 201 });
   } catch (error) {
     return apiErrorResponse(error, 'Satış kaydı oluşturulamadı.');
   }

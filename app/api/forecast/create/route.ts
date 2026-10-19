@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import { createPgAdminClient } from '@/lib/pg/admin';
 import { getQuoteCatalog } from '@/lib/quotes/service';
 import { FORECAST_MONTHS, getForecastParameterOptions, isMissingForecastRelation, toPositiveInt } from '@/lib/forecast';
+import { parseForecastPricing, type ForecastPricing } from '@/lib/forecast-pricing';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -16,6 +17,11 @@ type ForecastItem = {
   sales_channel?: string;
   probability?: number | string;
   note?: string | null;
+  /** 045: satış / kiralama + fiyat + Retail planı. Gönderilmezse 'sale', null, null, true. */
+  sale_type?: string;
+  unit_price?: number | string | null;
+  rental_monthly_price?: number | string | null;
+  include_in_retail_plan?: boolean | string | null;
 };
 
 type Body = ForecastItem & {
@@ -37,6 +43,10 @@ function normalizeItems(body: Body): ForecastItem[] {
     sales_channel: body.sales_channel,
     probability: body.probability,
     note: body.note,
+    sale_type: body.sale_type,
+    unit_price: body.unit_price,
+    rental_monthly_price: body.rental_monthly_price,
+    include_in_retail_plan: body.include_in_retail_plan,
   }];
 }
 
@@ -59,6 +69,8 @@ export async function POST(request: Request) {
       salesChannel: String(item.sales_channel ?? '').trim(),
       probability: toPositiveInt(item.probability, 0),
       note: String(item.note ?? '').trim() || null,
+      raw: item,
+      pricing: null as ForecastPricing | null,
     }));
 
     if (!items.length) return NextResponse.json({ message: 'En az bir forecast satiri girilmeli.' }, { status: 400 });
@@ -99,6 +111,9 @@ export async function POST(request: Request) {
 
     for (const item of items) {
       if (!productMap.has(item.productId)) return NextResponse.json({ message: `${item.index}. satirda urun bulunamadi.` }, { status: 400 });
+      const pricing = parseForecastPricing(item.raw, productMap.get(item.productId));
+      if (!pricing.ok) return NextResponse.json({ message: `${item.index}. satirda ${pricing.message}` }, { status: 400 });
+      item.pricing = pricing.value;
     }
 
     const client = await db.connect();
@@ -112,11 +127,13 @@ export async function POST(request: Request) {
             insert into public.crm_forecasts (
               customer_id, product_id, product_code_snapshot, product_name_snapshot, quantity,
               forecast_year, forecast_month, sales_channel, probability,
-              owner_name, owner_email, owner_user_id, note, created_by_email, created_by_name, updated_by_email, updated_by_name
+              owner_name, owner_email, owner_user_id, note, created_by_email, created_by_name, updated_by_email, updated_by_name,
+              sale_type, unit_price, rental_monthly_price, include_in_retail_plan
             )
-            values ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $11, $14, $11, $14)
+            values ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $11, $14, $11, $14, $15, $16, $17, $18)
             returning id::text, customer_id::text, product_id, product_code_snapshot, product_name_snapshot, quantity,
                       forecast_year, forecast_month, sales_channel, probability, owner_name, owner_email, owner_user_id, note,
+                      sale_type, unit_price::float8 as unit_price, rental_monthly_price::float8 as rental_monthly_price, include_in_retail_plan,
                       created_at::text, updated_at::text
           `,
           [
@@ -134,6 +151,10 @@ export async function POST(request: Request) {
             customer.owner_user_id,
             item.note,
             actorName,
+            item.pricing?.saleType ?? 'sale',
+            item.pricing?.unitPrice ?? null,
+            item.pricing?.rentalMonthlyPrice ?? null,
+            item.pricing?.includeInRetailPlan ?? true,
           ],
         );
         inserted.push(result.rows[0]);
