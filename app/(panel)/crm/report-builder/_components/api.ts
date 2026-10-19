@@ -31,6 +31,7 @@ export const api = {
   definitions: () => call<{ definitions: SavedDefinitionLite[]; userId: string }>('/api/report-builder/definitions'),
   createDefinition: (body: object) => call<{ id: string }>('/api/report-builder/definitions', { method: 'POST', body: JSON.stringify(body) }),
   updateDefinition: (id: string, body: object) => call<{ ok: true }>(`/api/report-builder/definitions/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  archiveDefinition: (id: string) => call<{ ok: true }>(`/api/report-builder/definitions/${id}`, { method: 'DELETE' }),
   pages: () => call<{ pages: SavedPageLite[]; templates: { key: string; label: string }[]; canDesign: boolean; canManageLetterheads: boolean }>('/api/report-builder/pages'),
   page: (id: string) => call<{ page: SavedPageLite & { page: PageDefinition } }>(`/api/report-builder/pages/${id}`),
   createPage: (body: object) => call<{ id: string }>('/api/report-builder/pages', { method: 'POST', body: JSON.stringify(body) }),

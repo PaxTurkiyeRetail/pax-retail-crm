@@ -64,3 +64,6 @@ Tip kontrolü, ilgili derleyici/formül/kalıcılık testleri ve üretim derleme
 - Kolay başlangıç konu/rakam/kırılım seçimiyle özet ve tablo oluşturur; Operasyon Paneli başlangıcı beş düzenlenebilir sekme üretir.
 - Rapor ayarlarında sol menüde göster seçimi rapor JSON tanımına kaydedilir; yalnız mevcut paylaşım yetkileriyle listelenir. Menü canlı önizlemeyi açar; sorgular her açılışta yeniden çalışır.
 - Kurumsal antet PDF arka planı olarak korunur; dikey A4 oranı sabittir. Antetsiz ve yüklenen antet seçenekleri korunur.
+
+## Son ürün düzeltmesi
+Operasyon Paneli yalnız kabiliyet örneğidir. Yeni rapor akışında sabit Retail/KasaPOS kartları yoktur. Kullanıcı her bölümü kaynak/rakam/kırılım/dönem/görünüm seçerek kendisi kurar; tek sayfa veya sekmeli düzen seçer. Rapor Merkezi sabit panel kopyalama alanı değildir. Mevcut sol menü raporları korunur. Sahip olunan hızlı raporlar ve düzenleme yetkili özel sayfalar onaylı Sil işlemiyle arşivlenir; menü ve kayıtlı erişim kapanır.

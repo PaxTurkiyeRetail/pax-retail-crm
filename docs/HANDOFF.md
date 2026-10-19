@@ -19,6 +19,12 @@ Read `.claude/CLAUDE.md` first. Rules:
 - **Read-only DB check:** write a `.cjs` file into the app directory, start it with `begin read only`, and run it with `node --env-file-if-exists=.env.local x.cjs`. Delete the file afterwards.
 - Vitest also picks up the `.claude/worktrees/*` copies, so ignore failures from there or run with `--exclude ".claude/**"`.
 
+## Generic creation correction — 2026-10-19
+- User clarified Operational Panel is a capability example, not a ready page to clone. Removed named Retail/KasaPOS creation shortcuts and static panel cards from Report Center; existing sidebar reports stay.
+- Generic wizard creates independent user-defined sections with own source, measures, up to 12 dimensions, period, table/pivot, titles; assemble blocks or tabs. No fixed-page cloning in creation flow.
+- Owned quick reports and editable saved pages expose confirmed Sil; server archives using existing authorized DELETE endpoints. Studio settings also expose deletion. Removed items refresh sidebar/list and their stored links cease resolving.
+- Local typecheck/lint passed. Real React mocked-browser acceptance built two unrelated user sections, saved, opened live from sidebar, changed sharing, then deleted and verified menu removal. Production follow-up deploy uses mandatory full verify/backup/health script.
+
 ## Report Studio deployed — 2026-10-19 (code: 713fa70)
 - Generic multi-source report pages: editable sections/tabs, tables/pivots/KPIs, formulas, conditional styles, up to 12 dimensions, CSV and PDF. Editable Retail/KasaPOS kits are examples, not limits on page structure.
 - Guided creation builds summary/detail; existing saved pages open in Studio. Sharing uses existing private/roles/everyone rules and viewer row scopes. Share button copies live link.
