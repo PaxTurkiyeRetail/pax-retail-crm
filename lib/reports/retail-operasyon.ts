@@ -179,8 +179,8 @@ async function fetchCrmPool(): Promise<RetailCrmRow[]> {
       left join public.musteri_kunye_v2 k on k.musteri_id = m.id
       left join public.musteri_pipeline mp on mp.musteri_id = m.id
       left join public.faz_tanimlari ft on ft.faz_no = mp.aktif_faz_no
-      -- Seda Kesikoğlu müşterileri Retail havuzuna girmez.
-      where coalesce(m.sorumlu, '') !~* 'seda\\s*kes[iı]ko[gğ]'
+      -- Havuz departman bazlı: yalnız Retail iş kolu (Bank/Vertical hariç).
+      where m.is_kolu = 'Retail'
       order by m.musteri
     `,
   );
