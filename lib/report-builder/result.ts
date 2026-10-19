@@ -10,6 +10,8 @@ export type ReportResult = {
   range: { from: string; to: string } | null;
   compareRange: { from: string; to: string } | null;
   durationMs: number;
+  provenance?: { queriedAt: string; source: string; sourceLabel: string; scope: 'all' | 'own'; description: string; measures: {label: string; description: string}[]; warnings: string[] };
+
 };
 
 export const PREV_SUFFIX = '__prev';
@@ -81,19 +83,34 @@ export function resolvePivotColumn(columns: ColumnMeta[], reference?: string): C
   return column?.role === 'dimension' ? column : undefined;
 }
 
-export function matchConditionalRule(rules: ConditionalRule[], column: string | ColumnMeta, value: unknown, columns?: ColumnMeta[]): ColorToken | null {
-  if (typeof value !== 'number') return null;
+/** First enabled match; relative thresholds are percentages of another metric in the same row. */
+export function resolveConditionalRule(rules: ConditionalRule[], column: string | ColumnMeta, value: unknown, columns?: ColumnMeta[], row?: Record<string, unknown>): ConditionalRule | null {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return null;
   const key = typeof column === 'string' ? column : column.key;
   const catalog = columns ?? (typeof column === 'string' ? undefined : [column]);
   for (const rule of rules) {
-    if ((catalog ? resolveResultColumn(catalog, rule.column)?.key : rule.column) !== key) continue;
-    const matches = rule.op === 'gt' ? value > rule.value : rule.op === 'gte' ? value >= rule.value : rule.op === 'lt' ? value < rule.value
-      : rule.op === 'lte' ? value <= rule.value : rule.op === 'eq' ? value === rule.value : value >= rule.value && value <= (rule.value2 ?? rule.value);
-    if (matches) return rule.color;
+    if (rule.enabled === false || (catalog ? resolveResultColumn(catalog, rule.column)?.key : rule.column) !== key) continue;
+    let threshold = rule.value;
+    let threshold2 = rule.value2 ?? rule.value;
+    if (rule.compareColumn !== undefined) {
+      const compared = catalog && resolveResultColumn(catalog, rule.compareColumn);
+      if (!compared || compared.role === 'dimension' || !row || !Object.prototype.hasOwnProperty.call(row, compared.key)) continue;
+      const reference = row[compared.key];
+      if (typeof reference !== 'number' || !Number.isFinite(reference)) continue;
+      threshold = reference * rule.value / 100;
+      threshold2 = reference * (rule.value2 ?? rule.value) / 100;
+    }
+    if (!Number.isFinite(threshold) || !Number.isFinite(threshold2)) continue;
+    const matches = rule.op === 'gt' ? value > threshold : rule.op === 'gte' ? value >= threshold : rule.op === 'lt' ? value < threshold
+      : rule.op === 'lte' ? value <= threshold : rule.op === 'eq' ? value === threshold : value >= threshold && value <= threshold2;
+    if (matches) return rule;
   }
   return null;
 }
 
+export function matchConditionalRule(rules: ConditionalRule[], column: string | ColumnMeta, value: unknown, columns?: ColumnMeta[], row?: Record<string, unknown>): ColorToken | null {
+  return resolveConditionalRule(rules, column, value, columns, row)?.color ?? null;
+}
 /** Bir kırılımı sütuna açar (pivot / aylık ısı tablosu). */
 export function pivot(columns: ColumnMeta[], rows: ResultRow[], pivotColumnKey: string, measureKey: string): PivotTable | null {
   const pivotCol = resolvePivotColumn(columns, pivotColumnKey);

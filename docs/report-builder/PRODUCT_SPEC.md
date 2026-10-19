@@ -67,3 +67,12 @@ Tip kontrolü, ilgili derleyici/formül/kalıcılık testleri ve üretim derleme
 
 ## Son ürün düzeltmesi
 Operasyon Paneli yalnız kabiliyet örneğidir. Yeni rapor akışında sabit Retail/KasaPOS kartları yoktur. Kullanıcı her bölümü kaynak/rakam/kırılım/dönem/görünüm seçerek kendisi kurar; tek sayfa veya sekmeli düzen seçer. Rapor Merkezi sabit panel kopyalama alanı değildir. Mevcut sol menü raporları korunur. Sahip olunan hızlı raporlar ve düzenleme yetkili özel sayfalar onaylı Sil işlemiyle arşivlenir; menü ve kayıtlı erişim kapanır.
+
+## Gelişmiş raporlama teslimatı
+Kullanıcı bağımsız bölümler kurar; şablon adları yerine konu, rakam, kırılım ve dönem seçer. Koşullu renkler sıralı kurallar, açıklayıcı durum etiketleri ve veri çubuklarıyla yönetilir. Ortalama, fark ve yüzde hesapları okunur alan adlarıyla eklenir; ileri formül düzenleyicisi korunur.
+
+PDF indirmeden önce gerçek sunucu çıktısı gösterilir. Sütun genişliği/hizası, satır sarma, yazı boyutu, sayfa arası ve güvenli kenarlar ayarlanır; indirilen dosya önizlemenin aynısıdır. Düzen değişirse yeniden önizleme gerekir. Resmî antet dikey sayfayı ve güvenli alanı korur.
+
+Kayıtlara inme, veri kaynağı açıklaması, değişmez kişisel dönem fotoğrafı, sahip posta kutusuna zamanlama ve eşik uyarıları eklenir. Yetkiler her çalışmada yeniden kontrol edilir. AD zamanlamasında etkin oturum gerekir. Hedefler Account/ay seviyesindedir; model/müşteri Forecast karşılaştırması adet üzerinden ayrıdır.
+
+Tasarım referansları: [Power BI koşullu tablo biçimlendirmesi](https://learn.microsoft.com/en-us/power-bi/desktop-conditional-table-formatting), [W3C renk kullanım ilkesi](https://www.w3.org/WAI/WCAG21/Understanding/use-of-color.html). Renk, metinsel durum etiketiyle desteklenir.

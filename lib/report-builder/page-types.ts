@@ -44,6 +44,10 @@ export const columnSettingSchema = z.object({
   label: shortText.optional(),
   hidden: z.boolean().optional(),
   format: numberFormatSchema.optional(),
+  width: z.number().positive().max(100).optional(),
+  align: z.enum(['left','center','right']).optional(),
+  wordWrap: z.boolean().optional(),
+  dataBar: z.boolean().optional(),
 });
 
 export const widgetStyleSchema = z.object({
@@ -146,6 +150,10 @@ export const pageDefinitionSchema = z.object({
     orientation: z.enum(['portrait', 'landscape']).optional(),
     letterheadId: z.string().uuid().optional(),
     noLetterhead: z.boolean().optional(),
+    fontSize: z.number().min(6).max(12).optional(),
+    wordWrap: z.boolean().optional(),
+    hideRepeatedTitle: z.boolean().optional(),
+    marginsMm: z.object({top:z.number().min(5).max(60),right:z.number().min(5).max(60),bottom:z.number().min(5).max(60),left:z.number().min(5).max(60)}).optional(),
   }).default({}),
 }).superRefine((page, ctx) => {
   const ids = new Set<string>();

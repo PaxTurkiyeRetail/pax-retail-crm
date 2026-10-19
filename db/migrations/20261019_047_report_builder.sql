@@ -131,3 +131,51 @@ from (values ('admin'), ('super_admin')) as r(role_key)
 cross join (values ('report.builder.design'), ('report.letterhead.manage')) as p(permission_key)
 where exists (select 1 from public.rbac_roles x where x.role_key = r.role_key)
 on conflict do nothing;
+-- CRM_APPEND_MIGRATION: 20261019_048_report_automation.sql
+-- Builder automation deliberately uses separate tables: report_schedules already
+-- belongs to the legacy notification centre (migration 009 has a different shape).
+create table if not exists public.report_page_automations (
+  id uuid primary key default gen_random_uuid(),
+  page_id uuid not null references public.report_pages(id) on delete restrict,
+  owner_user_id text not null,
+  name text not null,
+  kind text not null check(kind in ('delivery','alert')),
+  interval_hours integer not null check(interval_hours between 1 and 720),
+  next_run_at timestamptz not null,
+  format text not null default 'pdf' check(format in ('pdf','csv')),
+  config jsonb not null default '{}',
+  is_active boolean not null default true,
+  last_condition boolean not null default false,
+  last_status text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists report_page_automations_due_idx on public.report_page_automations(next_run_at) where is_active=true;
+create index if not exists report_page_automations_owner_idx on public.report_page_automations(owner_user_id,page_id);
+create table if not exists public.report_page_automation_runs (
+  id uuid primary key default gen_random_uuid(),
+  automation_id uuid not null references public.report_page_automations(id) on delete restrict,
+  period text not null,
+  status text not null,
+  detail text,
+  result jsonb not null default '{}',
+  created_at timestamptz not null default now(),
+  finished_at timestamptz,
+  unique(automation_id,period)
+);
+create index if not exists report_page_automation_runs_history_idx on public.report_page_automation_runs(automation_id,created_at desc);
+
+create table if not exists public.report_page_snapshots (
+  id uuid primary key default gen_random_uuid(),
+  page_id uuid not null references public.report_pages(id) on delete restrict,
+  owner_user_id text not null,
+  title text not null,
+  page_version integer not null,
+  page jsonb not null,
+  filter_values jsonb not null default '{}',
+  results jsonb not null,
+  captured_scope jsonb not null,
+  digest text not null,
+  created_at timestamptz not null default now()
+);
+create index if not exists report_page_snapshots_owner_page_idx on public.report_page_snapshots(owner_user_id,page_id,created_at desc);

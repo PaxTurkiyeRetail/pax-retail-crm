@@ -5,9 +5,12 @@ import type { ReactNode } from 'react';
 import type { ColumnMeta } from '@/lib/report-builder/types';
 import type { ColorToken, PageWidget } from '@/lib/report-builder/page-types';
 import type { WidgetData } from '@/lib/report-builder/pdf';
-import { formatCell, pivot, resolvePivotColumn, PREV_SUFFIX, type ReportResult } from '@/lib/report-builder/result';
+import { formatCell, pivot, resolvePivotColumn, resolveConditionalRule, PREV_SUFFIX, type ReportResult } from '@/lib/report-builder/result';
 import { BarLineChart, PieChart, type DrillHandler } from './Charts';
-import { DENSITY_PAD, ruleColor, TOKEN_CSS, TOKEN_SOFT } from './tokens';
+import { dataBarExtent } from '@/lib/report-builder/visual-format';
+import { DENSITY_PAD, TOKEN_CSS, TOKEN_SOFT } from './tokens';
+
+export type RecordDrillHandler = (row: Record<string, unknown>, column: ColumnMeta) => void;
 
 type Style = Extract<PageWidget, { query: unknown }>['style'];
 type NumberFormat = NonNullable<Style['numberFormat']>;
@@ -30,7 +33,7 @@ function visibleColumns(result: ReportResult, style?: Style) {
     .map((c) => ({ col: { ...c, label: settings.get(c.key)?.label || c.label }, format: settings.get(c.key)?.format ?? (c.role !== 'dimension' ? style?.numberFormat : undefined) }));
 }
 
-export function KpiStrip({ result, style }: { result: ReportResult; style?: Style }) {
+export function KpiStrip({ result, style, onDrill }: { result: ReportResult; style?: Style; onDrill?: RecordDrillHandler }) {
   const row = result.rows[0] ?? {};
   const measures = visibleColumns(result, style).filter((c) => c.col.role !== 'dimension' && !c.col.key.endsWith(PREV_SUFFIX));
   if (!measures.length) return <p className="pax-empty text-sm">Ölçü yok</p>;
@@ -39,12 +42,14 @@ export function KpiStrip({ result, style }: { result: ReportResult; style?: Styl
       {measures.map(({ col, format }) => {
         const v = row[col.key];
         const prev = row[col.key + PREV_SUFFIX];
-        const rc = ruleColor(style?.conditional ?? [], col, v, result.columns);
+        const matched=resolveConditionalRule(style?.conditional??[],col,v,result.columns,row);
+        const rc=matched?.color;
         const delta = typeof v === 'number' && typeof prev === 'number' && prev !== 0 ? ((v - prev) / Math.abs(prev)) * 100 : null;
         return (
           <div key={col.key} className="rounded-lg border p-3" style={{ borderColor: 'var(--border)', borderTop: `3px solid ${TOKEN_CSS[rc ?? style?.accent ?? 'primary']}` }}>
             <div className="text-xs text-[var(--muted)]">{col.label}</div>
-            <div className="mt-1 text-xl font-semibold tabular-nums">{fmt(col, v, format)}</div>
+            <div className="mt-1 text-xl font-semibold tabular-nums">{onDrill ? <button type="button" className="cursor-pointer underline decoration-dotted underline-offset-4" title="Katkıda bulunan kayıtlar" onClick={() => onDrill(row, col)}>{fmt(col, v, format)}</button> : fmt(col, v, format)}</div>
+            {matched?.label&&<div className="mt-1 text-xs font-medium">{matched.label}</div>}
             {delta !== null && (
               <div className="mt-0.5 text-xs tabular-nums" style={{ color: TOKEN_CSS[delta >= 0 ? 'success' : 'danger'] }}>
                 <span aria-hidden>{delta >= 0 ? '▲' : '▼'}</span> %{Math.abs(delta).toFixed(1)}
@@ -59,7 +64,7 @@ export function KpiStrip({ result, style }: { result: ReportResult; style?: Styl
   );
 }
 
-export function DataTableView({ result, style }: { result: ReportResult; style?: Style }) {
+export function DataTableView({ result, style, onDrill }: { result: ReportResult; style?: Style; onDrill?: RecordDrillHandler }) {
   const cols = visibleColumns(result, style);
   const pad = DENSITY_PAD[style?.density ?? 'normal'];
   if (!result.rows.length) return <p className="pax-empty text-sm">Kayıt yok</p>;
@@ -73,10 +78,13 @@ export function DataTableView({ result, style }: { result: ReportResult; style?:
           {result.rows.map((r, i) => (
             <tr key={i}>
               {cols.map(({ col, format }) => {
-                const rc = ruleColor(style?.conditional ?? [], col, r[col.key], result.columns);
+                const matched=resolveConditionalRule(style?.conditional??[],col,r[col.key],result.columns,r);const rc=matched?.color;
+                const bar=style?.columns.find(c=>c.key===col.key)?.dataBar?dataBarExtent(result.rows.map(row=>row[col.key]),r[col.key]):null;
+                const barColor=TOKEN_SOFT[rc??style?.accent??'primary'];
+                const backgroundImage=bar?`linear-gradient(to right, transparent ${bar.start*100}%, ${barColor} ${bar.start*100}%, ${barColor} ${(bar.start+bar.width)*100}%, transparent ${(bar.start+bar.width)*100}%)`:undefined;
                 return (
-                  <td key={col.key} className={`${pad} ${col.role !== 'dimension' ? 'text-right tabular-nums' : ''}`} style={rc ? { background: TOKEN_SOFT[rc], color: TOKEN_CSS[rc], fontWeight: 600 } : undefined}>
-                    {fmt(col, r[col.key], format)}
+                  <td key={col.key} className={`${pad} ${col.role !== 'dimension' ? 'text-right tabular-nums' : ''}`} style={{...(rc?{backgroundColor:TOKEN_SOFT[rc],color:TOKEN_CSS[rc],fontWeight:600}:{}),backgroundImage}}>
+                    {onDrill && col.role !== 'dimension' && !col.key.endsWith(PREV_SUFFIX) ? <button type="button" className="cursor-pointer underline decoration-dotted underline-offset-4" title="Katkıda bulunan kayıtlar" onClick={() => onDrill(r, col)}>{fmt(col, r[col.key], format)}</button> : fmt(col, r[col.key], format)}{matched?.label&&<span className="ml-2 inline-block text-[10px] font-medium">{matched.label}</span>}
                   </td>
                 );
               })}
@@ -90,11 +98,11 @@ export function DataTableView({ result, style }: { result: ReportResult; style?:
 }
 
 /** Pivot; heatmap modunda gerçekleşen yeşil, yalnız tahmini olan hücre sarı. */
-export function PivotView({ result, forecast, pivotColumn, heat, style }: { result: ReportResult; forecast?: ReportResult; pivotColumn?: string; heat?: boolean; style?: Style }) {
+export function PivotView({ result, forecast, pivotColumn, heat, style, onDrill }: { result: ReportResult; forecast?: ReportResult; pivotColumn?: string; heat?: boolean; style?: Style; onDrill?: RecordDrillHandler }) {
   const measure = result.columns.find((c) => c.role !== 'dimension' && !c.key.endsWith(PREV_SUFFIX));
   const pc = resolvePivotColumn(result.columns, pivotColumn)?.key;
   const p = pc && measure ? pivot(result.columns, result.rows, pc, measure.key) : null;
-  if (!p || !measure) return <DataTableView result={result} style={style} />;
+  if (!p || !measure) return <DataTableView result={result} style={style} onDrill={onDrill} />;
   const f = forecast && pc ? pivot(forecast.columns, forecast.rows, pc, forecast.columns.find((c) => c.role !== 'dimension')?.key ?? '') : null;
   const fMap = new Map<string, number | null>();
   f?.rows.forEach((r) => f.columnValues.forEach((cv, i) => fMap.set(`${r.key.join('\u0001')}\u0002${cv}`, r.cells[i])));
@@ -130,15 +138,20 @@ export function PivotView({ result, forecast, pivotColumn, heat, style }: { resu
                   const fc = fMap.get(`${k}\u0002${cv}`) ?? null;
                   const isForecast = (actual === null || actual === 0) && fc !== null && fc !== 0;
                   const v = isForecast ? fc : actual;
+                  const matches = onDrill && !isForecast && actual !== null ? result.rows.filter(row =>
+                    String(row[pc!] ?? '—') === cv && p.rowDims.every((dim, i) => String(row[dim.key] ?? '—') === r.key[i])
+                  ) : [];
+                  const drillRow = matches.length === 1 ? matches[0] : undefined;
                   let bg: string | undefined;
-                  let color: ColorToken | null = ruleColor(style?.conditional ?? [], measure, v, result.columns);
+                  const matched=resolveConditionalRule(style?.conditional??[],measure,v,result.columns,drillRow);
+                  let color:ColorToken|null=matched?.color??null;
                   if (heat && v) {
                     bg = isForecast ? TOKEN_SOFT.warning : `color-mix(in srgb, ${TOKEN_CSS.success} ${Math.round(12 + 50 * ((v ?? 0) / max))}%, transparent)`;
                     color = color ?? null;
                   }
                   return (
                     <td key={cv} className={`${pad} text-right tabular-nums`} style={{ background: color ? TOKEN_SOFT[color] : bg, fontStyle: isForecast ? 'italic' : undefined }} title={isForecast ? 'Tahmin' : undefined}>
-                      {v === null ? '' : fmt(measure, v, style?.numberFormat)}{isForecast && <span className="sr-only"> (tahmin)</span>}
+                      {drillRow && onDrill ? <button type="button" className="cursor-pointer underline decoration-dotted underline-offset-4" title="Katkıda bulunan kayıtlar" onClick={() => onDrill(drillRow, measure)}>{fmt(measure, v, style?.numberFormat)}</button> : v === null ? '' : fmt(measure, v, style?.numberFormat)}{isForecast && <span className="sr-only"> (tahmin)</span>}{matched?.label&&<span className="ml-2 text-[10px]">{matched.label}</span>}
                     </td>
                   );
                 })}
@@ -169,20 +182,27 @@ export function TextBlock({ variant, text }: { variant: 'heading' | 'paragraph' 
 }
 
 /** Veri widget'ının gövdesi. Filtre/sekme widget'ları designer/viewer'da ayrıca çizilir. */
-export function DataWidgetBody({ widget, data }: { widget: Extract<PageWidget, { query: unknown }>; data?: WidgetData }): ReactNode {
+export function DataWidgetBody({ widget, data, onDrill }: { widget: Extract<PageWidget, { query: unknown }>; data?: WidgetData; onDrill?: RecordDrillHandler }): ReactNode {
   if (!data) return <div className="h-full animate-pulse rounded-md" style={{ background: 'var(--border)', opacity: 0.35 }} aria-busy="true" aria-label="Yükleniyor" />;
   if (data.error) return <p role="alert" className="text-sm" style={{ color: TOKEN_CSS.danger }}>{data.error}</p>;
   if (!data.result) return <p className="pax-empty text-sm">Veri yok</p>;
   const r = data.result;
+  const chartDrill: DrillHandler | undefined = onDrill ? (value) => {
+    const dim = r.columns.find(c => c.role === 'dimension');
+    const measure = r.columns.find(c => c.role !== 'dimension' && !c.key.endsWith(PREV_SUFFIX));
+    const matches = dim ? r.rows.filter(row => row[dim.key] === value) : r.rows;
+    const row = matches.length === 1 ? matches[0] : undefined;
+    if (row && measure) onDrill(row, measure);
+  } : undefined;
   switch (widget.type) {
     case 'kpi':
-    case 'kpi_strip': return <KpiStrip result={r} style={widget.style} />;
+    case 'kpi_strip': return <KpiStrip result={r} style={widget.style} onDrill={onDrill} />;
     case 'bar':
-    case 'line': return <BarLineChart result={r} kind={widget.type} accent={widget.style.accent} title={widget.title} />;
-    case 'pie': return <PieChart result={r} title={widget.title} />;
-    case 'pivot': return <PivotView result={r} pivotColumn={widget.query.visualization.pivotColumn} style={widget.style} />;
-    case 'heatmap': return <PivotView result={r} forecast={data.forecast} pivotColumn={widget.query.visualization.pivotColumn} heat style={widget.style} />;
-    default: return <DataTableView result={r} style={widget.style} />;
+    case 'line': return <BarLineChart result={r} kind={widget.type} accent={widget.style.accent} title={widget.title} onDrill={chartDrill} />;
+    case 'pie': return <PieChart result={r} title={widget.title} onDrill={chartDrill} />;
+    case 'pivot': return <PivotView result={r} pivotColumn={widget.query.visualization.pivotColumn} style={widget.style} onDrill={onDrill} />;
+    case 'heatmap': return <PivotView result={r} forecast={data.forecast} pivotColumn={widget.query.visualization.pivotColumn} heat style={widget.style} onDrill={onDrill} />;
+    default: return <DataTableView result={r} style={widget.style} onDrill={onDrill} />;
   }
 }
 

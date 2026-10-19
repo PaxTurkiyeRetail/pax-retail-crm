@@ -8,9 +8,11 @@
 //    crm_sales.device_count (performance-report / live-board ile aynı).
 //  - Aktivite: tarih = coalesce(aktivite_tarihi, created_at@Istanbul); planlanan "sonraki aksiyon"
 //    kayıtları (Başlamadı + hedef tarihli) sayılmaz (weekly-targets / live-board ile aynı).
+import { ACTUAL_FORECAST_FROM } from './actual-forecast-source';
 import type { Permission } from '@/lib/roles';
 import { INTEGRATION_DEVICE_SERVICE_KEYS } from '@/lib/sales/service-invoices-shared';
 import type { TimeGrain } from '@/lib/report-builder/types';
+import { PERFORMANCE_COMPARISON_FROM } from '@/lib/report-builder/performance-source';
 
 export type FieldType = 'string' | 'number' | 'date' | 'boolean';
 
@@ -47,6 +49,8 @@ export type DatasetDef = {
   description: string;
   /** Dataset'e erişim için gereken action permission (screen.* değil). */
   permission: Permission;
+  /** Composite datasets require access to every underlying source. */
+  requiredPermissions?: readonly Permission[];
   from: string;
   baseWhere: readonly string[];
   defaultDateField: string;
@@ -77,6 +81,7 @@ const PHASE_GROUP = `case
 export const DEPARTMENTS = ['Retail', 'Vertical', 'Bank'] as const;
 
 const customerDims = (alias = 'm'): Record<string, DimensionDef> => ({
+  customer_id: { label: 'Müşteri kayıt kimliği', sql: `${alias}.id::text`, type: 'string', group: 'Kayıt bağlantıları' },
   customer: { label: 'Müşteri', sql: `${alias}.musteri`, type: 'string', group: 'Müşteri' },
   customer_owner: { label: 'Müşteri sorumlusu', sql: `coalesce(nullif(trim(${alias}.sorumlu), ''), 'Havuz')`, type: 'string', group: 'Müşteri' },
   sector: { label: 'Sektör', sql: `coalesce(nullif(trim(${alias}.sektor), ''), '—')`, type: 'string', group: 'Müşteri' },
@@ -103,6 +108,7 @@ const SALES: DatasetDef = {
   defaultDateField: 'sale_date',
   owner: { userId: 's.owner_user_id::text', email: 's.owner_email', name: 's.owner_name' },
   dimensions: {
+    sale_id: { label: 'Satış kayıt kimliği', sql: 's.id::text', type: 'string', group: 'Kayıt bağlantıları' },
     sale_date: { label: 'Satış tarihi', sql: 's.sale_date', type: 'date', grains: ALL_GRAINS, group: 'Satış' },
     owner: { label: 'Satıcı', sql: `coalesce(nullif(trim(s.owner_name), ''), 'Havuz Account')`, type: 'string', group: 'Satış' },
     sales_channel: { label: 'Satış kanalı', sql: `coalesce(s.sales_channel, '—')`, type: 'string', group: 'Satış' },
@@ -135,6 +141,7 @@ const SALE_ITEMS: DatasetDef = {
   defaultDateField: 'sale_date',
   owner: { userId: 's.owner_user_id::text', email: 's.owner_email', name: 's.owner_name' },
   dimensions: {
+    sale_id: { label: 'Satış kayıt kimliği', sql: 's.id::text', type: 'string', group: 'Kayıt bağlantıları' },
     sale_date: { label: 'Satış tarihi', sql: 's.sale_date', type: 'date', grains: ALL_GRAINS, group: 'Satış' },
     owner: { label: 'Satıcı', sql: `coalesce(nullif(trim(s.owner_name), ''), 'Havuz Account')`, type: 'string', group: 'Satış' },
     sales_channel: { label: 'Satış kanalı', sql: `coalesce(s.sales_channel, '—')`, type: 'string', group: 'Satış' },
@@ -250,6 +257,7 @@ const QUOTES: DatasetDef = {
   defaultDateField: 'proposal_date',
   owner: { userId: 'q.owner_user_id::text', email: 'q.owner_email', name: 'q.owner_name' },
   dimensions: {
+    quote_id: { label: 'Teklif kayıt kimliği', sql: 'q.id::text', type: 'string', group: 'Kayıt bağlantıları' },
     proposal_date: { label: 'Teklif tarihi', sql: 'q.proposal_date', type: 'date', grains: ALL_GRAINS, group: 'Teklif' },
     closed_date: { label: 'Kapanış tarihi', sql: `(coalesce(q.closed_at, q.updated_at) at time zone 'Europe/Istanbul')::date`, type: 'date', grains: ALL_GRAINS, group: 'Teklif' },
     owner: { label: 'Satıcı', sql: `coalesce(nullif(trim(q.owner_name), ''), '—')`, type: 'string', group: 'Teklif' },
@@ -373,7 +381,46 @@ const KASAPOS_SNAPSHOT: DatasetDef = {
   },
 };
 
+const PERFORMANCE_COMPARISON: DatasetDef = {
+  key: 'performance_comparison',
+  label: 'Gerçekleşen / hedef / forecast',
+  description: 'Account ve ay bazında karşılaştırma. Kişi hedefleri: çeyrek /3, yıl /12 (çeyrek öncelikli). Şirket hedefi eklenmez; müşteri/model hedefi yoktur. Cihaz = kiralama hariç satış. Forecast yalnız katalogda cihaz/paket olarak doğrulanan ürünler; USD forecast saklanmadığından gösterilmez.',
+  permission: 'report.performance.read',
+  requiredPermissions: ['report.performance.read', 'quote.read', 'forecast.read'],
+  from: PERFORMANCE_COMPARISON_FROM,
+  baseWhere: [],
+  defaultDateField: 'month',
+  owner: { userId: 'pc.owner_user_id', email: 'pc.owner_email', name: 'pc.owner_label' },
+  dimensions: {
+    month: { label: 'Ay (aylık hedef payı)', sql: 'pc.month', type: 'date', grains: ['month', 'quarter', 'year'], group: 'Dönem', description: 'Ayın ilk günü; tam ay dönemleri kullanın.' },
+    owner: { label: 'Account', sql: 'pc.owner_label', type: 'string', group: 'Account' },
+  },
+  measures: {
+    actual_quantity: { label: 'Gerçekleşen satılan cihaz', sql: 'coalesce(sum(pc.actual_quantity), 0)', format: 'number' },
+    target_quantity: { label: 'Cihaz hedefi (aylık pay)', sql: 'sum(pc.target_quantity)', format: 'number', description: 'Kişi hedefi; çeyrek /3 veya yıl /12. Eksik hedef boş kalır.' },
+    forecast_quantity: { label: 'Forecast cihaz (katalog doğrulanmış)', sql: 'coalesce(sum(pc.forecast_quantity), 0)', format: 'number' },
+    weighted_forecast_quantity: { label: 'Ağırlıklı forecast cihaz', sql: 'coalesce(sum(pc.weighted_forecast_quantity), 0)', format: 'number' },
+    quantity_gap: { label: 'Cihaz farkı (gerçekleşen − hedef)', sql: 'sum(pc.actual_quantity) - sum(pc.target_quantity)', format: 'number' },
+    quantity_achievement: { label: 'Cihaz hedef gerçekleşme (%)', sql: '100.0 * sum(pc.actual_quantity) / nullif(sum(pc.target_quantity), 0)', format: 'percent' },
+    actual_usd: { label: 'Gerçekleşen ciro (yalnız USD)', sql: 'coalesce(sum(pc.actual_usd), 0)', format: 'money' },
+    target_usd: { label: 'Ciro hedefi (USD, aylık pay)', sql: 'sum(pc.target_usd)', format: 'money', description: 'sales_revenue kişi bütçesi (USD); döviz dönüşümü yapılmaz.' },
+    usd_gap: { label: 'Ciro farkı (USD)', sql: 'sum(pc.actual_usd) - sum(pc.target_usd)', format: 'money' },
+    usd_achievement: { label: 'Ciro hedef gerçekleşme (%)', sql: '100.0 * sum(pc.actual_usd) / nullif(sum(pc.target_usd), 0)', format: 'percent' },
+  },
+};
+
+const ACTUAL_FORECAST: DatasetDef = {
+  key:'actual_forecast',label:'Müşteri / model · gerçekleşen ve Forecast',
+  description:'Müşteri, model kodu, Account ve tam ay üzerinden cihaz satışı ile Forecast karşılaştırması. Kiralama ve kalemsiz satışlar hariçtir. Model kodu eksik kayıtlar birbirine eşleştirilmez. Fark gerçekleşen eksi tahmindir; hedef veya USD Forecast tutarı üretilmez.',
+  permission:'quote.read',requiredPermissions:['quote.read','forecast.read'],from:ACTUAL_FORECAST_FROM,baseWhere:[],defaultDateField:'month',
+  owner:{userId:'af.owner_user_id',email:'af.owner_email',name:'af.owner_name'},
+  dimensions:{...customerDims(),model:{label:'Model kodu',sql:'af.model',type:'string',group:'Ortak kırılımlar'},owner:{label:'Account',sql:"coalesce(nullif(trim(af.owner_name),''),af.owner_email,'Havuz')",type:'string',group:'Ortak kırılımlar'},month:{label:'Ay',sql:'af.month',type:'date',grains:['month','quarter','year'],group:'Ortak kırılımlar'}},
+  measures:{actual_quantity:{label:'Gerçekleşen cihaz satışı',sql:'coalesce(sum(af.actual_quantity),0)',format:'number'},forecast_quantity:{label:'Forecast cihaz adedi',sql:'coalesce(sum(af.forecast_quantity),0)',format:'number'},weighted_forecast_quantity:{label:'Olasılık ağırlıklı Forecast',sql:'coalesce(sum(af.weighted_forecast_quantity),0)',format:'number'},quantity_gap:{label:'Gerçekleşen − Forecast',sql:'sum(af.actual_quantity)-sum(af.forecast_quantity)',format:'number'},weighted_gap:{label:'Gerçekleşen − ağırlıklı Forecast',sql:'sum(af.actual_quantity)-sum(af.weighted_forecast_quantity)',format:'number'},actual_usd:{label:'Gerçekleşen kalem tutarı (yalnız USD)',sql:'coalesce(sum(af.actual_usd),0)',format:'money'}},
+};
+
 export const DATASETS: Readonly<Record<string, DatasetDef>> = Object.freeze({
+  actual_forecast: ACTUAL_FORECAST,
+  performance_comparison: PERFORMANCE_COMPARISON,
   kasapos_snapshot: KASAPOS_SNAPSHOT,
   service_invoice_items: SERVICE_INVOICE_ITEMS,
   sales: SALES,
@@ -391,7 +438,7 @@ export function getDataset(key: string): DatasetDef | null {
 /** İstemciye giden katalog: SQL parçaları dışarı sızmaz. */
 export function datasetCatalog(canAccess: (permission: Permission) => boolean) {
   return Object.values(DATASETS)
-    .filter((dataset) => canAccess(dataset.permission))
+    .filter((dataset) => canAccess(dataset.permission) && (dataset.requiredPermissions ?? []).every(canAccess))
     .map((dataset) => ({
       key: dataset.key,
       label: dataset.label,

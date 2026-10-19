@@ -11,12 +11,14 @@ import type { DatasetCatalogEntry } from '@/lib/report-builder/datasets';
 import type { ColorToken, ConditionalRule } from '@/lib/report-builder/page-types';
 import type { ReportResult } from '@/lib/report-builder/result';
 import { DEPARTMENT_VALUES, type ReportDefinitionInput, type TimeGrain, type VizType } from '@/lib/report-builder/types';
-import { api, downloadCsv, fetchPdf, saveBlob, type LetterheadLite, type SavedDefinitionLite } from './api';
+import { api, downloadCsv, type LetterheadLite, type SavedDefinitionLite } from './api';
 import {
   bucketRange, defaultDefinition, friendlyError, GRAIN_CHIP, PERIODS, periodToRange, rangeToPeriod, uiFor, type PeriodKey,
 } from './friendly';
 import { DEPARTMENT_LABEL } from './labels';
 import { CalcEditor, FilterRow } from './QueryBuilder';
+import ReportPdfPreview from '@/components/report-builder/ReportPdfPreview';
+import { parsePageDefinition,type PageDefinition } from '@/lib/report-builder/page-types';
 import { ResultView } from './renderers/WidgetRenderer';
 import { TOKEN_CSS, TOKEN_SOFT } from './renderers/tokens';
 
@@ -65,6 +67,10 @@ export default function ReportWizard({ datasets, letterheads, initial, onClose, 
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [advanced, setAdvanced] = useState(false);
+  const [pdfPreview,setPdfPreview]=useState(false);
+  const [pdfLayout,setPdfLayout]=useState<PageDefinition['pdf']>({});
+  const [pdfColumns,setPdfColumns]=useState<Record<string,PageDefinition['widgets'][number]['style']['columns']>>({});
+
   const rules = def?.style?.conditional ?? [];
   const setRules = (conditional: ConditionalRule[]) => setDef((current) => current ? {
     ...current, style: { ...current.style, conditional },
@@ -148,7 +154,7 @@ export default function ReportWizard({ datasets, letterheads, initial, onClose, 
     const meta = ds.dimensions.find((d) => d.key === k)!;
     const has = dims.some((d) => d.field === k);
     const next = has ? dims.filter((d) => d.field !== k) : [...dims, { field: k, ...(meta.type === 'date' ? { grain: 'month' as const } : {}) }].slice(-3);
-    const nv: VizType = next.length === 0 ? 'kpi' : viz === 'kpi' ? (meta.type === 'date' ? 'bar' : 'table') : viz;
+    const nv: VizType = next.length === 0 ? 'kpi' : viz === 'kpi' ? 'table' : viz;
     patch({ dimensions: next, visualization: { ...def.visualization, type: nv } });
   };
   const setGrain = (k: string, g: TimeGrain) => patch({ dimensions: dims.map((d) => (d.field === k ? { ...d, grain: g } : d)) });
@@ -181,7 +187,7 @@ export default function ReportWizard({ datasets, letterheads, initial, onClose, 
       ...(letterheadId ? { letterheadId } : { letterheadId: null }),
       page: { version: 1, title: title || 'Rapor', department: def.department ?? 'all', widgets: [
         { id: 'h', type: 'text', variant: 'heading', text: title || 'Rapor', layout: { lg: { x: 0, y: 0, w: 12, h: 1 } } },
-        { id: 'r', type: wType, title: '', query: def, style: { ...style, showTitle: false }, layout: { lg: { x: 0, y: 1, w: 12, h: viz === 'kpi' ? 2 : 8 } } },
+        { id: 'r', type: wType, title: '', query: def, style: { ...style, showTitle: false,columns:pdfColumns.r??[] }, layout: { lg: { x: 0, y: 1, w: 12, h: viz === 'kpi' ? 2 : 8 } } },
       ] },
     };
   };
@@ -197,11 +203,11 @@ export default function ReportWizard({ datasets, letterheads, initial, onClose, 
       onSaved?.();
     } catch (e) { setError(friendlyError(e)); }
   };
-  const pdf = async () => {
+  const pdf = () => {
     setError(null);
     const issue = definitionFilterIssue(def);
     if (issue) { setError(issue); return; }
-    try { const { blob, fileName } = await fetchPdf(pdfBody()); saveBlob(blob, fileName); } catch (e) { setError(friendlyError(e)); }
+    setPdfPreview(true);
   };
   const csv = () => { setError(null); const issue = definitionFilterIssue(def); if (issue) { setError(issue); return; } downloadCsv(def).catch((e) => setError(friendlyError(e))); };
   const shareLink = savedId ? `${typeof window !== 'undefined' ? window.location.origin + window.location.pathname : ''}?report=${savedId}` : null;
@@ -233,6 +239,7 @@ export default function ReportWizard({ datasets, letterheads, initial, onClose, 
 
   return (
     <Shell step={step} onClose={onClose} onStep={setStep} canGo={(n) => n === 1 || def.measures.length > 0}>
+      {pdfPreview&&<ReportPdfPreview page={parsePageDefinition({...pdfBody().page,pdf:pdfLayout})} values={{}} letterheadId={letterheadId||null} builtinPortrait={letterheads.find(l=>l.id===letterheadId)?.isBuiltin} onClose={()=>setPdfPreview(false)} onApply={page=>{setPdfLayout(page.pdf);setPdfColumns(Object.fromEntries(page.widgets.map(w=>[w.id,w.style.columns])));setPdfPreview(false);}}/>}
       {step === 2 && (
         <div className="grid gap-4 xl:grid-cols-[minmax(340px,440px)_1fr]">
           <div className="pax-card space-y-5 p-4">
@@ -338,7 +345,7 @@ export default function ReportWizard({ datasets, letterheads, initial, onClose, 
                     <button type="button" className="pax-btn" disabled={(def.filters?.length ?? 0) >= 20} onClick={() => patch({ filters: [...(def.filters ?? []), { field: ds.dimensions[0].key, op: 'eq', value: '' }] })}>+ Filtre ekle</button>
                     <Help>Örn. Satıcı = Ahmet, Para birimi = USD. Değeri yazıp alandan çıkınca uygulanır.</Help>
                   </div>
-                  <CalcEditor calcs={def.calculated ?? []} measures={def.measures} onChange={(c) => patch({ calculated: c })} />
+                  <CalcEditor measureCatalog={ds.measures} calcs={def.calculated ?? []} measures={def.measures} onChange={(c) => patch({ calculated: c })} />
                   <RulesEditor rules={rules} onChange={setRules} columns={[...def.measures.map((m) => ({ key: m, label: ds.measures.find((x) => x.key === m)?.label ?? m })), ...(def.calculated ?? []).map((c) => ({ key: `c_${c.key}`, label: c.label }))]} />
                 </div>
               )}

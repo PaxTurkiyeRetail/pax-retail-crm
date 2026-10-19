@@ -187,6 +187,7 @@ export function compileReport(def: ReportDefinition, ctx: CompileContext): Compi
   let range: ResolvedRange | null = null;
   let shiftInterval: string | null = null;
   if (def.dateRange) range = resolveDateRange(def.dateRange, ctx.today);
+  if(['performance_comparison','actual_forecast'].includes(dataset.key)&&range){const end=new Date(`${range.to}T00:00:00Z`);end.setUTCDate(end.getUTCDate()+1);if(!range.from.endsWith('-01')||end.getUTCDate()!==1)fail('Karşılaştırma kaynağında tam ay aralıkları seçin; kaynak aylık veri içeriyor.');}
   if (ctx.period === 'compare') {
     if (!range) fail('Karşılaştırma için tarih aralığı gerekli');
     if (def.compare === 'none') fail('Karşılaştırma modu seçilmedi');

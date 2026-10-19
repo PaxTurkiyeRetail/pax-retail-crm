@@ -17,8 +17,8 @@ export function canUseReportBuilder(user: Pick<ReportUser, 'permissions'>) {
   return REPORT_BUILDER_READ.some((p) => user.permissions.includes(p));
 }
 
-export function canAccessDataset(user: Pick<ReportUser, 'permissions'>, dataset: Pick<DatasetDef, 'permission'>) {
-  return canUseReportBuilder(user) && user.permissions.includes(dataset.permission);
+export function canAccessDataset(user: Pick<ReportUser, 'permissions'>, dataset: Pick<DatasetDef, 'permission' | 'requiredPermissions'>) {
+  return canUseReportBuilder(user) && user.permissions.includes(dataset.permission) && (dataset.requiredPermissions ?? []).every(p => user.permissions.includes(p));
 }
 
 /**

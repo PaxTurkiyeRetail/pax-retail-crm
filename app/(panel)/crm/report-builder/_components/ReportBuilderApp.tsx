@@ -114,7 +114,7 @@ export default function ReportBuilderApp({ canDesign, canManageLetterheads }: { 
   }
   if (view.kind === 'page' || view.kind === 'studio') {
     return (
-      <ReportStudio liveView={view.kind==='page'&&view.live} key={view.kind === 'page' ? view.id : 'new-studio'} pageId={view.kind === 'page' ? view.id : undefined} datasets={datasets} letterheads={letterheads} canDesign={canDesign} onClose={back} onSaved={reload} />
+      <ReportStudio currentUserId={userId??undefined} liveView={view.kind==='page'&&view.live} key={view.kind === 'page' ? view.id : 'new-studio'} pageId={view.kind === 'page' ? view.id : undefined} datasets={datasets} letterheads={letterheads} canDesign={canDesign} onClose={back} onSaved={reload} />
     );
   }
   if (view.kind === 'letterheads' || view.kind === 'expert') {

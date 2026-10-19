@@ -8,6 +8,9 @@ export type ColorToken = (typeof COLOR_TOKENS)[number];
 
 export const conditionalRuleSchema = z.object({
   column: z.string().max(80),
+  enabled: z.boolean().optional(),
+  label: z.string().max(60).optional(),
+  compareColumn: z.string().max(80).optional(),
   op: z.enum(['gt', 'gte', 'lt', 'lte', 'eq', 'between']),
   value: z.number().finite(),
   value2: z.number().finite().optional(),

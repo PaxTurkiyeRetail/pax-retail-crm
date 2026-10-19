@@ -15,9 +15,11 @@ import { ReportDefinitionError, reportDefinitionSchema } from '@/lib/report-buil
 const TODAY = '2026-10-19';
 
 describe('departman (musteriler.is_kolu)', () => {
-  it('tüm datasetlerde Departman boyutu var', async () => {
+  it('müşteri kaynaklarında Departman var; Account hedeflerine müşteri departmanı uydurulmaz', async () => {
     const { DATASETS } = await import('@/lib/report-builder/datasets');
-    for (const ds of Object.values(DATASETS)) expect(ds.dimensions.department?.label, ds.key).toBe('Departman');
+    for (const ds of Object.values(DATASETS).filter(d=>d.key!=='performance_comparison')) expect(ds.dimensions.department?.label, ds.key).toBe('Departman');
+    expect(DATASETS.performance_comparison.dimensions.department).toBeUndefined();
+    expect(()=>compileReport(reportDefinitionSchema.parse({dataset:'performance_comparison',measures:['actual_quantity'],department:'Retail'}),{scope:{kind:'all'},today:TODAY})).toThrow();
   });
   it('department parametreyle derlenir, all filtre eklemez', () => {
     const base = { dataset: 'sales', measures: ['sale_count'] };

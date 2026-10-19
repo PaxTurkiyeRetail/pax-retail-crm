@@ -4,6 +4,7 @@
 //    tam genişlikte. "PDF'te gizle" atlanır, "yeni sayfada başlat" sayfa kırar.
 //  * Tablolar sayfa kırılımında başlık satırını tekrarlar. Bar/line/pie vektör çizilir.
 //  * Türkçe gömülü font (DejaVuSans; yoksa sistem Arial). Saf modül: DB bilmez.
+import { dataBarExtent } from './visual-format';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import fontkit from '@pdf-lib/fontkit';
@@ -11,7 +12,7 @@ import { PDFDocument, rgb, type PDFFont, type PDFPage, type RGB } from 'pdf-lib'
 import {
   isDataWidget, type ColorToken, type DataWidget, type LetterheadSettings, type PageDefinition, type PageWidget,
 } from '@/lib/report-builder/page-types';
-import { formatCell, pivot, resolvePivotColumn, matchConditionalRule as matchRule, PREV_SUFFIX, type ReportResult, type ResultRow } from '@/lib/report-builder/result';
+import { formatCell, pivot, resolvePivotColumn, matchConditionalRule as matchRule, resolveConditionalRule, PREV_SUFFIX, type ReportResult, type ResultRow } from '@/lib/report-builder/result';
 import type { ColumnMeta } from '@/lib/report-builder/types';
 
 export const MM = 72 / 25.4;
@@ -85,6 +86,8 @@ type Ctx = {
   pages: PDFPage[];
   decorate: (p: PDFPage) => void;
   accent: RGB;
+  fontSize?: number;
+  wordWrap?: boolean;
 };
 
 function fit(font: PDFFont, text: string, size: number, maxW: number): string {
@@ -94,18 +97,33 @@ function fit(font: PDFFont, text: string, size: number, maxW: number): string {
   return `${t}…`;
 }
 
-function wrap(font: PDFFont, text: string, size: number, maxW: number): string[] {
+export function wrapPdfText(font: Pick<PDFFont,'widthOfTextAtSize'>, text: string, size: number, maxW: number): string[] {
   const out: string[] = [];
   for (const para of text.split(/\r?\n/)) {
     let line = '';
     for (const word of para.split(/\s+/)) {
       const next = line ? `${line} ${word}` : word;
       if (font.widthOfTextAtSize(next, size) <= maxW) line = next;
-      else { if (line) out.push(line); line = fit(font, word, size, maxW); }
+      else {
+        if (line) out.push(line);
+        line='';
+        for(const character of word) {
+          if(line && font.widthOfTextAtSize(line+character,size)>maxW) {out.push(line);line='';}
+          line+=character;
+        }
+      }
     }
     out.push(line);
   }
   return out;
+}
+const wrap=wrapPdfText;
+export function pdfColumnWidths(total:number,weights:(number|undefined)[]) {
+  const n=weights.length;
+  if(!n)return [];
+  const defaults=weights.map((v,i)=>v&&v>0?v:i===0&&n>1?2:1);
+  const sum=defaults.reduce((a,b)=>a+b,0);
+  return defaults.map(v=>total*v/sum);
 }
 
 function newPage(c: Ctx) {
@@ -128,65 +146,93 @@ function drawTitle(c: Ctx, w: PageWidget) {
 
 function visibleColumns(w: DataWidget, result: ReportResult): Array<ColumnMeta & { label: string }> {
   const settings = new Map(w.style.columns.map((s) => [s.key, s]));
-  const ordered = w.style.columns.length
-    ? [...result.columns].sort((a, b) => {
-        const ia = w.style.columns.findIndex((s) => s.key === a.key);
-        const ib = w.style.columns.findIndex((s) => s.key === b.key);
-        return (ia < 0 ? 999 : ia) - (ib < 0 ? 999 : ib);
-      })
-    : result.columns;
-  return ordered.filter((col) => !settings.get(col.key)?.hidden).map((col) => {
+  return result.columns.filter((col) => !settings.get(col.key)?.hidden).map((col) => {
     const s = settings.get(col.key);
     const fmt = s?.format && s.format !== 'compact' ? s.format : col.format;
     return { ...col, label: s?.label || col.label, format: fmt };
   });
 }
 
-function drawTable(c: Ctx, headers: string[], rows: string[][], opts: { numeric: boolean[]; fill?: (r: number, col: number) => RGB | null; colorText?: (r: number, col: number) => RGB | null; density: string }) {
-  const fs = opts.density === 'compact' ? 7 : opts.density === 'comfortable' ? 9 : 8;
-  const rowH = fs + (opts.density === 'compact' ? 5 : 8);
+function drawTable(c: Ctx, headers: string[], rows: string[][], opts: { numeric: boolean[]; widths?:(number|undefined)[]; align?:('left'|'center'|'right'|undefined)[]; wordWrap?:(boolean|undefined)[]; fill?: (r: number, col: number) => RGB | null; colorText?: (r: number, col: number) => RGB | null; bar?: (r:number,col:number)=>{start:number;width:number;color:RGB}|null; density: string }) {
+  const fs = c.fontSize ?? (opts.density === 'compact' ? 7 : opts.density === 'comfortable' ? 9 : 8);
+  const lineH=fs*1.25;
+  const pad=opts.density==='compact'?3:4;
   const W = width(c);
-  const n = Math.max(1, headers.length);
-  // İlk sütun (etiket) daha geniş.
-  const first = n > 1 ? Math.min(W * 0.34, W / n * 2) : W;
-  const rest = n > 1 ? (W - first) / (n - 1) : 0;
-  const colX = (i: number) => c.box.left + (i === 0 ? 0 : first + (i - 1) * rest);
-  const colW = (i: number) => (i === 0 ? first : rest);
-  const header = () => {
-    c.page.drawRectangle({ x: c.box.left, y: c.y - rowH, width: W, height: rowH, color: HEAD_BG });
-    headers.forEach((h, i) => {
-      const t = fit(c.bold, h, fs, colW(i) - 6);
-      const tw = c.bold.widthOfTextAtSize(t, fs);
-      c.page.drawText(t, { x: opts.numeric[i] ? colX(i) + colW(i) - 3 - tw : colX(i) + 3, y: c.y - rowH + (rowH - fs) / 2 + 1, size: fs, font: c.bold, color: TEXT });
-    });
-    c.y -= rowH;
+  if(!headers.length)return;
+  const widths=pdfColumnWidths(W,headers.map((_,i)=>opts.widths?.[i]));
+  if(widths.some(w=>w<fs+6)) {
+    const capacity=Math.max(2,Math.floor(W/(fs+12)));
+    if(headers.length>capacity) {
+      const firstNumeric=opts.numeric.findIndex(Boolean);
+      const leading=Math.max(0,Math.min(firstNumeric<0?1:firstNumeric,Math.floor(capacity/2)));
+      const chunkSize=capacity-leading;
+      for(let start=leading;start<headers.length;start+=chunkSize){
+        const indices=[...Array.from({length:leading},(_,i)=>i),...Array.from({length:Math.min(chunkSize,headers.length-start)},(_,i)=>start+i)];
+        if(start>leading)newPage(c);
+        note(c,`Geniş tablo · sütunlar ${start+1}–${Math.min(headers.length,start+chunkSize)} / ${headers.length}`);
+        drawTable(c,indices.map(i=>headers[i]),rows.map(row=>indices.map(i=>row[i])),{...opts,numeric:indices.map(i=>opts.numeric[i]),widths:indices.map(i=>opts.widths?.[i]),align:indices.map(i=>opts.align?.[i]),wordWrap:indices.map(i=>opts.wordWrap?.[i]),fill:opts.fill?(r,i)=>opts.fill!(r,indices[i]):undefined,colorText:opts.colorText?(r,i)=>opts.colorText!(r,indices[i]):undefined,bar:opts.bar?(r,i)=>opts.bar!(r,indices[i]):undefined});
+      }
+      return;
+    }
+    throw new Error('PDF sütunu metin için çok dar; genişliği artırın veya sütunu gizleyin');
+  }
+  const colX = (i: number) => c.box.left+widths.slice(0,i).reduce((a,b)=>a+b,0);
+  const colW = (i: number) => widths[i];
+  const lines=(text:string,i:number,font:PDFFont)=> (opts.wordWrap?.[i]??c.wordWrap??true)?wrap(font,text,fs,Math.max(1,colW(i)-6)):[fit(font,text,fs,Math.max(1,colW(i)-6))];
+  const heads=headers.map((h,i)=>wrap(c.bold,h,fs,Math.max(1,colW(i)-6)));
+  const headerH=Math.max(...heads.map(h=>h.length))*lineH+pad*2;
+  const drawLine=(text:string,i:number,y:number,font:PDFFont,color:RGB)=>{
+    const align=opts.align?.[i]??(opts.numeric[i]?'right':'left');
+    const tw=font.widthOfTextAtSize(text,fs);
+    const x=align==='right'?colX(i)+colW(i)-3-tw:align==='center'?colX(i)+(colW(i)-tw)/2:colX(i)+3;
+    c.page.drawText(text,{x,y,size:fs,font,color});
   };
-  ensure(c, rowH * 3);
+  const header = () => {
+    c.page.drawRectangle({ x: c.box.left, y: c.y-headerH, width:W,height:headerH,color:HEAD_BG });
+    heads.forEach((cells,i)=>cells.forEach((t,j)=>drawLine(t,i,c.y-pad-fs-j*lineH,c.bold,TEXT)));
+    c.y-=headerH;
+  };
+  if(headerH+lineH+pad*2>c.box.top-c.box.bottom)throw new Error('PDF sütunları çok dar; sütun sayısını azaltın veya yatay yön seçin');
+  ensure(c, headerH+lineH+pad*2);
   header();
   rows.forEach((row, r) => {
-    if (c.y - rowH < c.box.bottom) { newPage(c); header(); }
-    row.forEach((cell, i) => {
-      const bg = opts.fill?.(r, i);
-      if (bg) c.page.drawRectangle({ x: colX(i), y: c.y - rowH, width: colW(i), height: rowH, color: bg });
-      const font = i === 0 && r === rows.length - 1 && row[0] === 'Toplam' ? c.bold : c.regular;
-      const t = fit(font, cell, fs, colW(i) - 6);
-      const tw = font.widthOfTextAtSize(t, fs);
-      c.page.drawText(t, { x: opts.numeric[i] ? colX(i) + colW(i) - 3 - tw : colX(i) + 3, y: c.y - rowH + (rowH - fs) / 2 + 1, size: fs, font, color: opts.colorText?.(r, i) ?? TEXT });
-    });
-    c.page.drawLine({ start: { x: c.box.left, y: c.y - rowH }, end: { x: c.box.right, y: c.y - rowH }, thickness: 0.4, color: LINE });
-    c.y -= rowH;
+    const fonts=row.map((_,i)=>i===0&&r===rows.length-1&&row[0]==='Toplam'?c.bold:c.regular);
+    const cells=row.map((text,i)=>lines(text,i,fonts[i]));
+    const maxLines=Math.max(1,...cells.map(v=>v.length));
+    let offset=0;
+    while(offset<maxLines) {
+      const fullHeight=(maxLines-offset)*lineH+pad*2;
+      if(c.y-fullHeight<c.box.bottom && c.y<c.box.top-headerH-0.01) {newPage(c);header();}
+      const capacity=Math.max(1,Math.floor((c.y-c.box.bottom-pad*2)/lineH));
+      const count=Math.min(maxLines-offset,capacity);
+      const rowH=count*lineH+pad*2;
+      cells.forEach((cell,i)=>{
+        const bg=opts.fill?.(r,i);
+        if(bg)c.page.drawRectangle({x:colX(i),y:c.y-rowH,width:colW(i),height:rowH,color:bg});
+        const bar=opts.bar?.(r,i);if(bar&&bar.width>0)c.page.drawRectangle({x:colX(i)+colW(i)*bar.start,y:c.y-rowH+1,width:colW(i)*bar.width,height:Math.max(1,rowH-2),color:tint(bar.color,.18)});
+        cell.slice(offset,offset+count).forEach((text,j)=>drawLine(text,i,c.y-pad-fs-j*lineH,fonts[i],opts.colorText?.(r,i)??TEXT));
+      });
+      c.page.drawLine({start:{x:c.box.left,y:c.y-rowH},end:{x:c.box.right,y:c.y-rowH},thickness:0.4,color:LINE});
+      c.y-=rowH;offset+=count;
+      if(offset<maxLines){newPage(c);header();}
+    }
   });
   c.y -= 10;
 }
 
 function renderFlatTable(c: Ctx, w: DataWidget, result: ReportResult) {
   const cols = visibleColumns(w, result);
-  const rows = result.rows.map((r) => cols.map((col) => formatCell(col, r[col.key])));
+  const rows = result.rows.map((r) => cols.map((col) => {const rule=resolveConditionalRule(w.style.conditional,col,r[col.key],result.columns,r);return formatCell(col,r[col.key])+(rule?.label?' · '+rule.label:'');}));
   drawTable(c, cols.map((col) => col.label), rows, {
     numeric: cols.map((col) => col.type === 'number'),
     density: w.style.density,
+    widths:cols.map(col=>w.style.columns.find(s=>s.key===col.key)?.width),
+    align:cols.map(col=>w.style.columns.find(s=>s.key===col.key)?.align),
+    wordWrap:cols.map(col=>w.style.columns.find(s=>s.key===col.key)?.wordWrap),
+    bar:(r,i)=>{const col=cols[i];if(!w.style.columns.find(setting=>setting.key===col.key)?.dataBar)return null;const extent=dataBarExtent(result.rows.map(row=>row[col.key]),result.rows[r][col.key]);return extent?{...extent,color:TOKEN_RGB[w.style.accent??'primary']}:null;},
+    fill:(r,i)=>{const tok=matchRule(w.style.conditional,cols[i],result.rows[r][cols[i].key],result.columns,result.rows[r]);return tok?tint(TOKEN_RGB[tok],.12):null;},
     colorText: (r, i) => {
-      const tok = matchRule(w.style.conditional, cols[i], result.rows[r][cols[i].key], result.columns);
+      const tok = matchRule(w.style.conditional, cols[i], result.rows[r][cols[i].key], result.columns,result.rows[r]);
       return tok ? TOKEN_RGB[tok] : null;
     },
   });
@@ -212,10 +258,11 @@ function renderPivot(c: Ctx, w: DataWidget, result: ReportResult, forecast?: Rep
   }
   const heads = [...pt.rowDims.map((d) => d.label), ...pt.columnValues.map((v) => formatCell(pivotCol, v)), 'Toplam'];
   const kind: Array<Array<'actual' | 'forecast' | null>> = [];
-  const rows = pt.rows.map((row) => {
+  const cellRule=(ri:number,ci:number)=>{const pr=pt.rows[ri];if(!pr||ci<0||ci>=pt.columnValues.length)return null;const candidates=result.rows.filter(row=>String(row[pivotCol.key]??'—')===pt.columnValues[ci]&&pt.rowDims.every((d,j)=>String(row[d.key]??'—')===pr.key[j]));return resolveConditionalRule(w.style.conditional,measure!,pr.cells[ci],result.columns,candidates.length===1?candidates[0]:undefined);};
+  const rows = pt.rows.map((row,ri) => {
     const k: Array<'actual' | 'forecast' | null> = row.key.map(() => null);
     const cells = row.cells.map((v, i) => {
-      if (v !== null) { k.push('actual'); return formatCell(measure!, v); }
+      if (v !== null) { k.push('actual'); const rule=cellRule(ri,i);return formatCell(measure!,v)+(rule?.label?' · '+rule.label:''); }
       const f = fc?.get(`${row.key.join('|')}::${pt.columnValues[i]}`);
       if (f !== undefined) { k.push('forecast'); return formatCell(measure!, f); }
       k.push(null);
@@ -232,9 +279,11 @@ function renderPivot(c: Ctx, w: DataWidget, result: ReportResult, forecast?: Rep
   drawTable(c, heads, rows, {
     numeric: heads.map((_, i) => i >= dimN),
     density: w.style.density,
-    fill: w.type === 'heatmap'
-      ? (r, i) => (kind[r]?.[i] === 'actual' ? tint(TOKEN_RGB.success, 0.22) : kind[r]?.[i] === 'forecast' ? tint(TOKEN_RGB.warning, 0.3) : null)
-      : undefined,
+    widths:heads.map((_,i)=>w.style.columns.find(s=>s.key===(i<dimN?pt.rowDims[i].key:measure!.key))?.width),
+    align:heads.map((_,i)=>w.style.columns.find(s=>s.key===(i<dimN?pt.rowDims[i].key:measure!.key))?.align),
+    wordWrap:heads.map((_,i)=>w.style.columns.find(s=>s.key===(i<dimN?pt.rowDims[i].key:measure!.key))?.wordWrap),
+    colorText:(r,i)=>{const rule=kind[r]?.[i]==='actual'?cellRule(r,i-dimN):null;return rule?TOKEN_RGB[rule.color]:null;},
+    fill:(r,i)=>{const rule=kind[r]?.[i]==='actual'?cellRule(r,i-dimN):null;if(rule)return tint(TOKEN_RGB[rule.color],.12);return w.type==='heatmap'?(kind[r]?.[i]==='actual'?tint(TOKEN_RGB.success,.22):kind[r]?.[i]==='forecast'?tint(TOKEN_RGB.warning,.3):null):null;} ,
   });
   if (w.type === 'heatmap') note(c, fc ? 'Yeşil: gerçekleşen · Sarı: tahmin' : 'Yeşil: gerçekleşen');
 }
@@ -259,7 +308,8 @@ function renderKpi(c: Ctx, w: DataWidget, result: ReportResult) {
     c.page.drawRectangle({ x, y: c.y - h, width: bw, height: h, borderColor: LINE, borderWidth: 0.6, color: rgb(1, 1, 1) });
     c.page.drawRectangle({ x, y: c.y - h, width: 2.5, height: h, color: accent });
     c.page.drawText(fit(c.regular, col.label, 7.5, bw - 12), { x: x + 8, y: c.y - 13, size: 7.5, font: c.regular, color: MUTED });
-    const tok = matchRule(w.style.conditional, col, row[col.key], result.columns);
+    const tok = matchRule(w.style.conditional, col, row[col.key], result.columns,row);
+    const label=resolveConditionalRule(w.style.conditional,col,row[col.key],result.columns,row)?.label;if(label)c.page.drawText(fit(c.regular,label,6.5,bw-12),{x:x+8,y:c.y-42,size:6.5,font:c.regular,color:TEXT});
     c.page.drawText(fit(c.bold, formatCell(col, row[col.key]), 15, bw - 12), { x: x + 8, y: c.y - 32, size: 15, font: c.bold, color: tok ? TOKEN_RGB[tok] : TEXT });
     const prev = row[col.key + PREV_SUFFIX];
     const cur = row[col.key];
@@ -382,7 +432,9 @@ export async function renderPagePdf(input: RenderPdfInput): Promise<Uint8Array> 
   const lh = input.letterhead?.settings;
   const orientation = input.letterhead?.lockOrientation ? lh?.orientation ?? 'portrait' : input.page.pdf.orientation ?? lh?.orientation ?? input.orientation ?? 'portrait';
   const size = orientation === 'landscape' ? { w: A4.h, h: A4.w } : { ...A4 };
-  const margins = lh?.margins ?? { top: 15, right: 15, bottom: 15, left: 15 };
+  const requested=input.page.pdf.marginsMm;
+  const baseMargins=lh?.margins ?? {top:15,right:15,bottom:15,left:15};
+  const margins=requested?(lh?{top:Math.max(baseMargins.top,requested.top),right:Math.max(baseMargins.right,requested.right),bottom:Math.max(baseMargins.bottom,requested.bottom),left:Math.max(baseMargins.left,requested.left)}:requested):baseMargins;
   const safe = lh?.safeArea ?? { top: 0, bottom: 0 };
   const showTitle = lh?.showTitle ?? true;
   const showDate = lh?.showDate ?? true;
@@ -422,6 +474,8 @@ export async function renderPagePdf(input: RenderPdfInput): Promise<Uint8Array> 
   const c: Ctx = {
     doc, regular, bold, size, box, page: undefined as unknown as PDFPage, y: box.top, pages: [], decorate,
     accent: TOKEN_RGB[input.page.theme.accent],
+    fontSize:input.page.pdf.fontSize,
+    wordWrap:input.page.pdf.wordWrap,
   };
   newPage(c);
 
@@ -436,9 +490,9 @@ export async function renderPagePdf(input: RenderPdfInput): Promise<Uint8Array> 
 
   for (const w of pdfWidgetOrder(input.page)) {
     if (w.pdf.pageBreakBefore && c.y < box.top) newPage(c);
-    if (w.type === 'text') { renderText(c, w); continue; }
+    if (w.type === 'text') { if(!(showTitle&&input.page.pdf.hideRepeatedTitle!==false&&w.variant==='heading'&&w.text.trim()===input.page.title.trim()))renderText(c, w); continue; }
     if (!isDataWidget(w)) continue;
-    drawTitle(c, w);
+    if(!(showTitle && input.page.pdf.hideRepeatedTitle!==false && w.title.trim()===input.page.title.trim()))drawTitle(c, w);
     const d = input.data[w.id];
     if (!d || d.error || !d.result) { note(c, d?.error ? `Hata: ${d.error}` : 'Veri yok'); continue; }
     switch (w.type) {

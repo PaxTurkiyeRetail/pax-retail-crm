@@ -3,6 +3,7 @@
 // Tanım istemcide JSON; SQL sunucuda derlenir (istemci SQL göndermez).
 import { useEffect, useMemo, useState } from 'react';
 import { changeFilterOperator, definitionFilterIssue, filterInputIssue, normalizeDefinitionFilters } from '@/lib/report-builder/filter-input';
+import { calculationPreset, type CalculationPreset } from '@/lib/report-builder/calculation-presets';
 import type { DatasetCatalogEntry } from '@/lib/report-builder/datasets';
 import type { ReportResult } from '@/lib/report-builder/result';
 import {
@@ -57,7 +58,7 @@ export default function QueryBuilder({ datasets, initial, onApply, onCancel }: P
     });
     setResult(null);
   };
-  const toggleMeasure = (k: string) => patch({ measures: def.measures.includes(k) ? def.measures.filter((m) => m !== k) : [...def.measures, k].slice(0, 12) });
+  const toggleMeasure=(k:string)=>{const affected=(def.calculated??[]).filter(c=>(c.formula?.includes('['+k+']'))||JSON.stringify(c.expr??{}).includes(JSON.stringify(k)));if(def.measures.includes(k)&&affected.length){setIssues(['Bu gösterge şu hesaplarda kullanılıyor: '+affected.map(c=>c.label).join(', ')+'. Önce bu hesapları değiştirin veya kaldırın.']);return;}patch({measures:def.measures.includes(k)?def.measures.filter(m=>m!==k):[...def.measures,k].slice(0,12)});};
 
   const run = async () => {
     const issue = definitionFilterIssue(def);
@@ -175,7 +176,7 @@ export default function QueryBuilder({ datasets, initial, onApply, onCancel }: P
               else patch({ dateRange: { type: 'relative', preset: v as never, field: def.dateRange?.field } });
             }}>
               <option value="">Tümü</option>
-              {RELATIVE_PRESETS.map((p) => <option key={p} value={p}>{PRESET_LABEL[p]}</option>)}
+              {RELATIVE_PRESETS.filter(p=>!['performance_comparison','actual_forecast'].includes(ds.key)||['this_month','last_month','this_quarter','last_quarter','this_year','last_year'].includes(p)).map((p) => <option key={p} value={p}>{PRESET_LABEL[p]}</option>)}
               <option value="abs">Özel aralık…</option>
             </select>
           </label>
@@ -213,7 +214,7 @@ export default function QueryBuilder({ datasets, initial, onApply, onCancel }: P
           <label>Satır limiti<input type="number" min={1} max={5000} className="pax-input mt-1 w-full" value={def.limit ?? 500} onChange={(e) => patch({ limit: Math.max(1, Math.min(5000, Number(e.target.value) || 500)) })} /></label>
         </div>
 
-        <CalcEditor calcs={def.calculated ?? []} measures={def.measures} onChange={(c) => patch({ calculated: c })} />
+        <CalcEditor calcs={def.calculated ?? []} measures={def.measures} measureCatalog={ds.measures} onChange={(c) => patch({ calculated: c })} />
 
         <fieldset className="space-y-2"><legend className="font-medium">Sıralama ve öncelik</legend><p className="text-xs text-[var(--muted)]">İlk satır ana sıralamadır; eşit değerlerde sonraki satır uygulanır.</p>{(def.sort ?? []).map((sort, index) => <div className="flex gap-1" key={index}><select aria-label={`Sıralama alanı ${index + 1}`} className="pax-input min-w-0 flex-1" value={sort.field} onChange={(event) => patch({ sort: def.sort!.map((item, i) => i === index ? { ...item, field: event.target.value } : item) })}>{sortFields.map((field) => <option key={field.key} value={field.key}>{field.label}</option>)}</select><select aria-label={`Sıralama yönü ${index + 1}`} className="pax-input" value={sort.dir} onChange={(event) => patch({ sort: def.sort!.map((item, i) => i === index ? { ...item, dir: event.target.value as 'asc' | 'desc' } : item) })}><option value="asc">Artan</option><option value="desc">Azalan</option></select><button type="button" className="pax-btn" aria-label={`Sıralama ${index + 1} kaldır`} onClick={() => patch({ sort: def.sort!.filter((_, i) => i !== index) })}>×</button></div>)}<button type="button" className="pax-btn" disabled={!sortFields.length || (def.sort?.length ?? 0) >= 4} onClick={() => patch({ sort: [...(def.sort ?? []), { field: sortFields.find((field) => !def.sort?.some((sort) => sort.field === field.key))?.key ?? sortFields[0].key, dir: 'desc' }] })}>+ Sıralama ekle</button></fieldset>
 
@@ -302,29 +303,60 @@ export function FilterRow({ ds, filter, onChange, onRemove }: { ds: DatasetCatal
   );
 }
 
-export function CalcEditor({ calcs, measures, onChange }: { calcs: Calc[]; measures: string[]; onChange: (c: Calc[]) => void }) {
+export function CalcEditor({ calcs, measures, measureCatalog = [], onChange }: { calcs: Calc[]; measures: string[]; measureCatalog?: DatasetCatalogEntry['measures']; onChange: (c: Calc[]) => void }) {
+  const [preset, setPreset] = useState<CalculationPreset>('average');
+  const [numerator, setNumerator] = useState('');
+  const [denominator, setDenominator] = useState('');
+  const selected = measures.map(key => ({ key, label: measureCatalog.find(m => m.key === key)?.label ?? key }));
+  const a = selected.find(m => m.key === numerator) ?? selected[0];
+  const b = selected.find(m => m.key === denominator) ?? selected[1] ?? selected[0];
+  const nextKey = (base: string) => {
+    const stem = base.slice(0, 56);
+    let key = stem; let suffix = 2;
+    while (calcs.some(c => c.key === key) || measures.includes(key)) key = `${stem}_${suffix++}`;
+    return key;
+  };
+  const addPreset = () => {
+    if (!a || !b || calcs.length >= 6) return;
+    onChange([...calcs, calculationPreset(preset, a, b, [...calcs.map(c => c.key), ...measures])]);
+  };
   return (
     <details>
-      <summary className="cursor-pointer font-medium">Hesaplanmış alanlar ({calcs.length})</summary>
-      <p className="mt-1 text-xs text-[var(--muted)]">
-        Formül: <code>[ölçü]</code>, + − × ÷, IF, ROUND, DIV, PCT, GROWTH, SHARE, RANK, RUNNING_SUM, SUM/AVG/MIN/MAX. Seçili ölçüler: {measures.join(', ') || '—'}
-      </p>
+      <summary className="cursor-pointer font-medium">Hesaplanmış alanlar ({calcs.length} / 6)</summary>
+      <p className="mt-2 text-xs text-[var(--muted)]">İki gösterge seçerek ortalama, fark veya yüzde hesaplayın.</p>
+      <div className={styles.calcPreset}>
+        <p className="text-xs text-[var(--muted)]">Ortalama fiyat için tutarı ve adedi aynı para birimiyle filtreleyin; USD tutarını tüm dövizlerdeki adede bölmek doğru birim fiyatı vermez.</p><label>Hesap türü<select aria-label="Hesap türü" value={preset} onChange={e => setPreset(e.target.value as typeof preset)}><option value="average">Ortalama (A ÷ B)</option><option value="difference">Fark (A − B)</option><option value="percentage">Yüzde (A ÷ B × 100)</option></select></label>
+        <label>{preset === 'difference' ? 'İlk gösterge (A)' : 'Pay (A)'}<select aria-label="Hesap ilk göstergesi" value={a?.key ?? ''} onChange={e => setNumerator(e.target.value)}>{!selected.length && <option value="">Önce gösterge seçin</option>}{selected.map(m => <option key={m.key} value={m.key}>{m.label}</option>)}</select></label>
+        <label>{preset === 'difference' ? 'Çıkarılacak gösterge (B)' : 'Bölen (B)'}<select aria-label="Hesap ikinci göstergesi" value={b?.key ?? ''} onChange={e => setDenominator(e.target.value)}>{!selected.length && <option value="">Önce gösterge seçin</option>}{selected.map(m => <option key={m.key} value={m.key}>{m.label}</option>)}</select></label>
+        {a && b && <p className={styles.calcSummary} aria-live="polite">{calculationPreset(preset, a, b).label}</p>}
+        <button type="button" className="pax-btn" disabled={!a || !b || calcs.length >= 6} onClick={addPreset}>Hesabı ekle</button>
+      </div>
+      <p className="mb-2 text-xs text-[var(--muted)]">Bölen sıfırsa sonuç boş gösterilir. Hesaplar seçtiğiniz gruplardaki gösterge sonuçlarına uygulanır.</p>
       <div className="mt-1 space-y-2">
         {calcs.map((c, i) => (
           <div key={i} className="space-y-1 rounded-md border p-2" style={{ borderColor: 'var(--border)' }}>
-            <div className="flex gap-1">
-              <input aria-label="Anahtar" className="pax-input w-28" value={c.key} onChange={(e) => onChange(calcs.map((x, j) => (j === i ? { ...x, key: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '') } : x)))} />
-              <input aria-label="Etiket" className="pax-input min-w-0 flex-1" value={c.label} onChange={(e) => onChange(calcs.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))} />
-              <select aria-label="Format" className="pax-input" value={c.format ?? 'number'} onChange={(e) => onChange(calcs.map((x, j) => (j === i ? { ...x, format: e.target.value as never } : x)))}>
+            <div className="flex flex-wrap gap-1">
+              <input aria-label="Hesap adı" className="pax-input min-w-0 flex-1" maxLength={80} value={c.label} onChange={e => onChange(calcs.map((x, j) => j === i ? { ...x, label: e.target.value } : x))} />
+              <select aria-label="Format" className="pax-input" value={c.format ?? 'number'} onChange={e => onChange(calcs.map((x, j) => j === i ? { ...x, format: e.target.value as never } : x))}>
                 <option value="number">Sayı</option><option value="money">Para</option><option value="percent">Yüzde</option>
               </select>
               <button type="button" aria-label="Alanı kaldır" className="pax-btn px-2" onClick={() => onChange(calcs.filter((_, j) => j !== i))}>✕</button>
             </div>
-            <input aria-label="Formül" className="pax-input w-full font-mono text-xs" placeholder="DIV([amount_usd], [sale_count])" value={c.formula ?? ''} onChange={(e) => onChange(calcs.map((x, j) => (j === i ? { key: x.key, label: x.label, format: x.format, formula: e.target.value } : x)))} />
+            <details className={styles.calcAdvanced}>
+              <summary>Gelişmiş formülü düzenle</summary>
+              <label className="block">Teknik anahtar<input aria-label="Anahtar" className="pax-input w-full" value={c.key} onChange={e => onChange(calcs.map((x, j) => j === i ? { ...x, key: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '') } : x))} /></label>
+              {Boolean(c.expr) && <p className="text-xs text-[var(--muted)]">Kayıtlı ifade korunuyor. Formül yazarsanız bu ifadenin yerini alır.</p>}
+              <input aria-label="Formül" className="pax-input w-full font-mono text-xs" placeholder="DIV([amount_usd], [sale_count])" value={c.formula ?? ''} onChange={e => onChange(calcs.map((x, j) => j === i ? { key: x.key, label: x.label, format: x.format, formula: e.target.value } : x))} />
+            </details>
           </div>
         ))}
-        <button type="button" className="pax-btn" disabled={calcs.length >= 6} onClick={() => onChange([...calcs, { key: `calc${calcs.length + 1}`, label: 'Hesaplanan', formula: measures[0] ? `[${measures[0]}]` : '0' }])}>+ Alan</button>
       </div>
+      <details className={styles.calcAdvanced}>
+        <summary>Gelişmiş hesap ve alan rehberi</summary>
+        <p className="mt-2 text-xs text-[var(--muted)]">Formül: [alan], + − × ÷, IF, ROUND, DIV, PCT, GROWTH, SHARE, RANK, RUNNING_SUM, SUM/AVG/MIN/MAX. DIV ve PCT sıfıra bölmede boş sonuç döndürür.</p>
+        <ul className="my-2 space-y-1 text-xs">{selected.map(m => <li key={m.key}>{m.label} → <code>[{m.key}]</code></li>)}</ul>
+        <button type="button" className="pax-btn" disabled={!selected.length || calcs.length >= 6} onClick={() => onChange([...calcs, { key: nextKey('custom_calculation'), label: 'Özel hesap', formula: a ? `[${a.key}]` : '0' }])}>+ Özel formül</button>
+      </details>
     </details>
   );
 }
