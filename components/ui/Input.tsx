@@ -4,7 +4,7 @@ import { cn } from './cn';
 // Legacy premium-ui.css input/select kuralları katmansız + !important olduğu için
 // çakışan özellikler önemli (!) işaretli: katmanlı !important, katmansız !important'ı yener.
 const field =
-  'box-border h-10 min-w-0 rounded-[3px]! border border-solid border-border! bg-surface! px-2.5 text-base text-text shadow-none! sm:text-[13px] placeholder:text-text-4 focus:border-accent! focus:shadow-[0_0_0_2px_var(--accent-soft)]! focus:outline-none sm:h-8';
+  'box-border h-10 min-w-0 rounded-lg! border border-solid border-border! bg-surface! px-3 text-base text-text shadow-none! sm:text-[13px] placeholder:text-text-4 focus:border-accent! focus:shadow-[0_0_0_3px_var(--accent-soft)]! focus:outline-none sm:h-8';
 
 export function Input({ className, ...p }: InputHTMLAttributes<HTMLInputElement>) {
   return <input className={cn(field, className)} {...p} />;

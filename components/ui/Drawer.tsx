@@ -24,7 +24,7 @@ export function Drawer({ open, onClose, side = 'left', title, children }: Drawer
           'absolute flex flex-col border-solid border-border bg-surface text-text',
           side === 'left' && 'inset-y-0 left-0 w-[min(300px,85vw)] border-0 border-r',
           side === 'right' && 'inset-y-0 right-0 w-[min(420px,100vw)] border-0 border-l',
-          side === 'center' && 'top-1/2 left-1/2 max-h-[85vh] w-[min(560px,calc(100vw-32px))] -translate-1/2 rounded-[4px] border',
+          side === 'center' && 'top-1/2 left-1/2 max-h-[85vh] w-[min(560px,calc(100vw-32px))] -translate-1/2 rounded-2xl border shadow-ds-lg',
         )}
       >
         {title && <div className="border-0 border-b border-solid border-border px-4 py-2.5 text-[13px] font-semibold">{title}</div>}

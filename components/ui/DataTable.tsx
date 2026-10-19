@@ -1,6 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { Button } from './Button';
 import { Section } from './Section';
+import { Badge, toneFor, type Tone } from './Badge';
 import { cn } from './cn';
 
 export type Column<T> = {
@@ -11,6 +12,8 @@ export type Column<T> = {
   num?: boolean;
   /** Hücreye ek sınıf (ör. durum tonu) */
   cellClass?: (r: T) => string | undefined;
+  /** true: değer metninden otomatik tonlu rozet; fonksiyon: tonu sen ver */
+  badge?: boolean | ((r: T) => Tone);
 };
 
 const nf = new Intl.NumberFormat('tr-TR');
@@ -27,8 +30,8 @@ export function downloadCsv<T>(name: string, cols: Column<T>[], rows: T[]) {
 }
 
 export const th =
-  'sticky top-0 z-[1] border-0 border-b border-solid border-border bg-surface-2 px-2.5 py-1.5 text-left text-[11px] font-medium tracking-wide whitespace-nowrap text-text-3 uppercase';
-export const td = 'border-0 border-b border-solid border-border px-2.5 py-1 whitespace-nowrap';
+  'ds-thead sticky top-0 z-[1] border-0 border-b border-solid border-border px-3 py-2 text-left text-[11px] font-bold tracking-wider whitespace-nowrap text-thead-text uppercase';
+export const td = 'border-0 border-b border-solid border-border/70 px-3 py-1.5 whitespace-nowrap';
 export const numCls = 'text-right tabular-nums';
 
 /** Sıralanabilir, CSV'li, sticky başlıklı, kendi içinde kayan tablo. */
@@ -76,7 +79,7 @@ export function DataTable<T>({
               <th
                 key={c.key}
                 aria-sort={sort?.key === c.key ? (sort.dir === 1 ? 'ascending' : 'descending') : undefined}
-                className={cn(th, c.num && 'text-right', sortable && 'cursor-pointer select-none hover:text-text')}
+                className={cn(th, c.num && 'text-right', sortable && 'cursor-pointer select-none hover:text-accent')}
                 onClick={
                   sortable
                     ? () => setSort((s) => (s?.key === c.key ? { key: c.key, dir: s.dir === 1 ? -1 : 1 } : { key: c.key, dir: c.num ? -1 : 1 }))
@@ -96,12 +99,12 @@ export function DataTable<T>({
             </tr>
           ) : sorted.length ? (
             sorted.map((r, i) => (
-              <tr key={i} className="hover:bg-row-hover">
+              <tr key={i} className="transition-colors even:bg-row-zebra hover:bg-row-hover">
                 {columns.map((c) => {
                   const v = c.value(r);
                   return (
                     <td key={c.key} className={cn(td, c.num && numCls, c.cellClass?.(r))}>
-                      {c.render ? c.render(r) : typeof v === 'number' ? nf.format(v) : v ?? '–'}
+                      {c.render ? c.render(r) : c.badge && v != null && v !== '' ? <Badge tone={typeof c.badge === 'function' ? c.badge(r) : toneFor(String(v))}>{v}</Badge> : typeof v === 'number' ? nf.format(v) : v ?? '–'}
                     </td>
                   );
                 })}
@@ -118,7 +121,7 @@ export function DataTable<T>({
     </div>
   );
 
-  if (!title) return table;
+  if (!title) return <div className="min-w-0 overflow-hidden rounded-xl border border-solid border-border bg-surface shadow-ds">{table}</div>;
   return (
     <Section
       title={title}

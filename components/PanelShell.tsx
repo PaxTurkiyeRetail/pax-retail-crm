@@ -619,9 +619,12 @@ export default function PanelShell({
         aria-current={active ? "page" : undefined}
       >
         {!sub && (
-          <span className="flex size-4 shrink-0 items-center justify-center">
+          <span className={cx(navIconWrap, ICON_TONE[item.iconKey], active && "bg-white/15 text-white")}>
             <NavIcon k={item.iconKey} />
           </span>
+        )}
+        {sub && !collapsed && (
+          <i className={cx("inline-block size-1.5 shrink-0 rounded-full", active ? "bg-nav-active-bar shadow-[0_0_0_3px_rgba(17,161,242,.25)]" : "bg-nav-label")} aria-hidden="true" />
         )}
         {sub && collapsed && <span className="hidden size-4 shrink-0 items-center justify-center text-[10px] lg:flex">•</span>}
         <span className={cx("truncate", sub && collapsed && "lg:hidden")}>{item.label}</span>
@@ -630,14 +633,17 @@ export default function PanelShell({
   };
 
   const sectionLabel = (title: string) => (
-    <div className={cx("px-2.5 pt-4 pb-1 text-[11px] font-medium tracking-wider text-text-4 uppercase", hideLabel)}>{title}</div>
+    <div className={cx("flex items-center gap-2 px-2.5 pt-5 pb-1.5 text-[10.5px] font-bold tracking-[0.14em] text-nav-label uppercase", hideLabel)}>
+      {title}
+      <i className="h-px flex-1 bg-nav-border" aria-hidden="true" />
+    </div>
   );
 
   return (
     <div className="min-h-dvh bg-app-bg text-text lg:flex">
       {/* Mobil üst bar */}
-      <div className="sticky top-0 z-40 flex h-12 items-center justify-between border-0 border-b border-solid border-border bg-surface px-4 lg:hidden">
-        <img src="/pax-logo.svg" alt="PAX Türkiye" className="h-5 w-auto dark:brightness-0 dark:invert" draggable={false} />
+      <div className="ds-nav sticky top-0 z-40 flex h-14 items-center justify-between border-0 border-b border-solid border-nav-border px-4 text-nav-text shadow-[0_4px_16px_-6px_rgba(7,5,91,.45)] lg:hidden [&_button]:text-nav-text! [&_button:hover]:bg-nav-hover!">
+        <img src="/pax-logo.svg" alt="PAX Türkiye" className="h-5 w-auto brightness-0 invert" draggable={false} />
         <div className="flex items-center gap-1">
           <button
             type="button"
@@ -670,7 +676,7 @@ export default function PanelShell({
         ref={sidebarRef}
         id="pax-primary-sidebar"
         className={cx(
-          "fixed inset-y-0 left-0 z-50 box-border flex w-[272px] max-w-[85vw] flex-col border-0 border-r border-solid border-border bg-surface transition-transform duration-200",
+          "fixed inset-y-0 left-0 z-50 box-border flex w-[272px] max-w-[85vw] flex-col border-0 border-r border-solid border-nav-border ds-nav text-nav-text shadow-[4px_0_24px_-8px_rgba(7,5,91,.35)] transition-transform duration-200",
           "lg:sticky lg:top-0 lg:h-dvh lg:max-w-none lg:shrink-0 lg:translate-x-0 lg:transition-[width]",
           collapsed ? "lg:w-14" : "lg:w-[232px]",
           menuOpen ? "translate-x-0" : "-translate-x-full",
@@ -679,11 +685,11 @@ export default function PanelShell({
         role={menuOpen ? "dialog" : undefined}
         aria-modal={menuOpen || undefined}
       >
-        <div className={cx("flex h-12 shrink-0 items-center justify-between gap-2 border-0 border-b border-solid border-border px-3", collapsed && "lg:justify-center lg:px-0")}>
-          <img src="/pax-logo.svg" alt="PAX Türkiye" className={cx("h-6 w-auto max-w-[130px] dark:brightness-0 dark:invert", hideLabel)} draggable={false} />
+        <div className={cx("flex h-14 shrink-0 items-center justify-between gap-2 border-0 border-b border-solid border-nav-border px-3", collapsed && "lg:justify-center lg:px-0")}>
+          <img src="/pax-logo.svg" alt="PAX Türkiye" className={cx("h-6 w-auto max-w-[130px] brightness-0 invert", hideLabel)} draggable={false} />
           <button
             type="button"
-            className="hidden size-8 cursor-pointer items-center justify-center rounded-[3px]! border-0 bg-transparent text-text-3 hover:bg-surface-2 hover:text-text lg:inline-flex"
+            className="hidden size-8 cursor-pointer items-center justify-center rounded-lg! border-0 bg-transparent text-nav-text hover:bg-nav-hover hover:text-nav-text-strong lg:inline-flex"
             onClick={toggleCollapse}
             aria-label={collapsed ? "Genişlet" : "Daralt"}
           >
@@ -703,16 +709,16 @@ export default function PanelShell({
             <div className="mt-3">
               <button
                 type="button"
-                className={cx(navItemCls, "w-full", reportsActive && "text-text font-semibold")}
+                className={cx(navItemCls, "w-full", reportsActive && "font-semibold text-nav-text-strong")}
                 onClick={() => setReportsOpen((value) => !value)}
                 aria-expanded={showReports}
                 title={collapsed ? reportsGroup.title : undefined}
               >
-                <span className="flex size-4 shrink-0 items-center justify-center">
+                <span className={cx(navIconWrap, ICON_TONE[reportsGroup.iconKey])}>
                   <NavIcon k={reportsGroup.iconKey} />
                 </span>
                 <span className={cx("flex-1 truncate text-left", hideLabel)}>{reportsGroup.title}</span>
-                <span className={cx("text-text-4", hideLabel)}>
+                <span className={cx("text-nav-label", hideLabel)}>
                   <IconChevronDown open={showReports} />
                 </span>
               </button>
@@ -732,32 +738,32 @@ export default function PanelShell({
           ))}
         </div>
 
-        <div className="shrink-0 border-0 border-t border-solid border-border p-2">
+        <div className="shrink-0 border-0 border-t border-solid border-nav-border bg-black/15 p-2">
           <button
             type="button"
             className={cx(navItemCls, "w-full")}
             onClick={() => setDark((v) => !v)}
             title={dark ? "Açık temaya geç" : "Koyu temaya geç"}
           >
-            <span className="flex size-4 shrink-0 items-center justify-center">{dark ? <IconSun /> : <IconMoon />}</span>
+            <span className={cx(navIconWrap, "text-amber-300")}>{dark ? <IconSun /> : <IconMoon />}</span>
             <span className={cx("truncate", hideLabel)}>{dark ? "Açık tema" : "Koyu tema"}</span>
           </button>
           <div className={cx("mt-1 flex items-center gap-2.5 px-2.5 py-1.5", collapsed && "lg:justify-center lg:px-0")}>
             <span className={avatarCls}>{initials || "U"}</span>
             <div className={cx("min-w-0", hideLabel)}>
-              <div className="truncate text-[13px] font-medium text-text">{displayName}</div>
-              <div className="truncate text-[11px] text-text-3">{displaySub}</div>
+              <div className="truncate text-[13px] font-semibold text-nav-text-strong">{displayName}</div>
+              <div className="truncate text-[11px] text-nav-label">{displaySub}</div>
             </div>
           </div>
         </div>
       </aside>
 
       <main className={cx("min-w-0 flex-1", !dsPage && "pax-main")}>
-        <header className="sticky top-0 z-30 hidden h-12 items-center justify-between gap-4 border-0 border-b border-solid border-border bg-surface px-6 lg:flex">
+        <header className="sticky top-0 z-30 hidden h-12 items-center justify-between gap-4 border-0 border-b border-solid border-border bg-surface/85 px-6 backdrop-blur-md lg:flex">
           <nav className="flex min-w-0 items-center gap-1.5 text-[13px]" aria-label="Breadcrumb">
             <span className="truncate text-text-3">{pageMeta.section}</span>
             <span className="text-text-4" aria-hidden="true">/</span>
-            <strong className="truncate font-semibold text-text">{pageMeta.title}</strong>
+            <strong className="truncate rounded-md bg-accent-soft px-2 py-0.5 font-semibold text-accent">{pageMeta.title}</strong>
           </nav>
           <div className="flex items-center gap-1">
             <button
@@ -772,7 +778,7 @@ export default function PanelShell({
             <div className="relative">
               <button
                 type="button"
-                className="flex h-8 cursor-pointer items-center gap-2 rounded-[3px]! border-0 bg-transparent px-2 text-text-2 hover:bg-surface-2"
+                className="flex h-9 cursor-pointer items-center gap-2 rounded-full! border border-solid border-border bg-surface py-0 pr-3 pl-1 text-text-2 hover:border-accent/40 hover:bg-accent-soft"
                 onClick={() => setUserMenuOpen((value) => !value)}
                 aria-expanded={userMenuOpen}
               >
@@ -781,7 +787,7 @@ export default function PanelShell({
                 <IconChevronDown open={userMenuOpen} />
               </button>
               {userMenuOpen && (
-                <div className="absolute top-full right-0 z-50 mt-1 w-64 rounded-[4px] border border-solid border-border bg-surface py-1 shadow-card-md">
+                <div className="absolute top-full right-0 z-50 mt-1.5 w-64 overflow-hidden rounded-xl border border-solid border-border bg-surface p-1 shadow-ds-lg">
                   <div className="border-0 border-b border-solid border-border px-3 py-2">
                     <div className="truncate text-[13px] font-semibold text-text">{displayName}</div>
                     <div className="truncate text-xs text-text-3">{email?.trim() || roleLabel(role)}</div>
@@ -837,11 +843,27 @@ const DS_ROUTES = ["/crm/reports/retail-operasyon", "/crm/reports/weekly-activit
 // Not: legacy premium-ui.css `button:not(...)` 14px radius kuralı katmansız olduğu için
 // köşe yarıçapı önemli (!) işaretiyle verilir.
 const navItemCls =
-  "flex h-10 cursor-pointer items-center gap-2.5 overflow-hidden rounded-[3px]! border-0 bg-transparent px-2.5 text-[13px]! whitespace-nowrap text-text-2 no-underline transition-colors hover:bg-surface-2 hover:text-text lg:h-8";
-const navActiveCls = "bg-surface-2 font-semibold text-text shadow-[inset_2px_0_0_var(--accent)]";
+  "relative flex h-10 cursor-pointer items-center gap-2.5 overflow-hidden rounded-[10px]! border-0 bg-transparent px-2 text-[13px]! font-medium whitespace-nowrap text-nav-text no-underline transition-colors hover:bg-nav-hover hover:text-nav-text-strong lg:h-9";
+const navActiveCls =
+  "ds-nav-active font-semibold text-nav-text-strong! shadow-[inset_3px_0_0_var(--nav-active-bar),0_6px_18px_-8px_rgba(17,161,242,.55)]";
+const navIconWrap = "flex size-6 shrink-0 items-center justify-center rounded-md bg-white/[.06] transition-colors";
+// Menü ikonları kategori renginde (koyu lacivert zeminde okunur tonlar)
+const ICON_TONE: Record<IconKey, string> = {
+  dashboard: "text-sky-300",
+  activity: "text-amber-300",
+  customers: "text-emerald-300",
+  quotes: "text-violet-300",
+  forecast: "text-cyan-300",
+  blocker: "text-rose-300",
+  weekly: "text-indigo-300",
+  users: "text-teal-300",
+  settings: "text-slate-300",
+  backup: "text-lime-300",
+  requests: "text-pink-300",
+};
 const iconBtnCls =
-  "inline-flex size-10 cursor-pointer items-center justify-center rounded-[3px]! border-0 bg-transparent text-text-3 hover:bg-surface-2 hover:text-text";
+  "inline-flex size-10 cursor-pointer items-center justify-center rounded-[10px]! border-0 bg-transparent text-text-3 hover:bg-accent-soft hover:text-accent";
 const avatarCls =
-  "inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-text-2 text-[10px] font-semibold text-surface";
+  "inline-flex size-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand-2 to-brand-navy text-[10.5px] font-bold text-white ring-2 ring-white/20";
 const menuLinkCls =
-  "flex h-10 w-full cursor-pointer items-center rounded-none! border-0 bg-transparent px-3 text-left text-[13px]! text-text-2 no-underline hover:bg-surface-2 hover:text-text lg:h-8";
+  "flex h-10 w-full cursor-pointer items-center rounded-lg! border-0 bg-transparent px-3 text-left text-[13px]! text-text-2 no-underline hover:bg-accent-soft hover:text-accent lg:h-8";

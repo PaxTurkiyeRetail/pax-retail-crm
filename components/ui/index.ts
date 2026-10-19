@@ -1,7 +1,7 @@
 export { cn } from './cn';
 export { Button } from './Button';
 export { Input, Select, Checkbox, Range } from './Input';
-export { Badge, type Tone } from './Badge';
+export { Badge, StatusBadge, toneFor, type Tone } from './Badge';
 export { PageHeader } from './PageHeader';
 export { Tabs } from './Tabs';
 export { KpiStrip, type Kpi } from './KpiStrip';
