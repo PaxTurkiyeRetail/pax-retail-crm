@@ -64,7 +64,7 @@ const COLUMNS: Column<Row>[] = [
 
 function MiniList({ title, items }: { title: string; items: Array<{ label: string; value: number }> }) {
   return (
-    <Section title={title} count={items.length}>
+    <Section title={title} count={items.length} pad>
       <dl className="m-0 divide-y divide-border text-[13px]">
         {items.map((i) => (
           <div key={i.label} className="flex justify-between gap-3 py-1.5">

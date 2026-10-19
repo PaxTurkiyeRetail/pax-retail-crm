@@ -30,9 +30,9 @@ const oppCols: Column<Opp>[] = [
   { key: 'model', label: 'Model', value: (r) => r.model },
   { key: 'qty', label: 'Adet', value: (r) => r.qty, num: true },
   { key: 'month', label: 'Ay', value: (r) => r.month, render: (r) => MONTHS[r.month - 1] ?? '–' },
-  { key: 'saleType', label: 'Tip', value: (r) => (r.saleType === 'rental' ? 'Kiralama' : 'Satış') },
+  { key: 'saleType', label: 'Tip', value: (r) => (r.saleType === 'rental' ? 'Kiralama' : 'Satış'), badge: (r) => (r.saleType === 'rental' ? 'c2' : 'c1') },
   { key: 'channel', label: 'Kanal', value: (r) => r.channel },
-  { key: 'prob', label: 'Olasılık %', value: (r) => r.prob, num: true },
+  { key: 'prob', label: 'Olasılık %', value: (r) => r.prob, num: true, cellClass: (r) => cn('font-semibold', r.prob >= 70 ? 'text-ok' : r.prob >= 40 ? 'text-warn' : 'text-danger') },
   { key: 'weighted', label: 'Senaryo adet', value: (r) => r.weighted, num: true },
   { key: 'owner', label: 'Sorumlu', value: (r) => r.owner },
   { key: 'note', label: 'Not', value: (r) => r.note },
@@ -70,14 +70,14 @@ function MonthlyResult({ title, actual, forecast, refMonth }: { title: string; a
     return { v, cum, isActual };
   });
   const total = cells.reduce((s, c) => s + c.v, 0);
-  const tone = (a: boolean) => (a ? 'bg-ok-soft text-ok' : 'bg-warn-soft text-warn');
+  const tone = (a: boolean) => (a ? 'bg-ok-soft text-ok font-semibold' : 'bg-warn-soft text-warn font-semibold');
   return (
     <Section
       title={title}
       actions={
         <span className="flex items-center gap-3 text-xs text-text-3">
-          <span className="flex items-center gap-1.5"><i className="inline-block size-2.5 bg-ok" />Gerçekleşen</span>
-          <span className="flex items-center gap-1.5"><i className="inline-block size-2.5 bg-warn" />Tahmin</span>
+          <span className="flex items-center gap-1.5"><i className="inline-block size-2.5 rounded-full bg-ok" />Gerçekleşen</span>
+          <span className="flex items-center gap-1.5"><i className="inline-block size-2.5 rounded-full bg-warn" />Tahmin</span>
         </span>
       }
     >
@@ -194,7 +194,7 @@ export default function RetailOperasyonClient() {
               { label: 'KasaPOS aktif kasa', value: data ? nf.format(data.kasapos.aktifKasa) : '–' },
               { label: 'Faturalanan', value: data ? nf.format(data.kasapos.faturalanan) : '–', sub: data?.kasapos.refMonth ?? undefined },
               { label: 'Aylık gelir', value: data ? usdf.format(data.kasapos.aylikGelir) : '–' },
-              { label: 'Fırsat kasa', value: data ? nf.format(data.kasapos.firsat) : '–', sub: data && `Potansiyel ${usdf.format(data.kasapos.potansiyel)}` },
+              { label: 'Fırsat kasa', tone: 'warn', value: data ? nf.format(data.kasapos.firsat) : '–', sub: data && `Potansiyel ${usdf.format(data.kasapos.potansiyel)}` },
             ]}
           />
           <MonthlyResult title={`${year} aylık terminal`} actual={calc.monthly} forecast={forecastMonthly(oppNow)} refMonth={refMonth} />
@@ -231,7 +231,7 @@ export default function RetailOperasyonClient() {
             emptyText="Kiralama kaydı yok — Satışlar ekranında satır tipini Kiralama seçin."
             columns={[
               { key: 'firm', label: 'Firma', value: (r) => r.firm },
-              { key: 'status', label: 'Durum', value: (r) => r.statusLabel },
+              { key: 'status', label: 'Durum', value: (r) => r.statusLabel, badge: true },
               { key: 'qty', label: 'Adet', value: (r) => r.qty, num: true },
               { key: 'monthly', label: 'Aylık (USD)', value: (r) => r.monthly, render: (r) => usdf.format(r.monthly), num: true },
               { key: 'start', label: 'Başlangıç', value: (r) => r.start?.slice(0, 10) ?? '' },
@@ -246,10 +246,10 @@ export default function RetailOperasyonClient() {
           <ScenarioBar pct={pct} setPct={setPct} weighted={weighted} setWeighted={setWeighted} />
           <KpiStrip
             items={[
-              { label: 'Gerçekleşen', value: nf.format(calc.qty) },
-              { label: 'Kalan aylar senaryo', value: nf.format(futureQty) },
-              { label: `${year} yıl sonu tahmini`, value: nf.format(calc.qty + futureQty) },
-              { label: 'Toplam fırsat', value: nf.format((data?.opportunities.current ?? []).reduce((a, o) => a + o.qty, 0)), sub: `${nf.format(oppNow.length)} kayıt` },
+              { label: 'Gerçekleşen', value: nf.format(calc.qty), tone: 'ok' },
+              { label: 'Kalan aylar senaryo', value: nf.format(futureQty), tone: 'warn' },
+              { label: `${year} yıl sonu tahmini`, value: nf.format(calc.qty + futureQty), tone: 'c1' },
+              { label: 'Toplam fırsat', tone: 'warn', value: nf.format((data?.opportunities.current ?? []).reduce((a, o) => a + o.qty, 0)), sub: `${nf.format(oppNow.length)} kayıt` },
             ]}
           />
           <DataTable title={`${year} fırsatları`} csvName={`retail-firsat-${year}`} columns={oppCols} rows={oppNow} loading={loading} tall />
@@ -262,7 +262,7 @@ export default function RetailOperasyonClient() {
           <KpiStrip
             items={[
               { label: `${year + 1} senaryo`, value: nf.format(nextQty) },
-              { label: 'Toplam fırsat', value: nf.format((data?.opportunities.next ?? []).reduce((a, o) => a + o.qty, 0)), sub: `${nf.format(oppNext.length)} kayıt` },
+              { label: 'Toplam fırsat', tone: 'warn', value: nf.format((data?.opportunities.next ?? []).reduce((a, o) => a + o.qty, 0)), sub: `${nf.format(oppNext.length)} kayıt` },
             ]}
           />
           <DataTable title={`${year + 1} fırsatları`} csvName={`retail-firsat-${year + 1}`} columns={oppCols} rows={oppNext} loading={loading} tall />
@@ -288,7 +288,7 @@ export default function RetailOperasyonClient() {
               { key: 'pos', label: 'POS markası', value: (r) => r.pos },
               { key: 'posOwner', label: 'POS mülkiyet', value: (r) => r.posOwner },
               { key: 'banks', label: 'Bankalar', value: (r) => r.banks },
-              { key: 'status', label: 'Faz', value: (r) => r.status },
+              { key: 'status', label: 'Faz', value: (r) => r.status, badge: true },
               { key: 'owner', label: 'Sorumlu', value: (r) => r.owner },
               {
                 key: 'plan',
