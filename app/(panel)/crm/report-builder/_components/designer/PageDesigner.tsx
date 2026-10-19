@@ -8,7 +8,7 @@ import {
 } from '@/lib/report-builder/page-types';
 import type { WidgetData } from '@/lib/report-builder/pdf';
 import { DEPARTMENT_VALUES, RELATIVE_PRESETS, ReportDefinitionError, type ReportDefinitionInput } from '@/lib/report-builder/types';
-import { api, ApiFailure, fetchPdf, saveBlob, type LetterheadLite, type SavedPageLite } from '../api';
+import { api, ApiFailure, fetchPdf, saveBlob, type LetterheadLite, type SavedDefinitionLite, type SavedPageLite } from '../api';
 import { DataWidgetBody, TextBlock } from '../renderers/WidgetRenderer';
 import { TOKEN_CSS } from '../renderers/tokens';
 import { DEPARTMENT_LABEL, PRESET_LABEL } from '../labels';
@@ -22,7 +22,17 @@ type Props = {
   letterheads: LetterheadLite[];
   onBack: () => void;
   onEditQuery: (query: ReportDefinitionInput, apply: (q: ReportDefinitionInput) => void) => void;
+  /** "Pano oluştur" akışı: düzenleme modunda açılır. */
+  startEditing?: boolean;
 };
+
+/** Kayıtlı raporu pano widget'ına çevirir. */
+function widgetFromDefinition(page: PageDefinition, d: SavedDefinitionLite): unknown {
+  const viz = d.definition.visualization?.type ?? 'table';
+  const type = viz === 'kpi' ? 'kpi_strip' : viz;
+  const half = viz === 'pie' || viz === 'kpi';
+  return { id: newId(page, 'r'), type, title: d.title, query: d.definition, layout: { lg: { x: 0, y: nextY(page), w: half ? 6 : 12, h: viz === 'kpi' ? 2 : 5 } } };
+}
 
 function newId(page: PageDefinition, prefix: string) {
   let i = page.widgets.length + 1;
@@ -66,11 +76,13 @@ function useBreakpoint(ref: React.RefObject<HTMLDivElement | null>, forced: Brea
   return forced === 'auto' ? bp : forced;
 }
 
-export default function PageDesigner({ pageId, canDesign, letterheads, onBack, onEditQuery }: Props) {
+export default function PageDesigner({ pageId, canDesign, letterheads, onBack, onEditQuery, startEditing }: Props) {
   const [meta, setMeta] = useState<SavedPageLite | null>(null);
   const [page, setPage] = useState<PageDefinition | null>(null);
   const [dirty, setDirty] = useState(false);
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState(!!startEditing);
+  const [savedDefs, setSavedDefs] = useState<SavedDefinitionLite[] | null>(null);
+  const [picker, setPicker] = useState(false);
   const [values, setValues] = useState<Record<string, unknown>>({});
   const [data, setData] = useState<Record<string, WidgetData>>({});
   const [selected, setSelected] = useState<string | null>(null);
@@ -203,11 +215,37 @@ export default function PageDesigner({ pageId, canDesign, letterheads, onBack, o
   if (!page || !meta) return <div className="pax-card p-6">{msg ? <p role="alert">{msg.text}</p> : 'Yükleniyor…'}</div>;
   const sel = page.widgets.find((w) => w.id === selected) ?? null;
   const cols = BREAKPOINT_COLUMNS[bp];
+  const dataCount = page.widgets.filter((w) => isDataWidget(w)).length;
+  const openPicker = () => {
+    setPicker(true);
+    if (!savedDefs) api.definitions().then((r) => setSavedDefs(r.definitions)).catch((e) => setMsg({ kind: 'err', text: (e as Error).message }));
+  };
+  const addSaved = (d: SavedDefinitionLite) => {
+    update((p) => { p.widgets.push(widgetFromDefinition(p, d) as PageWidget); return p; });
+    setPicker(false);
+    setMsg({ kind: 'ok', text: `“${d.title}” panoya eklendi. Kaydetmeyi unutma.` });
+  };
+  const pickerUi = picker && (
+    <div className="pax-card space-y-2 p-3 text-sm">
+      <div className="flex items-center gap-2"><span className="font-semibold">Kayıtlı raporlarım</span><button type="button" className="pax-btn ml-auto px-2" aria-label="Kapat" onClick={() => setPicker(false)}>✕</button></div>
+      {!savedDefs ? <p className="text-[var(--muted)]">Yükleniyor…</p> : !savedDefs.length
+        ? <p className="text-[var(--muted)]">Henüz kayıtlı raporun yok. Önce Rapor Merkezi’nden “+ Yeni rapor” ile bir rapor oluşturup kaydet.</p>
+        : (
+          <ul className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+            {savedDefs.map((d) => (
+              <li key={d.id}><button type="button" className="w-full rounded-lg border p-2 text-left hover:shadow-sm" style={{ borderColor: 'var(--border)' }} onClick={() => addSaved(d)}>
+                <div className="font-medium">{d.title}</div><div className="text-xs text-[var(--muted)]">{d.owner_name ?? '—'} · {new Date(d.updated_at).toLocaleDateString('tr-TR')}</div>
+              </button></li>
+            ))}
+          </ul>
+        )}
+    </div>
+  );
 
   return (
     <div className="space-y-3">
       <header className="pax-card flex flex-wrap items-center gap-2 p-3">
-        <button type="button" className="pax-btn" onClick={onBack}>← Sayfalar</button>
+        <button type="button" className="pax-btn" onClick={onBack}>← Rapor Merkezi</button>
         <div className="min-w-0 flex-1">
           {editMode
             ? <input aria-label="Sayfa başlığı" className="pax-input w-full font-semibold" value={page.title} onChange={(e) => update((p) => ({ ...p, title: e.target.value || 'Başlıksız' }))} />
@@ -244,6 +282,7 @@ export default function PageDesigner({ pageId, canDesign, letterheads, onBack, o
         <div className="pax-card space-y-2 p-3">
           <div className="flex flex-wrap items-center gap-2 text-sm">
             <span className="font-medium">Ekle:</span>
+            <button type="button" className="pax-btn pax-btn-primary" onClick={openPicker}>+ Kayıtlı rapor</button>
             {NEW_WIDGETS.map((n) => (
               <button key={n.type} type="button" className="pax-btn" disabled={n.type === 'filter' && !page.filters.length}
                 onClick={() => update((p) => { const w = makeWidget(p, n.type); if (w) p.widgets.push(w as PageWidget); return p; })}>{n.label}</button>
@@ -291,6 +330,21 @@ export default function PageDesigner({ pageId, canDesign, letterheads, onBack, o
             </div>
           )}
         </div>
+      )}
+
+      {editMode && pickerUi}
+
+      {editMode && dataCount === 0 && !picker && (
+        <div className="pax-card flex flex-col items-center gap-3 border-2 border-dashed p-8 text-center" style={{ borderColor: 'var(--border)' }}>
+          <h2 className="text-lg font-semibold">Panon boş — ilk raporunu ekle</h2>
+          <p className="max-w-xl text-sm text-[var(--muted)]">Daha önce kaydettiğin raporları panoya kart olarak ekle. Kartları başlığından tutup sürükleyerek taşı, sağ alt köşesinden çekerek büyüt. Bitince “Kaydet”e bas.</p>
+          <button type="button" className="pax-btn pax-btn-primary px-5 py-2 text-base" onClick={openPicker}>+ Kayıtlı rapor ekle</button>
+          <p className="text-xs text-[var(--muted)]">Yukarıdaki “Ekle” satırından boş grafik, metin veya filtre de ekleyebilirsin.</p>
+        </div>
+      )}
+
+      {!editMode && dataCount === 0 && (
+        <p className="pax-card pax-empty p-6 text-center text-sm">Bu panoda henüz rapor yok.{canDesign && meta.can_edit ? ' “Düzenle”ye basıp kayıtlı raporlarını ekleyebilirsin.' : ''}</p>
       )}
 
       <div className={editMode && sel ? 'grid gap-3 lg:grid-cols-[1fr_320px]' : ''}>
@@ -368,7 +422,7 @@ export default function PageDesigner({ pageId, canDesign, letterheads, onBack, o
         )}
       </div>
 
-      {editMode && <p className="text-xs text-[var(--muted)]">İpucu: widget seçiliyken ok tuşları taşır, Shift+ok boyutlandırır.</p>}
+      {editMode && <p className="text-xs text-[var(--muted)]">İpucu: kartı başlığından sürükle-bırak ile taşı, sağ alt köşeden boyutlandır. Klavye: kart seçiliyken ok tuşları taşır, Shift+ok boyutlandırır.</p>}
 
       {pdfUrl && (
         <div role="dialog" aria-label="Yazdırma önizleme" className="fixed inset-0 z-50 flex flex-col bg-black/60 p-4">

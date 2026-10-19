@@ -6,7 +6,7 @@ import type { ColumnMeta } from '@/lib/report-builder/types';
 import type { ColorToken, PageWidget } from '@/lib/report-builder/page-types';
 import type { WidgetData } from '@/lib/report-builder/pdf';
 import { formatCell, pivot, PREV_SUFFIX, type ReportResult } from '@/lib/report-builder/result';
-import { BarLineChart, PieChart } from './Charts';
+import { BarLineChart, PieChart, type DrillHandler } from './Charts';
 import { DENSITY_PAD, ruleColor, TOKEN_CSS, TOKEN_SOFT } from './tokens';
 
 type Style = Extract<PageWidget, { query: unknown }>['style'];
@@ -188,10 +188,11 @@ export function DataWidgetBody({ widget, data }: { widget: Extract<PageWidget, {
 }
 
 /** Tek sorgu sonucunu (QueryBuilder önizlemesi) görselleştirme tipine göre çizer. */
-export function ResultView({ result, viz, pivotColumn, title }: { result: ReportResult; viz: string; pivotColumn?: string; title: string }) {
-  if (viz === 'kpi') return <KpiStrip result={result} />;
-  if (viz === 'bar' || viz === 'line') return <div className="h-64"><BarLineChart result={result} kind={viz} title={title} /></div>;
-  if (viz === 'pie') return <div className="h-64"><PieChart result={result} title={title} /></div>;
-  if (viz === 'pivot' || viz === 'heatmap') return <PivotView result={result} pivotColumn={pivotColumn} heat={viz === 'heatmap'} />;
-  return <DataTableView result={result} />;
+export function ResultView({ result, viz, pivotColumn, title, style, onDrill }: { result: ReportResult; viz: string; pivotColumn?: string; title: string; style?: Partial<Style>; onDrill?: DrillHandler }) {
+  const st = style as Style | undefined;
+  if (viz === 'kpi') return <KpiStrip result={result} style={st} />;
+  if (viz === 'bar' || viz === 'line') return <div className="h-64"><BarLineChart result={result} kind={viz} title={title} accent={st?.accent} onDrill={onDrill} /></div>;
+  if (viz === 'pie') return <div className="h-64"><PieChart result={result} title={title} onDrill={onDrill} /></div>;
+  if (viz === 'pivot' || viz === 'heatmap') return <PivotView result={result} pivotColumn={pivotColumn} heat={viz === 'heatmap'} style={st} />;
+  return <DataTableView result={result} style={st} />;
 }

@@ -4,14 +4,15 @@ import { formatCell, type ReportResult } from '@/lib/report-builder/result';
 import type { ColorToken } from '@/lib/report-builder/page-types';
 import { SERIES, TOKEN_CSS } from './tokens';
 
-type Point = { label: string; value: number };
+type Point = { label: string; value: number; raw: unknown };
+export type DrillHandler = (value: unknown, label: string) => void;
 
 function series(result: ReportResult): { points: Point[]; measureLabel: string; fmt: (v: number) => string } | null {
   const dim = result.columns.find((c) => c.role === 'dimension');
   const m = result.columns.find((c) => c.role !== 'dimension');
   if (!m) return null;
   return {
-    points: result.rows.slice(0, 120).map((r) => ({ label: dim ? formatCell(dim, r[dim.key]) : m.label, value: Number(r[m.key] ?? 0) || 0 })),
+    points: result.rows.slice(0, 120).map((r) => ({ label: dim ? formatCell(dim, r[dim.key]) : m.label, value: Number(r[m.key] ?? 0) || 0, raw: dim ? r[dim.key] : null })),
     measureLabel: m.label,
     fmt: (v) => formatCell(m, v),
   };
@@ -26,7 +27,7 @@ function SrTable({ points, fmt, caption }: { points: Point[]; fmt: (v: number) =
   );
 }
 
-export function BarLineChart({ result, kind, accent = 'primary', title }: { result: ReportResult; kind: 'bar' | 'line'; accent?: ColorToken; title: string }) {
+export function BarLineChart({ result, kind, accent = 'primary', title, onDrill }: { result: ReportResult; kind: 'bar' | 'line'; accent?: ColorToken; title: string; onDrill?: DrillHandler }) {
   const s = series(result);
   if (!s || !s.points.length) return <p className="pax-empty text-sm">Veri yok</p>;
   const W = 640; const H = 240; const L = 48; const B = 28; const T = 10;
@@ -53,12 +54,12 @@ export function BarLineChart({ result, kind, accent = 'primary', title }: { resu
           ? s.points.map((p, i) => {
               const bw = Math.max(2, step * 0.62);
               const y0 = y(Math.max(0, min));
-              return <rect key={i} x={L + step * i + (step - bw) / 2} y={Math.min(y0, y(p.value))} width={bw} height={Math.abs(y0 - y(p.value))} fill={color} rx={2}><title>{`${p.label}: ${s.fmt(p.value)}`}</title></rect>;
+              return <rect key={i} x={L + step * i + (step - bw) / 2} y={Math.min(y0, y(p.value))} width={bw} height={Math.abs(y0 - y(p.value))} fill={color} rx={2} className={onDrill ? 'cursor-pointer hover:opacity-80' : undefined} onClick={onDrill ? () => onDrill(p.raw, p.label) : undefined}><title>{`${p.label}: ${s.fmt(p.value)}`}</title></rect>;
             })
           : (
             <>
               <polyline fill="none" stroke={color} strokeWidth={2} points={s.points.map((p, i) => `${L + step * i + step / 2},${y(p.value)}`).join(' ')} />
-              {s.points.map((p, i) => <circle key={i} cx={L + step * i + step / 2} cy={y(p.value)} r={3} fill={color}><title>{`${p.label}: ${s.fmt(p.value)}`}</title></circle>)}
+              {s.points.map((p, i) => <circle key={i} cx={L + step * i + step / 2} cy={y(p.value)} r={onDrill ? 5 : 3} fill={color} className={onDrill ? 'cursor-pointer' : undefined} onClick={onDrill ? () => onDrill(p.raw, p.label) : undefined}><title>{`${p.label}: ${s.fmt(p.value)}`}</title></circle>)}
             </>
           )}
         {s.points.map((p, i) => (i % every === 0 ? (
@@ -70,7 +71,7 @@ export function BarLineChart({ result, kind, accent = 'primary', title }: { resu
   );
 }
 
-export function PieChart({ result, title }: { result: ReportResult; title: string }) {
+export function PieChart({ result, title, onDrill }: { result: ReportResult; title: string; onDrill?: DrillHandler }) {
   const s = series(result);
   const pts = (s?.points ?? []).filter((p) => p.value > 0).slice(0, 12);
   const total = pts.reduce((a, p) => a + p.value, 0);
@@ -86,7 +87,7 @@ export function PieChart({ result, title }: { result: ReportResult; title: strin
             ? `M 0 ${-R} A ${R} ${R} 0 1 1 0 ${R} A ${R} ${R} 0 1 1 0 ${-R} Z`
             : `M 0 0 L ${R * Math.cos(a0)} ${R * Math.sin(a0)} A ${R} ${R} 0 ${a1 - a0 > Math.PI ? 1 : 0} 1 ${R * Math.cos(a1)} ${R * Math.sin(a1)} Z`;
           a0 = a1;
-          return <path key={i} d={d} fill={TOKEN_CSS[SERIES[i % SERIES.length]]} stroke="var(--surface)" strokeWidth={1.5}><title>{`${p.label}: ${s.fmt(p.value)}`}</title></path>;
+          return <path key={i} d={d} fill={TOKEN_CSS[SERIES[i % SERIES.length]]} stroke="var(--surface)" strokeWidth={1.5} className={onDrill ? 'cursor-pointer hover:opacity-80' : undefined} onClick={onDrill ? () => onDrill(p.raw, p.label) : undefined}><title>{`${p.label}: ${s.fmt(p.value)}`}</title></path>;
         })}
       </svg>
       <ul className="min-w-0 flex-1 space-y-1 text-xs">
