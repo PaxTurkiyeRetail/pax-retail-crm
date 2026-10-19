@@ -110,7 +110,7 @@
   --ds-thead-text: #1e3a6b;
   --ds-shadow: 0 1px 2px rgba(7,5,91,.05), 0 8px 24px -10px rgba(7,5,91,.14);
   --ds-shadow-lg: 0 2px 4px rgba(7,5,91,.06), 0 20px 44px -14px rgba(7,5,91,.22);
-  --ds-page-bg: radial-gradient(1400px 420px at 100% -8%, rgba(17,161,242,.10), transparent 62%), radial-gradient(900px 360px at -10% -10%, rgba(7,5,91,.06), transparent 60%), #f3f6fb;
+  --ds-page-bg: #f5f6f8;
   /* Kategori (grafik/badge/KPI) */
   --ds-c1: #0e6fc7; --ds-c1-soft: #e8f3fd;
   --ds-c2: #7c3aed; --ds-c2-soft: #f1ebfe;
@@ -119,14 +119,14 @@
   --ds-c5: #d97706; --ds-c5-soft: #fef3e2;
   --ds-c6: #4f46e5; --ds-c6-soft: #eceefe;
   /* Sidebar — her temada marka laciverti */
-  --nav-bg: linear-gradient(180deg, #0b0974 0%, #07055b 42%, #04033d 100%);
-  --nav-border: rgba(255,255,255,.08);
-  --nav-text: rgba(222,230,255,.76);
-  --nav-text-strong: #ffffff;
-  --nav-label: rgba(160,180,255,.55);
-  --nav-hover: rgba(255,255,255,.07);
-  --nav-active: linear-gradient(90deg, rgba(17,161,242,.34), rgba(17,161,242,.08));
-  --nav-active-bar: #11a1f2;
+  --nav-bg: #ffffff;
+  --nav-border: #e6e8ee;
+  --nav-text: #4b5263;
+  --nav-text-strong: #111827;
+  --nav-label: #9aa1b1;
+  --nav-hover: #f3f5f9;
+  --nav-active: #eaf4fe;
+  --nav-active-bar: #0b6fd6;
 }
 [data-theme="dark"] {
   --ds-info: #4cb8f5;    --ds-info-soft: rgba(76,184,245,.13);
@@ -139,15 +139,21 @@
   --ds-thead-text: #9fc6f5;
   --ds-shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 28px -10px rgba(0,0,0,.6);
   --ds-shadow-lg: 0 2px 4px rgba(0,0,0,.4), 0 20px 44px -14px rgba(0,0,0,.7);
-  --ds-page-bg: radial-gradient(1400px 420px at 100% -8%, rgba(17,161,242,.12), transparent 62%), radial-gradient(900px 360px at -10% -10%, rgba(124,58,237,.08), transparent 60%), #0a0b10;
+  --ds-page-bg: #0c0d12;
   --ds-c1: #4cb8f5; --ds-c1-soft: rgba(76,184,245,.14);
   --ds-c2: #a78bfa; --ds-c2-soft: rgba(167,139,250,.14);
   --ds-c3: #2dd4bf; --ds-c3-soft: rgba(45,212,191,.14);
   --ds-c4: #f472b6; --ds-c4-soft: rgba(244,114,182,.14);
   --ds-c5: #fbbf24; --ds-c5-soft: rgba(251,191,36,.14);
   --ds-c6: #818cf8; --ds-c6-soft: rgba(129,140,248,.14);
-  --nav-bg: linear-gradient(180deg, #0d0b45 0%, #08072c 50%, #05041c 100%);
+  --nav-bg: #12141b;
   --nav-border: rgba(255,255,255,.07);
+  --nav-text: rgba(226,230,240,.72);
+  --nav-text-strong: #ffffff;
+  --nav-label: rgba(226,230,240,.4);
+  --nav-hover: rgba(255,255,255,.05);
+  --nav-active: rgba(76,184,245,.12);
+  --nav-active-bar: #4cb8f5;
 }
 @theme inline {
   --color-info: var(--ds-info);

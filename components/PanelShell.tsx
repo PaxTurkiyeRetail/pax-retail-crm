@@ -619,7 +619,7 @@ export default function PanelShell({
         aria-current={active ? "page" : undefined}
       >
         {!sub && (
-          <span className={cx(navIconWrap, ICON_TONE[item.iconKey], active && "bg-white/15 text-white")}>
+          <span className={cx(navIconWrap, active ? "text-nav-active-bar" : "text-nav-label")}>
             <NavIcon k={item.iconKey} />
           </span>
         )}
@@ -676,7 +676,7 @@ export default function PanelShell({
         ref={sidebarRef}
         id="pax-primary-sidebar"
         className={cx(
-          "fixed inset-y-0 left-0 z-50 box-border flex w-[272px] max-w-[85vw] flex-col border-0 border-r border-solid border-nav-border ds-nav text-nav-text shadow-[4px_0_24px_-8px_rgba(7,5,91,.35)] transition-transform duration-200",
+          "fixed inset-y-0 left-0 z-50 box-border flex w-[272px] max-w-[85vw] flex-col border-0 border-r border-solid border-nav-border ds-nav text-nav-text transition-transform duration-200",
           "lg:sticky lg:top-0 lg:h-dvh lg:max-w-none lg:shrink-0 lg:translate-x-0 lg:transition-[width]",
           collapsed ? "lg:w-14" : "lg:w-[232px]",
           menuOpen ? "translate-x-0" : "-translate-x-full",
@@ -686,7 +686,8 @@ export default function PanelShell({
         aria-modal={menuOpen || undefined}
       >
         <div className={cx("flex h-14 shrink-0 items-center justify-between gap-2 border-0 border-b border-solid border-nav-border px-3", collapsed && "lg:justify-center lg:px-0")}>
-          <img src="/pax-logo.svg" alt="PAX Türkiye" className={cx("h-6 w-auto max-w-[130px] brightness-0 invert", hideLabel)} draggable={false} />
+          {!collapsed && <img src="/pax-logo.svg" alt="PAX Türkiye" className="h-6 w-auto max-w-[130px] dark:brightness-0 dark:invert" draggable={false} />}
+          {collapsed && <img src="/pax-logo.svg" alt="PAX Türkiye" className="h-6 w-auto max-w-[130px] dark:brightness-0 dark:invert lg:hidden" draggable={false} />}
           <button
             type="button"
             className="hidden size-8 cursor-pointer items-center justify-center rounded-lg! border-0 bg-transparent text-nav-text hover:bg-nav-hover hover:text-nav-text-strong lg:inline-flex"
@@ -845,8 +846,8 @@ const DS_ROUTES = ["/crm/reports/retail-operasyon", "/crm/reports/weekly-activit
 const navItemCls =
   "relative flex h-10 cursor-pointer items-center gap-2.5 overflow-hidden rounded-[10px]! border-0 bg-transparent px-2 text-[13px]! font-medium whitespace-nowrap text-nav-text no-underline transition-colors hover:bg-nav-hover hover:text-nav-text-strong lg:h-9";
 const navActiveCls =
-  "ds-nav-active font-semibold text-nav-text-strong! shadow-[inset_3px_0_0_var(--nav-active-bar),0_6px_18px_-8px_rgba(17,161,242,.55)]";
-const navIconWrap = "flex size-6 shrink-0 items-center justify-center rounded-md bg-white/[.06] transition-colors";
+  "ds-nav-active font-semibold text-nav-text-strong! shadow-[inset_3px_0_0_var(--nav-active-bar)]";
+const navIconWrap = "flex size-6 shrink-0 items-center justify-center transition-colors";
 // Menü ikonları kategori renginde (koyu lacivert zeminde okunur tonlar)
 const ICON_TONE: Record<IconKey, string> = {
   dashboard: "text-sky-300",
