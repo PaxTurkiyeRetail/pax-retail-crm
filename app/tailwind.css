@@ -119,13 +119,13 @@
   --ds-c5: #d97706; --ds-c5-soft: #fef3e2;
   --ds-c6: #4f46e5; --ds-c6-soft: #eceefe;
   /* Sidebar — her temada marka laciverti */
-  --nav-bg: #ffffff;
-  --nav-border: #e6e8ee;
-  --nav-text: #4b5263;
-  --nav-text-strong: #111827;
-  --nav-label: #9aa1b1;
-  --nav-hover: #f3f5f9;
-  --nav-active: #eaf4fe;
+  --nav-bg: linear-gradient(180deg, #ffffff 0%, #f6f8fc 100%);
+  --nav-border: #e3e7ef;
+  --nav-text: #3f4657;
+  --nav-text-strong: #0f1729;
+  --nav-label: #8a93a6;
+  --nav-hover: #eef2f8;
+  --nav-active: linear-gradient(135deg, #0b6fd6 0%, #07055b 100%);
   --nav-active-bar: #0b6fd6;
 }
 [data-theme="dark"] {
@@ -152,7 +152,7 @@
   --nav-text-strong: #ffffff;
   --nav-label: rgba(226,230,240,.4);
   --nav-hover: rgba(255,255,255,.05);
-  --nav-active: rgba(76,184,245,.12);
+  --nav-active: linear-gradient(135deg, #1677e0 0%, #2a2896 100%);
   --nav-active-bar: #4cb8f5;
 }
 @theme inline {

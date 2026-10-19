@@ -619,7 +619,7 @@ export default function PanelShell({
         aria-current={active ? "page" : undefined}
       >
         {!sub && (
-          <span className={cx(navIconWrap, active ? "text-nav-active-bar" : "text-nav-label")}>
+          <span className={cx(navIconWrap, active ? "bg-white/20 text-white" : ICON_TONE[item.iconKey])}>
             <NavIcon k={item.iconKey} />
           </span>
         )}
@@ -846,21 +846,21 @@ const DS_ROUTES = ["/crm/reports/retail-operasyon", "/crm/reports/weekly-activit
 const navItemCls =
   "relative flex h-10 cursor-pointer items-center gap-2.5 overflow-hidden rounded-[10px]! border-0 bg-transparent px-2 text-[13px]! font-medium whitespace-nowrap text-nav-text no-underline transition-colors hover:bg-nav-hover hover:text-nav-text-strong lg:h-9";
 const navActiveCls =
-  "ds-nav-active font-semibold text-nav-text-strong! shadow-[inset_3px_0_0_var(--nav-active-bar)]";
-const navIconWrap = "flex size-6 shrink-0 items-center justify-center transition-colors";
-// Menü ikonları kategori renginde (koyu lacivert zeminde okunur tonlar)
+  "ds-nav-active font-semibold text-white! hover:text-white! shadow-[0_6px_16px_-8px_rgba(11,111,214,.7)]";
+const navIconWrap = "flex size-7 shrink-0 items-center justify-center rounded-lg transition-colors";
+// Menü ikonları: yumuşak kategori kutucuğu (light: 50/600, dark: 500/15 + 300).
 const ICON_TONE: Record<IconKey, string> = {
-  dashboard: "text-sky-300",
-  activity: "text-amber-300",
-  customers: "text-emerald-300",
-  quotes: "text-violet-300",
-  forecast: "text-cyan-300",
-  blocker: "text-rose-300",
-  weekly: "text-indigo-300",
-  users: "text-teal-300",
-  settings: "text-slate-300",
-  backup: "text-lime-300",
-  requests: "text-pink-300",
+  dashboard: "bg-sky-50 text-sky-600 dark:bg-sky-500/15 dark:text-sky-300",
+  activity: "bg-amber-50 text-amber-600 dark:bg-amber-500/15 dark:text-amber-300",
+  customers: "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-300",
+  quotes: "bg-violet-50 text-violet-600 dark:bg-violet-500/15 dark:text-violet-300",
+  forecast: "bg-cyan-50 text-cyan-600 dark:bg-cyan-500/15 dark:text-cyan-300",
+  blocker: "bg-rose-50 text-rose-600 dark:bg-rose-500/15 dark:text-rose-300",
+  weekly: "bg-indigo-50 text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-300",
+  users: "bg-teal-50 text-teal-600 dark:bg-teal-500/15 dark:text-teal-300",
+  settings: "bg-slate-100 text-slate-600 dark:bg-slate-500/15 dark:text-slate-300",
+  backup: "bg-lime-50 text-lime-700 dark:bg-lime-500/15 dark:text-lime-300",
+  requests: "bg-pink-50 text-pink-600 dark:bg-pink-500/15 dark:text-pink-300",
 };
 const iconBtnCls =
   "inline-flex size-10 cursor-pointer items-center justify-center rounded-[10px]! border-0 bg-transparent text-text-3 hover:bg-accent-soft hover:text-accent";
