@@ -1,5 +1,6 @@
 import 'server-only';
 import { db } from '@/lib/db';
+import { resolveDepartmentFilter, type Department } from '@/lib/departments';
 
 // Entegrasyon Raporu — entegrasyon yeteneği açık tüm firmaların (müşteri veya
 // iş ortağı) hangi fazda olduğunu ve son aktivite notunu tek ekranda gösterir.
@@ -27,6 +28,8 @@ export type EntegrasyonRaporuPayload = {
   summary: { total: number };
   rows: EntegrasyonRaporuRow[];
   isKoluOptions: string[];
+  /** Kullanıcının izinli departmanları; null = hepsi. */
+  allowedDepartments: Department[] | null;
 };
 
 function cleanText(value: unknown) {
@@ -34,8 +37,11 @@ function cleanText(value: unknown) {
   return text || null;
 }
 
-export async function buildEntegrasyonRaporu(options?: { isKolu?: string }): Promise<EntegrasyonRaporuPayload> {
-  const isKolu = String(options?.isKolu ?? '').trim();
+export async function buildEntegrasyonRaporu(options?: { isKolu?: string; allowedDepartments?: Department[] | null }): Promise<EntegrasyonRaporuPayload> {
+  const allowedDepartments = options?.allowedDepartments ?? null;
+  // Sunucu tarafında zorla: izinsiz departman istense de kullanıcının departmanlarına daralır.
+  const deptFilter: string[] | null = resolveDepartmentFilter(options?.isKolu, allowedDepartments);
+  const isKolu = deptFilter?.length === 1 ? deptFilter[0] : '';
 
   const result = await db.query(
     `
@@ -67,7 +73,7 @@ export async function buildEntegrasyonRaporu(options?: { isKolu?: string }): Pro
   ).sort((a, b) => a.localeCompare(b, 'tr'));
 
   const rows: EntegrasyonRaporuRow[] = allRows
-    .filter((row) => !isKolu || String(row.is_kolu ?? '').trim() === isKolu)
+    .filter((row) => !deptFilter || deptFilter.includes(String(row.is_kolu ?? '').trim()))
     .map((row) => ({
       customerId: String(row.customer_id),
       musteri: String(row.musteri ?? '').trim(),
@@ -84,6 +90,9 @@ export async function buildEntegrasyonRaporu(options?: { isKolu?: string }): Pro
     filters: { isKolu },
     summary: { total: rows.length },
     rows,
-    isKoluOptions,
+    isKoluOptions: allowedDepartments
+      ? isKoluOptions.filter((o) => (allowedDepartments as string[]).includes(o))
+      : isKoluOptions,
+    allowedDepartments,
   };
 }

@@ -20,6 +20,7 @@ export async function GET() {
     const result = await db.query(`
       select
         au.email, au.full_name, au.role, au.secondary_roles, au.is_active,
+        coalesce(au.departments, '{}'::text[]) as departments,
         au.weekly_target_sales_physical,
         au.weekly_target_sales_online,
         au.weekly_target_sales_phone,

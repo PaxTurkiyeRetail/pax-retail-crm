@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createPgServerClient } from '@/lib/pg/server';
 import { createPgAdminClient } from '@/lib/pg/admin';
-import { requireCrmAccessOrThrow, userHasPermission } from '@/lib/authz';
+import { getUserDepartments, requireCrmAccessOrThrow, userHasPermission } from '@/lib/authz';
+import { resolveDepartmentFilter } from '@/lib/departments';
 import { getKunyeStatus, mapKunyeDbToUi, normalizeKunyeStatusFilter } from '@/lib/kunye';
 import { appendLastStayedPhase } from '@/lib/crm-phase-history';
 import { isReportOnlyCustomer } from '@/lib/report-only-customers';
@@ -211,7 +212,16 @@ export async function GET(request: Request) {
       ? { data: null as any[] | null, error: null as any }
       : await admin.from('musteriler').select('id').eq('owner_user_id', me.id).limit(10000);
     if (visibleCustomerResult.error) return NextResponse.json({ message: visibleCustomerResult.error.message }, { status: 500 });
-    const visibleCustomerIds = canReadAny ? null : (visibleCustomerResult.data ?? []).map((row: any) => String(row.id ?? '')).filter(Boolean);
+    let visibleCustomerIds: string[] | null = canReadAny ? null : (visibleCustomerResult.data ?? []).map((row: any) => String(row.id ?? '')).filter(Boolean);
+    // Departman kapsamı (allowed_users.departments): kullanıcının departmanı varsa
+    // yalnız o iş kollarının müşterileri; ?is_kolu= izinli değilse izinli listeye daralır.
+    const deptFilter = resolveDepartmentFilter(url.searchParams.get('is_kolu'), await getUserDepartments(me));
+    if (deptFilter) {
+      const deptResult = await admin.from('musteriler').select('id').in('is_kolu', deptFilter).limit(20000);
+      if (deptResult.error) return NextResponse.json({ message: deptResult.error.message }, { status: 500 });
+      const deptIds = new Set<string>((deptResult.data ?? []).map((row: any) => String(row.id ?? '')).filter(Boolean));
+      visibleCustomerIds = visibleCustomerIds ? visibleCustomerIds.filter((id) => deptIds.has(id)) : Array.from(deptIds);
+    }
     if (visibleCustomerIds?.length === 0) return NextResponse.json({ rows: [], total: 0, page, pageSize });
     const effectiveOwner = canReadAny ? owner : '';
 

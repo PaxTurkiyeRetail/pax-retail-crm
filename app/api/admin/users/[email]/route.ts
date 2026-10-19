@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireAdminOrThrow } from '@/lib/authz';
 import { db } from '@/lib/db';
+import { normalizeDepartments } from '@/lib/departments';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -65,6 +66,10 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ email: string
     if (typeof body?.full_name === 'string') {
       values.push(body.full_name.trim());
       fields.push(`full_name = $${values.length}`);
+    }
+    if (Array.isArray(body?.departments)) {
+      values.push(normalizeDepartments(body.departments));
+      fields.push(`departments = $${values.length}::text[]`);
     }
     for (const column of WEEKLY_TARGET_COLUMNS) {
       if (Object.prototype.hasOwnProperty.call(body ?? {}, column)) {

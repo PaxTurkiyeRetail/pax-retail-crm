@@ -10,6 +10,7 @@ import {
   ROLE_PRIORITY,
 } from '@/lib/roles';
 import { db } from '@/lib/db';
+import { normalizeDepartments, type Department } from '@/lib/departments';
 import { userHasPermission } from '@/lib/permissions';
 import { isResourceOwner, type OwnedResource } from '@/lib/resource-ownership';
 export { isResourceOwner, type OwnedResource } from '@/lib/resource-ownership';
@@ -254,6 +255,21 @@ export async function resolveRolePermissionsFromDb(role: AllowedRole): Promise<P
   return Array.isArray(row?.permissions)
     ? row.permissions.filter((permission: unknown): permission is Permission => typeof permission === 'string')
     : [];
+}
+
+/**
+ * Kullanıcının departmanları (allowed_users.departments). null = tüm departmanlar
+ * (atanmamış ya da kolon henüz yok). AD'den gelmez; admin Kullanıcılar ekranından atar.
+ */
+export async function getUserDepartments(user: Pick<AllowedUser, 'id'>): Promise<Department[] | null> {
+  try {
+    const result = await db.query('select departments from public.allowed_users where id = $1 limit 1', [user.id]);
+    const list = normalizeDepartments(result.rows[0]?.departments);
+    return list.length ? list : null;
+  } catch (error) {
+    if ((error as { code?: string })?.code === '42703') return null; // kolon yok (migration 046 öncesi)
+    throw error;
+  }
 }
 
 export { isAdminLike } from '@/lib/roles';
