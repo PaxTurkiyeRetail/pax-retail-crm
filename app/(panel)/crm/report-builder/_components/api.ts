@@ -5,12 +5,13 @@ import type { PageDefinition } from '@/lib/report-builder/page-types';
 import type { WidgetData } from '@/lib/report-builder/pdf';
 import type { ReportResult } from '@/lib/report-builder/result';
 import type { ReportDefinitionInput } from '@/lib/report-builder/types';
+import { validReportListPayload, REPORT_LIST_LABEL, type ReportListKind } from './api-contract';
 
 export class ApiFailure extends Error {
-  constructor(message: string, public status: number, public details?: string[]) { super(message); }
+  constructor(message: string, public status: number, public details?: string[], public invalidResponse = false) { super(message); }
 }
 
-async function call<T>(url: string, init?: RequestInit): Promise<T> {
+async function call<T>(url: string, init?: RequestInit, listKind?:ReportListKind): Promise<T> {
   const res = await fetch(url, { ...init, headers: { ...(init?.body && !(init.body instanceof FormData) ? { 'content-type': 'application/json' } : {}), ...init?.headers } });
   if (!res.ok) {
     const body = await res.json().catch(() => null);
@@ -22,17 +23,19 @@ async function call<T>(url: string, init?: RequestInit): Promise<T> {
     }) : undefined;
     throw new ApiFailure(err?.message ?? `İstek başarısız (${res.status})`, res.status, details);
   }
-  return res.json() as Promise<T>;
+  const payload:unknown=await res.json().catch(()=>{throw new ApiFailure('Rapor yanıtı okunamadı. Sayfayı yenileyin; sorun sürerse yöneticinize bildirin.',502,undefined,true);});
+  if(listKind&&!validReportListPayload(listKind,payload))throw new ApiFailure(`${REPORT_LIST_LABEL[listKind]} yanıtı eksik veya geçersiz. Sayfayı yenileyin; sorun sürerse yöneticinize bildirin.`,502,undefined,true);
+  return payload as T;
 }
 
 export const api = {
-  datasets: () => call<{ datasets: DatasetCatalogEntry[]; scope: 'all' | 'own' | null }>('/api/report-builder/datasets'),
+  datasets: () => call<{ datasets: DatasetCatalogEntry[]; scope: 'all' | 'own' | null }>('/api/report-builder/datasets',undefined,'datasets'),
   query: (definition: ReportDefinitionInput) => call<ReportResult & { scope: string }>('/api/report-builder/query', { method: 'POST', body: JSON.stringify({ definition }) }),
-  definitions: () => call<{ definitions: SavedDefinitionLite[]; userId: string }>('/api/report-builder/definitions'),
+  definitions: () => call<{ definitions: SavedDefinitionLite[]; userId: string }>('/api/report-builder/definitions',undefined,'definitions'),
   createDefinition: (body: object) => call<{ id: string }>('/api/report-builder/definitions', { method: 'POST', body: JSON.stringify(body) }),
   updateDefinition: (id: string, body: object) => call<{ ok: true }>(`/api/report-builder/definitions/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   archiveDefinition: (id: string) => call<{ ok: true }>(`/api/report-builder/definitions/${id}`, { method: 'DELETE' }),
-  pages: () => call<{ pages: SavedPageLite[]; templates: { key: string; label: string }[]; canDesign: boolean; canManageLetterheads: boolean }>('/api/report-builder/pages'),
+  pages: () => call<{ pages: SavedPageLite[]; templates: { key: string; label: string }[]; canDesign: boolean; canManageLetterheads: boolean }>('/api/report-builder/pages',undefined,'pages'),
   page: (id: string) => call<{ page: SavedPageLite & { page: PageDefinition } }>(`/api/report-builder/pages/${id}`),
   createPage: (body: object) => call<{ id: string }>('/api/report-builder/pages', { method: 'POST', body: JSON.stringify(body) }),
   updatePage: (id: string, body: object) => call<{ ok: true; version: number }>(`/api/report-builder/pages/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
@@ -41,7 +44,7 @@ export const api = {
   restore: (id: string, version: number) => call<{ ok: true; version: number }>(`/api/report-builder/pages/${id}/versions`, { method: 'POST', body: JSON.stringify({ version }) }),
   runPage: (body: { pageId?: string; page?: PageDefinition; values?: Record<string, unknown>; widgetIds?: string[] }) =>
     call<{ data: Record<string, WidgetData> }>('/api/report-builder/pages/run', { method: 'POST', body: JSON.stringify(body) }),
-  letterheads: () => call<{ letterheads: LetterheadLite[]; canManage: boolean }>('/api/report-builder/letterheads'),
+  letterheads: () => call<{ letterheads: LetterheadLite[]; canManage: boolean }>('/api/report-builder/letterheads',undefined,'letterheads'),
   uploadLetterhead: (form: FormData) => call<{ id: string }>('/api/report-builder/letterheads', { method: 'POST', body: form }),
   updateLetterhead: (id: string, settings: object) => call<{ ok: true }>(`/api/report-builder/letterheads/${id}`, { method: 'PUT', body: JSON.stringify(settings) }),
   deactivateLetterhead: (id: string) => call<{ ok: true }>(`/api/report-builder/letterheads/${id}`, { method: 'DELETE' }),

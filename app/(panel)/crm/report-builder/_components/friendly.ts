@@ -108,6 +108,7 @@ export const TEMPLATE_DESC: Record<string, string> = {
 /** API hatasını iş kullanıcısının anlayacağı Türkçeye çevirir. */
 export function friendlyError(e: unknown): string {
   if (e instanceof ApiFailure) {
+    if (e.invalidResponse) return e.message;
     if (e.status === 401) return 'Oturumunuz sona ermiş. Sayfayı yenileyip tekrar giriş yapın.';
     if (e.status === 403) return 'Bu veriyi görme yetkiniz yok. Gerekirse yöneticinizden yetki isteyin.';
     if (e.status === 404) return 'Aradığınız rapor bulunamadı; silinmiş veya sizinle paylaşılmamış olabilir.';
