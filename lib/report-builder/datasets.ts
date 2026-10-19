@@ -8,9 +8,12 @@
 //    crm_sales.device_count (performance-report / live-board ile aynı).
 //  - Aktivite: tarih = coalesce(aktivite_tarihi, created_at@Istanbul); planlanan "sonraki aksiyon"
 //    kayıtları (Başlamadı + hedef tarihli) sayılmaz (weekly-targets / live-board ile aynı).
+import { ACTIVITY_CHANNEL_OPTIONS } from '@/lib/activity-channels';
+import { DURUM_CANONICAL } from '@/lib/activities/presentation';
 import { ACTUAL_FORECAST_FROM } from './actual-forecast-source';
 import type { Permission } from '@/lib/roles';
 import { INTEGRATION_DEVICE_SERVICE_KEYS } from '@/lib/sales/service-invoices-shared';
+import { RENTAL_OPS_STATUSES } from '@/lib/sales/rental-ops';
 import type { TimeGrain } from '@/lib/report-builder/types';
 import { PERFORMANCE_COMPARISON_FROM } from '@/lib/report-builder/performance-source';
 
@@ -113,7 +116,10 @@ const SALES: DatasetDef = {
     owner: { label: 'Satıcı', sql: `coalesce(nullif(trim(s.owner_name), ''), 'Havuz Account')`, type: 'string', group: 'Satış' },
     sales_channel: { label: 'Satış kanalı', sql: `coalesce(s.sales_channel, '—')`, type: 'string', group: 'Satış' },
     source: { label: 'Kaynak', sql: 's.source', type: 'string', group: 'Satış', options: ['quote', 'direct'] },
-    sale_type: { label: 'Satış tipi', sql: 's.sale_type', type: 'string', group: 'Satış', options: ['sale', 'rental'] },
+    sale_type: { label: 'Satış tipi', sql: 's.sale_type', type: 'string', group: 'Satış', options: ['sale', 'rental', 'mixed'], description: 'mixed: satış ve kiralama kalemleri aynı kayıtta.' },
+    rental_start_date: { label: 'Kiralama başlangıç tarihi', sql: 's.rental_start_date', type: 'date', grains: ALL_GRAINS, group: 'Kiralama', description: 'Satış kaydındaki kiralama döneminin başlangıcı; kiralama yoksa boştur.' },
+    rental_end_date: { label: 'Kiralama bitiş tarihi', sql: 's.rental_end_date', type: 'date', grains: ALL_GRAINS, group: 'Kiralama', description: 'Satış kaydındaki kiralama döneminin bitişi; kiralama yoksa boştur.' },
+    rental_ops_status: { label: 'Kiralama operasyon durumu', sql: `case when s.sale_type in ('rental', 'mixed') then coalesce(s.rental_ops_status, 'hazirlik') end`, type: 'string', group: 'Kiralama', options: RENTAL_OPS_STATUSES.map(s => s.value), description: 'Kiralama veya karma satışın operasyon aşaması. Boş kiralama durumu Hazırlık sayılır; normal satışlarda boştur.' },
     currency: { label: 'Para birimi', sql: 's.currency', type: 'string', group: 'Satış' },
     price_source: { label: 'Fiyat kaynağı', sql: 's.price_source', type: 'string', group: 'Satış', options: ['catalog', 'manual'] },
     quote_no: { label: 'Teklif no', sql: 's.quote_no', type: 'string', group: 'Satış' },
@@ -150,6 +156,7 @@ const SALE_ITEMS: DatasetDef = {
     product_type: { label: 'Ürün tipi', sql: 'i.product_type', type: 'string', group: 'Kalem', options: ['device', 'peripheral', 'bundle', 'service', 'license'] },
     item_sale_type: { label: 'Satış / kiralama', sql: `case when i.sale_type = 'rental' then 'Kiralama' else 'Satış' end`, type: 'string', group: 'Kalem', options: ['Satış', 'Kiralama'] },
     is_device: { label: 'Cihaz mı', sql: DEVICE, type: 'boolean', group: 'Kalem' },
+    is_recurring: { label: 'Tekrarlayan kalem mi', sql: 'i.is_recurring', type: 'boolean', group: 'Kalem', description: 'Satış kaleminde saklanan tekrarlayan hizmet/lisans işareti; güncel katalogdan alınmaz.' },
     currency: { label: 'Para birimi', sql: 's.currency', type: 'string', group: 'Satış' },
     ...customerDims(),
   },
@@ -178,6 +185,8 @@ const FORECAST: DatasetDef = {
     owner: { label: 'Satıcı', sql: `coalesce(nullif(trim(f.owner_name), ''), '—')`, type: 'string', group: 'Forecast' },
     sales_channel: { label: 'Satış kanalı', sql: 'f.sales_channel', type: 'string', group: 'Forecast' },
     probability: { label: 'Olasılık (%)', sql: 'f.probability', type: 'number', group: 'Forecast', options: ['30', '60', '90'] },
+    sale_type: { label: 'Satış / kiralama', sql: 'f.sale_type', type: 'string', group: 'Forecast', options: ['sale', 'rental'], description: 'Forecast satırının satış veya kiralama planı.' },
+    include_in_retail_plan: { label: 'Retail planına dahil mi', sql: 'f.include_in_retail_plan', type: 'boolean', group: 'Forecast', description: 'Kayıtta seçilen Retail planına dahil etme işareti; filtre uygulanmadıkça tüm aktif satırlar kalır.' },
     product: { label: 'Ürün', sql: `coalesce(nullif(trim(f.product_code_snapshot), ''), f.product_name_snapshot)`, type: 'string', group: 'Forecast' },
     ...customerDims(),
   },
@@ -202,9 +211,10 @@ const ACTIVITIES: DatasetDef = {
   dimensions: {
     activity_date: { label: 'Aktivite tarihi', sql: ACTIVITY_DATE, type: 'date', grains: ALL_GRAINS, group: 'Aktivite' },
     created_by: { label: 'Giren kişi', sql: `coalesce(nullif(trim(pe.created_by), ''), '—')`, type: 'string', group: 'Aktivite' },
-    channel: { label: 'Aktivite tipi', sql: ACTIVITY_CHANNEL, type: 'string', group: 'Aktivite', options: ['Telefon', 'Yerinde Ziyaret', 'Online Toplantı', 'Teknik Ziyaret', 'Teknik Online', 'POM', 'E-posta', 'Entegrasyon Süreci', 'Diğer'] },
+    channel: { label: 'Aktivite tipi', sql: ACTIVITY_CHANNEL, type: 'string', group: 'Aktivite', options: ACTIVITY_CHANNEL_OPTIONS },
     is_activity_record: { label: 'AKTIVITE: kaydı mı', sql: `coalesce(pe.aksiyon, '') like 'AKTIVITE:%'`, type: 'boolean', group: 'Aktivite' },
-    status: { label: 'Durum', sql: 'pe.durum::text', type: 'string', group: 'Aktivite' },
+    status: { label: 'Durum', sql: 'pe.durum::text', type: 'string', group: 'Aktivite', options: Object.values(DURUM_CANONICAL) },
+    activity_context: { label: 'Aktivite bağlamı', sql: 'pe.activity_context', type: 'string', group: 'Aktivite', options: ['customer', 'business_partner'], description: 'Müşteri veya iş ortağı süreci. Eski kayıtlarda boş olabilir.' },
     phase_no: { label: 'Faz no', sql: 'pe.faz_no', type: 'number', group: 'Aktivite' },
     scope: { label: 'Kapsam', sql: 'pe.activity_scope', type: 'string', group: 'Aktivite', options: ['account', 'technical'] },
     ...customerDims(),
@@ -236,6 +246,7 @@ const CUSTOMERS: DatasetDef = {
     phase_name: { label: 'Aktif faz', sql: `coalesce(ft.asama_adi, 'Fazsız')`, type: 'string', group: 'Faz' },
     phase_group: { label: 'Faz grubu', sql: PHASE_GROUP, type: 'string', group: 'Faz', options: ['Fazsız', 'Fırsat', 'İlk Temas', 'Business', 'Operasyon', 'Yayılım'] },
     pipeline_status: { label: 'Pipeline durumu', sql: 'mp.durum::text', type: 'string', group: 'Faz' },
+    pipeline_policy: { label: 'Faz zorunluluğu politikası', sql: 'm.pipeline_policy', type: 'string', group: 'Müşteri', options: ['phase_required', 'phase_optional'], description: 'Müşteri kartındaki faz zorunlu / yalnız aktivite seçimi; mevcut pipeline durumundan bağımsızdır.' },
     integration_type: { label: 'Entegrasyon tipi', sql: 'm.entegrasyon_tipi::text', type: 'string', group: 'Müşteri' },
     ...customerDims(),
   },
@@ -259,6 +270,7 @@ const QUOTES: DatasetDef = {
   dimensions: {
     quote_id: { label: 'Teklif kayıt kimliği', sql: 'q.id::text', type: 'string', group: 'Kayıt bağlantıları' },
     proposal_date: { label: 'Teklif tarihi', sql: 'q.proposal_date', type: 'date', grains: ALL_GRAINS, group: 'Teklif' },
+    valid_until: { label: 'Teklif geçerlilik tarihi', sql: 'q.valid_until', type: 'date', grains: ALL_GRAINS, group: 'Teklif', description: 'Teklif kaydında saklanan son geçerlilik günü.' },
     closed_date: { label: 'Kapanış tarihi', sql: `(coalesce(q.closed_at, q.updated_at) at time zone 'Europe/Istanbul')::date`, type: 'date', grains: ALL_GRAINS, group: 'Teklif' },
     owner: { label: 'Satıcı', sql: `coalesce(nullif(trim(q.owner_name), ''), '—')`, type: 'string', group: 'Teklif' },
     status: { label: 'Durum', sql: 'q.status', type: 'string', group: 'Teklif' },

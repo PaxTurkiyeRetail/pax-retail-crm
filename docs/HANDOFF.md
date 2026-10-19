@@ -103,3 +103,12 @@ Read `.claude/CLAUDE.md` first. Rules:
 - Validation: full local verify passed (447 tests before final targeted additions); latest snapshot/security tests 39/39, drilldown helper/route tests 17/17. Mocked real-component browser tests passed. Real antetli PDF rendered and visually checked across three pages. Authenticated live UI has not been tested.
 - Migration 048 is an append section in 047; applied migration prefix checksums are preserved. Use standard backup-first deployment script.
 - Production status: 6b0064c deployed successfully; server full verify 54 files / 452 tests passed, append migration 048 applied, PM2 online, internal and public HTTPS health passed. Mandatory backup: backups/predeploy-20261019-131234.dump. No real email was sent for QA.
+
+## Discoverable fields and tab placement — 2026-10-19
+- Generic creation now searches all permitted source measures and dimensions; selected breakdowns can be ordered and removed. Order determines table columns and the last pivot dimension.
+- Per-section typed record filters: canonical option multi-select/exclusion, text matching, numeric/date ranges, boolean and null checks. Conditions combine with AND; selections within an inclusion list combine with OR. Incomplete drafts cannot create a report. Both summary and detail retain the same filters.
+- Free-text dimensions offer real-value suggestions through the existing scoped query endpoint (this year, up to 100 results, searchable, abortable; honest fallback on failure). These are suggestions, not a new unrestricted endpoint.
+- Canonical activity channels/status/context exposed; eight existing scalar details exposed across sales/items/Forecast/quotes/customers. No new joins or rental entry flow.
+- Explicit tab naming and section destinations allow several sections in one tab, with a structure preview and independent per-tab stacking. Empty tabs are omitted. Studio outline also groups shared areas and tab contents, showing widget kind/source and new-widget destination.
+- Local real-component browser acceptance passed: two independent filtered sources, ordered model breakdown, persisted filters, three sections across two tabs, omitted empty tab, correct layout and grouped Studio outline. Authenticated live AD UI verification remains pending.
+- Production status for this follow-up: full verification and standard deployment pending.
