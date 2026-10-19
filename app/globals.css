@@ -579,7 +579,8 @@ img, svg { display: block; }
 
 /* ── MOBILE-FIRST UX HARDENING ── */
 :root { --safe-bottom: env(safe-area-inset-bottom, 0px); }
-html, body { max-width: 100%; overflow-x: hidden; }
+/* clip: hidden gibi taşmayı keser ama scroll container oluşturmaz → sticky sidebar çalışır. */
+html, body { max-width: 100%; overflow-x: clip; }
 button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 button { touch-action: manipulation; }
 
