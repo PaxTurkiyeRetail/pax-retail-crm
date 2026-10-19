@@ -21,6 +21,7 @@ type Payload = {
   summary: { total: number };
   rows: Row[];
   isKoluOptions: string[];
+  allowedDepartments?: string[] | null;
 };
 
 const EMPTY: Payload = { filters: { isKolu: '' }, summary: { total: 0 }, rows: [], isKoluOptions: [] };
@@ -103,6 +104,9 @@ export default function EntegrasyonRaporuClient() {
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json?.message || 'Rapor yüklenemedi.');
       setData(json);
+      // Tek departmanlı kullanıcı: varsayılan o departman.
+      const allowed: string[] | null = Array.isArray(json?.allowedDepartments) ? json.allowedDepartments : null;
+      if (allowed && allowed.length === 1 && isKoluFilter !== allowed[0]) setIsKolu(allowed[0]);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Rapor yüklenemedi.');
     } finally {
@@ -111,6 +115,12 @@ export default function EntegrasyonRaporuClient() {
   }, []);
 
   useEffect(() => { void load(isKolu); }, [load, isKolu]);
+
+  const filterOptions = useMemo(() => {
+    const allowed = data.allowedDepartments;
+    if (!allowed || !allowed.length) return ['', 'Retail', 'Vertical'];
+    return allowed.length === 1 ? allowed : ['', ...allowed];
+  }, [data.allowedDepartments]);
 
   const sortedRows = useMemo(() => {
     return [...data.rows].sort((a, b) => {
@@ -146,7 +156,7 @@ export default function EntegrasyonRaporuClient() {
           Entegrasyon süreci açık müşterilerin ve iş ortaklarının aktif fazı ile son aktivite notu.
         </p>
         <div style={{ display: 'flex', gap: 12, marginTop: 14, alignItems: 'center', flexWrap: 'wrap' }}>
-          {['', 'Retail', 'Vertical'].map((opt) => (
+          {filterOptions.map((opt) => (
             <button
               key={opt || 'all'}
               type="button"

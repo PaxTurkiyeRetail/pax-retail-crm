@@ -2,6 +2,7 @@
 import '@/styles/users-admin.css';
 
 import { useEffect, useState } from 'react';
+import { DEPARTMENTS, DEPARTMENT_LABELS, type Department } from '@/lib/departments';
 
 type AllowedUser = {
   email: string;
@@ -9,6 +10,8 @@ type AllowedUser = {
   role: 'super_admin' | 'account_manager' | 'itsm' | 'admin' | 'user';
   secondary_roles: string[] | null;
   is_active: boolean;
+  /** Boş = tüm departmanlar. */
+  departments: Department[];
   auth_provider: 'local' | 'active_directory' | null;
   auth_tenant_id: string | null;
   auth_last_login_at: string | null;
@@ -190,6 +193,7 @@ export default function UsersClient() {
                   <th>AD Durumu</th>
                   <th>Son Giriş</th>
                   <th>Hedefler (yıllık ciro · haftalık aktivite)</th>
+                  <th>Departman</th>
                   <th>Aktif</th>
                   <th></th>
                 </tr>
@@ -227,6 +231,28 @@ export default function UsersClient() {
                           <span>{targetSummary(u)}</span>
                         </button>
                       </td>
+                      <td>
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }} title="Boş = tüm departmanlar">
+                          {DEPARTMENTS.map((d) => {
+                            const current = u.departments ?? [];
+                            const checked = current.includes(d);
+                            return (
+                              <label key={d} style={{ display: 'inline-flex', gap: 4, alignItems: 'center', fontSize: 13 }}>
+                                <input
+                                  type="checkbox"
+                                  disabled={busy}
+                                  checked={checked}
+                                  onChange={() => updateUser(u.email, {
+                                    departments: checked ? current.filter((x) => x !== d) : [...current, d],
+                                  })}
+                                />
+                                {DEPARTMENT_LABELS[d]}
+                              </label>
+                            );
+                          })}
+                        </div>
+                        {!(u.departments ?? []).length ? <div style={{ fontSize: 11, color: '#64748b' }}>Tümü</div> : null}
+                      </td>
                       <td>{u.is_active ? 'true' : 'false'}</td>
                       <td>
                         <div className="actions">
@@ -243,7 +269,7 @@ export default function UsersClient() {
                     </tr>
                   );
                 })}
-                {rows.length === 0 ? <tr><td colSpan={8} style={{ padding: 16, color: '#64748b' }}>Kayıt yok.</td></tr> : null}
+                {rows.length === 0 ? <tr><td colSpan={9} style={{ padding: 16, color: '#64748b' }}>Kayıt yok.</td></tr> : null}
               </tbody>
             </table>
           </div>
