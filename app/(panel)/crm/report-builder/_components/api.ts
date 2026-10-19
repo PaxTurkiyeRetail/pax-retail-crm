@@ -68,6 +68,6 @@ export function saveBlob(blob: Blob, name: string) {
   setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 
-export type SavedDefinitionLite = { id: string; title: string; description: string; owner_name: string | null; visibility: string; is_favorite?: boolean; definition: ReportDefinitionInput; updated_at: string; version: number };
+export type SavedDefinitionLite = { id: string; title: string; description: string; owner_user_id?: string; owner_name: string | null; visibility: string; is_favorite?: boolean; definition: ReportDefinitionInput; updated_at: string; version: number };
 export type SavedPageLite = { id: string; title: string; owner_name: string | null; visibility: 'private' | 'roles' | 'everyone'; shared_roles: string[]; is_template: boolean; version: number; letterhead_id: string | null; updated_at: string; can_edit: boolean };
 export type LetterheadLite = { id: string; name: string; mimeType: string; byteSize: number; orientation: 'portrait' | 'landscape'; margins: { top: number; right: number; bottom: number; left: number }; safeArea: { top: number; bottom: number }; showTitle: boolean; showDate: boolean; showPageNumbers: boolean; footerText: string; isDefault: boolean };

@@ -1,123 +1,242 @@
 'use client';
-// Rapor Geliştirme Aracı kabuğu: Sayfalar / Rapor oluştur / Antetler.
+// Rapor Merkezi kabuğu: galeri (hazır raporlar, raporlarım, panolar) → sihirbaz / pano / antetler / uzman ekranı.
 import { useCallback, useEffect, useState } from 'react';
+import { ChevronRight, FileStack, LayoutDashboard, Plus, Sparkles, Stamp, Wrench } from 'lucide-react';
 import type { DatasetCatalogEntry } from '@/lib/report-builder/datasets';
 import type { ReportDefinitionInput } from '@/lib/report-builder/types';
-import { api, type LetterheadLite, type SavedPageLite } from './api';
+import { api, type LetterheadLite, type SavedDefinitionLite, type SavedPageLite } from './api';
 import PageDesigner from './designer/PageDesigner';
+import { friendlyError, QUICK_REPORTS, TEMPLATE_DESC, uiFor } from './friendly';
 import LetterheadManager from './LetterheadManager';
 import QueryBuilder from './QueryBuilder';
-import { TOKEN_CSS } from './renderers/tokens';
+import ReportWizard from './ReportWizard';
+import { TOKEN_CSS, TOKEN_SOFT } from './renderers/tokens';
 
-type Tab = 'pages' | 'query' | 'letterheads';
+type View =
+  | { kind: 'hub' }
+  | { kind: 'wizard'; initial?: { def: ReportDefinitionInput; title?: string; saved?: SavedDefinitionLite | null; step?: 1 | 2 | 3 } }
+  | { kind: 'page'; id: string; edit?: boolean }
+  | { kind: 'letterheads' }
+  | { kind: 'expert' };
+
+const VIS_LABEL: Record<string, string> = { private: 'Yalnız ben', roles: 'Rollerle paylaşılan', everyone: 'Herkesle paylaşılan' };
+
+function setParam(k: string, v: string | null) {
+  const url = new URL(window.location.href);
+  ['page', 'report'].forEach((x) => url.searchParams.delete(x));
+  if (v) url.searchParams.set(k, v);
+  window.history.replaceState(null, '', url);
+}
 
 export default function ReportBuilderApp({ canDesign, canManageLetterheads }: { canDesign: boolean; canManageLetterheads: boolean }) {
-  const [tab, setTab] = useState<Tab>('pages');
+  const [view, setView] = useState<View>({ kind: 'hub' });
   const [datasets, setDatasets] = useState<DatasetCatalogEntry[]>([]);
   const [pages, setPages] = useState<SavedPageLite[]>([]);
   const [templates, setTemplates] = useState<{ key: string; label: string }[]>([]);
+  const [defs, setDefs] = useState<SavedDefinitionLite[]>([]);
+  const [userId, setUserId] = useState<string | null>(null);
   const [letterheads, setLetterheads] = useState<LetterheadLite[]>([]);
-  const [openPage, setOpenPage] = useState<string | null>(null);
   const [queryEdit, setQueryEdit] = useState<{ query: ReportDefinitionInput; apply: (q: ReportDefinitionInput) => void } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [newTitle, setNewTitle] = useState('');
-  const [templateKey, setTemplateKey] = useState('');
+  const [loaded, setLoaded] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
     try {
-      const [d, p, l] = await Promise.all([api.datasets(), api.pages(), api.letterheads()]);
+      const [d, p, l, r] = await Promise.all([api.datasets(), api.pages(), api.letterheads(), api.definitions()]);
       setDatasets(d.datasets); setPages(p.pages); setTemplates(p.templates); setLetterheads(l.letterheads);
-    } catch (e) { setError((e as Error).message); }
+      setDefs(r.definitions); setUserId(r.userId);
+    } catch (e) { setError(friendlyError(e)); } finally { setLoaded(true); }
   }, []);
   useEffect(() => { reload(); }, [reload]);
 
-  // URL ?page=<id> → sayfa doğrudan açılır (paylaşılabilir bağlantı).
+  // Paylaşılabilir bağlantılar: ?page=<id> pano, ?report=<id> kayıtlı rapor.
   useEffect(() => {
-    const id = new URLSearchParams(window.location.search).get('page');
-    if (id) setOpenPage(id);
+    const q = new URLSearchParams(window.location.search);
+    const id = q.get('page');
+    if (id) setView({ kind: 'page', id });
   }, []);
-  const open = (id: string | null) => {
-    setOpenPage(id);
-    const url = new URL(window.location.href);
-    if (id) url.searchParams.set('page', id); else url.searchParams.delete('page');
-    window.history.replaceState(null, '', url);
+  useEffect(() => {
+    const rid = new URLSearchParams(window.location.search).get('report');
+    if (!rid || !defs.length) return;
+    const s = defs.find((d) => d.id === rid);
+    if (s) setView({ kind: 'wizard', initial: { def: s.definition, title: s.title, saved: s, step: 3 } });
+  }, [defs]);
+
+  const go = (v: View) => {
+    setView(v); setError(null);
+    if (v.kind === 'page') setParam('page', v.id);
+    else if (v.kind === 'wizard' && v.initial?.saved) setParam('report', v.initial.saved.id);
+    else setParam('page', null);
+  };
+  const back = () => { go({ kind: 'hub' }); reload(); };
+
+  const openTemplate = async (key: string, label: string) => {
+    const existing = pages.find((p) => p.title === label);
+    if (existing) { go({ kind: 'page', id: existing.id }); return; }
+    if (!canDesign) { setError('Bu hazır pano henüz kurulmamış. Kurulum için rapor tasarım yetkisi olan birine başvur.'); return; }
+    setBusy(key);
+    try { const r = await api.createPage({ templateKey: key }); await reload(); go({ kind: 'page', id: r.id }); }
+    catch (e) { setError(friendlyError(e)); } finally { setBusy(null); }
   };
 
-  const create = async () => {
+  const newBoard = async () => {
+    setBusy('board');
     try {
-      const title = newTitle.trim() || 'Yeni sayfa';
-      const r = await api.createPage(templateKey
-        ? { templateKey }
-        : { page: { version: 1, title, widgets: [{ id: 'h1', type: 'text', variant: 'heading', text: title, layout: { lg: { x: 0, y: 0, w: 12, h: 1 } } }] } });
-      setNewTitle(''); setTemplateKey('');
-      await reload();
-      open(r.id);
-    } catch (e) { setError((e as Error).message); }
+      const r = await api.createPage({ page: { version: 1, title: 'Yeni pano', widgets: [{ id: 'h1', type: 'text', variant: 'heading', text: 'Yeni pano', layout: { lg: { x: 0, y: 0, w: 12, h: 1 } } }] } });
+      await reload(); go({ kind: 'page', id: r.id, edit: true });
+    } catch (e) { setError(friendlyError(e)); } finally { setBusy(null); }
   };
+
+  const queryDialog = queryEdit && (
+    <div role="dialog" aria-label="Kart sorgusu" className="fixed inset-0 z-40 overflow-auto bg-black/50 p-4">
+      <div className="mx-auto max-w-7xl rounded-xl p-2" style={{ background: 'var(--surface)' }}>
+        <QueryBuilder datasets={datasets} initial={queryEdit.query} onApply={(q) => { queryEdit.apply(q); setQueryEdit(null); }} onCancel={() => setQueryEdit(null)} />
+      </div>
+    </div>
+  );
+
+  if (view.kind === 'wizard') {
+    return (
+      <div className="pax-page-container">
+        {loaded && <ReportWizard key={view.initial?.saved?.id ?? 'new'} datasets={datasets} letterheads={letterheads} initial={view.initial} onClose={back} onSaved={reload} />}
+      </div>
+    );
+  }
+  if (view.kind === 'page') {
+    return (
+      <div className="pax-page-container space-y-3">
+        {queryDialog}
+        <PageDesigner key={view.id} pageId={view.id} canDesign={canDesign} startEditing={view.edit} letterheads={letterheads} onBack={back} onEditQuery={(query, apply) => setQueryEdit({ query, apply })} />
+      </div>
+    );
+  }
+  if (view.kind === 'letterheads' || view.kind === 'expert') {
+    return (
+      <div className="pax-page-container space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <button type="button" className="pax-btn" onClick={back}>← Rapor Merkezi</button>
+          <h1 className="text-xl font-semibold">{view.kind === 'letterheads' ? 'PDF antetleri' : 'Uzman sorgu ekranı'}</h1>
+        </div>
+        <p className="text-sm text-[var(--muted)]">{view.kind === 'letterheads' ? 'PDF çıktılarında kullanılacak antetli kâğıtları yönet.' : 'Tüm seçenekler tek ekranda: veri kümesi, kırılım, filtre, formül. Günlük kullanım için “+ Yeni rapor” sihirbazı daha hızlıdır.'}</p>
+        {view.kind === 'letterheads'
+          ? <LetterheadManager letterheads={letterheads} canManage={canManageLetterheads} onChanged={reload} />
+          : datasets.length ? <QueryBuilder datasets={datasets} /> : <p className="pax-card p-4 text-sm">Yükleniyor…</p>}
+      </div>
+    );
+  }
+
+  const mine = defs.filter((d) => d.owner_user_id === userId);
+  const shared = defs.filter((d) => d.owner_user_id !== userId);
+  const templatePages = new Set(templates.map((t) => t.label));
+  const boards = pages.filter((p) => !p.is_template);
 
   return (
-    <div className="pax-page-container space-y-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <h1 className="mr-auto text-xl font-semibold">Rapor Geliştirme</h1>
-        <div role="tablist" aria-label="Bölümler" className="flex gap-1">
-          {([['pages', 'Sayfalar'], ['query', 'Rapor oluştur'], ['letterheads', 'Antetler']] as const).map(([k, l]) => (
-            <button key={k} type="button" role="tab" aria-selected={tab === k} className={tab === k ? 'pax-btn pax-btn-primary' : 'pax-btn'} onClick={() => { setTab(k); setQueryEdit(null); }}>{l}</button>
+    <div className="pax-page-container space-y-6">
+      <section className="pax-card flex flex-col gap-4 p-5 md:flex-row md:items-center">
+        <div className="min-w-0 flex-1 space-y-1">
+          <h1 className="text-2xl font-semibold">Rapor Merkezi</h1>
+          <p className="text-sm text-[var(--muted)]">Hazır bir raporu tek tıkla aç ya da 3 adımda kendi raporunu oluştur. Kod, formül veya teknik bilgi gerekmez.</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" className="pax-btn pax-btn-primary inline-flex items-center gap-2 px-5 py-2.5 text-base" onClick={() => go({ kind: 'wizard' })}><Plus size={18} aria-hidden />Yeni rapor</button>
+          {canDesign && <button type="button" className="pax-btn inline-flex items-center gap-2 px-4 py-2.5" disabled={busy === 'board'} onClick={newBoard}><LayoutDashboard size={18} aria-hidden />Pano oluştur</button>}
+        </div>
+      </section>
+
+      {error && <p role="alert" className="rounded-lg p-3 text-sm" style={{ background: TOKEN_SOFT.danger, color: TOKEN_CSS.danger }}>{error}</p>}
+
+      <section className="space-y-3" aria-labelledby="h-quick">
+        <div><h2 id="h-quick" className="flex items-center gap-2 text-lg font-semibold"><Sparkles size={18} aria-hidden style={{ color: TOKEN_CSS.warning }} />Hazır raporlar</h2>
+          <p className="text-xs text-[var(--muted)]">“Aç”a bas, rapor anında çalışsın. İstersen içinde değiştirip kendi raporun olarak kaydedebilirsin.</p></div>
+        <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {templates.map((t) => (
+            <li key={t.key}>
+              <Card icon={<LayoutDashboard size={20} aria-hidden />} tone="primary" title={t.label} desc={TEMPLATE_DESC[t.key] ?? 'Çok kartlı hazır pano.'} badge="Pano"
+                action={busy === t.key ? 'Hazırlanıyor…' : 'Aç'} onClick={() => openTemplate(t.key, t.label)} />
+            </li>
           ))}
-        </div>
+          {QUICK_REPORTS.filter((q) => datasets.some((d) => d.key === q.def.dataset)).map((q) => {
+            const u = uiFor(q.def.dataset); const Icon = u.icon;
+            return (
+              <li key={q.key}>
+                <Card icon={<Icon size={20} aria-hidden />} tone={u.tone} title={q.title} desc={q.desc} badge={u.title}
+                  action="Aç" onClick={() => go({ kind: 'wizard', initial: { def: q.def, title: q.title, step: 3 } })} />
+              </li>
+            );
+          })}
+        </ul>
+      </section>
+
+      <div className="grid gap-6 xl:grid-cols-2">
+        <ReportList title="Raporlarım" empty="Henüz kaydettiğin rapor yok. “+ Yeni rapor” ile başla, 3. adımda “Kaydet”e bas." items={mine}
+          onOpen={(s) => go({ kind: 'wizard', initial: { def: s.definition, title: s.title, saved: s, step: 3 } })} />
+        <ReportList title="Benimle paylaşılanlar" empty="Seninle paylaşılan rapor yok." items={shared}
+          onOpen={(s) => go({ kind: 'wizard', initial: { def: s.definition, title: s.title, saved: s.owner_user_id === userId ? s : null, step: 3 } })} />
       </div>
-      {error && <p role="alert" className="text-sm" style={{ color: TOKEN_CSS.danger }}>{error}</p>}
 
-      {queryEdit && (
-        <div role="dialog" aria-label="Widget sorgusu" className="fixed inset-0 z-40 overflow-auto bg-black/50 p-4">
-          <div className="mx-auto max-w-7xl rounded-xl p-2" style={{ background: 'var(--surface)' }}>
-            <QueryBuilder datasets={datasets} initial={queryEdit.query} onApply={(q) => { queryEdit.apply(q); setQueryEdit(null); }} onCancel={() => setQueryEdit(null)} />
-          </div>
-        </div>
-      )}
+      <section className="space-y-3" aria-labelledby="h-boards">
+        <div><h2 id="h-boards" className="flex items-center gap-2 text-lg font-semibold"><LayoutDashboard size={18} aria-hidden style={{ color: TOKEN_CSS.primary }} />Panolar</h2>
+          <p className="text-xs text-[var(--muted)]">Pano: birden çok raporu tek sayfada toplayan, PDF’e antetli basılabilen ekran.</p></div>
+        {!boards.length ? <p className="pax-card pax-empty p-5 text-sm">{loaded ? `Görebildiğin pano yok.${canDesign ? ' “Pano oluştur” ile kayıtlı raporlarını tek sayfada topla.' : ''}` : 'Yükleniyor…'}</p> : (
+          <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {boards.map((p) => (
+              <li key={p.id}>
+                <button type="button" className="pax-card block h-full w-full p-4 text-left transition hover:shadow-md" onClick={() => go({ kind: 'page', id: p.id })}>
+                  <div className="font-semibold">{p.title}{templatePages.has(p.title) && <span className="ml-1 rounded-full px-2 py-0.5 text-[10px]" style={{ background: TOKEN_SOFT.primary, color: TOKEN_CSS.primary }}>hazır</span>}</div>
+                  <div className="mt-1 text-xs text-[var(--muted)]">{p.owner_name ?? '—'} · {VIS_LABEL[p.visibility]} · {new Date(p.updated_at).toLocaleDateString('tr-TR')}</div>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
-      {tab === 'pages' && (openPage ? (
-        <PageDesigner
-          key={openPage}
-          pageId={openPage}
-          canDesign={canDesign}
-          letterheads={letterheads}
-          onBack={() => { open(null); reload(); }}
-          onEditQuery={(query, apply) => setQueryEdit({ query, apply })}
-        />
-      ) : (
-        <div className="space-y-3">
-          {canDesign && (
-            <form className="pax-card flex flex-wrap items-end gap-2 p-3 text-sm" onSubmit={(e) => { e.preventDefault(); create(); }}>
-              <label>Başlık<input className="pax-input mt-1 block" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="Yeni sayfa" /></label>
-              <label>Şablon
-                <select className="pax-input mt-1 block" value={templateKey} onChange={(e) => setTemplateKey(e.target.value)}>
-                  <option value="">Boş sayfa</option>
-                  {templates.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
-                </select>
-              </label>
-              <button type="submit" className="pax-btn pax-btn-primary">Oluştur</button>
-            </form>
-          )}
-          {!pages.length ? <p className="pax-card pax-empty p-6 text-sm">Görebildiğiniz sayfa yok.</p> : (
-            <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {pages.map((p) => (
-                <li key={p.id}>
-                  <button type="button" className="pax-card block w-full p-4 text-left hover:shadow-md" onClick={() => open(p.id)}>
-                    <div className="font-semibold">{p.title}{p.is_template && <span className="ml-1 text-xs text-[var(--muted)]">(şablon)</span>}</div>
-                    <div className="mt-1 text-xs text-[var(--muted)]">
-                      {p.owner_name ?? '—'} · {p.visibility === 'private' ? 'Özel' : p.visibility === 'roles' ? 'Rollerle paylaşılan' : 'Herkes'} · v{p.version} · {new Date(p.updated_at).toLocaleDateString('tr-TR')}
-                    </div>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      ))}
-
-      {tab === 'query' && (datasets.length ? <QueryBuilder datasets={datasets} /> : <p className="pax-card p-4 text-sm">Yükleniyor…</p>)}
-
-      {tab === 'letterheads' && <LetterheadManager letterheads={letterheads} canManage={canManageLetterheads} onChanged={reload} />}
+      <footer className="flex flex-wrap gap-2 border-t pt-4 text-sm" style={{ borderColor: 'var(--border)' }}>
+        <button type="button" className="pax-btn inline-flex items-center gap-1" onClick={() => go({ kind: 'letterheads' })}><Stamp size={16} aria-hidden />PDF antetleri</button>
+        <button type="button" className="pax-btn inline-flex items-center gap-1" onClick={() => go({ kind: 'expert' })}><Wrench size={16} aria-hidden />Uzman sorgu ekranı</button>
+      </footer>
     </div>
+  );
+}
+
+function Card({ icon, tone, title, desc, badge, action, onClick }: { icon: React.ReactNode; tone: keyof typeof TOKEN_CSS; title: string; desc: string; badge: string; action: string; onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick} className="pax-card flex h-full w-full flex-col gap-2 p-4 text-left transition hover:-translate-y-0.5 hover:shadow-md">
+      <div className="flex items-center gap-2">
+        <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg" style={{ background: TOKEN_SOFT[tone], color: TOKEN_CSS[tone] }}>{icon}</span>
+        <span className="ml-auto rounded-full px-2 py-0.5 text-[11px] text-[var(--muted)]" style={{ border: '1px solid var(--border)' }}>{badge}</span>
+      </div>
+      <span className="font-semibold">{title}</span>
+      <span className="text-sm text-[var(--muted)]">{desc}</span>
+      <span className="mt-auto inline-flex items-center gap-1 text-sm font-semibold" style={{ color: TOKEN_CSS.primary }}>{action}<ChevronRight size={14} aria-hidden /></span>
+    </button>
+  );
+}
+
+function ReportList({ title, empty, items, onOpen }: { title: string; empty: string; items: SavedDefinitionLite[]; onOpen: (s: SavedDefinitionLite) => void }) {
+  return (
+    <section className="space-y-3">
+      <h2 className="flex items-center gap-2 text-lg font-semibold"><FileStack size={18} aria-hidden style={{ color: TOKEN_CSS.accent }} />{title} <span className="text-sm font-normal text-[var(--muted)]">({items.length})</span></h2>
+      {!items.length ? <p className="pax-card pax-empty p-5 text-sm">{empty}</p> : (
+        <ul className="pax-card divide-y p-0" style={{ borderColor: 'var(--border)' }}>
+          {items.map((s) => {
+            const u = uiFor(s.definition.dataset); const Icon = u.icon;
+            return (
+              <li key={s.id}>
+                <button type="button" className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-black/5" onClick={() => onOpen(s)}>
+                  <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg" style={{ background: TOKEN_SOFT[u.tone], color: TOKEN_CSS[u.tone] }}><Icon size={16} aria-hidden /></span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-medium">{s.title}</span>
+                    <span className="block truncate text-xs text-[var(--muted)]">{u.title || s.definition.dataset} · {s.owner_name ?? '—'} · {VIS_LABEL[s.visibility] ?? s.visibility} · {new Date(s.updated_at).toLocaleDateString('tr-TR')}</span>
+                  </span>
+                  <ChevronRight size={16} aria-hidden className="text-[var(--muted)]" />
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
   );
 }

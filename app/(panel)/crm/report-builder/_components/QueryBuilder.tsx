@@ -235,7 +235,7 @@ export default function QueryBuilder({ datasets, initial, onApply, onCancel }: P
   );
 }
 
-function FilterRow({ ds, filter, onChange, onRemove }: { ds: DatasetCatalogEntry; filter: Filter; onChange: (f: Filter) => void; onRemove: () => void }) {
+export function FilterRow({ ds, filter, onChange, onRemove }: { ds: DatasetCatalogEntry; filter: Filter; onChange: (f: Filter) => void; onRemove: () => void }) {
   const fields = [...ds.dimensions.map((d) => ({ key: d.key, label: d.label, type: d.type, options: d.options })), ...ds.measures.map((m) => ({ key: m.key, label: `Σ ${m.label}`, type: 'number' as const, options: null }))];
   const meta = fields.find((f) => f.key === filter.field);
   const listId = `opts-${filter.field}`;
@@ -266,7 +266,7 @@ function FilterRow({ ds, filter, onChange, onRemove }: { ds: DatasetCatalogEntry
   );
 }
 
-function CalcEditor({ calcs, measures, onChange }: { calcs: Calc[]; measures: string[]; onChange: (c: Calc[]) => void }) {
+export function CalcEditor({ calcs, measures, onChange }: { calcs: Calc[]; measures: string[]; onChange: (c: Calc[]) => void }) {
   return (
     <details>
       <summary className="cursor-pointer font-medium">Hesaplanmış alanlar ({calcs.length})</summary>
