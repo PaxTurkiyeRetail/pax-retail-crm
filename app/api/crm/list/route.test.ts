@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const state = vi.hoisted(() => ({ canReadAny: true, ownIds: ['a', 'b'] as string[] }));
-vi.mock('@/lib/authz', () => ({ requireCrmAccessOrThrow: async () => ({ id: 'u1' }), userHasPermission: () => state.canReadAny }));
+vi.mock('@/lib/authz', () => ({ requireCrmAccessOrThrow: async () => ({ id: 'u1' }), userHasPermission: () => state.canReadAny, getUserDepartments: async () => null }));
 vi.mock('@/lib/crm-phase-history', () => ({ appendLastStayedPhase: async (rows: unknown[]) => rows }));
 vi.mock('@/lib/kunye', () => ({ mapKunyeDbToUi: () => null, getKunyeStatus: () => ({ status: 'Eksik', missingFields: [], missing: 1 }), normalizeKunyeStatusFilter: () => '' }));
 function client() {
