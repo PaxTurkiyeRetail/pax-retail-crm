@@ -111,4 +111,4 @@ Read `.claude/CLAUDE.md` first. Rules:
 - Canonical activity channels/status/context exposed; eight existing scalar details exposed across sales/items/Forecast/quotes/customers. No new joins or rental entry flow.
 - Explicit tab naming and section destinations allow several sections in one tab, with a structure preview and independent per-tab stacking. Empty tabs are omitted. Studio outline also groups shared areas and tab contents, showing widget kind/source and new-widget destination.
 - Local real-component browser acceptance passed: two independent filtered sources, ordered model breakdown, persisted filters, three sections across two tabs, omitted empty tab, correct layout and grouped Studio outline. Authenticated live AD UI verification remains pending.
-- Production status for this follow-up: full verification and standard deployment pending.
+- Production status for this follow-up: 371a94d deployed; server verify 57 files / 467 tests passed, backup predeploy-20261019-133855.dump created, internal and public HTTPS health passed.
