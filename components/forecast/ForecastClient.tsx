@@ -6,7 +6,7 @@ import { appToast } from '@/lib/app-toast';
 import { useConfiguredPageSize } from '@/components/hooks/useConfiguredPageSize';
 import { PAGE_SIZE_OPTIONS } from '@/lib/ui-pagination';
 
-type Product = { id: string; code: string; name: string; category: string; product_type?: string };
+type Product = { id: string; code: string; name: string; category: string; product_type?: string; rental_monthly_price?: number | null };
 type Option = { label: string; value: string };
 type MonthOption = { label: string; value: number };
 type ForecastLine = {
@@ -21,6 +21,11 @@ type ForecastLine = {
   sales_channel: string;
   probability: number;
   note: string | null;
+  /** 045 — eski API yanıtında yoksa satış / dahil varsayılır. */
+  sale_type?: 'sale' | 'rental';
+  unit_price?: number | null;
+  rental_monthly_price?: number | null;
+  include_in_retail_plan?: boolean;
 };
 type CustomerRow = {
   musteri_id: string;
@@ -60,6 +65,10 @@ type ForecastDraftLine = {
   salesChannel: string;
   probability: string;
   note: string;
+  saleType: 'sale' | 'rental';
+  unitPrice: string;
+  rentalMonthlyPrice: string;
+  includeInRetailPlan: boolean;
 };
 
 const EMPTY_SUMMARY: Summary = { totalCustomers: 0, enteredCustomers: 0, missingCustomers: 0, completionRate: 0, totalQuantity: 0, weightedQuantity: 0 };
@@ -91,6 +100,21 @@ function emptyDraftLine(options: OptionsPayload, source?: Partial<ForecastDraftL
     salesChannel: source?.salesChannel ?? options.salesChannels[0]?.value ?? '',
     probability: source?.probability ?? options.probabilities[0]?.value ?? '30',
     note: source?.note ?? '',
+    saleType: source?.saleType ?? 'sale',
+    unitPrice: source?.unitPrice ?? '',
+    rentalMonthlyPrice: source?.rentalMonthlyPrice ?? '',
+    includeInRetailPlan: source?.includeInRetailPlan ?? true,
+  };
+}
+
+const priceOrNull = (value: string) => (value.trim() === '' ? null : Number(value.replace(',', '.')));
+
+function linePricingPayload(line: ForecastDraftLine) {
+  return {
+    sale_type: line.saleType,
+    unit_price: priceOrNull(line.unitPrice),
+    rental_monthly_price: line.saleType === 'rental' ? priceOrNull(line.rentalMonthlyPrice) : null,
+    include_in_retail_plan: line.includeInRetailPlan,
   };
 }
 
@@ -200,6 +224,10 @@ export default function ForecastClient() {
       salesChannel: line.sales_channel,
       probability: String(line.probability),
       note: line.note ?? '',
+      saleType: line.sale_type === 'rental' ? 'rental' : 'sale',
+      unitPrice: line.unit_price == null ? '' : String(line.unit_price),
+      rentalMonthlyPrice: line.rental_monthly_price == null ? '' : String(line.rental_monthly_price),
+      includeInRetailPlan: line.include_in_retail_plan !== false,
     })]);
   }
 
@@ -274,6 +302,7 @@ export default function ForecastClient() {
           sales_channel: line.salesChannel,
           probability: Number(line.probability),
           note: line.note,
+          ...linePricingPayload(line),
         } : {
           customer_id: selectedCustomer.musteri_id,
           items: draftLines.map((item) => ({
@@ -284,6 +313,7 @@ export default function ForecastClient() {
             sales_channel: item.salesChannel,
             probability: Number(item.probability),
             note: item.note,
+            ...linePricingPayload(item),
           })),
         }),
       });
@@ -390,6 +420,13 @@ export default function ForecastClient() {
                   <label className="premium-field"><span>Yıl</span><select value={line.forecastYear} onChange={(event) => updateDraftLine(line.uid, { forecastYear: event.target.value })}>{options.years.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
                   <label className="premium-field"><span>Satış Kanalı</span><select value={line.salesChannel} onChange={(event) => updateDraftLine(line.uid, { salesChannel: event.target.value })}>{options.salesChannels.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
                   <label className="premium-field"><span>Gerçekleşme</span><select value={line.probability} onChange={(event) => updateDraftLine(line.uid, { probability: event.target.value })}>{options.probabilities.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
+                  <label className="premium-field"><span>Satış Tipi</span><select value={line.saleType} onChange={(event) => updateDraftLine(line.uid, { saleType: event.target.value === 'rental' ? 'rental' : 'sale' })}><option value="sale">Satış</option><option value="rental">Kiralama</option></select></label>
+                  {line.saleType === 'rental' ? (
+                    <label className="premium-field"><span>Aylık Kira (USD)</span><input type="number" min={0} step="0.01" value={line.rentalMonthlyPrice} onChange={(event) => updateDraftLine(line.uid, { rentalMonthlyPrice: event.target.value })} placeholder={(() => { const p = options.products.find((item) => item.id === line.productId)?.rental_monthly_price; return p ? `Katalog: ${p}` : 'Zorunlu'; })()} /></label>
+                  ) : (
+                    <label className="premium-field"><span>Birim Fiyat (USD)</span><input type="number" min={0} step="0.01" value={line.unitPrice} onChange={(event) => updateDraftLine(line.uid, { unitPrice: event.target.value })} placeholder="Boş = katalog" /></label>
+                  )}
+                  <label className="premium-field"><span>Retail Planı</span><select value={line.includeInRetailPlan ? '1' : '0'} onChange={(event) => updateDraftLine(line.uid, { includeInRetailPlan: event.target.value === '1' })}><option value="1">Dahil</option><option value="0">Hariç</option></select></label>
                   <label className="premium-field wide"><span>Not</span><input value={line.note} onChange={(event) => updateDraftLine(line.uid, { note: event.target.value })} placeholder="Opsiyonel not" /></label>
                 </div>
               </article>
@@ -453,6 +490,8 @@ export default function ForecastClient() {
                   {row.forecasts.map((line) => (
                     <span key={line.id} className="forecast-soft-chip">
                       {line.product_code_snapshot || line.product_name_snapshot} · {line.quantity} adet · {line.forecast_label} · %{line.probability}
+                      {line.sale_type === 'rental' ? ` · Kiralama${line.rental_monthly_price ? ` $${line.rental_monthly_price}/ay` : ''}` : line.unit_price != null ? ` · $${line.unit_price}` : ''}
+                      {line.include_in_retail_plan === false ? ' · plan dışı' : ''}
                       <button type="button" className="forecast-chip-action" onClick={() => openEdit(row, line)} title="Düzenle">✎</button>
                       <button type="button" className="forecast-chip-action" onClick={() => deleteForecast(line)} disabled={deletingId === line.id} title="Sil">{deletingId === line.id ? '...' : '✕'}</button>
                     </span>

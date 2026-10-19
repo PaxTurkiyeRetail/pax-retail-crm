@@ -6,7 +6,8 @@ import { revalidatePath } from 'next/cache';
 import { requirePermissionOrThrow, userHasPermission } from '@/lib/authz';
 import { tryRecordAuditEvent } from '@/lib/audit';
 import { createPgAdminClient } from '@/lib/pg/admin';
-import { repriceFromCatalog, rescaleSaleItems, sumSaleItems } from '@/lib/quotes/sales-service';
+import { repriceFromCatalog, rescaleSaleItems, saleAmountWarnings, sumSaleItems } from '@/lib/quotes/sales-service';
+import { isRentalOpsStatus } from '@/lib/sales/rental-ops';
 import { db } from '@/lib/db';
 import { OWNER_ORDER } from '@/lib/reports/live-board-shared';
 
@@ -27,6 +28,9 @@ type Body = {
   sales_channel?: string | null;
   /** Satışçı (Sinan, 10.09): satış kaydının sahibi ekrandan değiştirilebilir. */
   owner_name?: string | null;
+  /** Kiralama operasyon takibi (045): yalnız kiralama içeren satışta; gönderilmezse dokunulmaz. */
+  rental_ops_status?: string | null;
+  rental_ops_note?: string | null;
 };
 
 const isoDate = (value: unknown) => {
@@ -151,7 +155,24 @@ export async function POST(request: Request) {
       }
     }
 
+    // Kiralama operasyon durumu + notu (045). Sözleşme düzeyi: satış kaydının kendisinde tutulur.
+    const sendsOps = Object.prototype.hasOwnProperty.call(body, 'rental_ops_status') || Object.prototype.hasOwnProperty.call(body, 'rental_ops_note');
+    let opsPayload: Record<string, unknown> = {};
+    if (sendsOps) {
+      if (!hasRental) return NextResponse.json({ message: 'Kiralama durumu yalnız kiralama içeren satışta girilir.' }, { status: 400 });
+      const opsStatus = String(body.rental_ops_status ?? '').trim() || null;
+      if (opsStatus && !isRentalOpsStatus(opsStatus)) return NextResponse.json({ message: 'Kiralama durumu geçersiz.' }, { status: 400 });
+      const opsNote = String(body.rental_ops_note ?? '').trim().slice(0, 1000) || null;
+      opsPayload = {
+        rental_ops_status: opsStatus,
+        rental_ops_note: opsNote,
+        rental_ops_updated_at: new Date().toISOString(),
+        rental_ops_updated_by: String(me.full_name ?? me.email ?? '').trim() || null,
+      };
+    }
+
     const payload = {
+      ...opsPayload,
       device_count: deviceCount,
       amount,
       price_source: priceSource,
@@ -181,9 +202,12 @@ export async function POST(request: Request) {
     });
 
     revalidatePath('/crm/sales');
+    // Tutar tutarlılık uyarısı (engellemez): birim × adet ↔ toplam, cihaz başı ortalama.
+    const amountWarnings = await saleAmountWarnings(saleId, Number(amount ?? 0), deviceCount);
     return NextResponse.json({
       ok: true,
       amount,
+      amount_warnings: amountWarnings,
       price_source: priceSource,
       rental_months: repriced.rentalMonths,
       warning: noLines

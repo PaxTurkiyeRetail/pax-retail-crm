@@ -1,6 +1,8 @@
 import 'server-only';
 import { db } from '@/lib/db';
 import { buildKasaposEntegrasyonRaporu } from './kasapos-entegrasyon';
+import { DEFAULT_RENTAL_OPS_STATUS, RENTAL_OPS_STATUSES, isRentalOpsStatus, rentalOpsLabel, type RentalOpsStatus } from '@/lib/sales/rental-ops';
+import { summarizeRental, type RentalItemRow } from './retail-rental';
 
 // Retail Operasyon Paneli — müdürün statik Retail_2026_2027.html panelinin canlı veri karşılığı.
 // Kaynaklar:
@@ -15,6 +17,28 @@ export const ACCESSORY_MODELS = ['S210'];
 export type RetailSaleLine = { firm: string; model: string; month: number; qty: number; usd: number; saleType: 'sale' | 'rental' };
 export type RetailOpportunity = {
   firm: string; model: string; qty: number; month: number; channel: string; prob: number; note: string; owner: string;
+  /** 045 — forecast satırı satış/kiralama, fiyat ve Retail planı kuralı. Liste FİLTRELENMEZ; istemci `includeInRetailPlan` ile süzer. */
+  id?: string;
+  customerId?: string;
+  saleType?: 'sale' | 'rental';
+  unitPrice?: number | null;
+  rentalMonthlyPrice?: number | null;
+  includeInRetailPlan?: boolean;
+};
+export type RetailRentalStatusRow = { status: RentalOpsStatus; label: string; contracts: number; qty: number; monthly: number };
+export type RetailRentalContract = {
+  saleId: string; firm: string; status: RentalOpsStatus; statusLabel: string; note: string;
+  qty: number; monthly: number; start: string | null; end: string | null;
+};
+export type RetailRentalSummary = {
+  /** Aktif kiralık cihaz: satış aktif + operasyon 'aktif' + dönem bitmemiş. */
+  activeQty: number;
+  /** Aktif kiralamaların aylık kira geliri (birim kira × adet), USD. */
+  monthlyRevenue: number;
+  /** Ortalama aylık birim kira = monthlyRevenue / activeQty. */
+  avgMonthlyPrice: number | null;
+  byStatus: RetailRentalStatusRow[];
+  contracts: RetailRentalContract[];
 };
 export type RetailCrmRow = {
   id: string; name: string; sector: string; kasa: string; register: number | null; owner: string;
@@ -33,6 +57,8 @@ export type RetailOperasyonPayload = {
     aktifKasa: number; faturalanan: number; aylikGelir: number; firsat: number; potansiyel: number;
   };
   crm: RetailCrmRow[];
+  /** 045 — kiralama operasyonu (opsiyonel: eski istemci yok sayar). */
+  rental?: RetailRentalSummary;
 };
 
 const normModel = (code: unknown) => String(code ?? '').trim().toUpperCase() || 'DİĞER';
@@ -69,7 +95,13 @@ async function fetchOpportunities(years: number[]): Promise<Map<number, RetailOp
     `
       select f.forecast_year, f.forecast_month, m.musteri as firm,
              coalesce(nullif(btrim(f.product_code_snapshot), ''), f.product_name_snapshot) as model,
-             f.quantity, f.sales_channel, f.probability, f.note, f.owner_name
+             f.quantity, f.sales_channel, f.probability, f.note, f.owner_name,
+             f.id::text as id, f.customer_id::text as customer_id,
+             -- 045 kolonları to_jsonb ile: migration öncesinde de sorgu kırılmaz.
+             to_jsonb(f) ->> 'sale_type' as sale_type,
+             to_jsonb(f) ->> 'unit_price' as unit_price,
+             to_jsonb(f) ->> 'rental_monthly_price' as rental_monthly_price,
+             to_jsonb(f) ->> 'include_in_retail_plan' as include_in_retail_plan
       from public.crm_forecasts f
       join public.musteriler m on m.id = f.customer_id
       where f.is_active = true and f.forecast_year = any($1::int[])
@@ -88,9 +120,53 @@ async function fetchOpportunities(years: number[]): Promise<Map<number, RetailOp
       prob: Number(x.probability) || 0,
       note: txt(x.note),
       owner: txt(x.owner_name),
+      id: String(x.id),
+      customerId: String(x.customer_id),
+      saleType: x.sale_type === 'rental' ? 'rental' : 'sale',
+      unitPrice: numOrNull(x.unit_price),
+      rentalMonthlyPrice: numOrNull(x.rental_monthly_price),
+      includeInRetailPlan: x.include_in_retail_plan == null ? true : String(x.include_in_retail_plan) === 'true',
     });
   }
   return out;
+}
+
+const numOrNull = (v: unknown) => {
+  if (v == null || v === '') return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+};
+
+/** Kiralama kalemleri (sözleşme = satış kaydı; durum crm_sales.rental_ops_status). Yıl filtresi yok: stok. */
+async function fetchRental(): Promise<RetailRentalSummary> {
+  const r = await db.query(
+    `
+      select s.id::text as sale_id, m.musteri as firm,
+             to_jsonb(s) ->> 'rental_ops_status' as ops_status,
+             to_jsonb(s) ->> 'rental_ops_note' as ops_note,
+             coalesce(i.rental_start_date, s.rental_start_date)::text as start_date,
+             coalesce(i.rental_end_date, s.rental_end_date)::text as end_date,
+             i.quantity::int as qty,
+             coalesce(i.rental_monthly_price, 0)::float8 as monthly_price
+      from public.crm_sales s
+      join public.crm_sale_items i on i.sale_id = s.id
+      join public.musteriler m on m.id = s.customer_id
+      where s.status = 'active' and i.sale_type = 'rental'
+        and public.crm_sale_item_is_device(i.product_type, i.is_recurring)
+    `,
+  );
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Istanbul' });
+  const rows: RentalItemRow[] = (r.rows as any[]).map((x) => ({
+    saleId: String(x.sale_id),
+    firm: txt(x.firm, '-'),
+    status: isRentalOpsStatus(x.ops_status) ? x.ops_status : DEFAULT_RENTAL_OPS_STATUS,
+    note: txt(x.ops_note),
+    start: x.start_date ?? null,
+    end: x.end_date ?? null,
+    qty: Number(x.qty) || 0,
+    monthlyPrice: Number(x.monthly_price) || 0,
+  }));
+  return summarizeRental(rows, today, RENTAL_OPS_STATUSES.map((s) => s.value), rentalOpsLabel);
 }
 
 async function fetchCrmPool(): Promise<RetailCrmRow[]> {
@@ -135,11 +211,12 @@ async function fetchCrmPool(): Promise<RetailCrmRow[]> {
 export async function buildRetailOperasyon(options?: { year?: number }): Promise<RetailOperasyonPayload> {
   const req = options?.year;
   const year = Number.isInteger(req) && req! > 2000 ? req! : new Date().getFullYear();
-  const [sales, opps, kasa, crm] = await Promise.all([
+  const [sales, opps, kasa, crm, rental] = await Promise.all([
     fetchSales(year),
     fetchOpportunities([year, year + 1]),
     buildKasaposEntegrasyonRaporu({ year }),
     fetchCrmPool(),
+    fetchRental(),
   ]);
   const ref = kasa.refMonthIndex;
   return {
@@ -166,5 +243,6 @@ export async function buildRetailOperasyon(options?: { year?: number }): Promise
       potansiyel: kasa.kpi.potansiyel,
     },
     crm,
+    rental,
   };
 }

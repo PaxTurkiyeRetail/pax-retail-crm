@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import { createPgAdminClient } from '@/lib/pg/admin';
 import { getQuoteCatalog } from '@/lib/quotes/service';
 import { FORECAST_MONTHS, getForecastParameterOptions, isMissingForecastRelation, toPositiveInt } from '@/lib/forecast';
+import { parseForecastPricing } from '@/lib/forecast-pricing';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -17,6 +18,11 @@ type Body = {
   sales_channel?: string;
   probability?: number | string;
   note?: string | null;
+  /** 045: gönderilmeyen alan mevcut değerini korur. */
+  sale_type?: string;
+  unit_price?: number | string | null;
+  rental_monthly_price?: number | string | null;
+  include_in_retail_plan?: boolean | string | null;
 };
 
 function validYear(value: number) {
@@ -52,7 +58,10 @@ export async function POST(request: Request) {
     if (!allowedProbabilities.has(probability)) return NextResponse.json({ message: 'Gerceklesme orani gecersiz.' }, { status: 400 });
 
     const existing = await db.query(
-      `select f.id::text, f.customer_id::text, c.owner_user_id::text as owner_user_id
+      `select f.id::text, f.customer_id::text, c.owner_user_id::text as owner_user_id,
+              to_jsonb(f) ->> 'sale_type' as sale_type, to_jsonb(f) ->> 'unit_price' as unit_price,
+              to_jsonb(f) ->> 'rental_monthly_price' as rental_monthly_price,
+              to_jsonb(f) ->> 'include_in_retail_plan' as include_in_retail_plan
        from public.crm_forecasts f
        join public.musteriler c on c.id = f.customer_id
        where f.id = $1::uuid and f.is_active = true limit 1`,
@@ -69,6 +78,15 @@ export async function POST(request: Request) {
     const product = products.find((item: any) => String(item.id) === productId || String(item.code) === productId);
     if (!product) return NextResponse.json({ message: 'Urun bulunamadi.' }, { status: 400 });
 
+    const has = (key: keyof Body) => Object.prototype.hasOwnProperty.call(body, key);
+    const pricing = parseForecastPricing({
+      sale_type: has('sale_type') ? body.sale_type : row.sale_type,
+      unit_price: has('unit_price') ? body.unit_price : row.unit_price,
+      rental_monthly_price: has('rental_monthly_price') ? body.rental_monthly_price : row.rental_monthly_price,
+      include_in_retail_plan: has('include_in_retail_plan') ? body.include_in_retail_plan : row.include_in_retail_plan,
+    }, product);
+    if (!pricing.ok) return NextResponse.json({ message: pricing.message }, { status: 400 });
+
     const actorName = String(me.full_name ?? me.email ?? '').trim();
 
     try {
@@ -77,13 +95,16 @@ export async function POST(request: Request) {
           update public.crm_forecasts set
             product_id = $2, product_code_snapshot = $3, product_name_snapshot = $4, quantity = $5,
             forecast_year = $6, forecast_month = $7, sales_channel = $8, probability = $9,
-            note = $10, updated_by_email = $11, updated_by_name = $12, updated_at = now()
+            note = $10, updated_by_email = $11, updated_by_name = $12, updated_at = now(),
+            sale_type = $13, unit_price = $14, rental_monthly_price = $15, include_in_retail_plan = $16
           where id = $1::uuid
           returning id::text, customer_id::text, product_id, product_code_snapshot, product_name_snapshot, quantity,
                     forecast_year, forecast_month, sales_channel, probability, owner_name, owner_email, note,
+                    sale_type, unit_price::float8 as unit_price, rental_monthly_price::float8 as rental_monthly_price, include_in_retail_plan,
                     created_at::text, updated_at::text
         `,
-        [id, String(product.id), product.code, product.name, quantity, forecastYear, forecastMonth, salesChannel, probability, note, me.email, actorName],
+        [id, String(product.id), product.code, product.name, quantity, forecastYear, forecastMonth, salesChannel, probability, note, me.email, actorName,
+          pricing.value.saleType, pricing.value.unitPrice, pricing.value.rentalMonthlyPrice, pricing.value.includeInRetailPlan],
       );
       return NextResponse.json({ ok: true, row: result.rows[0] });
     } catch (error) {

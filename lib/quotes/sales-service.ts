@@ -2,6 +2,7 @@ import 'server-only';
 import { db } from '@/lib/db';
 import { rentalMonths, round2 } from '@/lib/quotes/line-pricing';
 import { ApiError } from '@/lib/http/api-error';
+import { checkSaleAmounts } from '@/lib/sales/amount-check';
 
 // Satış kaydı (crm_sales) — kazanılan teklifin türevi, DÜZENLENEBİLİR kayıt.
 // Teklif donmuş belgedir: satış düzenlenince teklif satırları/tutarı DEĞİŞMEZ.
@@ -42,6 +43,11 @@ export type SaleRow = {
   quote_amount: number;
   updated_at: string | null;
   updated_by: string | null;
+  /** Kiralama operasyon takibi (045). Boş = hazırlık. Satış (sale) kaydında anlamsız. */
+  rental_ops_status: string | null;
+  rental_ops_note: string | null;
+  rental_ops_updated_at: string | null;
+  rental_ops_updated_by: string | null;
 };
 
 export type RentalPeriod = { start: string | null; end: string | null };
@@ -161,6 +167,10 @@ export async function listSales(options?: { owner?: string; status?: string; q?:
              s.note, s.updated_at, s.updated_by, s.sales_channel, s.source,
              s.sale_type, s.rental_start_date::text as rental_start_date, s.rental_end_date::text as rental_end_date,
              s.rental_monthly_amount::float8 as rental_monthly_amount, s.hardware_amount::float8 as hardware_amount,
+             to_jsonb(s) ->> 'rental_ops_status' as rental_ops_status,
+             to_jsonb(s) ->> 'rental_ops_note' as rental_ops_note,
+             to_jsonb(s) ->> 'rental_ops_updated_at' as rental_ops_updated_at,
+             to_jsonb(s) ->> 'rental_ops_updated_by' as rental_ops_updated_by,
              coalesce(q.total_device_count, 0) as quote_device_count,
              coalesce(q.total_amount, 0)::float8 as quote_amount
       from public.crm_sales s
@@ -323,6 +333,30 @@ export async function listSaleItems(saleId: string) {
     [saleId],
   );
   return rows;
+}
+
+/**
+ * Tutar tutarlılık uyarıları (birim × adet ↔ toplam, cihaz başı ortalama). Kaydı ENGELLEMEZ;
+ * create/update yanıtına `amount_warnings` olarak eklenir. Hata olursa sessizce boş döner.
+ */
+export async function saleAmountWarnings(saleId: string, amount: number, deviceCount: number): Promise<string[]> {
+  try {
+    const items = (await listSaleItems(saleId)) as any[];
+    return checkSaleAmounts({
+      amount: Number(amount ?? 0),
+      deviceCount: Number(deviceCount ?? 0),
+      items: items.map((item) => ({
+        product_code: item.product_code,
+        quantity: Number(item.quantity ?? 0),
+        unit_price: Number(item.unit_price ?? 0),
+        total_price: Number(item.total_price ?? 0),
+        sale_type: item.sale_type,
+        is_device: String(item.product_type ?? 'device') === 'device' && !item.is_recurring,
+      })),
+    });
+  } catch {
+    return [];
+  }
 }
 
 /* ------------------------------------------------------------------------ */

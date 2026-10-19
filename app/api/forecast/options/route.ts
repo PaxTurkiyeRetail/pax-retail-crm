@@ -23,6 +23,8 @@ export async function GET() {
         name: product.name,
         category: product.category,
         product_type: product.product_type,
+        /** Katalog kira tarifesi (045): forecast kiralama satırında varsayılan aylık kira. */
+        rental_monthly_price: product.rental_monthly_price ?? null,
       })),
       catalogSource: source,
       salesChannels: params.channels,

@@ -21,6 +21,10 @@ type ForecastLine = {
   owner_name: string | null;
   owner_email: string | null;
   note: string | null;
+  sale_type: 'sale' | 'rental';
+  unit_price: number | null;
+  rental_monthly_price: number | null;
+  include_in_retail_plan: boolean;
   created_at: string | null;
   updated_at: string | null;
 };
@@ -74,8 +78,12 @@ export async function GET(request: Request) {
       const forecastSql = `
         select id::text, customer_id::text, product_id, product_code_snapshot, product_name_snapshot, quantity,
                forecast_year, forecast_month, sales_channel, probability, owner_name, owner_email, note,
+               coalesce(to_jsonb(f) ->> 'sale_type', 'sale') as sale_type,
+               (to_jsonb(f) ->> 'unit_price')::float8 as unit_price,
+               (to_jsonb(f) ->> 'rental_monthly_price')::float8 as rental_monthly_price,
+               coalesce((to_jsonb(f) ->> 'include_in_retail_plan')::boolean, true) as include_in_retail_plan,
                created_at::text, updated_at::text
-        from public.crm_forecasts
+        from public.crm_forecasts f
         where ${clauses.join(' and ')}
         order by forecast_year asc, forecast_month asc, product_name_snapshot asc, created_at desc
       `;
