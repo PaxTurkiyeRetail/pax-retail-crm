@@ -220,7 +220,7 @@ export function compileReport(def: ReportDefinition, ctx: CompileContext): Compi
     selects.push(`${expr} as "${alias}"`);
     dimExprs.push(expr);
     groupBy.push(String(selects.length));
-    columns.push({ key: alias, label: dim.label, role: 'dimension', type: dim.type, grain, format: dim.type === 'date' ? 'date' : undefined });
+    columns.push({ key: alias, sourceField: ref.field, label: dim.label, role: 'dimension', type: dim.type, grain, format: dim.type === 'date' ? 'date' : undefined });
   });
 
   // --- Ölçüler ---
@@ -231,7 +231,7 @@ export function compileReport(def: ReportDefinition, ctx: CompileContext): Compi
     aliasByField.set(key, alias);
     aliasByField.set(alias, alias);
     const m = dataset.measures[key];
-    columns.push({ key: alias, label: m.label, role: 'measure', type: 'number', format: m.format });
+    columns.push({ key: alias, sourceField: key, label: m.label, role: 'measure', type: 'number', format: m.format });
   }
 
   // --- Hesaplanmış alanlar ---
@@ -252,7 +252,7 @@ export function compileReport(def: ReportDefinition, ctx: CompileContext): Compi
     selects.push(`${sql} as "${alias}"`);
     aliasByField.set(calc.key, alias);
     aliasByField.set(alias, alias);
-    columns.push({ key: alias, label: calc.label, role: 'calculated', type: 'number', format: calc.format ?? 'number' });
+    columns.push({ key: alias, sourceField: calc.key, label: calc.label, role: 'calculated', type: 'number', format: calc.format ?? 'number' });
   }
 
   // --- WHERE ---

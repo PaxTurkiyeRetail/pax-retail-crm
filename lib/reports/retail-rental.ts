@@ -10,8 +10,8 @@ export type RentalItemRow = {
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
 /** Aktif: operasyon 'aktif' ve kira dönemi bitmemiş (bitiş boş ya da bugün/sonrası). */
-export function isActiveRental(row: Pick<RentalItemRow, 'status' | 'end'>, today: string) {
-  return row.status === 'aktif' && (!row.end || row.end.slice(0, 10) >= today);
+export function isActiveRental(row: Pick<RentalItemRow, 'status' | 'end'> & { start?: string | null }, today: string) {
+  return row.status === 'aktif' && (!row.start || row.start.slice(0,10) <= today) && (!row.end || row.end.slice(0, 10) >= today);
 }
 
 export function summarizeRental(

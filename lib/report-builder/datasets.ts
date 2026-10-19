@@ -125,8 +125,8 @@ const SALES: DatasetDef = {
 
 const SALE_ITEMS: DatasetDef = {
   key: 'sale_items',
-  label: 'Satış kalemleri',
-  description: 'Aktif satışların kalemleri (model/ürün kırılımı). Kalemsiz eski satışlar burada görünmez.',
+  label: 'Ürün / model satışları',
+  description: 'Model bazında adet, tutar, müşteri, Account ve satış / kiralama analizi. Kalemsiz eski satışlar burada görünmez.',
   permission: 'quote.read',
   from: `public.crm_sale_items i
     join public.crm_sales s on s.id = i.sale_id
@@ -305,7 +305,76 @@ const SERVICE_INVOICE_ITEMS: DatasetDef = {
   },
 };
 
+// Her müşteri tek satır: fatura kalemleri stokla birleştirilmeden önce ay bazında toplanır.
+// Güncel künye stoku geçmiş stok değildir; period_month yalnız son fatura referans dönemidir.
+const KASAPOS_SNAPSHOT: DatasetDef = {
+  key: 'kasapos_snapshot',
+  label: 'KasaPOS operasyon anlık durumu',
+  description: 'Son entegrasyon fatura ayı ve güncel kasa stoku. Geçmiş tarihli stok yeniden kurulmaz; firma başına tek satır.',
+  permission: 'quote.read',
+  from: `public.musteriler m
+    join (
+      with monthly as (
+        select s.customer_id, date_trunc('month', s.period_month)::date as period_month,
+          sum(i.quantity)::numeric as billed,
+          coalesce(sum(i.total_price) filter (where s.currency = 'USD'), 0)::numeric as usd
+        from public.crm_service_invoices s
+        join public.crm_service_invoice_items i on i.invoice_id = s.id
+        where s.status = 'active' and ${INTEGRATION_KEYS_SQL}
+        group by s.customer_id, date_trunc('month', s.period_month)::date
+      ), reference as (select max(period_month) as period_month from monthly)
+      select customers.customer_id, reference.period_month,
+        coalesce(billed.billed, 0) as billed, coalesce(billed.usd, 0) as usd,
+        price.unit_price
+      from reference
+      join lateral (
+        select distinct customer_id from monthly
+        where period_month >= date_trunc('year', reference.period_month)::date
+          and period_month <= reference.period_month
+      ) customers on true
+      left join monthly billed on billed.customer_id = customers.customer_id and billed.period_month = reference.period_month
+      left join lateral (
+        select round(p.usd / p.billed, 2) as unit_price from monthly p
+        where p.customer_id = customers.customer_id and p.billed > 0 and p.usd > 0
+          and p.period_month >= date_trunc('year', reference.period_month)::date
+          and p.period_month <= reference.period_month
+        order by p.period_month desc limit 1
+      ) price on true
+    ) snapshot on snapshot.customer_id = m.id
+    left join lateral (
+      select coalesce(
+        case when btrim(k.sabit_kasa_adedi) ~ '^[0-9]+$' then btrim(k.sabit_kasa_adedi)::numeric end,
+        m.aktif_satis_kasasi::numeric
+      ) as active_registers
+      from (select 1) seed
+      left join lateral (
+        select mk.sabit_kasa_adedi from public.musteri_kunye_v2 mk
+        where mk.musteri_id = m.id order by mk.updated_at desc nulls last limit 1
+      ) k on true
+    ) stock on true`,
+  baseWhere: [],
+  defaultDateField: 'period_month',
+  owner: { userId: 'm.owner_user_id::text', name: 'm.sorumlu' },
+  dimensions: {
+    ...customerDims(),
+    owner: { label: 'Müşteri sorumlusu', sql: `coalesce(nullif(trim(m.sorumlu), ''), 'Havuz')`, type: 'string', group: 'Müşteri' },
+    period_month: { label: 'Son fatura referans ayı (güncel stok)', sql: 'snapshot.period_month', type: 'date', grains: ['month', 'quarter', 'year'], group: 'KasaPOS' },
+  },
+  measures: {
+    active_registers: { label: 'Güncel aktif kasa', sql: 'coalesce(sum(stock.active_registers), 0)', format: 'number' },
+    billed_registers: { label: 'Son ay faturalanan kasa', sql: 'coalesce(sum(snapshot.billed), 0)', format: 'number' },
+    monthly_usd: { label: 'Son ay hizmet geliri (USD)', sql: 'coalesce(sum(snapshot.usd), 0)', format: 'money' },
+    opportunity_registers: { label: 'Ek kasa fırsatı (stok bilinen)', sql: 'coalesce(sum(greatest(stock.active_registers - snapshot.billed, 0)) filter (where stock.active_registers is not null), 0)', format: 'number' },
+    utilization_pct: { label: 'Kasa kullanım oranı (stok bilinen)', sql: 'round(100.0 * sum(snapshot.billed) filter (where stock.active_registers is not null) / nullif(sum(stock.active_registers), 0))', format: 'percent' },
+    potential_monthly_usd: { label: 'Ek aylık gelir fırsatı (USD, fiyatı bilinen)', sql: 'coalesce(sum(round(greatest(stock.active_registers - snapshot.billed, 0) * snapshot.unit_price, 2)) filter (where stock.active_registers is not null and snapshot.unit_price is not null), 0)', format: 'money' },
+    customer_count: { label: 'Referans yılı faturalı firma', sql: 'count(*)', format: 'number' },
+    known_stock_count: { label: 'Kasa stoku bilinen firma', sql: 'count(*) filter (where stock.active_registers is not null)', format: 'number' },
+    known_price_count: { label: 'Stoku ve USD fiyatı bilinen firma', sql: 'count(*) filter (where stock.active_registers is not null and snapshot.unit_price is not null)', format: 'number' },
+  },
+};
+
 export const DATASETS: Readonly<Record<string, DatasetDef>> = Object.freeze({
+  kasapos_snapshot: KASAPOS_SNAPSHOT,
   service_invoice_items: SERVICE_INVOICE_ITEMS,
   sales: SALES,
   sale_items: SALE_ITEMS,

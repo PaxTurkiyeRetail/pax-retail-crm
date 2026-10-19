@@ -51,7 +51,7 @@ export async function POST(request: Request) {
     const letterheadId = body.letterheadId === null ? null : body.letterheadId ?? page.pdf.letterheadId ?? pageLetterhead;
     const [data, letterhead, fonts] = await Promise.all([
       runPage(user, page, body.values),
-      body.letterheadId === null ? Promise.resolve(null) : loadLetterheadAsset(letterheadId),
+      body.letterheadId === null || (body.letterheadId === undefined && page.pdf.noLetterhead) ? Promise.resolve(null) : loadLetterheadAsset(letterheadId),
       loadPdfFonts(),
     ]);
     const date = istanbulToday();

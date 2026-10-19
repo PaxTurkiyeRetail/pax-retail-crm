@@ -8,6 +8,11 @@ const row = (p: Partial<RentalItemRow>): RentalItemRow => ({
 });
 
 describe('summarizeRental', () => {
+  it('gelecekte başlayacak aktif sözleşme bugünün gelirine girmez',()=>{
+    const summary=summarizeRental([row({start:'2027-01-01'})],'2026-10-19',order,rentalOpsLabel);
+    expect(summary.activeQty).toBe(0);expect(summary.monthlyRevenue).toBe(0);
+    expect(summary.contracts).toHaveLength(1);
+  });
   it('yalnız aktif ve süresi dolmamış kalemler gelire girer', () => {
     const s = summarizeRental([
       row({ qty: 10, monthlyPrice: 15 }),

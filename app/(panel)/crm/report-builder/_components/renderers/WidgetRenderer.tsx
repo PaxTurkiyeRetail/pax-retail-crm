@@ -5,7 +5,7 @@ import type { ReactNode } from 'react';
 import type { ColumnMeta } from '@/lib/report-builder/types';
 import type { ColorToken, PageWidget } from '@/lib/report-builder/page-types';
 import type { WidgetData } from '@/lib/report-builder/pdf';
-import { formatCell, pivot, PREV_SUFFIX, type ReportResult } from '@/lib/report-builder/result';
+import { formatCell, pivot, resolvePivotColumn, PREV_SUFFIX, type ReportResult } from '@/lib/report-builder/result';
 import { BarLineChart, PieChart, type DrillHandler } from './Charts';
 import { DENSITY_PAD, ruleColor, TOKEN_CSS, TOKEN_SOFT } from './tokens';
 
@@ -39,7 +39,7 @@ export function KpiStrip({ result, style }: { result: ReportResult; style?: Styl
       {measures.map(({ col, format }) => {
         const v = row[col.key];
         const prev = row[col.key + PREV_SUFFIX];
-        const rc = ruleColor(style?.conditional ?? [], col.key, v);
+        const rc = ruleColor(style?.conditional ?? [], col, v, result.columns);
         const delta = typeof v === 'number' && typeof prev === 'number' && prev !== 0 ? ((v - prev) / Math.abs(prev)) * 100 : null;
         return (
           <div key={col.key} className="rounded-lg border p-3" style={{ borderColor: 'var(--border)', borderTop: `3px solid ${TOKEN_CSS[rc ?? style?.accent ?? 'primary']}` }}>
@@ -73,7 +73,7 @@ export function DataTableView({ result, style }: { result: ReportResult; style?:
           {result.rows.map((r, i) => (
             <tr key={i}>
               {cols.map(({ col, format }) => {
-                const rc = ruleColor(style?.conditional ?? [], col.key, r[col.key]);
+                const rc = ruleColor(style?.conditional ?? [], col, r[col.key], result.columns);
                 return (
                   <td key={col.key} className={`${pad} ${col.role !== 'dimension' ? 'text-right tabular-nums' : ''}`} style={rc ? { background: TOKEN_SOFT[rc], color: TOKEN_CSS[rc], fontWeight: 600 } : undefined}>
                     {fmt(col, r[col.key], format)}
@@ -91,9 +91,8 @@ export function DataTableView({ result, style }: { result: ReportResult; style?:
 
 /** Pivot; heatmap modunda gerçekleşen yeşil, yalnız tahmini olan hücre sarı. */
 export function PivotView({ result, forecast, pivotColumn, heat, style }: { result: ReportResult; forecast?: ReportResult; pivotColumn?: string; heat?: boolean; style?: Style }) {
-  const dims = result.columns.filter((c) => c.role === 'dimension');
   const measure = result.columns.find((c) => c.role !== 'dimension' && !c.key.endsWith(PREV_SUFFIX));
-  const pc = pivotColumn ?? dims[dims.length - 1]?.key;
+  const pc = resolvePivotColumn(result.columns, pivotColumn)?.key;
   const p = pc && measure ? pivot(result.columns, result.rows, pc, measure.key) : null;
   if (!p || !measure) return <DataTableView result={result} style={style} />;
   const f = forecast && pc ? pivot(forecast.columns, forecast.rows, pc, forecast.columns.find((c) => c.role !== 'dimension')?.key ?? '') : null;
@@ -132,7 +131,7 @@ export function PivotView({ result, forecast, pivotColumn, heat, style }: { resu
                   const isForecast = (actual === null || actual === 0) && fc !== null && fc !== 0;
                   const v = isForecast ? fc : actual;
                   let bg: string | undefined;
-                  let color: ColorToken | null = ruleColor(style?.conditional ?? [], measure.key, v);
+                  let color: ColorToken | null = ruleColor(style?.conditional ?? [], measure, v, result.columns);
                   if (heat && v) {
                     bg = isForecast ? TOKEN_SOFT.warning : `color-mix(in srgb, ${TOKEN_CSS.success} ${Math.round(12 + 50 * ((v ?? 0) / max))}%, transparent)`;
                     color = color ?? null;

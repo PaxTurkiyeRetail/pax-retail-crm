@@ -3,9 +3,10 @@
 // Güçlü özellikler (karşılaştırma, ilk N, filtre, formül, koşullu renk, drill-down) "Gelişmiş" katmanında.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  BarChart3, Check, ChevronLeft, ChevronRight, Download, FileDown, Gauge, LineChart, Loader2, PieChart as PieIcon,
+  Check, ChevronLeft, ChevronRight, Download, FileDown, Gauge, Loader2, PieChart as PieIcon,
   Save, SlidersHorizontal, Table2, Undo2, X,
 } from 'lucide-react';
+import { definitionFilterIssue, normalizeDefinitionFilters } from '@/lib/report-builder/filter-input';
 import type { DatasetCatalogEntry } from '@/lib/report-builder/datasets';
 import type { ColorToken, ConditionalRule } from '@/lib/report-builder/page-types';
 import type { ReportResult } from '@/lib/report-builder/result';
@@ -24,8 +25,6 @@ type Step = 1 | 2 | 3;
 
 const VIEWS: { type: VizType; label: string; hint: string; icon: typeof Table2 }[] = [
   { type: 'table', label: 'Tablo', hint: 'Satır satır rakamlar', icon: Table2 },
-  { type: 'bar', label: 'Çubuk', hint: 'Kalemleri kıyasla', icon: BarChart3 },
-  { type: 'line', label: 'Çizgi', hint: 'Zaman içindeki eğilim', icon: LineChart },
   { type: 'pie', label: 'Pasta', hint: 'Payların dağılımı', icon: PieIcon },
   { type: 'kpi', label: 'Özet kart', hint: 'Tek büyük rakam', icon: Gauge },
 ];
@@ -57,7 +56,7 @@ type Props = {
 
 export default function ReportWizard({ datasets, letterheads, initial, onClose, onSaved }: Props) {
   const [step, setStep] = useState<Step>(initial?.step ?? (initial ? 2 : 1));
-  const [def, setDef] = useState<Def | null>(initial?.def ?? null);
+  const [def, setDef] = useState<Def | null>(() => initial?.def ? normalizeDefinitionFilters(initial.def) : null);
   const [title, setTitle] = useState(initial?.title ?? '');
   const [savedId, setSavedId] = useState<string | null>(initial?.saved?.id ?? null);
   const [visibility, setVisibility] = useState<'private' | 'everyone'>(initial?.saved?.visibility === 'everyone' ? 'everyone' : 'private');
@@ -82,6 +81,8 @@ export default function ReportWizard({ datasets, letterheads, initial, onClose, 
   useEffect(() => {
     if (!def || step === 1 || !def.measures.length) { setResult(null); return; }
     const id = ++reqId.current;
+    const issue = definitionFilterIssue(def);
+    if (issue) { setResult(null); setLoading(false); setError(issue); return; }
     setLoading(true);
     const t = setTimeout(() => {
       api.query(def).then((r) => { if (id === reqId.current) { setResult(r); setError(null); } })
@@ -187,6 +188,8 @@ export default function ReportWizard({ datasets, letterheads, initial, onClose, 
 
   const save = async () => {
     setNote(null); setError(null);
+    const issue = definitionFilterIssue(def);
+    if (issue) { setError(issue); return; }
     try {
       const body = { title: title.trim() || 'Rapor', description: '', visibility, definition: def };
       if (savedId) await api.updateDefinition(savedId, body); else setSavedId((await api.createDefinition(body)).id);
@@ -196,9 +199,11 @@ export default function ReportWizard({ datasets, letterheads, initial, onClose, 
   };
   const pdf = async () => {
     setError(null);
+    const issue = definitionFilterIssue(def);
+    if (issue) { setError(issue); return; }
     try { const { blob, fileName } = await fetchPdf(pdfBody()); saveBlob(blob, fileName); } catch (e) { setError(friendlyError(e)); }
   };
-  const csv = () => { setError(null); downloadCsv(def).catch((e) => setError(friendlyError(e))); };
+  const csv = () => { setError(null); const issue = definitionFilterIssue(def); if (issue) { setError(issue); return; } downloadCsv(def).catch((e) => setError(friendlyError(e))); };
   const shareLink = savedId ? `${typeof window !== 'undefined' ? window.location.origin + window.location.pathname : ''}?report=${savedId}` : null;
 
   const preview = (

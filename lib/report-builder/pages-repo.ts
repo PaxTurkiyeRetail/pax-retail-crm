@@ -5,6 +5,7 @@ import { db } from '@/lib/db';
 import { canDesignPages, canEditDefinition, canViewDefinition, type ReportUser } from '@/lib/report-builder/access';
 import { letterheadSettingsSchema, parsePageDefinition, type LetterheadSettings, type PageDefinition } from '@/lib/report-builder/page-types';
 import { getPageTemplate } from '@/lib/report-builder/templates';
+import { loadPaxLetterhead, PAX_LETTERHEAD, PAX_LETTERHEAD_ID } from '@/lib/report-builder/builtin-letterhead';
 
 // Kalıcılık: report_pages (+ report_page_versions) ve report_letterheads. Silme yok → arşiv / pasif.
 
@@ -38,6 +39,7 @@ export type SavedPage = {
   page: PageDefinition;
   updated_at: string;
   can_edit: boolean;
+  show_in_menu: boolean;
 };
 
 const COLS = `p.id::text, p.title, p.owner_user_id, p.owner_name, p.visibility, p.shared_roles, p.is_template, p.template_key,
@@ -48,13 +50,14 @@ function mapRow(user: User, row: any): SavedPage {
     id: row.id, title: row.title, owner_user_id: row.owner_user_id, owner_name: row.owner_name ?? null,
     visibility: row.visibility, shared_roles: row.shared_roles ?? [], is_template: Boolean(row.is_template),
     template_key: row.template_key ?? null, version: Number(row.version), letterhead_id: row.letterhead_id ?? null,
+    show_in_menu: row.show_in_menu === true || row.page?.navigation?.enabled === true,
     page: row.page, updated_at: row.updated_at, can_edit: canDesignPages(user) && canEditDefinition(user, row),
   };
 }
 
 export async function listPages(user: User): Promise<Omit<SavedPage, 'page'>[]> {
   const { rows } = await db.query(
-    `select ${COLS.replace('p.page,', '')}
+    `select ${COLS.replace('p.page,', "(p.page #>> '{navigation,enabled}') = 'true' as show_in_menu,")}
      from public.report_pages p
      where p.is_archived = false
        and (p.owner_user_id = $1 or p.visibility = 'everyone' or p.is_template = true
@@ -166,7 +169,7 @@ export async function archivePage(user: User, id: string) {
 // ---------------------------------------------------------------------------
 // Antetler
 // ---------------------------------------------------------------------------
-export type LetterheadRow = LetterheadSettings & { id: string; mimeType: string; byteSize: number; updatedAt: string };
+export type LetterheadRow = LetterheadSettings & { id: string; mimeType: string; byteSize: number; updatedAt: string; isBuiltin?: boolean };
 
 function mapLetterhead(r: any): LetterheadRow {
   return {
@@ -183,20 +186,23 @@ const LH_COLS = `id::text, name, mime_type, byte_size, orientation, margins_mm, 
 
 export async function listLetterheads(): Promise<LetterheadRow[]> {
   const { rows } = await db.query(`select ${LH_COLS} from public.report_letterheads where is_active = true order by is_default desc, name`);
-  return rows.map(mapLetterhead);
+  const uploaded = rows.map(mapLetterhead);
+  return [{ ...PAX_LETTERHEAD, isDefault: !uploaded.some((letterhead) => letterhead.isDefault) }, ...uploaded];
 }
 
 /** PDF için antet: id verilmezse varsayılan; bulunamazsa null (antetsiz PDF). */
 export async function loadLetterheadAsset(id: string | null | undefined) {
+  if (id === PAX_LETTERHEAD_ID) return loadPaxLetterhead();
   const { rows } = id && UUID.test(id)
     ? await db.query(`select ${LH_COLS}, image_data from public.report_letterheads where id = $1 and is_active = true`, [id])
     : await db.query(`select ${LH_COLS}, image_data from public.report_letterheads where is_default = true and is_active = true limit 1`);
   const r = rows[0];
-  if (!r) return null;
+  if (!r) return id ? null : loadPaxLetterhead();
   return { settings: mapLetterhead(r), bytes: new Uint8Array(r.image_data as Buffer), mimeType: r.mime_type as 'image/png' | 'image/jpeg' | 'application/pdf' };
 }
 
 export async function loadLetterheadImage(id: string) {
+  if (id === PAX_LETTERHEAD_ID) { const asset = await loadPaxLetterhead(); return { mimeType: asset.mimeType, bytes: Buffer.from(asset.bytes) }; }
   if (!UUID.test(id)) return null;
   const { rows } = await db.query(`select mime_type, image_data from public.report_letterheads where id = $1 and is_active = true`, [id]);
   return rows[0] ? { mimeType: rows[0].mime_type as string, bytes: rows[0].image_data as Buffer } : null;

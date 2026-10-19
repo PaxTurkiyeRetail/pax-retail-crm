@@ -51,7 +51,8 @@ export default function LetterheadManager({ letterheads, canManage, onChanged }:
                   : <div className="mb-2 flex h-32 items-center justify-center rounded text-xs text-[var(--muted)]" style={{ background: 'var(--border)' }}>PDF antet</div>}
                 <div className="font-medium">{l.name}{l.isDefault && <span className="ml-1 text-xs" style={{ color: TOKEN_CSS.primary }}>(varsayılan)</span>}</div>
                 <div className="text-xs text-[var(--muted)]">A4 {l.orientation === 'portrait' ? 'dikey' : 'yatay'} · kenar {l.margins.top}/{l.margins.right}/{l.margins.bottom}/{l.margins.left} mm · {(l.byteSize / 1024).toFixed(0)} KB</div>
-                {canManage && (
+                {l.isBuiltin && <p className="mt-2 text-xs text-[var(--muted)]">Kurumsal antet. Farklı bir antet yükleyerek varsayılanı değiştirebilirsin.</p>}
+                {canManage && !l.isBuiltin && (
                   <div className="mt-2 flex gap-1">
                     <button type="button" className="pax-btn" onClick={() => { setEditId(l.id); setForm({ name: l.name, orientation: l.orientation, margins: l.margins, safeArea: l.safeArea, showTitle: l.showTitle, showDate: l.showDate, showPageNumbers: l.showPageNumbers, footerText: l.footerText, isDefault: l.isDefault }); }}>Düzenle</button>
                     {!l.isDefault && <button type="button" className="pax-btn" onClick={async () => { await api.updateLetterhead(l.id, { ...l, isDefault: true }); onChanged(); }}>Varsayılan yap</button>}

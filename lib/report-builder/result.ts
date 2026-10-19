@@ -1,5 +1,5 @@
 // Sonuç yardımcıları (istemci + sunucu): karşılaştırma birleştirme, pivot, CSV, biçim.
-import type { ColumnMeta } from '@/lib/report-builder/types';
+import type { ColorToken, ConditionalRule, ColumnMeta } from '@/lib/report-builder/types';
 
 export type ResultRow = Record<string, string | number | boolean | null>;
 
@@ -62,9 +62,41 @@ export type PivotTable = {
   grandTotal: number;
 };
 
+/** Resolve only exact aliases, explicit source metadata or canonical compiler aliases. */
+export function resolveResultColumn(columns: ColumnMeta[], reference: string): ColumnMeta | undefined {
+  const exact = columns.find((column) => column.key === reference);
+  if (exact) return exact;
+  const candidates = columns.filter((column) => {
+    if (column.key.endsWith(PREV_SUFFIX)) return false;
+    if (column.sourceField) return column.sourceField === reference;
+    if (column.role === 'measure') return column.key === 'm_' + reference;
+    if (column.role === 'calculated') return column.key === 'c_' + reference;
+    return column.key === 'd_' + reference || (column.type === 'date' && column.grain && column.grain !== 'day' && column.key === 'd_' + reference + '_' + column.grain);
+  });
+  return candidates.length === 1 ? candidates[0] : undefined;
+}
+
+export function resolvePivotColumn(columns: ColumnMeta[], reference?: string): ColumnMeta | undefined {
+  const column = reference ? resolveResultColumn(columns, reference) : columns.filter((item) => item.role === 'dimension').at(-1);
+  return column?.role === 'dimension' ? column : undefined;
+}
+
+export function matchConditionalRule(rules: ConditionalRule[], column: string | ColumnMeta, value: unknown, columns?: ColumnMeta[]): ColorToken | null {
+  if (typeof value !== 'number') return null;
+  const key = typeof column === 'string' ? column : column.key;
+  const catalog = columns ?? (typeof column === 'string' ? undefined : [column]);
+  for (const rule of rules) {
+    if ((catalog ? resolveResultColumn(catalog, rule.column)?.key : rule.column) !== key) continue;
+    const matches = rule.op === 'gt' ? value > rule.value : rule.op === 'gte' ? value >= rule.value : rule.op === 'lt' ? value < rule.value
+      : rule.op === 'lte' ? value <= rule.value : rule.op === 'eq' ? value === rule.value : value >= rule.value && value <= (rule.value2 ?? rule.value);
+    if (matches) return rule.color;
+  }
+  return null;
+}
+
 /** Bir kırılımı sütuna açar (pivot / aylık ısı tablosu). */
 export function pivot(columns: ColumnMeta[], rows: ResultRow[], pivotColumnKey: string, measureKey: string): PivotTable | null {
-  const pivotCol = columns.find((c) => c.key === pivotColumnKey && c.role === 'dimension');
+  const pivotCol = resolvePivotColumn(columns, pivotColumnKey);
   const measure = columns.find((c) => c.key === measureKey && c.role !== 'dimension');
   if (!pivotCol || !measure) return null;
   const rowDims = columns.filter((c) => c.role === 'dimension' && c.key !== pivotCol.key);

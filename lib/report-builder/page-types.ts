@@ -133,6 +133,7 @@ export const pageDefinitionSchema = z.object({
   version: z.literal(1),
   title: z.string().min(1).max(120),
   subtitle: z.string().max(200).optional(),
+  navigation: z.object({ enabled: z.boolean().default(false) }).optional(),
   theme: z.object({
     accent: z.enum(COLOR_TOKENS).default('primary'),
     density: z.enum(['compact', 'normal', 'comfortable']).default('normal'),
@@ -144,6 +145,7 @@ export const pageDefinitionSchema = z.object({
   pdf: z.object({
     orientation: z.enum(['portrait', 'landscape']).optional(),
     letterheadId: z.string().uuid().optional(),
+    noLetterhead: z.boolean().optional(),
   }).default({}),
 }).superRefine((page, ctx) => {
   const ids = new Set<string>();
@@ -206,6 +208,7 @@ export function applyPageFilters(
   const out = { ...query, filters: [...query.filters] };
   for (const f of filters) {
     const v = Object.prototype.hasOwnProperty.call(values, f.key) ? values[f.key] : f.defaultValue;
+    if (f.kind === 'date_range' && v === '' && Object.prototype.hasOwnProperty.call(values, f.key)) { out.dateRange = undefined; out.compare = 'none'; continue; }
     if (v === undefined || v === null || v === '') continue;
     if (f.kind === 'date_range') {
       const preset = typeof v === 'string' ? v : null;

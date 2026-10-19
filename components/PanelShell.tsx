@@ -39,6 +39,7 @@ type NavItem = {
   label: string;
   iconKey: IconKey;
   exact?: boolean;
+  hardNavigate?: boolean;
 };
 type NavGroup = { title: string; items: NavItem[]; tail?: boolean };
 type ReportsGroup = { title: string; iconKey: IconKey; items: NavItem[] };
@@ -246,6 +247,7 @@ function routeMeta(pathname: string) {
     ["/crm/reports/forecast", "Rapor Merkezi", "Forecast Raporu"],
     ["/crm/reports/quotes", "Rapor Merkezi", "Teklif Raporları"],
     ["/crm/reports/kasapos-summary", "Rapor Merkezi", "KasaPOS Raporu"],
+    ["/crm/report-builder", "Raporlar", "Rapor Merkezi"],
     ["/crm/reports/retail-operasyon", "Rapor Merkezi", "Retail Operasyon Paneli"],
     ["/crm/reports/weekly-activities", "Rapor Merkezi", "Aktivite Raporu"],
     ["/crm/quotes/catalog", "Operasyon", "Ürün Kataloğu"],
@@ -316,6 +318,7 @@ export default function PanelShell({
   const [collapsed, setCollapsed] = useState(false);
   const [dark, setDark] = useState(false);
   const [reportsOpen, setReportsOpen] = useState(false);
+  const [customReports, setCustomReports] = useState<NavItem[]>([]);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const mobileMenuButtonRef = useRef<HTMLButtonElement>(null);
   const sidebarRef = useRef<HTMLElement>(null);
@@ -323,6 +326,25 @@ export default function PanelShell({
     (permission: Permission) => permissions ? permissions.includes(permission) : hasPermission(role, permission),
     [permissions, role],
   );
+
+  useEffect(() => {
+    if (!(allowed('report.read.all') || allowed('report.read.team') || allowed('report.read.own'))) { setCustomReports([]); return; }
+    let active = true;
+    let controller: AbortController | undefined;
+    const refresh = async () => {
+      controller?.abort(); controller = new AbortController();
+      try {
+        const response = await fetch('/api/report-builder/pages', { cache: 'no-store', signal: controller.signal });
+        if (!response.ok) { if (active) setCustomReports([]); return; }
+        const result = await response.json();
+        if (active) setCustomReports((result.pages ?? []).filter((p: {show_in_menu?: boolean}) => p.show_in_menu).map((p: {id: string;title: string}) => ({href: `/crm/report-builder?page=${encodeURIComponent(p.id)}&view=live`,label:p.title,iconKey:'weekly',exact:true,hardNavigate:true})));
+      } catch (error) { if (active && !(error instanceof DOMException && error.name === 'AbortError')) setCustomReports([]); }
+    };
+    void refresh();
+    window.addEventListener('pax:reportschange', refresh);
+    window.addEventListener('focus', refresh);
+    return () => { active=false; controller?.abort(); window.removeEventListener('pax:reportschange', refresh); window.removeEventListener('focus', refresh); };
+  }, [allowed]);
 
   useEffect(() => {
     try {
@@ -594,7 +616,7 @@ export default function PanelShell({
   const displaySub = email?.trim() || roleLabel(role);
   const initials = getInitials(displayName);
   // Dashboard rapor URL'inde yaşar ama menüde ayrı; Raporlar grubunu aktif/açık yapmasın.
-  const reportsActive = pathname.startsWith("/crm/reports");
+  const reportsActive = pathname.startsWith("/crm/reports") || pathname.startsWith("/crm/report-builder");
   const pageMeta = useMemo(() => routeMeta(pathname), [pathname]);
   const showParameterManagement = allowed('admin.parameters.manage') && allowed('screen.admin.parameters.view');
   const showReports = Boolean(
@@ -612,6 +634,7 @@ export default function PanelShell({
         key={item.href}
         href={item.href}
         prefetch
+        onClick={item.hardNavigate ? (event) => { if (!event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) { event.preventDefault(); window.location.assign(item.href); } } : undefined}
         onMouseEnter={() => prefetchRoute(item.href)}
         onFocus={() => prefetchRoute(item.href)}
         className={cx(navItemCls, sub && !collapsed && "pl-8", active && navActiveCls)}
@@ -726,6 +749,8 @@ export default function PanelShell({
               {showReports && (
                 <nav className="mt-px flex flex-col gap-px" aria-label="Raporlar">
                   {reportsGroup.items.map((item) => navLink(item, true))}
+                  {customReports.length > 0 && <span className={cx("px-3 pt-3 pb-1 text-[10px] font-semibold text-nav-label", hideLabel)}>ÖZEL RAPORLAR</span>}
+                  {customReports.map((item) => navLink(item, true))}
                 </nav>
               )}
             </div>
@@ -739,7 +764,7 @@ export default function PanelShell({
           ))}
         </div>
 
-        <div className="shrink-0 border-0 border-t border-solid border-nav-border bg-black/15 p-2">
+        <div className="shrink-0 border-0 border-t border-solid border-nav-border bg-transparent p-2" data-sidebar-footer>
           <button
             type="button"
             className={cx(navItemCls, "w-full")}

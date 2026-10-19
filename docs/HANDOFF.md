@@ -19,6 +19,16 @@ Read `.claude/CLAUDE.md` first. Rules:
 - **Read-only DB check:** write a `.cjs` file into the app directory, start it with `begin read only`, and run it with `node --env-file-if-exists=.env.local x.cjs`. Delete the file afterwards.
 - Vitest also picks up the `.claude/worktrees/*` copies, so ignore failures from there or run with `--exclude ".claude/**"`.
 
+## Report Studio release prepared — 2026-10-19
+- Generic multi-source report pages: editable sections/tabs, tables/pivots/KPIs, formulas, conditional styles, up to 12 dimensions, CSV and PDF. Editable Retail/KasaPOS kits are examples, not limits on page structure.
+- Guided creation builds summary/detail; existing saved pages open in Studio. Sharing uses existing private/roles/everyone rules and viewer row scopes. Share button copies live link.
+- Optional page.navigation.enabled persists menu visibility in existing page JSON; list API only returns authorized reports. Menu opens live preview and queries fresh data. No migration.
+- Sale-date legacy scalar/list normalization, pivot aliases, all-dates clearing fixed. Sidebar footer uses the sidebar background in both themes. Bar/line creation options removed; old saved chart renderers remain compatible.
+- Rental creation stays in EXISTING quotes → sales flow; proposed separate rental entry was removed before release. Only active-rental future-start exclusion remains as a reporting correction.
+- Official supplied PDF antet is bundled unchanged; portrait A4 preserved; uploaded/default/no-letterhead choices supported.
+- Local verify passed (typecheck/lint/tests/build); targeted added tests and isolated mocked React browser acceptance cover guided model/customer/month save, menu/reopen, five-section page, themes and mobile. Official antet PDF rendered and inspected. AD-authenticated live UI still needs a test session. Deploy outcome must be checked against PM2/health before claiming production completion.
+- Vitest now excludes nested .claude worktree copies to avoid duplicate/stale suites.
+
 ## Deployed release — 2026-10-19 (code: cabde5d)
 - Report Center: search, category filters, resilient partial loading, retry and scoped styles. Structured API validation errors no longer render `[object Object]`.
 - The Retail gallery card opens `/crm/reports/retail-operasyon` directly, rather than creating the more limited generic page template.

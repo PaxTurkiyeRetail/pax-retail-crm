@@ -6,7 +6,7 @@ import { Search, RefreshCw, ChevronRight, FileStack, LayoutDashboard, Plus, Spar
 import type { DatasetCatalogEntry } from '@/lib/report-builder/datasets';
 import type { ReportDefinitionInput } from '@/lib/report-builder/types';
 import { api, type LetterheadLite, type SavedDefinitionLite, type SavedPageLite } from './api';
-import PageDesigner from './designer/PageDesigner';
+import ReportStudio from './ReportStudio';
 import { friendlyError, QUICK_REPORTS, TEMPLATE_DESC, uiFor } from './friendly';
 import LetterheadManager from './LetterheadManager';
 import QueryBuilder from './QueryBuilder';
@@ -16,7 +16,8 @@ import { TOKEN_CSS, TOKEN_SOFT } from './renderers/tokens';
 type View =
   | { kind: 'hub' }
   | { kind: 'wizard'; initial?: { def: ReportDefinitionInput; title?: string; saved?: SavedDefinitionLite | null; step?: 1 | 2 | 3 } }
-  | { kind: 'page'; id: string; edit?: boolean }
+  | { kind: 'page'; id: string; edit?: boolean; live?: boolean }
+  | { kind: 'studio' }
   | { kind: 'letterheads' }
   | { kind: 'expert' };
 
@@ -37,7 +38,6 @@ export default function ReportBuilderApp({ canDesign, canManageLetterheads }: { 
   const [defs, setDefs] = useState<SavedDefinitionLite[]>([]);
   const [userId, setUserId] = useState<string | null>(null);
   const [letterheads, setLetterheads] = useState<LetterheadLite[]>([]);
-  const [queryEdit, setQueryEdit] = useState<{ query: ReportDefinitionInput; apply: (q: ReportDefinitionInput) => void } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('all');
@@ -65,7 +65,7 @@ export default function ReportBuilderApp({ canDesign, canManageLetterheads }: { 
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
     const id = q.get('page');
-    if (id) setView({ kind: 'page', id });
+    if (id) setView({ kind: 'page', id, live: q.get('view')==='live' });
   }, []);
   useEffect(() => {
     const rid = new URLSearchParams(window.location.search).get('report');
@@ -93,21 +93,14 @@ export default function ReportBuilderApp({ canDesign, canManageLetterheads }: { 
     catch (e) { setError(friendlyError(e)); } finally { setBusy(null); }
   };
 
-  const newBoard = async () => {
-    setBusy('board');
+  const createFromKit = async (templateKey: string) => {
+    if (busy) return;
+    setBusy(templateKey);
     try {
-      const r = await api.createPage({ page: { version: 1, title: 'Yeni pano', widgets: [{ id: 'h1', type: 'text', variant: 'heading', text: 'Yeni pano', layout: { lg: { x: 0, y: 0, w: 12, h: 1 } } }] } });
+      const r = await api.createPage({ templateKey });
       await reload(); go({ kind: 'page', id: r.id, edit: true });
     } catch (e) { setError(friendlyError(e)); } finally { setBusy(null); }
   };
-
-  const queryDialog = queryEdit && (
-    <div role="dialog" aria-label="Kart sorgusu" className="fixed inset-0 z-40 overflow-auto bg-black/50 p-4">
-      <div className="mx-auto max-w-7xl rounded-xl p-2" style={{ background: 'var(--surface)' }}>
-        <QueryBuilder datasets={datasets} initial={queryEdit.query} onApply={(q) => { queryEdit.apply(q); setQueryEdit(null); }} onCancel={() => setQueryEdit(null)} />
-      </div>
-    </div>
-  );
 
   if (view.kind === 'wizard') {
     return (
@@ -116,12 +109,9 @@ export default function ReportBuilderApp({ canDesign, canManageLetterheads }: { 
       </div>
     );
   }
-  if (view.kind === 'page') {
+  if (view.kind === 'page' || view.kind === 'studio') {
     return (
-      <div className="pax-page-container space-y-3">
-        {queryDialog}
-        <PageDesigner key={view.id} pageId={view.id} canDesign={canDesign} startEditing={view.edit} letterheads={letterheads} onBack={back} onEditQuery={(query, apply) => setQueryEdit({ query, apply })} />
-      </div>
+      <ReportStudio liveView={view.kind==='page'&&view.live} key={view.kind === 'page' ? view.id : 'new-studio'} pageId={view.kind === 'page' ? view.id : undefined} datasets={datasets} letterheads={letterheads} canDesign={canDesign} onClose={back} onSaved={reload} />
     );
   }
   if (view.kind === 'letterheads' || view.kind === 'expert') {
@@ -129,7 +119,7 @@ export default function ReportBuilderApp({ canDesign, canManageLetterheads }: { 
       <div className="pax-page-container space-y-3">
         <div className="flex flex-wrap items-center gap-2">
           <button type="button" className="pax-btn" onClick={back}>← Rapor Merkezi</button>
-          <h1 className="text-xl font-semibold">{view.kind === 'letterheads' ? 'PDF antetleri' : 'Uzman sorgu ekranı'}</h1>
+          <h1 className="text-xl font-semibold">{view.kind === 'letterheads' ? 'PDF antetleri' : 'Alan bazlı rapor oluşturucu'}</h1>
         </div>
         <p className="text-sm text-[var(--muted)]">{view.kind === 'letterheads' ? 'PDF çıktılarında kullanılacak antetli kâğıtları yönet.' : 'Tüm seçenekler tek ekranda: veri kümesi, kırılım, filtre, formül. Günlük kullanım için “+ Yeni rapor” sihirbazı daha hızlıdır.'}</p>
         {view.kind === 'letterheads'
@@ -144,7 +134,7 @@ export default function ReportBuilderApp({ canDesign, canManageLetterheads }: { 
   const shared = defs.filter((d) => d.owner_user_id !== userId && matches(d.title));
   const templatePages = new Set(templates.map((t) => t.label));
   const boards = pages.filter((p) => !p.is_template && matches(p.title));
-  const visibleTemplates = templates.filter((t) => (category === 'all' || category === 'boards') && matches(t.label + ' ' + (TEMPLATE_DESC[t.key] ?? '')));
+  const visibleTemplates = templates.filter((t) => !['retail_custom', 'kasapos_monthly'].includes(t.key) && (category === 'all' || category === 'boards') && matches(t.label + ' ' + (TEMPLATE_DESC[t.key] ?? '')));
   const visibleQuickReports = QUICK_REPORTS.filter((q) => datasets.some((d) => d.key === q.def.dataset) && (category === 'all' || category === q.def.dataset) && matches(q.title + ' ' + q.desc));
 
   return (
@@ -152,15 +142,24 @@ export default function ReportBuilderApp({ canDesign, canManageLetterheads }: { 
       <section className={`${styles.hero} pax-card flex flex-col gap-4 p-5 md:flex-row md:items-center`}>
         <div className="min-w-0 flex-1 space-y-1">
           <h1 className="text-2xl font-semibold">Rapor Merkezi</h1>
-          <p className="text-sm text-[var(--muted)]">Hazır bir raporu tek tıkla aç ya da 3 adımda kendi raporunu oluştur. Kod, formül veya teknik bilgi gerekmez.</p>
+          <p className="text-sm text-[var(--muted)]">Kendi yönetim raporunu tasarla: farklı kaynaklardan tablolar, aylık matrisler, grafikler ve özet kartları tek raporda birleştir.</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button type="button" className="pax-btn pax-btn-primary inline-flex items-center gap-2 px-5 py-2.5 text-base" disabled={!loaded || !datasets.length} onClick={() => go({ kind: 'wizard' })}><Plus size={18} aria-hidden />Yeni rapor</button>
-          {canDesign && <button type="button" className="pax-btn inline-flex items-center gap-2 px-4 py-2.5" disabled={!!busy || !loaded} onClick={newBoard}><LayoutDashboard size={18} aria-hidden />Pano oluştur</button>}
+          {canDesign && <button type="button" className="pax-btn pax-btn-primary inline-flex items-center gap-2 px-5 py-2.5 text-base" disabled={!loaded || !datasets.length} onClick={() => go({ kind: 'studio' })}><LayoutDashboard size={18} aria-hidden />Özel rapor tasarla</button>}
+          <button type="button" className="pax-btn inline-flex items-center gap-2 px-4 py-2.5" disabled={!loaded || !datasets.length} onClick={() => go({ kind: 'wizard' })}><Plus size={18} aria-hidden />Hızlı rapor</button>
         </div>
       </section>
 
       {error && <p role="alert" className="rounded-lg p-3 text-sm" style={{ background: TOKEN_SOFT.danger, color: TOKEN_CSS.danger }}>{error} <button type="button" className="pax-btn" disabled={refreshing} onClick={reload}><RefreshCw size={14} aria-hidden />Tekrar dene</button></p>}
+
+      {canDesign && <section className={styles.createSection} aria-labelledby="h-create">
+        <div className={styles.sectionIntro}><div><span className={styles.eyebrow}>SENİN VERİN, SENİN DÜZENİN</span><h2 id="h-create">Nasıl bir rapor hazırlamak istiyorsun?</h2><p>Boş bir tuvalle başla veya örnek yapıyı kendine göre değiştir. Her bölümün kaynağını, alanlarını, hesabını ve görünümünü sen seç.</p></div><span className={styles.capability}>{datasets.length} veri kaynağı · Çok bölümlü tasarım · Antetli PDF</span></div>
+        <div className={styles.createGrid}>
+          <button className={styles.createCard} disabled={!loaded || !datasets.length} onClick={() => go({ kind: 'studio' })}><span className={styles.createIcon}><Plus size={22} /></span><strong>Sıfırdan özel rapor</strong><span>Satış, model, müşteri, Forecast veya fatura verilerini ayrı bölümlerle istediğin düzende kullan.</span><b>Rapor Stüdyosu’nu aç <ChevronRight size={15} /></b></button>
+          <button className={styles.createCard} disabled={!!busy || !templates.some((t) => t.key === 'kasapos_monthly') || !datasets.some((d) => d.key === 'service_invoice_items')} onClick={() => void createFromKit('kasapos_monthly')}><span className={styles.createIcon}><FileStack size={22} /></span><strong>KasaPOS aylık yönetim raporu</strong><span>Firma × ay adet ve tutar tabloları, toplamlar ve gelir grafiği. Alanları ve dönemleri değiştir.</span><b>{busy === 'kasapos_monthly' ? 'Hazırlanıyor…' : 'Özelleştirerek başla'} <ChevronRight size={15} /></b></button>
+          <button className={styles.createCard} disabled={!!busy || !templates.some((t) => t.key === 'retail_custom') || !datasets.some((d) => d.key === 'sales')} onClick={() => void createFromKit('retail_custom')}><span className={styles.createIcon}><LayoutDashboard size={22} /></span><strong>Retail yönetim raporu</strong><span>Satış, fırsat, model dağılımı ve müşteri havuzu bölümlerinden kendi yönetim ekranını üret.</span><b>{busy === 'retail_custom' ? 'Hazırlanıyor…' : 'Özelleştirerek başla'} <ChevronRight size={15} /></b></button>
+        </div><p className={styles.scopeNote}>Her bölüm kendi veri kaynağında hesaplanır. Farklı kaynakları aynı raporda birlikte gösterebilir, her bölüm için ayrı filtre ve formül tanımlayabilirsin.</p>
+      </section>}
 
       <div className={styles.toolbar}>
         <label className={styles.search}><Search size={18} aria-hidden /><input aria-label="Rapor ve pano ara" placeholder="Rapor veya pano ara…" value={search} onChange={(event) => setSearch(event.target.value)} />{search && <button type="button" aria-label="Aramayı temizle" onClick={() => setSearch('')}>×</button>}</label>
@@ -199,9 +198,9 @@ export default function ReportBuilderApp({ canDesign, canManageLetterheads }: { 
       </div>
 
       <section className="space-y-3" aria-labelledby="h-boards">
-        <div><h2 id="h-boards" className="flex items-center gap-2 text-lg font-semibold"><LayoutDashboard size={18} aria-hidden style={{ color: TOKEN_CSS.primary }} />Panolar</h2>
-          <p className="text-xs text-[var(--muted)]">Pano: birden çok raporu tek sayfada toplayan, PDF’e antetli basılabilen ekran.</p></div>
-        {!boards.length ? <p className="pax-card pax-empty p-5 text-sm">{loaded ? `Görebildiğin pano yok.${canDesign ? ' “Pano oluştur” ile kayıtlı raporlarını tek sayfada topla.' : ''}` : 'Yükleniyor…'}</p> : (
+        <div><h2 id="h-boards" className="flex items-center gap-2 text-lg font-semibold"><LayoutDashboard size={18} aria-hidden style={{ color: TOKEN_CSS.primary }} />Çok bölümlü özel raporlar</h2>
+          <p className="text-xs text-[var(--muted)]">Kaydettiğin yönetim raporlarını aç, düzenle veya antetli PDF olarak indir.</p></div>
+        {!boards.length ? <p className="pax-card pax-empty p-5 text-sm">{loaded ? `Henüz görebildiğin çok bölümlü rapor yok.${canDesign ? ' “Özel rapor tasarla” ile ilk raporunu oluştur.' : ''}` : 'Yükleniyor…'}</p> : (
           <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             {boards.map((p) => (
               <li key={p.id}>
@@ -217,7 +216,7 @@ export default function ReportBuilderApp({ canDesign, canManageLetterheads }: { 
 
       <footer className="flex flex-wrap gap-2 border-t pt-4 text-sm" style={{ borderColor: 'var(--border)' }}>
         <button type="button" className="pax-btn inline-flex items-center gap-1" onClick={() => go({ kind: 'letterheads' })}><Stamp size={16} aria-hidden />PDF antetleri</button>
-        <button type="button" className="pax-btn inline-flex items-center gap-1" onClick={() => go({ kind: 'expert' })}><Wrench size={16} aria-hidden />Uzman sorgu ekranı</button>
+        <button type="button" className="pax-btn inline-flex items-center gap-1" onClick={() => go({ kind: 'expert' })}><Wrench size={16} aria-hidden />Alan bazlı rapor oluşturucu</button>
       </footer>
     </div>
   );

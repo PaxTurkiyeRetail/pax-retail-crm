@@ -23,6 +23,7 @@ export type DatasetUi = {
 };
 
 export const DATASET_UI: Record<string, DatasetUi> = {
+  kasapos_snapshot: { title: 'KasaPOS operasyonu', desc: 'Son fatura ayı, güncel kasa stoku, kullanım ve büyüme fırsatı.', icon: Receipt, tone: 'info', measures: ['active_registers', 'billed_registers', 'monthly_usd', 'utilization_pct'], groups: ['customer', 'owner', 'department', 'sector', 'period_month'], defaultGroup: 'customer', dated: false },
   sales: { title: 'Satışlar', desc: 'Kapanan satışlar: cihaz adedi, ciro, firma sayısı.', icon: ShoppingCart, tone: 'success', measures: ['device_count', 'amount_usd'], groups: ['sale_date', 'owner', 'customer', 'department', 'sales_channel', 'sale_type'], defaultGroup: 'sale_date', dated: true },
   sale_items: { title: 'Ürün / model satışları', desc: 'Hangi model kaç adet satıldı, kim sattı.', icon: Package, tone: 'info', measures: ['device_quantity'], groups: ['product_code', 'sale_date', 'owner', 'customer', 'item_sale_type', 'department'], defaultGroup: 'product_code', dated: true },
   forecast: { title: 'Forecast', desc: 'Satışçıların gelecek ay tahminleri ve olasılıkları.', icon: TrendingUp, tone: 'warning', measures: ['quantity', 'weighted_quantity'], groups: ['forecast_month', 'probability', 'owner', 'product', 'customer', 'department'], defaultGroup: 'forecast_month', dated: true },
@@ -85,15 +86,15 @@ export function defaultDefinition(datasetKey: string, catalogMeasures: string[],
     dimensions: g ? [{ field: g.key, ...(g.type === 'date' ? { grain: 'month' as const } : {}) }] : [],
     filters: [], calculated: [], sort: [], limit: 500, compare: 'none', department: 'all',
     dateRange: ui.dated ? periodToRange('this_year', defaultDateField) : undefined,
-    visualization: { type: g?.type === 'date' ? 'bar' : 'table' },
+    visualization: { type: 'table' },
   };
 }
 
 /** Tek tıkla açılan hazır raporlar (sihirbaza dolu gelir). */
 export const QUICK_REPORTS: { key: string; title: string; desc: string; def: ReportDefinitionInput }[] = [
-  { key: 'q_sales_month', title: 'Aylık cihaz satışı', desc: 'Bu yıl her ay kaç cihaz sattık, geçen yılla kıyas.', def: { dataset: 'sales', measures: ['device_count'], dimensions: [{ field: 'sale_date', grain: 'month' }], dateRange: { type: 'relative', preset: 'this_year' }, compare: 'yoy', visualization: { type: 'bar' } } },
+  { key: 'q_sales_month', title: 'Aylık cihaz satışı', desc: 'Bu yıl her ay kaç cihaz sattık, geçen yılla kıyas.', def: { dataset: 'sales', measures: ['device_count'], dimensions: [{ field: 'sale_date', grain: 'month' }], dateRange: { type: 'relative', preset: 'this_year' }, compare: 'yoy', visualization: { type: 'table' } } },
   { key: 'q_seller', title: 'Satışçı karnesi', desc: 'Satışçı bazında cihaz, ciro ve firma sayısı.', def: { dataset: 'sales', measures: ['device_count', 'amount_usd', 'customer_count'], dimensions: [{ field: 'owner' }], dateRange: { type: 'relative', preset: 'this_year' }, sort: [{ field: 'device_count', dir: 'desc' }], visualization: { type: 'table' } } },
-  { key: 'q_top_models', title: 'En çok satan 10 model', desc: 'Bu yıl en çok satılan cihaz modelleri.', def: { dataset: 'sale_items', measures: ['device_quantity'], dimensions: [{ field: 'product_code' }], dateRange: { type: 'relative', preset: 'this_year' }, sort: [{ field: 'device_quantity', dir: 'desc' }], limit: 10, visualization: { type: 'bar' } } },
+  { key: 'q_top_models', title: 'En çok satan 10 model', desc: 'Bu yıl en çok satılan cihaz modelleri.', def: { dataset: 'sale_items', measures: ['device_quantity'], dimensions: [{ field: 'product_code' }], dateRange: { type: 'relative', preset: 'this_year' }, sort: [{ field: 'device_quantity', dir: 'desc' }], limit: 10, visualization: { type: 'table' } } },
   { key: 'q_forecast', title: 'Forecast olasılık dağılımı', desc: 'Tahminler %30 / %60 / %90 olasılığa göre.', def: { dataset: 'forecast', measures: ['quantity'], dimensions: [{ field: 'probability' }], dateRange: { type: 'relative', preset: 'this_year' }, visualization: { type: 'pie' } } },
   { key: 'q_quotes', title: 'Teklif durumu', desc: 'Açık / kapalı teklifler ve tutarları.', def: { dataset: 'quotes', measures: ['quote_count', 'total_amount'], dimensions: [{ field: 'status' }], dateRange: { type: 'relative', preset: 'this_year' }, visualization: { type: 'table' } } },
   { key: 'q_activity', title: 'Aktivite tipleri', desc: 'Bu ay telefon, ziyaret, toplantı sayıları.', def: { dataset: 'activities', measures: ['activity_count'], dimensions: [{ field: 'channel' }], dateRange: { type: 'relative', preset: 'this_month' }, visualization: { type: 'pie' } } },

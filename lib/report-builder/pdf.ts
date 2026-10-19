@@ -9,9 +9,9 @@ import path from 'node:path';
 import fontkit from '@pdf-lib/fontkit';
 import { PDFDocument, rgb, type PDFFont, type PDFPage, type RGB } from 'pdf-lib';
 import {
-  isDataWidget, type ColorToken, type ConditionalRule, type DataWidget, type LetterheadSettings, type PageDefinition, type PageWidget,
+  isDataWidget, type ColorToken, type DataWidget, type LetterheadSettings, type PageDefinition, type PageWidget,
 } from '@/lib/report-builder/page-types';
-import { formatCell, pivot, PREV_SUFFIX, type ReportResult, type ResultRow } from '@/lib/report-builder/result';
+import { formatCell, pivot, resolvePivotColumn, matchConditionalRule as matchRule, PREV_SUFFIX, type ReportResult, type ResultRow } from '@/lib/report-builder/result';
 import type { ColumnMeta } from '@/lib/report-builder/types';
 
 export const MM = 72 / 25.4;
@@ -33,7 +33,7 @@ const HEAD_BG = rgb(0.95, 0.96, 0.97);
 const tint = (c: RGB, a: number) => rgb(1 - (1 - c.red) * a, 1 - (1 - c.green) * a, 1 - (1 - c.blue) * a);
 
 export type WidgetData = { result?: ReportResult; forecast?: ReportResult; error?: string };
-export type LetterheadAsset = { settings: LetterheadSettings; bytes: Uint8Array; mimeType: 'image/png' | 'image/jpeg' | 'application/pdf' };
+export type LetterheadAsset = { settings: LetterheadSettings; bytes: Uint8Array; mimeType: 'image/png' | 'image/jpeg' | 'application/pdf'; lockOrientation?: boolean };
 export type PdfFonts = { regular: Uint8Array; bold: Uint8Array };
 
 export type RenderPdfInput = {
@@ -72,16 +72,6 @@ export function pdfFileName(title: string, date: string): string {
   return `${slug}_${date}.pdf`;
 }
 
-function matchRule(rules: ConditionalRule[], column: string, value: unknown): ColorToken | null {
-  if (typeof value !== 'number') return null;
-  for (const r of rules) {
-    if (r.column !== column) continue;
-    const ok = r.op === 'gt' ? value > r.value : r.op === 'gte' ? value >= r.value : r.op === 'lt' ? value < r.value
-      : r.op === 'lte' ? value <= r.value : r.op === 'eq' ? value === r.value : value >= r.value && value <= (r.value2 ?? r.value);
-    if (ok) return r.color;
-  }
-  return null;
-}
 export { matchRule as matchConditionalRule };
 
 type Ctx = {
@@ -196,7 +186,7 @@ function renderFlatTable(c: Ctx, w: DataWidget, result: ReportResult) {
     numeric: cols.map((col) => col.type === 'number'),
     density: w.style.density,
     colorText: (r, i) => {
-      const tok = matchRule(w.style.conditional, cols[i].key, result.rows[r][cols[i].key]);
+      const tok = matchRule(w.style.conditional, cols[i], result.rows[r][cols[i].key], result.columns);
       return tok ? TOKEN_RGB[tok] : null;
     },
   });
@@ -204,7 +194,7 @@ function renderFlatTable(c: Ctx, w: DataWidget, result: ReportResult) {
 }
 
 function renderPivot(c: Ctx, w: DataWidget, result: ReportResult, forecast?: ReportResult) {
-  const pivotKey = result.columns.find((col) => col.role === 'dimension' && (col.key === `d_${w.query.visualization.pivotColumn}` || col.key.startsWith(`d_${w.query.visualization.pivotColumn}_`)))?.key;
+  const pivotKey = resolvePivotColumn(result.columns, w.query.visualization.pivotColumn)?.key;
   const measure = result.columns.find((col) => col.role !== 'dimension');
   const pt = pivotKey && measure ? pivot(result.columns, result.rows, pivotKey, measure.key) : null;
   if (!pt) return renderFlatTable(c, w, result);
@@ -269,7 +259,7 @@ function renderKpi(c: Ctx, w: DataWidget, result: ReportResult) {
     c.page.drawRectangle({ x, y: c.y - h, width: bw, height: h, borderColor: LINE, borderWidth: 0.6, color: rgb(1, 1, 1) });
     c.page.drawRectangle({ x, y: c.y - h, width: 2.5, height: h, color: accent });
     c.page.drawText(fit(c.regular, col.label, 7.5, bw - 12), { x: x + 8, y: c.y - 13, size: 7.5, font: c.regular, color: MUTED });
-    const tok = matchRule(w.style.conditional, col.key, row[col.key]);
+    const tok = matchRule(w.style.conditional, col, row[col.key], result.columns);
     c.page.drawText(fit(c.bold, formatCell(col, row[col.key]), 15, bw - 12), { x: x + 8, y: c.y - 32, size: 15, font: c.bold, color: tok ? TOKEN_RGB[tok] : TEXT });
     const prev = row[col.key + PREV_SUFFIX];
     const cur = row[col.key];
@@ -390,7 +380,7 @@ export function pdfWidgetOrder(page: PageDefinition): PageWidget[] {
 
 export async function renderPagePdf(input: RenderPdfInput): Promise<Uint8Array> {
   const lh = input.letterhead?.settings;
-  const orientation = input.page.pdf.orientation ?? lh?.orientation ?? input.orientation ?? 'portrait';
+  const orientation = input.letterhead?.lockOrientation ? lh?.orientation ?? 'portrait' : input.page.pdf.orientation ?? lh?.orientation ?? input.orientation ?? 'portrait';
   const size = orientation === 'landscape' ? { w: A4.h, h: A4.w } : { ...A4 };
   const margins = lh?.margins ?? { top: 15, right: 15, bottom: 15, left: 15 };
   const safe = lh?.safeArea ?? { top: 0, bottom: 0 };

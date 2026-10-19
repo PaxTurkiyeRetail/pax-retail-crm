@@ -97,7 +97,7 @@ export const reportDefinitionSchema = z.object({
   version: z.literal(1).default(1),
   dataset: key,
   measures: z.array(key).min(1).max(12),
-  dimensions: z.array(dimensionRefSchema).max(4).default([]),
+  dimensions: z.array(dimensionRefSchema).max(12).default([]),
   filters: z.array(filterSchema).max(20).default([]),
   dateRange: dateRangeSchema.optional(),
   /** Varsayılan departman filtresi (musteriler.is_kolu). 'all' = tümü. */
@@ -140,6 +140,8 @@ export type RowScope =
 
 export type ColumnMeta = {
   key: string;
+  /** Original semantic field; key remains the SQL result alias. */
+  sourceField?: string;
   label: string;
   role: 'dimension' | 'measure' | 'calculated';
   type: 'string' | 'number' | 'date' | 'boolean';
