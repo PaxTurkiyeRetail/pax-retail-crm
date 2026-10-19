@@ -545,6 +545,11 @@ export default function PanelShell({
         iconKey: "forecast",
       });
       reports.push({
+        href: "/crm/report-builder",
+        label: "Rapor Tasarımcısı",
+        iconKey: "forecast",
+      });
+      reports.push({
         href: "/crm/reports/weekly-activities",
         label: "Aktiviteler Raporu",
         iconKey: "weekly",
