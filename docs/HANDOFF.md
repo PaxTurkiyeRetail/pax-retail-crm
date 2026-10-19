@@ -44,15 +44,16 @@ Read `.claude/CLAUDE.md` first. Rules:
   - Content is full width (the `max-width` was removed from `premium-ui.css`).
 
 ## Open / pending
-1. **Report Builder UX redo:** "I couldn't even build a report". A background agent is working in worktree branch `worktree-agent-af9de7f5c551e4898`, NOT merged.
-   - Target:
-     - Template gallery on the landing page.
-     - 3-step wizard (data → measure/grouping + live preview → view/save).
-     - An advanced layer: comparison, top-N, conditional colour, drill-down, scheduling, letterhead PDF.
-     - A separate "Pano oluştur" (create dashboard) flow.
-     - Plain Turkish, no jargon. Bar: Metabase/Looker Studio ease.
-   - Current state: tsc errors exist, e.g. `PageDesigner.tsx: SavedDefinitionLite` not found.
-   - To do: finish or check that branch, then run `tsc`, `vitest` and `build`, then merge and deploy.
+1. **Report Builder UX:** DONE and live.
+   - Shipped:
+     - Rapor Merkezi gallery with ready templates.
+     - 3-step wizard: `ReportWizard.tsx`, plain Turkish names in `friendly.ts`.
+     - Advanced layer: comparison, top-N, filters, formulas, conditional colour.
+     - Drill-down, `?report=` / `?page=` links, "Kayıtlı rapor ekle" in the dashboard designer.
+   - Remaining:
+     - (a) Conditional colour is not persisted. Add a `style` field to the report definition schema in `lib/report-builder/types.ts`.
+     - (b) Scheduled reports: the `report_schedules` table exists, but there is no runner or UI. Build a cron/pm2 job plus the "Zamanla" UI.
+     - (c) No Playwright verification yet.
 2. **UI taste:** the user said "too colourful" and then "too pale". The current balance is in the last commit; the request is "advanced, polished, product feel".
    - The Dashboard hero band (navy gradient) is still old styling. Bring it in line with the system.
 3. **Görkem İlbay:** department is empty. The user should assign it from `/admin/users`.
