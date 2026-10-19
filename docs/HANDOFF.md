@@ -102,4 +102,4 @@ Read `.claude/CLAUDE.md` first. Rules:
 - Comparison grains: targets only Account/month with explicit equal quarter/year monthly allocation; model/customer actual-vs-Forecast quantities are separate. No invented model targets or Forecast USD conversion.
 - Validation: full local verify passed (447 tests before final targeted additions); latest snapshot/security tests 39/39, drilldown helper/route tests 17/17. Mocked real-component browser tests passed. Real antetli PDF rendered and visually checked across three pages. Authenticated live UI has not been tested.
 - Migration 048 is an append section in 047; applied migration prefix checksums are preserved. Use standard backup-first deployment script.
-- Production status: awaiting this delivery's standard deployment and health verification.
+- Production status: 6b0064c deployed successfully; server full verify 54 files / 452 tests passed, append migration 048 applied, PM2 online, internal and public HTTPS health passed. Mandatory backup: backups/predeploy-20261019-131234.dump. No real email was sent for QA.
