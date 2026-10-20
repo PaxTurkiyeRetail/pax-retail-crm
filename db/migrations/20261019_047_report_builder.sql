@@ -179,3 +179,21 @@ create table if not exists public.report_page_snapshots (
   created_at timestamptz not null default now()
 );
 create index if not exists report_page_snapshots_owner_page_idx on public.report_page_snapshots(owner_user_id,page_id,created_at desc);
+-- CRM_APPEND_MIGRATION: 20261019_049_retail_reference_plan.sql
+CREATE TABLE IF NOT EXISTS public.crm_retail_plan_entries (
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(), reference_key text NOT NULL UNIQUE,
+ plan_year integer NOT NULL CHECK(plan_year BETWEEN 2000 AND 2100), plan_month integer NOT NULL CHECK(plan_month BETWEEN 1 AND 12),
+ customer_id uuid REFERENCES public.musteriler(id), firm_name text NOT NULL, product_code text NOT NULL,
+ quantity integer NOT NULL CHECK(quantity>=0), business_model text NOT NULL CHECK(business_model IN ('sale','rental','bank')),
+ probability integer NOT NULL CHECK(probability BETWEEN 0 AND 100), note text NOT NULL DEFAULT '',
+ unit_price numeric CHECK(unit_price>=0), rental_monthly_price numeric CHECK(rental_monthly_price>=0),
+ is_active boolean NOT NULL DEFAULT true, source_name text NOT NULL, reference_snapshot jsonb NOT NULL DEFAULT '{}'::jsonb,
+ created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(), updated_by text
+);
+CREATE INDEX IF NOT EXISTS crm_retail_plan_entries_year_active_idx ON public.crm_retail_plan_entries(plan_year) WHERE is_active=true;
+CREATE TABLE IF NOT EXISTS public.crm_retail_pool_memberships (
+ customer_id uuid PRIMARY KEY REFERENCES public.musteriler(id), reference_key text NOT NULL UNIQUE,
+ reference_name text NOT NULL, retail_status text NOT NULL, register_vendor_group text,
+ source_name text NOT NULL, reference_snapshot jsonb NOT NULL DEFAULT '{}'::jsonb,
+ created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now()
+);

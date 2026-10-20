@@ -112,3 +112,6 @@ Read `.claude/CLAUDE.md` first. Rules:
 - Explicit tab naming and section destinations allow several sections in one tab, with a structure preview and independent per-tab stacking. Empty tabs are omitted. Studio outline also groups shared areas and tab contents, showing widget kind/source and new-widget destination.
 - Local real-component browser acceptance passed: two independent filtered sources, ordered model breakdown, persisted filters, three sections across two tabs, omitted empty tab, correct layout and grouped Studio outline. Authenticated live AD UI verification remains pending.
 - Production status for this follow-up: 371a94d deployed; server verify 57 files / 467 tests passed, backup predeploy-20261019-133855.dump created, internal and public HTTPS health passed.
+
+## LATEST / çalışma durduruldu — Claude devri
+Kullanıcı 19 Ekim 2026'da token nedeniyle işi Claude'a devretmek istedi. Önce `docs/CLAUDE_HANDOFF_20261019.md` okunmalı. Son canlı kod 2cfa4fc (480 test); yereldeki ayrı Retail planı/CRM üyelik kaynakları UNCOMMITTED ve TypeScript canEditRetailPlan alanı eksik. Plan/veri onarımları CANLIYA UYGULANMADI. Çalışma ağacını/untracked dosyaları koru; eski DONE ifadelerini bu yeni teslimat için geçerli sayma.

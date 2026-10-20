@@ -3,10 +3,11 @@
 import { Fragment, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { ArrowDownToLine, RefreshCw } from 'lucide-react';
 import type { RetailOperasyonPayload, RetailOpportunity } from '@/lib/reports/retail-operasyon';
-import { isTerminal, retailModel } from '@/lib/reports/retail-projection';
+import { businessLabel, businessType, isTerminal, retailModel } from '@/lib/reports/retail-projection';
 import ForecastQuickAdd, { loadForecastQuickAddOptions, type ForecastQuickAddOptions } from '@/components/forecast/ForecastQuickAdd';
 import { downloadCsv, type Column } from '@/components/ui';
 import RetailResults from './RetailResults';
+import RetailPlanEditor from './RetailPlanEditor';
 import s from './retail-operasyon.module.css';
 
 const MONTHS = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
@@ -56,6 +57,7 @@ export default function RetailOperasyonClient() {
   const [planning, setPlanning] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [yearChoice, setYearChoice] = useState(new Date().getFullYear());
+  const [editingPlan,setEditingPlan]=useState<{row:RetailOpportunity;year:number}|null>(null);
 
   const reload = useCallback(async () => {
     setBusy(true); setError('');
@@ -101,12 +103,15 @@ export default function RetailOperasyonClient() {
   const planned = new Set(planNext.map((r) => r.customerId).filter(Boolean));
 
   async function updateMonth(row: RetailOpportunity, month: number) {
-    if (!row.id) return;
+    if (!row.id || !data?.canEditRetailPlan) return;
     setSavingId(row.id); setError('');
     try {
-      const r = await fetch('/api/forecast/update', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: row.id, product_id: row.productId || row.model, quantity: row.qty, forecast_year: year + 1, forecast_month: month, sales_channel: row.channel, probability: row.prob, note: row.note }) });
+      if(row.source==='retail_plan'&&!row.updatedAt)throw new Error('Plan bilgisi güncel değil. Raporu yenileyin.');
+      const r = row.source==='retail_plan'
+        ? await fetch(`/api/reports/retail-plan/${encodeURIComponent(row.id)}`,{method:'PATCH',headers:{'content-type':'application/json'},body:JSON.stringify({planMonth:month,expectedUpdatedAt:row.updatedAt})})
+        : await fetch('/api/forecast/update', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: row.id, product_id: row.productId || row.model, quantity: row.qty, forecast_year: year + 1, forecast_month: month, sales_channel: row.channel, probability: row.prob, note: row.note }) });
       const j = await r.json();
-      if (!r.ok) throw new Error(j?.message || 'Plan ayı kaydedilemedi');
+      if (!r.ok) throw new Error(r.status===409?'Bu plan başka bir kullanıcı tarafından değiştirildi. Raporu yenileyip tekrar deneyin.':j?.error?.message||j?.message||'Plan ayı kaydedilemedi');
       await reload();
     } catch (e) { setError(e instanceof Error ? e.message : 'Plan ayı kaydedilemedi'); }
     finally { setSavingId(null); }
@@ -118,17 +123,20 @@ export default function RetailOperasyonClient() {
       <Metrics items={[
         { label: 'Fırsat firması', value: nf.format(unique(rows, (r) => r.customerId || r.firm)) },
         { label: 'Toplam cihaz', value: nf.format(sum(rows.filter((r) => isTerminal(r.model)), (r) => r.qty)) },
-        { label: 'Kiralama cihaz', value: nf.format(sum(rows.filter((r) => isTerminal(r.model) && r.saleType === 'rental'), (r) => r.qty)) },
-        { label: 'Satış cihaz', value: nf.format(sum(rows.filter((r) => isTerminal(r.model) && r.saleType !== 'rental'), (r) => r.qty)) },
+        { label: 'Kiralama cihaz', value: nf.format(sum(rows.filter((r) => isTerminal(r.model) && businessType(r)==='rental'), (r) => r.qty)) },
+        { label: 'Satış cihaz', value: nf.format(sum(rows.filter((r) => isTerminal(r.model) && businessType(r)==='sale'), (r) => r.qty)) },
+        { label: 'Banka cihaz', value: nf.format(sum(rows.filter((r) => isTerminal(r.model) && businessType(r)==='bank'), (r) => r.qty)),sub:'Toplamda dahil · satış ve kiralamadan ayrı' },
       ]} />
       <Table title="Model dağılımı" rows={models} columns={[{ key: 'model', label: 'Model', value: (r) => r.model }, { key: 'qty', label: 'Adet', value: (r) => r.qty, num: true }]} name={`retail-model-${next ? year + 1 : year}`} />
       <Table title={`${next ? year + 1 : year} firma fırsatları`} rows={rows} name={`retail-firsat-${next ? year + 1 : year}`} columns={[
         { key: 'firm', label: 'Firma', value: (r) => r.firm }, { key: 'model', label: 'Model', value: (r) => r.model }, { key: 'qty', label: 'Adet', value: (r) => r.qty, num: true },
-        { key: 'mode', label: 'İş modeli', value: (r) => r.saleType === 'rental' ? 'Kiralama' : 'Satış', render: (r) => <span className={s.pill}>{r.saleType === 'rental' ? 'Kiralama' : 'Satış'}</span> },
+        { key: 'mode', label: 'İş modeli', value: businessLabel, render: (r) => <span className={s.pill}>{businessLabel(r)}</span> },
+        { key:'source',label:'Kaynak',value:r=>r.source==='retail_plan'?'Retail planı · canlı':'Forecast · canlı' },
         { key: 'channel', label: 'Kanal', value: (r) => r.channel }, { key: 'prob', label: 'Olasılık %', value: (r) => r.prob, num: true }, { key: 'note', label: 'Not', value: (r) => r.note }, { key: 'owner', label: 'Account', value: (r) => r.owner },
-        { key: 'month', label: 'Planlanan ay', value: (r) => r.month, render: (r) => next && r.id ? <select aria-label={`${r.firm} planlanan ay`} disabled={savingId === r.id} value={r.month} onChange={(e) => void updateMonth(r, Number(e.target.value))}>{MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}</select> : MONTHS[r.month - 1] ?? '—' },
+        { key: 'month', label: 'Planlanan ay', value: (r) => r.month, render: (r) => next && r.id && data?.canEditRetailPlan ? <select aria-label={`${r.firm} planlanan ay`} disabled={savingId === r.id} value={r.month} onChange={(e) => void updateMonth(r, Number(e.target.value))}>{MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}</select> : MONTHS[r.month - 1] ?? '—' },
+        ...(data?.canEditRetailPlan?[{key:'edit',label:'Plan işlemi',value:()=>'',render:(r:RetailOpportunity)=>r.source==='retail_plan'&&r.id?<button type="button" className={s.button} onClick={()=>setEditingPlan({row:r,year:next?year+1:year})}>Planı düzenle</button>:null}]:[]),
       ]} />
-      {next && <p className={s.note}>Banka kanalı: {nf.format(sum(rows.filter((r) => /bank/i.test(r.channel) && isTerminal(r.model)), (r) => r.qty))} cihaz. Planlanan ay değişiklikleri Forecast kaydına kaydedilir.</p>}
+      {next && <p className={s.note}>Banka: {nf.format(sum(rows.filter((r) => businessType(r)==='bank' && isTerminal(r.model)), (r) => r.qty))} cihaz. Banka planları toplam adede dahildir; satış cirosu ve aylık kiralama geliri hesabından ayrı tutulur. Planlanan ay, satırın kendi planına kaydedilir.</p>}
     </>;
   }
 
@@ -188,6 +196,7 @@ export default function RetailOperasyonClient() {
         <RetailResults data={data} year={tab === 4 ? year : year + 1} pct={tab === 4 ? pct : pctNext} />
       </>}
     </>}
-    <footer className={s.foot}>Kaynak: CRM satışları, Forecast, KasaPOS faturaları ve Retail müşteri havuzu. S210 aksesuarı terminal sayısına girmez; ürün cirosuna dahildir.</footer>
+    <footer className={s.foot}>Kaynak: CRM satışları, Retail planı, Forecast, KasaPOS faturaları ve Retail müşteri havuzu. S210 aksesuarı terminal sayısına girmez; ürün cirosuna dahildir.</footer>
+    {editingPlan&&data?.canEditRetailPlan&&<RetailPlanEditor row={editingPlan.row} year={editingPlan.year} onClose={()=>setEditingPlan(null)} onSaved={reload}/>}
   </div>;
 }

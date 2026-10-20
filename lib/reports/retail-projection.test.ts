@@ -1,10 +1,25 @@
 import { describe, expect, it } from 'vitest';
-import { actualRetailAverage, actualRetailRevenue, allocateRetailScenario, projectRetail } from './retail-projection';
+import { actualRetailAverage, actualRetailRevenue, allocateRetailScenario, businessType, projectRetail } from './retail-projection';
 import type { RetailOpportunity } from './retail-operasyon';
 
 const opp = (values: Partial<RetailOpportunity> = {}): RetailOpportunity => ({firm:'Test',model:'A80',qty:1,month:3,channel:'sale',prob:10,note:'',owner:'',...values});
 
 describe('Retail reference scenario calculations',()=>{
+  it('preserves separate sale, rental and bank quantities and money with explicit model priority',()=>{
+    const rows=[opp({source:'retail_plan',businessModel:'sale',saleType:'rental',channel:'Banka',qty:1250,unitPrice:200}),opp({source:'retail_plan',businessModel:'rental',saleType:'sale',qty:4845,rentalMonthlyPrice:17}),opp({source:'retail_plan',businessModel:'bank',saleType:'sale',qty:500,unitPrice:99})];
+    const p=projectRetail([],rows,100,true);
+    expect(p.saleQty).toBe(1250);expect(p.leaseQty).toBe(4845);expect(p.bankQty).toBe(500);expect(p.planQty).toBe(6595);
+    expect(p.saleUsd).toBe(250000);expect(p.leaseUsd).toBe(82365);expect(p.bankUsd).toBe(49500);
+    expect(businessType(rows[0])).toBe('sale');expect(businessType(opp({channel:'Banka',saleType:'sale'}))).toBe('bank');
+    expect(p.groups[0].planMonths[11]).toBe(6595);
+  });
+  it('keeps business models separate while rounding each month and reconciles firm allocations',()=>{
+    const rows=[opp({businessModel:'sale'}),opp({businessModel:'rental',rentalMonthlyPrice:15}),opp({businessModel:'bank'}),opp({businessModel:'sale',month:4})];
+    const p=projectRetail([],rows,50,false),allocated=allocateRetailScenario(rows,50);
+    expect(p.saleQty).toBe(2);expect(p.leaseQty).toBe(1);expect(p.bankQty).toBe(1);expect(p.planQty).toBe(4);
+    expect(p.groups[0].planMonths[2]).toBe(3);expect(p.groups[0].planMonths[3]).toBe(1);
+    expect([...allocated.values()].reduce((a,b)=>a+b,0)).toBe(p.planQty);
+  });
   it('allocates rounded monthly totals to firms so details reconcile with the matrix', () => {
     const rows = [opp(), opp(), opp({ month: 4, qty: 3 }), opp({ model: 'A35', qty: 5 })];
     for (const pct of [0, 33, 50, 100]) {
