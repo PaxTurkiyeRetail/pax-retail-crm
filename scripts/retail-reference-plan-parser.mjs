@@ -15,6 +15,21 @@ function embeddedData(html) {
   return { data: candidates[0], blocks, hash: createHash('sha256').update(html).digest('hex') };
 }
 
+export function retailReferenceSalesTotals(html) {
+  const { data } = embeddedData(html);
+  if (!Array.isArray(data.salesF) || !Array.isArray(data.salesModels)) fail('Satış firma/model JSON kaynağı gerekli');
+  const sum = (rows, field) => rows.reduce((total, row) => {
+    if (typeof row[field] !== 'number' || !Number.isFinite(row[field]) || row[field] < 0) fail('Satış toplamı geçersiz');
+    return total + row[field];
+  }, 0);
+  const usd = sum(data.salesF, 'usd'), terminals = sum(data.salesF, 'qty');
+  const modelUsd = sum(data.salesModels, 'usd');
+  if (Math.round(usd * 100) !== Math.round(modelUsd * 100)) fail('Referans firma/model ciro toplamı uyuşmuyor');
+  const s210 = data.salesModels.filter(row => row.name === 'S210');
+  if (s210.length !== 1) fail('Referans S210 modeli tekil olmalı');
+  return { firms: data.salesF.length, usd, terminals, s210: sum(s210, 'qty') };
+}
+
 export function parseRetailReferencePool(html) {
   const { data, hash } = embeddedData(html);
   if (!Array.isArray(data.crm) || data.crm.length !== 530) fail('CRM havuzu tam 530 kaynak satırı olmalı');

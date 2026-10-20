@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error JavaScript CLI helper intentionally has no declaration file.
-import { parseRetailReferencePlan, parseRetailReferencePool, matchRetailReferencePool } from './retail-reference-plan-parser.mjs';
+import { parseRetailReferencePlan, parseRetailReferencePool, matchRetailReferencePool, retailReferenceSalesTotals } from './retail-reference-plan-parser.mjs';
 
 const data = () => ({
   p26: Array.from({ length: 15 }, (_, i) => ({ firm: `Firma ${i}`, model: 'A80', qty: i === 14 ? 5172 : 1, mode: 'Kiralama', prob: 60, note: i === 0 ? 'Kaynak notu' : '' })),
@@ -69,5 +69,11 @@ describe('Retail reference plan JSON parser', () => {
   it('rejects duplicate source JSON and invalid persisted months', () => {
     expect(() => parseRetailReferencePlan(html() + html())).toThrow();
     expect(() => parseRetailReferencePlan(html(data(), { 0: 13 }))).toThrow('Ay');
+  });
+  it('derives realized totals from the source JSON and rejects inconsistent firm/model revenue', () => {
+    const source = { ...data(), salesF: [{ qty: 1432, usd: 404636 }], salesModels: [{ name: 'S210', qty: 678, usd: 51338 }, { name: 'A80', qty: 1432, usd: 353298 }] };
+    expect(retailReferenceSalesTotals(html(source))).toEqual({ firms: 1, usd: 404636, terminals: 1432, s210: 678 });
+    source.salesModels[0].usd -= 1;
+    expect(() => retailReferenceSalesTotals(html(source))).toThrow('ciro');
   });
 });
