@@ -4,10 +4,11 @@ import { Fragment, useCallback, useEffect, useMemo, useState, type ReactNode } f
 import { ArrowDownToLine, RefreshCw } from 'lucide-react';
 import type { RetailOperasyonPayload, RetailOpportunity } from '@/lib/reports/retail-operasyon';
 import { businessLabel, businessType, isTerminal, retailModel } from '@/lib/reports/retail-projection';
-import ForecastQuickAdd, { loadForecastQuickAddOptions, type ForecastQuickAddOptions } from '@/components/forecast/ForecastQuickAdd';
+import { loadForecastQuickAddOptions, type ForecastQuickAddOptions } from '@/components/forecast/ForecastQuickAdd';
 import { downloadCsv, type Column } from '@/components/ui';
 import RetailResults from './RetailResults';
 import RetailPlanEditor from './RetailPlanEditor';
+import RetailPlanQuickAdd from './RetailPlanQuickAdd';
 import s from './retail-operasyon.module.css';
 
 const MONTHS = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
@@ -71,8 +72,8 @@ export default function RetailOperasyonClient() {
   }, [yearChoice]);
   useEffect(() => { void reload(); }, [reload]);
   useEffect(() => {
-    if (tab === 3 && !quickOptions) loadForecastQuickAddOptions().then(setQuickOptions).catch((e) => setError(e.message));
-  }, [tab, quickOptions]);
+    if (tab === 3 && data?.canEditRetailPlan && !quickOptions) loadForecastQuickAddOptions().then(setQuickOptions).catch((e) => setError(e.message));
+  }, [tab, quickOptions,data?.canEditRetailPlan]);
   useEffect(() => {
     if (!planning) return;
     const close = (event: KeyboardEvent) => { if (event.key === 'Escape') setPlanning(null); };
@@ -141,7 +142,7 @@ export default function RetailOperasyonClient() {
   }
 
   const tabs = ['1. Mevcut Durum', `2. ${year} Yıl Sonu`, `3. ${year + 1} Projeksiyon`, '4. CRM Havuzu', `5. ${year} Aylık Sonuç`, `6. ${year + 1} Aylık Sonuç`];
-  const subtitles = ['Gerçekleşen satışlar, KasaPOS entegrasyonu ve kiralama operasyonu.', 'Yıl sonuna kadar beklenen satış ve kiralama fırsatları.', 'Gelecek yılın firma, model ve ay bazında planı.', 'Müşteri havuzunu incele, planını oluştur ve Forecast’e kaydet.', 'Gerçekleşen sonuçlar ve yıl sonu senaryosu, model ve ay bazında.', 'CRM planları ve projeksiyonun birleşik aylık görünümü.'];
+  const subtitles = ['Gerçekleşen satışlar, KasaPOS entegrasyonu ve kiralama operasyonu.', 'Yıl sonuna kadar beklenen satış ve kiralama fırsatları.', 'Gelecek yılın firma, model ve ay bazında planı.', 'Müşteri havuzunu incele, canlı Retail planını oluştur.', 'Gerçekleşen sonuçlar ve yıl sonu senaryosu, model ve ay bazında.', 'CRM planları ve projeksiyonun birleşik aylık görünümü.'];
 
   return <div className={s.root}>
     <header className={s.top}><div><span className={s.eyebrow}>PAX TÜRKİYE · RETAIL</span><h1>Operasyon Paneli</h1><p>Satıştan plana, tüm Retail operasyonu tek yerde.</p></div><div className={s.actions}><span className={s.live}><i />Canlı CRM verisi</span><label>Rapor yılı <select aria-label="Rapor yılı" value={yearChoice} disabled={busy} onChange={(e) => { setData(null); setYearChoice(Number(e.target.value)); }}>{Array.from({ length: 7 }, (_, i) => new Date().getFullYear() - 3 + i).map((y) => <option key={y}>{y}</option>)}</select></label><button className={s.button} disabled={busy} onClick={() => void reload()}><RefreshCw size={14} />{busy ? 'Yenileniyor…' : 'Yenile'}</button></div></header>
@@ -175,19 +176,19 @@ export default function RetailOperasyonClient() {
           { label: 'Kasa firması bilinen', value: nf.format(crm.filter((r) => r.kasa && !/bilinmeyen/i.test(r.kasa)).length) }, { label: 'Planlanan firma', value: nf.format(planned.size), sub: `${nf.format(sum(planNext, (r) => r.qty))} cihaz · ${year + 1}` },
         ]} />
         <div className={s.two}><Distribution title="Kasa firması dağılımı" rows={crm} field="kasa" /><Distribution title="POS markası dağılımı" rows={crm} field="pos" /></div>
-        <div className={s.banner}><strong>{year + 1} firma planını buradan oluştur</strong><p>Firma satırındaki “Plan ekle” ile model, adet ve ay seç. Kaydettiğin plan doğrudan Forecast’e ve aylık sonuçlara yansır.</p></div>
+        <div className={s.banner}><strong>{year + 1} firma planını buradan oluştur</strong><p>Firma satırındaki “Plan ekle” ile model, adet ve ay seç. Kaydettiğin plan Retail projeksiyonuna ve aylık sonuçlara yansır.</p></div>
         <div className={s.actions}><input aria-label="CRM havuzunda ara" placeholder="Firma, sektör, kasa, POS veya Account ara…" value={q} onChange={(e) => setQ(e.target.value)} />
           {(['kasa', 'pos', 'posOwner', 'status'] as const).map((key) => <select key={key} aria-label={{ kasa: 'Kasa firması', pos: 'POS markası', posOwner: 'POS sahipliği', status: 'CRM statüsü' }[key]} value={filters[key]} onChange={(e) => setFilters({ ...filters, [key]: e.target.value })}><option value="">{{ kasa: 'Tüm kasa firmaları', pos: 'Tüm POS markaları', posOwner: 'Tüm sahiplikler', status: 'Tüm statüler' }[key]}</option>{[...new Set(crm.map((r) => r[key]).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'tr')).map((v) => <option key={v}>{v}</option>)}</select>)}
           <select aria-label="Firma sırası" value={order} onChange={(e) => setOrder(e.target.value)}><option value="register">Kasa adedine göre</option><option value="name">Firma adına göre</option><option value="pos">POS markasına göre</option></select>
           {(q || Object.values(filters).some(Boolean)) && <button className={s.button} onClick={() => { setQ(''); setFilters({ kasa: '', pos: '', posOwner: '', status: '' }); }}>Filtreleri temizle</button>}
           <span>{nf.format(crmRows.length)} / {nf.format(crm.length)} firma</span>
         </div>
-        <Table title="CRM müşteri ve plan havuzu" rows={crmRows} name={`retail-crm-plan-${year + 1}`} detail={(r) => planning === r.id && <div><div className={s.cardHeader}><strong>{r.name} · {year + 1} yeni plan</strong><button className={s.button} onClick={() => setPlanning(null)}>Vazgeç</button></div><ForecastQuickAdd customerId={r.id} customerName={r.name} options={quickOptions} defaultYear={year + 1} compact onSaved={() => { void reload(); }} /></div>} columns={[
+        <Table title="CRM müşteri ve plan havuzu" rows={crmRows} name={`retail-crm-plan-${year + 1}`} detail={(r) => data.canEditRetailPlan && planning === r.id && <div><div className={s.cardHeader}><strong>{r.name} · {year + 1} yeni plan</strong><button className={s.button} onClick={() => setPlanning(null)}>Vazgeç</button></div><RetailPlanQuickAdd customerId={r.id} customerName={r.name} options={quickOptions} year={year + 1} onSaved={reload} /></div>} columns={[
           { key: 'name', label: 'Firma', value: (r) => r.name },
           { key: 'planModel', label: 'Planlanan model', value: (r) => planNext.filter((p) => p.customerId === r.id).map((p) => p.model).join(', ') || '—' },
           { key: 'planQty', label: 'Planlanan adet', value: (r) => sum(planNext.filter((p) => p.customerId === r.id), (p) => p.qty), num: true },
           { key: 'planMonth', label: 'Planlanan ay', value: (r) => [...new Set(planNext.filter((p) => p.customerId === r.id).map((p) => MONTHS[p.month - 1]))].join(', ') || '—' },
-          { key: 'plan', label: 'Plan işlemi', value: () => '', render: (r) => <button className={s.button} aria-expanded={planning === r.id} onClick={() => setPlanning(planning === r.id ? null : r.id)}>{planning === r.id ? 'Planı kapat' : 'Plan ekle'}</button> },
+          { key: 'plan', label: 'Plan işlemi', value: () => '', render: (r) => data.canEditRetailPlan ? <button className={s.button} aria-expanded={planning === r.id} onClick={() => setPlanning(planning === r.id ? null : r.id)}>{planning === r.id ? 'Planı kapat' : 'Plan ekle'}</button> : '—' },
           { key: 'kasa', label: 'Kasa firması', value: (r) => r.kasa }, { key: 'register', label: 'Kasa sayısı', value: (r) => r.register, num: true }, { key: 'pos', label: 'POS markası', value: (r) => r.pos }, { key: 'posOwner', label: 'POS sahipliği', value: (r) => r.posOwner }, { key: 'status', label: 'CRM statüsü', value: (r) => r.status }, { key: 'owner', label: 'Account', value: (r) => r.owner }, { key: 'banks', label: 'Bankalar', value: (r) => r.banks },
         ]} />
       </>}
@@ -196,7 +197,7 @@ export default function RetailOperasyonClient() {
         <RetailResults data={data} year={tab === 4 ? year : year + 1} pct={tab === 4 ? pct : pctNext} />
       </>}
     </>}
-    <footer className={s.foot}>Kaynak: CRM satışları, Retail planı, Forecast, KasaPOS faturaları ve Retail müşteri havuzu. S210 aksesuarı terminal sayısına girmez; ürün cirosuna dahildir.</footer>
+    <footer className={s.foot}>Kaynak: CRM satışları, Retail planı, KasaPOS faturaları ve Retail müşteri havuzu. S210 aksesuarı terminal sayısına girmez; ürün cirosuna dahildir.</footer>
     {editingPlan&&data?.canEditRetailPlan&&<RetailPlanEditor row={editingPlan.row} year={editingPlan.year} onClose={()=>setEditingPlan(null)} onSaved={reload}/>}
   </div>;
 }
