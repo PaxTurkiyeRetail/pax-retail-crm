@@ -13,11 +13,11 @@ export function businessType(row:RetailOpportunity):RetailBusinessModel {
 export const businessLabel=(row:RetailOpportunity)=>({sale:'Satış',rental:'Kiralama',bank:'Banka'})[businessType(row)];
 
 /** Allocate rounded model/month totals to firms without adding rounding-only devices. */
-export function allocateRetailScenario(rows: RetailOpportunity[], pct: number, current=false) {
+export function allocateRetailScenario(rows: RetailOpportunity[], pct: number) {
   const rate = scenarioRate(pct);
   const groups = new Map<string, Array<{ row: RetailOpportunity; exact: number; count: number }>>();
   for (const row of rows) {
-    const key = `${retailModel(row.model)}~${businessType(row)}~${current?12:row.month}`;
+    const key = `${retailModel(row.model)}~${businessType(row)}~${row.month}`;
     const group = groups.get(key) ?? [];
     const exact = row.qty * rate;
     group.push({ row, exact, count: Math.floor(exact) });
@@ -42,8 +42,8 @@ export function actualRetailAverage(sales: Array<RetailSaleLine & { usdQty?: num
 
 /** Round after grouping, so splitting a forecast into rows cannot change its result. */
 export function projectRetail(sales: RetailSaleLine[], opportunities: RetailOpportunity[], pct: number, current: boolean) {
-  const included = opportunities.filter(o => o.includeInRetailPlan !== false && isTerminal(o.model) && o.qty > 0 && (current || Number.isInteger(o.month) && o.month >= 1 && o.month <= 12));
-  const allocated=allocateRetailScenario(included,pct,current);
+  const included = opportunities.filter(o => o.includeInRetailPlan !== false && isTerminal(o.model) && o.qty > 0 && Number.isInteger(o.month) && o.month >= 1 && o.month <= 12);
+  const allocated=allocateRetailScenario(included,pct);
   const models = [...new Set([...(current ? sales.filter(s => isTerminal(s.model)).map(s => retailModel(s.model)) : []), ...included.map(o => retailModel(o.model))])].sort((a,b) => a.localeCompare(b, 'tr', { numeric: true }));
   const groups = models.map(model => {
     const actual = current ? sales.filter(s => retailModel(s.model) === model) : [];
@@ -64,7 +64,7 @@ export function projectRetail(sales: RetailSaleLine[], opportunities: RetailOppo
     };
     const salePrice = price(sale,'unitPrice',actualPrice), leasePrice = price(lease,'rentalMonthlyPrice',null),bankPrice=price(bank,'unitPrice',null);
     const actualMonths = Array.from({length:12},(_,i) => actual.filter(s=>s.month===i+1).reduce((n,s)=>n+s.qty,0));
-    const planMonths = Array.from({length:12},(_,i) => current ? (i===11 ? saleQty+leaseQty+bankQty : 0) : count(opp.filter(o=>o.month===i+1)));
+    const planMonths = Array.from({length:12},(_,i) => count(opp.filter(o=>o.month===i+1)));
     return {model, actualMonths, planMonths, saleQty, leaseQty,bankQty, salePrice, leasePrice,bankPrice, saleUsd:saleQty===0?0:salePrice==null?null:saleQty*salePrice, leaseUsd:leaseQty===0?0:leasePrice==null?null:leaseQty*leasePrice,bankUsd:bankQty===0?0:bankPrice==null?null:bankQty*bankPrice};
   });
   const sum = (key: 'saleUsd'|'leaseUsd'|'bankUsd') => groups.some(g=>g[key]==null) ? null : groups.reduce((n,g)=>n+(g[key]??0),0);

@@ -1,15 +1,10 @@
 import { NextResponse } from 'next/server';
-import { z } from 'zod';
 import { requireReportsAccessOrThrow } from '@/lib/authz';
-import { apiErrorResponse, parseJsonBody } from '@/lib/http/api-error';
-import { patchRetailPlan, retailPlanPatchSchema } from '@/lib/reports/retail-plan';
-
+import { apiErrorResponse } from '@/lib/http/api-error';
 export const dynamic = 'force-dynamic';
-export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
+export async function PATCH() {
   try {
-    const user = await requireReportsAccessOrThrow();
-    const id = z.string().uuid().parse((await context.params).id);
-    const patch = await parseJsonBody(request, retailPlanPatchSchema);
-    return NextResponse.json({ data: await patchRetailPlan(user, id, patch) });
-  } catch (error) { return apiErrorResponse(error, 'Retail planı kaydedilemedi.'); }
+    await requireReportsAccessOrThrow();
+    return NextResponse.json({ message: 'Retail ekranı artık ana Forecast kayıtlarını kullanıyor. Sayfayı yenileyip Forecast üzerinden işlem yapın.' }, { status: 410 });
+  } catch (error) { return apiErrorResponse(error, 'İşlem yapılamadı.'); }
 }

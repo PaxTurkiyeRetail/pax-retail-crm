@@ -26,7 +26,7 @@ const KASAPOS_ITEM_FILTER = `
 
 // ---- Repository ----
 
-async function fetchInvoiceAggregates(year: number, keys: string[]): Promise<KasaposInvoiceAggregate[]> {
+async function fetchInvoiceAggregates(year: number, keys: string[], department?: string): Promise<KasaposInvoiceAggregate[]> {
   const result = await db.query(
     `
       select s.customer_id::text as customer_id,
@@ -36,9 +36,11 @@ async function fetchInvoiceAggregates(year: number, keys: string[]): Promise<Kas
       from public.crm_service_invoices s
       join public.crm_service_invoice_items i on i.invoice_id = s.id
       where ${KASAPOS_ITEM_FILTER}
+        and ($3::text is null or exists(select 1 from public.musteriler scope_customer
+          where scope_customer.id=s.customer_id and scope_customer.is_kolu=$3::text))
       group by 1, 2
     `,
-    [year, keys],
+    [year, keys, department ?? null],
   );
   return (result.rows as any[]).map((row) => ({
     customerId: String(row.customer_id),
@@ -48,7 +50,7 @@ async function fetchInvoiceAggregates(year: number, keys: string[]): Promise<Kas
   }));
 }
 
-async function fetchFirmSources(year: number, keys: string[]): Promise<KasaposFirmSource[]> {
+async function fetchFirmSources(year: number, keys: string[], department?: string): Promise<KasaposFirmSource[]> {
   const result = await db.query(
     `
       select m.id::text as customer_id, m.musteri, m.sorumlu,
@@ -66,14 +68,14 @@ async function fetchFirmSources(year: number, keys: string[]): Promise<KasaposFi
         from public.musteri_kunye_v2 mk
         where mk.musteri_id = m.id
       ) k on true
-      where exists (
+      where ($3::text is null or m.is_kolu=$3::text) and exists (
            select 1
            from public.crm_service_invoices s
            join public.crm_service_invoice_items i on i.invoice_id = s.id
            where s.customer_id = m.id and ${KASAPOS_ITEM_FILTER}
          )
     `,
-    [year, keys],
+    [year, keys, department ?? null],
   );
   return (result.rows as any[]).map((row) => ({
     customerId: String(row.customer_id),
@@ -87,11 +89,11 @@ async function fetchFirmSources(year: number, keys: string[]): Promise<KasaposFi
 
 // ---- Servis ----
 
-export async function buildKasaposEntegrasyonRaporu(options?: { year?: number }): Promise<KasaposEntegrasyonPayload> {
+export async function buildKasaposEntegrasyonRaporu(options?: { year?: number; department?: 'Retail' | 'Bank' | 'Vertical' }): Promise<KasaposEntegrasyonPayload> {
   const requested = options?.year;
   const year = Number.isInteger(requested) && requested! > 2000 ? requested! : new Date().getFullYear();
   const keys = [...INTEGRATION_DEVICE_SERVICE_KEYS];
-  const [invoices, sources] = await Promise.all([fetchInvoiceAggregates(year, keys), fetchFirmSources(year, keys)]);
+  const [invoices, sources] = await Promise.all([fetchInvoiceAggregates(year, keys, options?.department), fetchFirmSources(year, keys, options?.department)]);
   return computeKasaposEntegrasyon(year, invoices, sources);
 }
 

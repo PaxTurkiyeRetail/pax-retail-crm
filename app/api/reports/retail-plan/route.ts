@@ -1,13 +1,10 @@
 import { NextResponse } from 'next/server';
 import { requireReportsAccessOrThrow } from '@/lib/authz';
-import { apiErrorResponse, parseJsonBody } from '@/lib/http/api-error';
-import { createRetailPlan, retailPlanCreateSchema } from '@/lib/reports/retail-plan';
-
+import { apiErrorResponse } from '@/lib/http/api-error';
 export const dynamic = 'force-dynamic';
-export async function POST(request: Request) {
+export async function POST() {
   try {
-    const user = await requireReportsAccessOrThrow();
-    const input = await parseJsonBody(request, retailPlanCreateSchema);
-    return NextResponse.json({ data: await createRetailPlan(user, input) }, { status: 201 });
-  } catch (error) { return apiErrorResponse(error, 'Retail planı eklenemedi.'); }
+    await requireReportsAccessOrThrow();
+    return NextResponse.json({ message: 'Retail ekranı artık ana Forecast kayıtlarını kullanıyor. Sayfayı yenileyip Forecast üzerinden işlem yapın.' }, { status: 410 });
+  } catch (error) { return apiErrorResponse(error, 'İşlem yapılamadı.'); }
 }

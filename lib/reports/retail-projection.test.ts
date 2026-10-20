@@ -11,7 +11,7 @@ describe('Retail reference scenario calculations',()=>{
     expect(p.saleQty).toBe(1250);expect(p.leaseQty).toBe(4845);expect(p.bankQty).toBe(500);expect(p.planQty).toBe(6595);
     expect(p.saleUsd).toBe(250000);expect(p.leaseUsd).toBe(82365);expect(p.bankUsd).toBe(49500);
     expect(businessType(rows[0])).toBe('sale');expect(businessType(opp({channel:'Banka',saleType:'sale'}))).toBe('bank');
-    expect(p.groups[0].planMonths[11]).toBe(6595);
+    expect(p.groups[0].planMonths[2]).toBe(6595);
   });
   it('keeps business models separate while rounding each month and reconciles firm allocations',()=>{
     const rows=[opp({businessModel:'sale'}),opp({businessModel:'rental',rentalMonthlyPrice:15}),opp({businessModel:'bank'}),opp({businessModel:'sale',month:4})];
@@ -35,9 +35,9 @@ describe('Retail reference scenario calculations',()=>{
   it('includes accessory sales revenue but keeps recurring rentals separate',()=>{
     expect(actualRetailRevenue([{firm:'Test',model:'S210',month:1,qty:2,usd:100,saleType:'sale'},{firm:'Test',model:'A80',month:1,qty:2,usd:30,saleType:'rental'}])).toBe(100);
   });
-  it('groups by model and business type before rounding, ignoring probability and booking in December',()=>{
+  it('groups by native model, month and business type before rounding, ignoring probability',()=>{
     const p=projectRetail([], [opp(),opp(),opp({saleType:'rental'}),opp({saleType:'rental'})],50,true);
-    expect(p.saleQty).toBe(1);expect(p.leaseQty).toBe(1);expect(p.groups[0].planMonths).toEqual([...Array(11).fill(0),2]);
+    expect(p.saleQty).toBe(1);expect(p.leaseQty).toBe(1);expect(p.groups[0].planMonths).toEqual([0,0,2,...Array(9).fill(0)]);
   });
   it('rounds next year by model/month rather than individual forecast row',()=>{
     const p=projectRetail([], [opp(),opp(),opp({month:4})],50,false);
@@ -60,7 +60,7 @@ describe('Retail reference scenario calculations',()=>{
   });
   it('keeps December actuals and forecast additive so matrix, cards and reconciliation agree',()=>{
     const sale={firm:'Test',model:'A80',month:12,qty:5,usdQty:5,usd:500,saleType:'sale' as const};
-    const p=projectRetail([sale],[opp({qty:4})],50,true);
+    const p=projectRetail([sale],[opp({qty:4,month:12})],50,true);
     expect(p.groups[0].actualMonths[11]+p.groups[0].planMonths[11]).toBe(p.actualQty+p.planQty);
     expect(p.actualQty+p.planQty).toBe(7);
   });

@@ -23,6 +23,7 @@ type Body = {
   unit_price?: number | string | null;
   rental_monthly_price?: number | string | null;
   include_in_retail_plan?: boolean | string | null;
+  expected_updated_at?: string;
 };
 
 function validYear(value: number) {
@@ -37,6 +38,10 @@ export async function POST(request: Request) {
     const canSeeAll = userHasPermission(me, 'forecast.write.any');
 
     if (!id) return NextResponse.json({ message: 'Forecast id zorunlu.' }, { status: 400 });
+    const expected = body.expected_updated_at;
+    if (expected !== undefined && (typeof expected !== 'string' || expected.length > 80 || !Number.isFinite(Date.parse(expected)))) {
+      return NextResponse.json({ message: 'Forecast sürümü geçersiz. Raporu yenileyin.' }, { status: 400 });
+    }
 
     const productId = String(body.product_id ?? '').trim();
     const quantity = toPositiveInt(body.quantity, 0);
@@ -97,15 +102,20 @@ export async function POST(request: Request) {
             forecast_year = $6, forecast_month = $7, sales_channel = $8, probability = $9,
             note = $10, updated_by_email = $11, updated_by_name = $12, updated_at = now(),
             sale_type = $13, unit_price = $14, rental_monthly_price = $15, include_in_retail_plan = $16
-          where id = $1::uuid
+          where id = $1::uuid and is_active=true
+            and ($17::timestamptz is null or updated_at=$17::timestamptz)
+            and exists(select 1 from public.musteriler customer where customer.id=crm_forecasts.customer_id
+              and ($18::boolean or customer.owner_user_id=$19::uuid))
           returning id::text, customer_id::text, product_id, product_code_snapshot, product_name_snapshot, quantity,
                     forecast_year, forecast_month, sales_channel, probability, owner_name, owner_email, note,
                     sale_type, unit_price::float8 as unit_price, rental_monthly_price::float8 as rental_monthly_price, include_in_retail_plan,
                     created_at::text, updated_at::text
         `,
         [id, String(product.id), product.code, product.name, quantity, forecastYear, forecastMonth, salesChannel, probability, note, me.email, actorName,
-          pricing.value.saleType, pricing.value.unitPrice, pricing.value.rentalMonthlyPrice, pricing.value.includeInRetailPlan],
+          pricing.value.saleType, pricing.value.unitPrice, pricing.value.rentalMonthlyPrice, pricing.value.includeInRetailPlan,
+          expected ?? null, canSeeAll, me.id],
       );
+      if (!result.rows.length) return NextResponse.json({ message: 'Forecast başka bir kullanıcı tarafından değiştirildi veya artık erişilemiyor. Raporu yenileyin.' }, { status: 409 });
       return NextResponse.json({ ok: true, row: result.rows[0] });
     } catch (error) {
       if (isMissingForecastRelation(error)) return NextResponse.json({ message: 'forecast_module_not_setup' }, { status: 400 });

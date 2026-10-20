@@ -3,14 +3,14 @@ import { db } from '@/lib/db';
 import { buildKasaposEntegrasyonRaporu } from './kasapos-entegrasyon';
 import { DEFAULT_RENTAL_OPS_STATUS, RENTAL_OPS_STATUSES, isRentalOpsStatus, rentalOpsLabel, type RentalOpsStatus } from '@/lib/sales/rental-ops';
 import { summarizeRental, type RentalItemRow } from './retail-rental';
-import { loadRetailPlan } from './retail-plan';
+import { normalizeDelimitedList } from '@/lib/kunye';
 
 // Retail Operasyon Paneli — müdürün statik Retail_2026_2027.html panelinin canlı veri karşılığı.
 // Kaynaklar:
 //   * Gerçekleşen satış: crm_sales (status=active) + crm_sale_items (cihaz kalemleri, sale_type).
 //     S210 aksesuardır: ciroya girer, terminal adedine girmez.
 //   * KasaPOS aktif / faturalanan / aylık gelir: buildKasaposEntegrasyonRaporu (tek tanım).
-//   * Yıl fırsatları: ayrı Retail planı (crm_retail_plan_entries); genel Forecast kayıtları karıştırılmaz.
+//   * Yıl fırsatları: aktif crm_forecasts + müşterinin güncel Retail departmanı.
 //   * CRM havuzu: musteriler + musteri_kunye_v2 + musteri_pipeline.
 
 export const ACCESSORY_MODELS = ['S210'];
@@ -18,7 +18,7 @@ export const ACCESSORY_MODELS = ['S210'];
 export type RetailSaleLine = { firm: string; model: string; month: number; qty: number; usd: number; usdQty?: number; saleType: 'sale' | 'rental' };
 export type RetailOpportunity = {
   firm: string; model: string; qty: number; month: number; channel: string; prob: number; note: string; owner: string;
-  /** Ayrı Retail planı ve eski Forecast istemcileri için açık kaynak / iş modeli bilgisi. */
+  /** Kanonik Forecast kimliği, gerçek iş modeli ve güncelleme bilgisi. */
   id?: string;
   customerId?: string;
   productId?: string;
@@ -28,6 +28,9 @@ export type RetailOpportunity = {
   referenceKey?: string;
   sourceName?: string;
   updatedAt?: string;
+  ownerUserId?: string;
+  canEditForecast?: boolean;
+  canEdit?: boolean;
   unitPrice?: number | null;
   rentalMonthlyPrice?: number | null;
   includeInRetailPlan?: boolean;
@@ -50,6 +53,11 @@ export type RetailRentalSummary = {
 export type RetailCrmRow = {
   id: string; customerId?: string; name: string; sector: string; kasa: string; rawKasa?: string; register: number | null; owner: string;
   phase?: string;
+  ownerUserId?: string;
+  canEditForecast?: boolean;
+  canPlan?: boolean;
+  hasForecast?: boolean;
+  forecastYears?: number[];
   status: string; pos: string; posOwner: string; banks: string;
 };
 export type RetailKasaRow = {
@@ -61,6 +69,7 @@ export type RetailKasaRow = {
 };
 export type RetailOperasyonPayload = {
   canEditRetailPlan?: boolean;
+  canEditForecast?: boolean;
   year: number;
   generatedAt: string;
   sales: RetailSaleLine[];
@@ -90,6 +99,7 @@ async function fetchSales(year: number): Promise<RetailSaleLine[]> {
       join public.crm_sale_items i on i.sale_id = s.id
       join public.musteriler m on m.id = s.customer_id
       where s.status = 'active'
+        and m.is_kolu = 'Retail'
         and s.sale_date >= make_date($1::int, 1, 1) and s.sale_date < make_date($1::int + 1, 1, 1)
         and public.crm_sale_item_is_device(i.product_type, i.is_recurring)
       group by 1, 2, 3, 4
@@ -107,6 +117,42 @@ async function fetchSales(year: number): Promise<RetailSaleLine[]> {
   }));
 }
 
+/** Active Forecast source only: no imported plan, cohort, or reference-file fallback. */
+async function fetchOpportunities(years: number[]): Promise<Map<number, RetailOpportunity[]>> {
+  const { rows } = await db.query(`select f.id::text as id,f.customer_id::text as customer_id,f.product_id,
+      m.musteri as firm,m.owner_user_id::text as customer_owner_user_id,
+      f.product_code_snapshot,f.product_name_snapshot,f.quantity,f.forecast_year,f.forecast_month,
+      f.sales_channel,f.probability,f.note,f.owner_name,f.updated_at::text as updated_at,
+      exists(select 1 from public.system_parameters channel where channel.group_key='forecast_sales_channel'
+        and channel.is_active=true and channel.value=f.sales_channel
+        and (lower(trim(channel.label))='banka' or lower(trim(channel.value))='banka')) as is_bank_channel,
+      coalesce(to_jsonb(f)->>'sale_type','sale') as sale_type,
+      (to_jsonb(f)->>'unit_price')::numeric as unit_price,
+      (to_jsonb(f)->>'rental_monthly_price')::numeric as rental_monthly_price,
+      coalesce((to_jsonb(f)->>'include_in_retail_plan')::boolean,true) as include_in_retail_plan
+    from public.crm_forecasts f join public.musteriler m on m.id=f.customer_id
+    where f.is_active=true and f.forecast_year=any($1::int[]) and m.is_kolu='Retail'
+    order by f.forecast_year,f.forecast_month,f.quantity desc,f.id`, [years]);
+  const result = new Map<number, RetailOpportunity[]>(years.map(year => [year, []]));
+  for (const row of rows) {
+    const saleType = row.sale_type === 'rental' ? 'rental' : 'sale';
+    const bankChannel = row.is_bank_channel === true || txt(row.sales_channel).toLocaleLowerCase('tr-TR') === 'banka';
+    const businessModel = saleType === 'rental' ? 'rental' : bankChannel ? 'bank' : 'sale';
+    result.get(Number(row.forecast_year))?.push({
+      id: String(row.id), customerId: String(row.customer_id), productId: row.product_id == null ? undefined : String(row.product_id),
+      firm: txt(row.firm, '-'), model: normModel(txt(row.product_code_snapshot, txt(row.product_name_snapshot))),
+      qty: Number(row.quantity) || 0, month: Number(row.forecast_month), channel: txt(row.sales_channel),
+      prob: Number(row.probability) || 0, note: txt(row.note), owner: txt(row.owner_name),
+      saleType, businessModel, source: 'forecast', sourceName: 'CRM Forecast', updatedAt: txt(row.updated_at),
+      ownerUserId: row.customer_owner_user_id == null ? undefined : String(row.customer_owner_user_id),
+      unitPrice: row.unit_price == null ? null : Number(row.unit_price),
+      rentalMonthlyPrice: row.rental_monthly_price == null ? null : Number(row.rental_monthly_price),
+      includeInRetailPlan: row.include_in_retail_plan !== false,
+    });
+  }
+  return result;
+}
+
 /** Kiralama kalemleri (sözleşme = satış kaydı; durum crm_sales.rental_ops_status). Yıl filtresi yok: stok. */
 async function fetchRental(): Promise<RetailRentalSummary> {
   const r = await db.query(
@@ -122,6 +168,7 @@ async function fetchRental(): Promise<RetailRentalSummary> {
       join public.crm_sale_items i on i.sale_id = s.id
       join public.musteriler m on m.id = s.customer_id
       where s.status = 'active' and i.sale_type = 'rental'
+        and m.is_kolu = 'Retail'
         and public.crm_sale_item_is_device(i.product_type, i.is_recurring)
     `,
   );
@@ -139,21 +186,28 @@ async function fetchRental(): Promise<RetailRentalSummary> {
   return summarizeRental(rows, today, RENTAL_OPS_STATUSES.map((s) => s.value), rentalOpsLabel);
 }
 
-async function fetchCrmPool(): Promise<RetailCrmRow[]> {
+async function fetchCrmPool(years: number[]): Promise<RetailCrmRow[]> {
   const r = await db.query(
     `
-      select m.id::text as id, m.musteri, m.sektor, m.sorumlu,
-             rpm.retail_status, rpm.register_vendor_group,
+      select m.id::text as id, m.musteri, m.sektor, m.sorumlu,m.owner_user_id::text as owner_user_id,
+             k.satici_etiketi,fc.forecast_years,
              ft.asama_adi as faz, k.kasapos_firmasi, k.sabit_kasa_adedi, k.pos_markasi, k.pos_mulkiyet,
              k.pos_mulkiyet_bankalari, k.bankalar
-      from public.crm_retail_pool_memberships rpm
-      join public.musteriler m on m.id = rpm.customer_id
+      from public.musteriler m
       left join public.musteri_kunye_v2 k on k.musteri_id = m.id
       left join public.musteri_pipeline mp on mp.musteri_id = m.id
       left join public.faz_tanimlari ft on ft.faz_no = mp.aktif_faz_no
-      -- Açık rapor havuzu: kanonik üyelikler, departmandan bağımsız. Boşsa global havuza dönülmez.
+      left join lateral (
+        select array_agg(distinct f.forecast_year order by f.forecast_year) as forecast_years
+        from public.crm_forecasts f where f.customer_id=m.id and f.is_active=true
+          and f.forecast_year=any($1::int[])
+          and coalesce((to_jsonb(f)->>'include_in_retail_plan')::boolean,true)
+      ) fc on true
+      -- Tüm güncel Retail müşterileri görünür; Forecast'i olanlar işaretlenir, gizlenmez.
+      where m.is_kolu='Retail'
       order by m.musteri
     `,
+    [years],
   );
   const seen = new Set<string>();
   const rows: RetailCrmRow[] = [];
@@ -163,22 +217,28 @@ async function fetchCrmPool(): Promise<RetailCrmRow[]> {
     if (seen.has(customerId)) continue;
     seen.add(customerId);
     const kasaAdet = txt(x.sabit_kasa_adedi);
-    const owners = Array.isArray(x.pos_mulkiyet_bankalari) ? x.pos_mulkiyet_bankalari.filter(Boolean) : [];
+    const owners = normalizeDelimitedList(x.pos_mulkiyet_bankalari) ?? [];
     const mulk = txt(x.pos_mulkiyet, 'Bilinmeyen');
+    const nativeStatus = txt(x.satici_etiketi);
+    const knownStatus: Record<string, string> = { hunter: 'Hunter', farmer: 'Farmer', lead: 'Lead', kasa: 'Kasa' };
+    const forecastYears = Array.isArray(x.forecast_years) ? x.forecast_years.map(Number).filter(Number.isInteger) : [];
     rows.push({
       id: customerId,
       customerId,
       name,
       sector: txt(x.sektor),
-      kasa: txt(x.register_vendor_group, 'Bilinmeyen'),
+      kasa: txt(x.kasapos_firmasi, 'Bilinmeyen'),
       rawKasa: txt(x.kasapos_firmasi, 'Bilinmeyen'),
       register: /^\d+$/.test(kasaAdet) ? Number(kasaAdet) : null,
       owner: txt(x.sorumlu),
-      status: txt(x.retail_status, 'Bilinmeyen'),
+      status: knownStatus[nativeStatus.toLocaleLowerCase('tr-TR')] ?? txt(nativeStatus, 'Girilmedi'),
+      ownerUserId: x.owner_user_id == null ? undefined : String(x.owner_user_id),
+      hasForecast: forecastYears.length > 0,
+      forecastYears,
       phase: txt(x.faz, 'Faz yok'),
       pos: txt(x.pos_markasi, 'Bilinmeyen'),
       posOwner: owners.length ? `${mulk} - ${owners.join(', ')}` : mulk,
-      banks: Array.isArray(x.bankalar) ? x.bankalar.filter(Boolean).join(', ') : '',
+      banks: (normalizeDelimitedList(x.bankalar) ?? []).join(', '),
     });
   }
   return rows;
@@ -189,9 +249,9 @@ export async function buildRetailOperasyon(options?: { year?: number }): Promise
   const year = Number.isInteger(req) && req! > 2000 ? req! : new Date().getFullYear();
   const [sales, opps, kasa, crm, rental] = await Promise.all([
     fetchSales(year),
-    loadRetailPlan([year, year + 1]),
-    buildKasaposEntegrasyonRaporu({ year }),
-    fetchCrmPool(),
+    fetchOpportunities([year, year + 1]),
+    buildKasaposEntegrasyonRaporu({ year, department: 'Retail' }),
+    fetchCrmPool([year, year + 1]),
     fetchRental(),
   ]);
   const ref = kasa.refMonthIndex;

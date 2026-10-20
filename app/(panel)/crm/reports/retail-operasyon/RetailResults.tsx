@@ -15,7 +15,7 @@ export default function RetailResults({data,year,pct,includeOpportunities=true}:
   const [finance,setFinance] = useState(false);
   const opportunities = useMemo(() => includeOpportunities ? current ? data.opportunities.current : data.opportunities.next : [], [includeOpportunities,current,data.opportunities]);
   const p = useMemo(()=>projectRetail(data.sales,opportunities,pct,current),[data.sales,opportunities,pct,current]);
-  const allocated = useMemo(() => allocateRetailScenario(p.included, pct,current), [p.included, pct,current]);
+  const allocated = useMemo(() => allocateRetailScenario(p.included, pct), [p.included, pct]);
   const actualUsd = current ? actualRetailRevenue(data.sales) : 0;
   const monthly = months.map((_,i)=>p.groups.reduce((n,g)=>n+g.actualMonths[i]+g.planMonths[i],0));
   const cards: Array<[string,string,string?]> = current ? [
@@ -35,7 +35,7 @@ export default function RetailResults({data,year,pct,includeOpportunities=true}:
     <div className={styles.actions}><button className={styles.button} onClick={csv}>Görünen tabloyu CSV indir</button></div>
     <div className={styles.grid}>{cards.map(([label,value,sub])=><div className={styles.metric} key={label}><div>{label}</div><strong>{value}</strong>{sub&&<small>{sub}</small>}</div>)}</div>
     {current&&table(['Model','Plan satış adedi','Plan kiralama adedi','Plan banka adedi','Satış ort. fiyatı','Ek satış tutarı'],<>{p.groups.map(g=><tr key={g.model}><td>{g.model}</td><td>{number(g.saleQty)}</td><td>{number(g.leaseQty)}</td><td>{number(g.bankQty)}</td><td>{money(g.salePrice)}</td><td>{money(g.saleUsd)}</td></tr>)}<tr><th>TOPLAM</th><td>{number(p.saleQty)}</td><td>{number(p.leaseQty)}</td><td>{number(p.bankQty)}</td><td>—</td><td>{money(p.saleUsd)}</td></tr></>,`${year} · Senaryonun model bazlı satış / kiralama / banka sonucu`)}
-    <div className={styles.note}>{current?'Yeşil = gerçekleşen · Sarı = Aralık fırsat senaryosu. Gerçekleşenler sabit; fırsat olasılıkları kullanılmaz.':'Sarı = plan. Projeksiyon ve CRM forecast kayıtları seçilen aylarda birlikte gösterilir.'}</div>
+    <div className={styles.note}>{current?'Yeşil = gerçekleşen · Sarı = kayıtlı ayındaki Forecast senaryosu. Gerçekleşenler sabit; fırsat olasılıkları kullanılmaz.':'Sarı = plan. Canlı Forecast kayıtları seçilen aylarda gösterilir.'}</div>
     {table(['Model',...months,'Toplam',...(current?['Fırsat']:[])],<>{p.groups.map(g=><tr key={g.model}><th>{g.model}</th>{g.actualMonths.map((n,i)=><td className={styles.num} key={i} style={{background:n?'#d8f6e3':g.planMonths[i]?'#fff0ce':undefined}}>{n&&g.planMonths[i]?<><span title='Gerçekleşen'>{number(n)}</span><span title='Ek forecast' style={{display:'block',background:'#fff0ce'}}>+{number(g.planMonths[i])}</span></>:n||g.planMonths[i]?number(n+g.planMonths[i]):'—'}</td>)}<th>{number(total(g.actualMonths)+total(g.planMonths))}</th>{current&&<td>{number(total(g.planMonths))}</td>}</tr>)}<tr><th>TOPLAM</th>{monthly.map((n,i)=><th key={i}>{number(n)}</th>)}<th>{number(total(monthly))}</th>{current&&<th>{number(p.planQty)}</th>}</tr></>,`${year} · Aylık ${current?'terminal adetleri':'cihaz sipariş planı'}`)}
     {current ? <>
       <label className={styles.actions}><input type="checkbox" checked={finance} onChange={e=>setFinance(e.target.checked)}/> Simülasyonu satış ve kiralama tablolarına dahil et</label>

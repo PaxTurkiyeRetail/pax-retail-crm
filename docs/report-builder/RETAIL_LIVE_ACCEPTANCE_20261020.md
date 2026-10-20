@@ -46,3 +46,5 @@ Sunucu app: /home/tahabitim/apps/pax-retail-crm
 Bu doğrulayıcı orijinal32referans anahtarını kontrol eder. Kullanıcının bu satırlarda bilinçli düzenlemesi sonrasında kaynakla fark beklenebilir; snapshotları körlemesine geri yüklemeyin.
 
 Son ekleme endpoint'i bebed09 ile canlı:63testdosyası/522test,typecheck/lint/build geçti. İkinci tamDB yedeği backups/predeploy-20261020-052624.dump. Internal+publicHTTPShealth başarılı; son saltokunur doğrulama32/530/404636vecanonicalhash'leri tekrar onayladı.
+
+> Historical import acceptance only: superseded by RETAIL_LIVE_ACCEPTANCE.md. All six runtime tabs now use canonical live CRM; archived reference rows remain untouched.
