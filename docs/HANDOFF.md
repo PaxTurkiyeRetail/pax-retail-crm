@@ -115,3 +115,14 @@ Read `.claude/CLAUDE.md` first. Rules:
 
 ## LATEST / çalışma durduruldu — Claude devri
 Kullanıcı 19 Ekim 2026'da token nedeniyle işi Claude'a devretmek istedi. Önce `docs/CLAUDE_HANDOFF_20261019.md` okunmalı. Son canlı kod 2cfa4fc (480 test); yereldeki ayrı Retail planı/CRM üyelik kaynakları UNCOMMITTED ve TypeScript canEditRetailPlan alanı eksik. Plan/veri onarımları CANLIYA UYGULANMADI. Çalışma ağacını/untracked dosyaları koru; eski DONE ifadelerini bu yeni teslimat için geçerli sayma.
+
+## LATEST — 20 Ekim 2026 canlı tamamlandı
+- Son uygulama kodu bebed09 (ayrı plan/üyelik7653013, doğrulayıcı88b9b4b). Sunucu63testdosyası/522test, typecheck/lint/build, backup ve internal/publichealth geçti.
+- Append migration049 uygulandı; önceki047/048checksum'ları korundu.
+- KaynakHTML'den32plan ve530müşteriüyeliği canlıDB'ye aktarıldı; genel275Forecast/719müşteri tablosunun hash'leri önce/sonra aynı.
+- 4kanıtlanmış importtutarı4staging+4kalem+3başlıkta yedekli onarıldı. Retail ürün-kalem cirosu404.636USD,1432terminal+678S210,23firma doğrulandı.
+- 2026plan15firma/5186cihaz:2430satış+2756kiralama.2027plan17firma/6595:1250satış+4845kiralama+500banka. Türler/model/ay/olasılık/not/tarifeler kaynakla eşleşiyor.
+- HavuzdanPlanekle yeni ayrıRetailPOST'a bağlı; kanonikForecast değişmez. Edit+POST RBAC/optimisticlock/catalog/pool kontrolleri var. GerçekSQLcreate+patch açıktransaction'da çalıştırılıpROLLBACK yapıldı, test kaydı bırakılmadı.
+- İkinci deploy tamDB yedeği backups/predeploy-20261020-052624.dump. Veri işlem yedekleri backups/retail-reference-20261020/0700dizininde0600dosyalar.
+- Sınırlar: AğustosKasaPOS9021USD orijinalPDF/faturayla doğru, HTML8838sabitine uydurulmadı; niteloperasyonnotlarından aktifkirageliri yaratılmadı; BRimzastatüsü doğrulanamadı. M&S1959USDbaşlık/kalem anlaşmafarkı değiştirilmedi. ADilecanlıgörselgiriş hâlâ yapılmadı.
+- Ayrıntılı güncel kabul raporu: docs/report-builder/RETAIL_LIVE_ACCEPTANCE_20261020.md. ÖncekiClaude devir notundaki uygulanmamış durumlar tarihsel kaldı.

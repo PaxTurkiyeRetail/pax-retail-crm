@@ -1,3 +1,4 @@
+> **20 Ekim 2026 güncellemesi:** Bu dosya 19 Ekim'deki tarihsel durumu anlatır. İş tekrar sürdürüldü; tip/yetki alanı tamamlandı, migration049 uygulandı,32plan+530üyelik aktarıldı ve4tutar onarımı canlıda uygulandı. Genel Forecast/müşteri hash'leri aynı. bebed09 canlı;63dosya/522test ve public/internalhealth başarılı. Güncel kanıt ve kalan kaynak farklılıkları: docs/report-builder/RETAIL_LIVE_ACCEPTANCE_20261020.md. Aşağıdaki “uygulanmadı/TypeScript hatası” ifadeleri artık güncel değildir.
 # Claude devir notu — 19 Ekim 2026
 
 ## Önce bunu oku
