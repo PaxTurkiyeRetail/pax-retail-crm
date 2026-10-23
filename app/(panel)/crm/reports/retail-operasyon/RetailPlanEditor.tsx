@@ -12,10 +12,21 @@ export default function RetailPlanEditor({row,year,options,onClose,onSaved}:{row
   const [model,setModel]=useState(retailModel(row.model));const [mode,setMode]=useState(businessType(row));const [prob,setProb]=useState(String(row.prob));const [note,setNote]=useState(row.note);
   const [price,setPrice]=useState(row.unitPrice==null?'':String(row.unitPrice));const [rentalPrice,setRentalPrice]=useState(row.rentalMonthlyPrice==null?'':String(row.rentalMonthlyPrice));
   const [busy,setBusy]=useState(false);const [error,setError]=useState('');const inFlight=useRef(false);const modal=useRef<HTMLDivElement>(null);
+  const [confirmDelete,setConfirmDelete]=useState(false);const [deleting,setDeleting]=useState(false);
   const [channel,setChannel]=useState(row.channel);
   const products=options?.products??[];
   const product=products.find(p=>p.code===model||p.id===model);
   const selectedChannel=forecastChannel(options,mode,channel);
+  async function deleteForecast(){
+    if(inFlight.current||!row.canEdit||row.source!=='forecast'||!row.id)return;
+    inFlight.current=true;setBusy(true);setDeleting(true);setError('');
+    try{
+      const response=await fetch('/api/forecast/delete',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({id:row.id,expected_updated_at:row.updatedAt})});
+      const json=await response.json().catch(()=>null);
+      if(!response.ok)throw new Error(response.status===409?'Bu Forecast başka bir kullanıcı tarafından değiştirildi. Raporu yenileyip tekrar açın.':json?.error?.message??json?.message??'Forecast silinemedi.');
+      await onSaved();onClose();
+    }catch(e){setError(e instanceof Error?e.message:'Forecast silinemedi.');}finally{inFlight.current=false;setBusy(false);setDeleting(false);}
+  }
   useEffect(()=>{const previous=document.activeElement as HTMLElement|null;modal.current?.focus();const listener=(e:KeyboardEvent)=>{if(e.key==='Escape'&&!inFlight.current)onClose();if(e.key==='Tab'){const items=modal.current?.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled)');if(!items?.length)return;const first=items[0],last=items[items.length-1];if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}}};window.addEventListener('keydown',listener);return()=>{window.removeEventListener('keydown',listener);previous?.focus();};},[onClose]);
   async function save(){
     if(inFlight.current)return;
@@ -46,6 +57,8 @@ export default function RetailPlanEditor({row,year,options,onClose,onSaved}:{row
     </div>
     <label className={s.planNote}>Not<textarea aria-label="Not" value={note} maxLength={4000} rows={4} onChange={e=>setNote(e.target.value)} disabled={busy}/></label>
     <p className={s.note}>Değişiklikler mevcut Forecast kaydına kaydedilir. İş modeli, satış ve aylık kiralama hesabını belirler; Banka planları ayrıca gösterilir.</p>
-    {error&&<div className={s.error} role="alert">{error}</div>}<footer><button type="button" className={s.button} disabled={busy} onClick={onClose}>Vazgeç</button><button type="button" className={s.button} disabled={busy||!options} onClick={()=>void save()}>{busy?'Kaydediliyor…':'Forecast kaydet'}</button></footer>
+    {error&&<div className={s.error} role="alert">{error}</div>}
+    {confirmDelete&&<div className={s.deleteConfirm} role="group" aria-label="Forecast silme onayı"><strong>Bu Forecast kaydı silinsin mi?</strong><p>{row.firm} · {row.model} · {row.qty.toLocaleString('tr-TR')} adet · {year}</p><p>Kayıt Forecast listesinden, fırsatlardan ve aylık sonuçlardan kaldırılır.</p><div><button type="button" className={s.button} disabled={busy} onClick={()=>setConfirmDelete(false)}>Silmekten vazgeç</button><button type="button" className={`${s.button} ${s.dangerButton}`} disabled={busy} onClick={()=>void deleteForecast()}>{deleting?'Siliniyor…':'Evet, Forecast’i sil'}</button></div></div>}
+    <footer>{row.canEdit&&row.source==='forecast'&&row.id&&!confirmDelete&&<button type="button" className={`${s.button} ${s.dangerButton} ${s.deleteAction}`} disabled={busy} onClick={()=>{setError('');setConfirmDelete(true);}}>Forecast sil</button>}<button type="button" className={s.button} disabled={busy} onClick={onClose}>Vazgeç</button><button type="button" className={s.button} disabled={busy||!options||confirmDelete} onClick={()=>void save()}>{busy&&!deleting?'Kaydediliyor…':'Forecast kaydet'}</button></footer>
   </div></div>;
 }

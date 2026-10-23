@@ -248,7 +248,7 @@ function routeMeta(pathname: string) {
     ["/crm/reports/quotes", "Rapor Merkezi", "Teklif Raporları"],
     ["/crm/reports/kasapos-summary", "Rapor Merkezi", "KasaPOS Raporu"],
     ["/crm/report-builder", "Raporlar", "Rapor Merkezi"],
-    ["/crm/reports/retail-operasyon", "Rapor Merkezi", "Retail Operasyon Paneli"],
+    ["/crm/reports/retail-operasyon", "Rapor Merkezi", "Gerçekleşen / Bütçe"],
     ["/crm/reports/weekly-activities", "Rapor Merkezi", "Aktivite Raporu"],
     ["/crm/quotes/catalog", "Operasyon", "Ürün Kataloğu"],
     ["/crm/quotes/new", "Operasyon", "Yeni Teklif"],
@@ -563,7 +563,7 @@ export default function PanelShell({
       });
       reports.push({
         href: "/crm/reports/retail-operasyon",
-        label: "Retail Operasyon Paneli",
+        label: "Gerçekleşen / Bütçe",
         iconKey: "forecast",
       });
       reports.push({

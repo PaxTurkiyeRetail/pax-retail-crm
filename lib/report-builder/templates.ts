@@ -10,7 +10,7 @@ const RETAIL = [] as const;
 
 const retailOperasyon = {
   version: 1,
-  title: 'Retail Operasyon Paneli',
+  title: 'Gerçekleşen / Bütçe',
   subtitle: 'Canlı satış, fırsat, KasaPOS ve CRM havuzu',
   theme: { accent: 'primary', density: 'compact' },
   department: 'Retail',
@@ -19,7 +19,7 @@ const retailOperasyon = {
     { key: 'owner', label: 'Satıcı', kind: 'select', field: 'owner' },
   ],
   widgets: [
-    { id: 'h1', type: 'text', variant: 'heading', text: 'Retail Operasyon Paneli', layout: { lg: { x: 0, y: 0, w: 8, h: 1 } } },
+    { id: 'h1', type: 'text', variant: 'heading', text: 'Gerçekleşen / Bütçe', layout: { lg: { x: 0, y: 0, w: 8, h: 1 } } },
     { id: 'f_period', type: 'filter', filterKey: 'period', layout: { lg: { x: 8, y: 0, w: 2, h: 1 } }, pdf: { hideInPdf: true, pageBreakBefore: false } },
     { id: 'f_owner', type: 'filter', filterKey: 'owner', layout: { lg: { x: 10, y: 0, w: 2, h: 1 } }, pdf: { hideInPdf: true, pageBreakBefore: false } },
     {
@@ -196,7 +196,7 @@ const retailCustom = () => {
 };
 
 export const PAGE_TEMPLATES: Readonly<Record<string, { label: string; build: () => PageDefinition }>> = Object.freeze({
-  retail_operasyon: { label: 'Retail Operasyon Paneli', build: () => parsePageDefinition(retailOperasyon) },
+  retail_operasyon: { label: 'Gerçekleşen / Bütçe', build: () => parsePageDefinition(retailOperasyon) },
   kasapos_entegrasyon: { label: 'KasaPOS Entegrasyon Raporu', build: () => parsePageDefinition(kasaposEntegrasyon) },
   kasapos_monthly: { label: 'KasaPOS Aylık Adet ve Gelir', build: kasaposMonthly },
   retail_custom: { label: 'Retail Yönetim Raporum', build: retailCustom },

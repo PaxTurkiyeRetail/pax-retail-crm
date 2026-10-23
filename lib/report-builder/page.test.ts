@@ -122,7 +122,7 @@ describe('şablonlar: mevcut raporlar tanım JSON’uyla üretilebilir', () => {
 
 describe('antetli PDF', () => {
   it('dosya adı Türkçe karakterleri sadeleştirir', () => {
-    expect(pdfFileName('Retail Operasyon Paneli — Ekim/Çeyrek', TODAY)).toBe('retail-operasyon-paneli-ekimceyrek_2026-10-19.pdf');
+    expect(pdfFileName('Gerçekleşen / Bütçe — Ekim/Çeyrek', TODAY)).toBe('gerceklesen-butce-ekimceyrek_2026-10-19.pdf');
     expect(pdfFileName('***', TODAY)).toBe('rapor_2026-10-19.pdf');
   });
 
@@ -144,7 +144,7 @@ describe('antetli PDF', () => {
     expect(String.fromCharCode(...bytes.slice(0, 5))).toBe('%PDF-');
     const out = await PDFDocument.load(bytes);
     expect(out.getPageCount()).toBeGreaterThan(2);
-    expect(out.getTitle()).toBe('Retail Operasyon Paneli');
+    expect(out.getTitle()).toBe('Gerçekleşen / Bütçe');
   }, 30_000);
 
   it('PNG antet ve antetsiz yatay sayfa', async () => {

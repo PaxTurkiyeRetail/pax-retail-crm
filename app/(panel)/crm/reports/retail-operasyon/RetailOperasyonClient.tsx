@@ -1,11 +1,11 @@
 'use client';
 
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { ArrowDownToLine, RefreshCw } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { RefreshCw } from 'lucide-react';
 import type { RetailOperasyonPayload, RetailOpportunity } from '@/lib/reports/retail-operasyon';
 import { businessLabel, businessType, isTerminal, retailModel } from '@/lib/reports/retail-projection';
 import { loadForecastQuickAddOptions, type ForecastQuickAddOptions } from '@/components/forecast/ForecastQuickAdd';
-import { downloadCsv, type Column } from '@/components/ui';
+import Table from './RetailTable';
 import RetailResults from './RetailResults';
 import RetailPlanEditor from './RetailPlanEditor';
 import RetailPlanQuickAdd from './RetailPlanQuickAdd';
@@ -19,21 +19,6 @@ const unique = <T,>(rows: T[], value: (r: T) => string) => new Set(rows.map(valu
 
 function Metrics({ items }: { items: { label: string; value: ReactNode; sub?: string }[] }) {
   return <div className={s.metrics}>{items.map((m) => <div className={s.metric} key={m.label}><div>{m.label}</div><strong>{m.value}</strong>{m.sub && <small>{m.sub}</small>}</div>)}</div>;
-}
-
-function Table<T>({ title, rows, columns, name, detail }: { title: string; rows: T[]; columns: Column<T>[]; name?: string; detail?: (r: T) => ReactNode }) {
-  const [sort, setSort] = useState<{ key: string; dir: number } | null>(null);
-  const sorted = useMemo(() => {
-    const col = columns.find((c) => c.key === sort?.key);
-    if (!col || !sort) return rows;
-    return [...rows].sort((a, b) => { const x = col.value(a); const y = col.value(b); return sort.dir * (typeof x === 'number' && typeof y === 'number' ? x - y : String(x ?? '').localeCompare(String(y ?? ''), 'tr')); });
-  }, [rows, columns, sort]);
-  return <section className={s.card}>
-    <div className={s.cardHeader}><h3>{title} <small>{nf.format(rows.length)} kayıt</small></h3>{name && <button className={s.button} onClick={() => downloadCsv(name, columns, sorted)}><ArrowDownToLine size={13} />CSV indir</button>}</div>
-    <div className={s.tableWrap}><table><thead><tr>{columns.map((c) => <th key={c.key} className={c.num ? s.num : ''} aria-sort={sort?.key === c.key ? sort.dir === 1 ? 'ascending' : 'descending' : undefined}><button onClick={() => setSort({ key: c.key, dir: sort?.key === c.key ? -sort.dir : c.num ? -1 : 1 })}>{c.label}{sort?.key === c.key ? sort.dir === 1 ? ' ↑' : ' ↓' : ''}</button></th>)}</tr></thead>
-      <tbody>{sorted.length ? sorted.map((r, i) => { const expanded = detail?.(r); return <Fragment key={i}><tr>{columns.map((c) => <td key={c.key} className={c.num ? s.num : ''}>{c.render ? c.render(r) : typeof c.value(r) === 'number' ? nf.format(c.value(r) as number) : c.value(r) ?? '—'}</td>)}</tr>{expanded && <tr><td colSpan={columns.length} className={s.planDetail}>{expanded}</td></tr>}</Fragment>; }) : <tr><td colSpan={columns.length} className={s.empty}>Bu filtreye uyan kayıt yok.</td></tr>}</tbody>
-    </table></div>
-  </section>;
 }
 
 function Distribution({ title, rows, field }: { title: string; rows: RetailOperasyonPayload['crm']; field: 'kasa' | 'pos' }) {
@@ -140,8 +125,8 @@ export default function RetailOperasyonClient() {
         { key: 'mode', label: 'İş modeli', value: businessLabel, render: (r) => <span className={s.pill}>{businessLabel(r)}</span> },
         { key:'source',label:'Kaynak',value:()=> 'Forecast · canlı' },
         { key: 'channel', label: 'Kanal', value: (r) => r.channel }, { key: 'prob', label: 'Olasılık %', value: (r) => r.prob, num: true }, { key: 'note', label: 'Not', value: (r) => r.note }, { key: 'owner', label: 'Account', value: (r) => r.owner },
-        { key: 'month', label: 'Planlanan ay', value: (r) => r.month, render: (r) => next && r.id && r.canEdit&&r.source==='forecast' ? <select aria-label={`${r.firm} planlanan ay`} disabled={savingId === r.id} value={r.month} onChange={(e) => void updateMonth(r, Number(e.target.value))}>{MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}</select> : MONTHS[r.month - 1] ?? '—' },
-        {key:'edit',label:'Fırsat işlemi',value:()=>'',render:(r:RetailOpportunity)=>r.canEdit&&r.source==='forecast'&&r.id?<button type="button" className={s.button} onClick={()=>setEditingPlan({row:r,year:next?year+1:year})}>Forecast düzenle</button>:null},
+        { key: 'month', label: 'Planlanan ay', value: (r) => r.month, filterValue: (r) => MONTHS[r.month - 1] ?? '', render: (r) => next && r.id && r.canEdit&&r.source==='forecast' ? <select aria-label={`${r.firm} planlanan ay`} disabled={savingId === r.id} value={r.month} onChange={(e) => void updateMonth(r, Number(e.target.value))}>{MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}</select> : MONTHS[r.month - 1] ?? '—' },
+        {key:'edit',label:'Fırsat işlemi',value:()=>'',searchable:false,sortable:false,render:(r:RetailOpportunity)=>r.canEdit&&r.source==='forecast'&&r.id?<button type="button" className={s.button} onClick={()=>setEditingPlan({row:r,year:next?year+1:year})}>Forecast düzenle</button>:null},
       ]} />
       {next && <p className={s.note}>Banka: {nf.format(sum(rows.filter((r) => businessType(r)==='bank' && isTerminal(r.model)), (r) => r.qty))} cihaz. Banka planları toplam adede dahildir; satış cirosu ve aylık kiralama geliri hesabından ayrı tutulur. Planlanan ay, satırın kendi planına kaydedilir.</p>}
     </>;
@@ -151,7 +136,7 @@ export default function RetailOperasyonClient() {
   const subtitles = ['Gerçekleşen satışlar, KasaPOS entegrasyonu ve kiralama operasyonu.', 'Yıl sonuna kadar beklenen satış ve kiralama fırsatları.', 'Gelecek yılın firma, model ve ay bazında planı.', 'Müşteri havuzunu incele, canlı Forecast fırsatlarını oluştur.', 'Gerçekleşen sonuçlar ve yıl sonu senaryosu, model ve ay bazında.', 'CRM planları ve projeksiyonun birleşik aylık görünümü.'];
 
   return <div className={s.root}>
-    <header className={s.top}><div><span className={s.eyebrow}>PAX TÜRKİYE · RETAIL</span><h1>Operasyon Paneli</h1><p>Satıştan plana, tüm Retail operasyonu tek yerde.</p></div><div className={s.actions}><span className={s.live}><i />Canlı CRM verisi</span><label>Rapor yılı <select aria-label="Rapor yılı" value={yearChoice} disabled={busy} onChange={(e) => { requestVersion.current++;activeRequest.current?.abort();requestBusy.current=false;setPlanning(null);setEditingPlan(null);setData(null); setYearChoice(Number(e.target.value)); }}>{Array.from({ length: 7 }, (_, i) => new Date().getFullYear() - 3 + i).map((y) => <option key={y}>{y}</option>)}</select></label><button className={s.button} disabled={busy} onClick={() => void reload()}><RefreshCw size={14} />{busy ? 'Yenileniyor…' : 'Yenile'}</button></div></header>
+    <header className={s.top}><div><span className={s.eyebrow}>PAX TÜRKİYE · RETAIL</span><h1>Gerçekleşen / Bütçe</h1><p>Gerçekleşen sonuçlar ve bütçe planları tek yerde.</p></div><div className={s.actions}><span className={s.live}><i />Canlı CRM verisi</span><label>Rapor yılı <select aria-label="Rapor yılı" value={yearChoice} disabled={busy} onChange={(e) => { requestVersion.current++;activeRequest.current?.abort();requestBusy.current=false;setPlanning(null);setEditingPlan(null);setData(null); setYearChoice(Number(e.target.value)); }}>{Array.from({ length: 7 }, (_, i) => new Date().getFullYear() - 3 + i).map((y) => <option key={y}>{y}</option>)}</select></label><button className={s.button} disabled={busy} onClick={() => void reload()}><RefreshCw size={14} />{busy ? 'Yenileniyor…' : 'Yenile'}</button></div></header>
     <nav className={s.nav} aria-label="Retail raporları">{tabs.map((label, i) => <button key={i} aria-current={tab === i ? 'page' : undefined} className={tab === i ? s.active : ''} onClick={() => setTab(i)}>{label}</button>)}</nav>
     <div className={s.sectionHeading}><div><h2>{tabs[tab].replace(/^\d\. /, '')}</h2><p>{subtitles[tab]}</p></div>{data && <span className={s.timestamp}>Son güncelleme {new Date(data.generatedAt).toLocaleString('tr-TR')}</span>}</div>
     {error && <div className={s.error} role="alert">{error}<button className={s.button} onClick={() => void reload()}>Tekrar dene</button></div>}
@@ -195,7 +180,7 @@ export default function RetailOperasyonClient() {
           { key: 'planModel', label: 'Planlanan model', value: (r) => planNext.filter((p) => p.customerId === r.id).map((p) => p.model).join(', ') || '—' },
           { key: 'planQty', label: 'Planlanan adet', value: (r) => sum(planNext.filter((p) => p.customerId === r.id), (p) => p.qty), num: true },
           { key: 'planMonth', label: 'Planlanan ay', value: (r) => [...new Set(planNext.filter((p) => p.customerId === r.id).map((p) => MONTHS[p.month - 1]))].join(', ') || '—' },
-          { key: 'plan', label: 'Plan işlemi', value: () => '', render: (r) => r.canPlan ? <button className={s.button} aria-expanded={planning === r.id} onClick={() => setPlanning(planning === r.id ? null : r.id)}>{planning === r.id ? 'Planı kapat' : 'Plan ekle'}</button> : '—' },
+          { key: 'plan', label: 'Plan işlemi', value: () => '', searchable:false,sortable:false, render: (r) => r.canPlan ? <button className={s.button} aria-expanded={planning === r.id} onClick={() => setPlanning(planning === r.id ? null : r.id)}>{planning === r.id ? 'Planı kapat' : 'Plan ekle'}</button> : '—' },
           { key: 'kasa', label: 'Kasa firması', value: (r) => r.kasa }, { key: 'register', label: 'Kasa sayısı', value: (r) => r.register, num: true }, { key: 'pos', label: 'POS markası', value: (r) => r.pos }, { key: 'posOwner', label: 'POS sahipliği', value: (r) => r.posOwner }, { key: 'status', label: 'CRM statüsü', value: (r) => r.status }, { key: 'owner', label: 'Account', value: (r) => r.owner }, { key: 'banks', label: 'Bankalar', value: (r) => r.banks },
         ]} />
       </>}
