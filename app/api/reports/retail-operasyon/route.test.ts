@@ -15,11 +15,18 @@ beforeEach(() => {
   mocks.build.mockResolvedValue(payload);
 });
 describe('Retail native per-record edit flags', () => {
+  it('passes the selected manager to the report without changing edit permissions', async () => {
+    const response = await GET(new Request('http://localhost/api/reports/retail-operasyon?year=2026&accountManager=user%3Aother'));
+    expect(mocks.build).toHaveBeenCalledWith({ year: 2026, accountManager: 'user:other' });
+    const result = await response.json() as Flags;
+    expect(result.canEditForecast).toBe(false);
+    expect(result.crm.every(row => !row.canPlan)).toBe(true);
+  });
   it('grants any-scope edit and create flags across owners and unassigned rows', async () => {
     mocks.access.mockResolvedValueOnce({ id: 'actor', permissions: ['forecast.write.any'] });
     const response = await GET(new Request('http://localhost/api/reports/retail-operasyon?year=2027'));
     expect(response.status).toBe(200);
-    expect(mocks.build).toHaveBeenCalledWith({ year: 2027 });
+    expect(mocks.build).toHaveBeenCalledWith({ year: 2027, accountManager: undefined });
     const result = await response.json() as Flags;
     expect(result.canEditForecast).toBe(true);
     expect([...result.opportunities.current, ...result.opportunities.next].map(r => r.canEdit)).toEqual([true, true, true]);

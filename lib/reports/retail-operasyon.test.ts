@@ -12,6 +12,34 @@ beforeEach(() => {
 });
 
 describe('Retail canonical live sources', () => {
+  it('scopes every source by current customer ownership and keeps the full manager list', async () => {
+    query.mockImplementation(async (sql: string, params: unknown[]) => {
+      if (sql.includes('k.satici_etiketi')) return { rows: [
+        { id: 'a', musteri: 'A', owner_user_id: 'manager-a', sorumlu: 'Ali' },
+        { id: 'b', musteri: 'B', owner_user_id: 'manager-b', sorumlu: 'Ayşe' },
+        { id: 'c', musteri: 'C', sorumlu: '' },
+      ] };
+      expect(sql).toContain('m.id::text = any(');
+      expect(params.at(-1)).toEqual(['a']);
+      return { rows: [] };
+    });
+    const result = await buildRetailOperasyon({ year: 2026, accountManager: 'user:manager-a' });
+    expect(result.crm.map(row => row.id)).toEqual(['a']);
+    expect(result.accountManagers).toEqual(expect.arrayContaining([
+      { value: 'user:manager-a', label: 'Ali' }, { value: 'user:manager-b', label: 'Ayşe' },
+      { value: 'unassigned', label: 'Atanmamış' },
+    ]));
+    expect(kasapos).toHaveBeenCalledWith({ year: 2026, department: 'Retail', customerIds: ['a'] });
+    expect(query).toHaveBeenCalledTimes(4);
+  });
+  it('uses an empty scope for a missing manager instead of returning all customers', async () => {
+    const result = await buildRetailOperasyon({ year: 2026, accountManager: 'user:missing' });
+    expect(result.crm).toEqual([]);
+    expect(kasapos).toHaveBeenCalledWith({ year: 2026, department: 'Retail', customerIds: [] });
+    for (const [sql, params] of query.mock.calls) {
+      if (!sql.includes('k.satici_etiketi')) expect(params.at(-1)).toEqual([]);
+    }
+  });
   it('preserves missing invoice months and reconciles firm/monthly KasaPOS totals', async () => {
     kasapos.mockResolvedValue(computeKasaposEntegrasyon(2026, [
       { customerId: 'a', ay: 1, adet: 10, tutar: 50.25 },

@@ -68,6 +68,8 @@ export type RetailKasaRow = {
   totalUsd?: number;
 };
 export type RetailOperasyonPayload = {
+  accountManagers?: Array<{ value: string; label: string }>;
+  accountManager?: string;
   canEditRetailPlan?: boolean;
   canEditForecast?: boolean;
   year: number;
@@ -88,7 +90,7 @@ export type RetailOperasyonPayload = {
 const normModel = (code: unknown) => String(code ?? '').trim().toUpperCase() || 'DİĞER';
 const txt = (v: unknown, fb = '') => String(v ?? '').trim() || fb;
 
-async function fetchSales(year: number): Promise<RetailSaleLine[]> {
+async function fetchSales(year: number, customerIds?: string[]): Promise<RetailSaleLine[]> {
   const r = await db.query(
     `
       select m.musteri as firm, i.product_code, extract(month from s.sale_date)::int as ay,
@@ -100,11 +102,12 @@ async function fetchSales(year: number): Promise<RetailSaleLine[]> {
       join public.musteriler m on m.id = s.customer_id
       where s.status = 'active'
         and m.is_kolu = 'Retail'
+        ${customerIds ? 'and m.id::text = any($2::text[])' : ''}
         and s.sale_date >= make_date($1::int, 1, 1) and s.sale_date < make_date($1::int + 1, 1, 1)
         and public.crm_sale_item_is_device(i.product_type, i.is_recurring)
       group by 1, 2, 3, 4
     `,
-    [year],
+    customerIds ? [year, customerIds] : [year],
   );
   return (r.rows as any[]).map((x) => ({
     firm: txt(x.firm, '-'),
@@ -118,7 +121,7 @@ async function fetchSales(year: number): Promise<RetailSaleLine[]> {
 }
 
 /** Active Forecast source only: no imported plan, cohort, or reference-file fallback. */
-async function fetchOpportunities(years: number[]): Promise<Map<number, RetailOpportunity[]>> {
+async function fetchOpportunities(years: number[], customerIds?: string[]): Promise<Map<number, RetailOpportunity[]>> {
   const { rows } = await db.query(`select f.id::text as id,f.customer_id::text as customer_id,f.product_id,
       m.musteri as firm,m.owner_user_id::text as customer_owner_user_id,
       f.product_code_snapshot,f.product_name_snapshot,f.quantity,f.forecast_year,f.forecast_month,
@@ -132,7 +135,8 @@ async function fetchOpportunities(years: number[]): Promise<Map<number, RetailOp
       coalesce((to_jsonb(f)->>'include_in_retail_plan')::boolean,true) as include_in_retail_plan
     from public.crm_forecasts f join public.musteriler m on m.id=f.customer_id
     where f.is_active=true and f.forecast_year=any($1::int[]) and m.is_kolu='Retail'
-    order by f.forecast_year,f.forecast_month,f.quantity desc,f.id`, [years]);
+      ${customerIds ? 'and m.id::text = any($2::text[])' : ''}
+    order by f.forecast_year,f.forecast_month,f.quantity desc,f.id`, customerIds ? [years, customerIds] : [years]);
   const result = new Map<number, RetailOpportunity[]>(years.map(year => [year, []]));
   for (const row of rows) {
     const saleType = row.sale_type === 'rental' ? 'rental' : 'sale';
@@ -154,7 +158,7 @@ async function fetchOpportunities(years: number[]): Promise<Map<number, RetailOp
 }
 
 /** Kiralama kalemleri (sözleşme = satış kaydı; durum crm_sales.rental_ops_status). Yıl filtresi yok: stok. */
-async function fetchRental(): Promise<RetailRentalSummary> {
+async function fetchRental(customerIds?: string[]): Promise<RetailRentalSummary> {
   const r = await db.query(
     `
       select s.id::text as sale_id, m.musteri as firm,
@@ -169,8 +173,9 @@ async function fetchRental(): Promise<RetailRentalSummary> {
       join public.musteriler m on m.id = s.customer_id
       where s.status = 'active' and i.sale_type = 'rental'
         and m.is_kolu = 'Retail'
+        ${customerIds ? 'and m.id::text = any($1::text[])' : ''}
         and public.crm_sale_item_is_device(i.product_type, i.is_recurring)
-    `,
+    `, customerIds ? [customerIds] : [],
   );
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Istanbul' });
   const rows: RentalItemRow[] = (r.rows as any[]).map((x) => ({
@@ -244,18 +249,30 @@ async function fetchCrmPool(years: number[]): Promise<RetailCrmRow[]> {
   return rows;
 }
 
-export async function buildRetailOperasyon(options?: { year?: number }): Promise<RetailOperasyonPayload> {
+export function retailAccountManagerKey(row: RetailCrmRow): string {
+  return row.ownerUserId ? `user:${row.ownerUserId}` : row.owner.trim() ? `name:${row.owner.trim()}` : 'unassigned';
+}
+
+export async function buildRetailOperasyon(options?: { year?: number; accountManager?: string }): Promise<RetailOperasyonPayload> {
   const req = options?.year;
   const year = Number.isInteger(req) && req! > 2000 ? req! : new Date().getFullYear();
-  const [sales, opps, kasa, crm, rental] = await Promise.all([
-    fetchSales(year),
-    fetchOpportunities([year, year + 1]),
-    buildKasaposEntegrasyonRaporu({ year, department: 'Retail' }),
-    fetchCrmPool([year, year + 1]),
-    fetchRental(),
+  const pool = await fetchCrmPool([year, year + 1]);
+  const accountManager = options?.accountManager?.trim() || '';
+  const managers = new Map<string, string>();
+  for (const row of pool) managers.set(retailAccountManagerKey(row), row.owner.trim() || (row.ownerUserId ? 'İsimsiz Account Manager' : 'Atanmamış'));
+  const accountManagers = [...managers].map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label, 'tr'));
+  const crm = accountManager ? pool.filter(row => retailAccountManagerKey(row) === accountManager) : pool;
+  const customerIds = accountManager ? crm.map(row => row.id) : undefined;
+  const [sales, opps, kasa, rental] = await Promise.all([
+    fetchSales(year, customerIds),
+    fetchOpportunities([year, year + 1], customerIds),
+    buildKasaposEntegrasyonRaporu({ year, department: 'Retail', customerIds }),
+    fetchRental(customerIds),
   ]);
   const ref = kasa.refMonthIndex;
   return {
+    accountManagers,
+    accountManager,
     year,
     generatedAt: new Date().toISOString(),
     sales,

@@ -8,8 +8,9 @@ export const revalidate = 0;
 export async function GET(request: Request) {
   try {
     const user = await requireReportsAccessOrThrow();
-    const year = Number(new URL(request.url).searchParams.get('year')) || undefined;
-    const payload = await buildRetailOperasyon({ year });
+    const params = new URL(request.url).searchParams;
+    const year = Number(params.get('year')) || undefined;
+    const payload = await buildRetailOperasyon({ year, accountManager: params.get('accountManager') || undefined });
     const any = userHasPermission(user, 'forecast.write.any');
     const own = userHasPermission(user, 'forecast.write.own');
     const allowed = (owner?: string | null) => any || (own && owner === user.id);

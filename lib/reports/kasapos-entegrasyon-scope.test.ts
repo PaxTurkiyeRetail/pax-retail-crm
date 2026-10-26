@@ -6,6 +6,14 @@ vi.mock('@/lib/audit',()=>({tryRecordAuditEvent:vi.fn()}));
 import{buildKasaposEntegrasyonRaporu}from'./kasapos-entegrasyon';
 beforeEach(()=>{query.mockReset().mockResolvedValue({rows:[]});});
 describe('KasaPOS shared department scope',()=>{
+  it.each([{ customerIds: ['customer-a'] }, { customerIds: [] }])('binds customer scope to invoices and firms: $customerIds', async ({ customerIds }) => {
+    await buildKasaposEntegrasyonRaporu({ year: 2026, department: 'Retail', customerIds });
+    for (const [sql, params] of query.mock.calls) {
+      expect(params[3]).toEqual(customerIds);
+      expect(sql).toContain('$4::text[] is null');
+      expect(sql).toContain('any($4::text[])');
+    }
+  });
   it.each(['Retail','Bank',undefined] as const)('uses the same bound scope for invoice and customer aggregates: %s',async department=>{
     await buildKasaposEntegrasyonRaporu({year:2026,department});
     expect(query).toHaveBeenCalledTimes(2);
