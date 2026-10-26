@@ -5,6 +5,7 @@ import { ACTIVITY_BACKDATE_DAYS, ACTIVITY_DATE_PICKER_ENABLED, activityDateBound
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import TechnicalContactSelect from './TechnicalContactSelect';
+import ActivitySelect from './ActivitySelect';
 import { isPureBusinessPartnerRelationship } from '@/lib/activity-channels';
 
 type Customer = {
@@ -482,11 +483,12 @@ export default function QuickActivityClient() {
               placeholder="Müşteri / iş ortağı ara..."
               style={{ width: '100%', minHeight: 44, fontSize: 15, marginBottom: 8 }}
             />
-            <select
+            <ActivitySelect
               value={musteriId}
               disabled={!!editId}
-              onChange={(e) => {
-                const nextMusteriId = e.target.value;
+              label="Müşteri"
+              onValueChange={(value) => {
+                const nextMusteriId = value;
                 setMusteriId(nextMusteriId);
                 setContactSelection(null);
                 setBekleyenTaraf('');
@@ -504,7 +506,7 @@ export default function QuickActivityClient() {
               {customers.map(c => (
                 <option key={c.musteri_id} value={c.musteri_id}>{c.musteri} {c.sorumlu && `(${c.sorumlu})`}</option>
               ))}
-            </select>
+            </ActivitySelect>
             {customerSearch && !customerLoading && customers.length === 0 ? (
               <div style={{ marginTop: 8, fontSize: 13, color: 'var(--text-3)' }}>Sonuç bulunamadı. Müşteri adı, sorumlu veya sektörle tekrar deneyin.</div>
             ) : null}
@@ -526,9 +528,9 @@ export default function QuickActivityClient() {
               onChange={id => setContactSelection({ customerId: musteriId, id })}
             />}
             <label className="pax-label" style={{ display: 'block', marginBottom: 8, marginTop: 16 }}>Aktivite Tipi *</label>
-            <select value={aktiviteTipi} onChange={(e) => setAktiviteTipi(e.target.value as ActivityType)} className="pax-input" required style={{ width: '100%', minHeight: 48, fontSize: 16 }}>
+            <ActivitySelect value={aktiviteTipi} label="Aktivite Tipi" onValueChange={(value) => setAktiviteTipi(value as ActivityType)} className="pax-input" required style={{ width: '100%', minHeight: 48, fontSize: 16 }}>
               {visibleActivityTypes.map(tip => <option key={tip} value={tip}>{tip}</option>)}
-            </select>
+            </ActivitySelect>
           </div>
 
           {ACTIVITY_DATE_PICKER_ENABLED ? (
@@ -564,25 +566,25 @@ export default function QuickActivityClient() {
 
           <div>
             <label className="pax-label" style={{ display: 'block', marginBottom: 8 }}>Faz {phaseOptionalCustomer ? '' : '*'} {isTechnicalActivity && !phaseOptionalCustomer ? '(otomatik / değiştirilemez)' : ''}</label>
-            <select value={fazNo || ''} onChange={(e) => setFazNo(e.target.value ? Number(e.target.value) : null)} className="pax-input" required={!phaseOptionalCustomer} disabled={isTechnicalActivity || phaseOptionalCustomer} style={{ width: '100%', minHeight: 48, fontSize: 16, opacity: (isTechnicalActivity || phaseOptionalCustomer) ? 0.75 : 1 }}>
+            <ActivitySelect value={fazNo || ''} label="Faz" onValueChange={(value) => setFazNo(value ? Number(value) : null)} className="pax-input" required={!phaseOptionalCustomer} disabled={isTechnicalActivity || phaseOptionalCustomer} style={{ width: '100%', minHeight: 48, fontSize: 16, opacity: (isTechnicalActivity || phaseOptionalCustomer) ? 0.75 : 1 }}>
               <option value="">Faz seçin...</option>
               {phaseOptions.map(f => <option key={f.faz_no} value={f.faz_no}>{f.faz_no} - {f.asama_adi}</option>)}
-            </select>
+            </ActivitySelect>
           </div>
 
           <div>
             <label className="pax-label" style={{ display: 'block', marginBottom: 8 }}>Faz Durum {phaseOptionalCustomer ? '' : '*'} {isTechnicalActivity && !phaseOptionalCustomer ? '(otomatik / değiştirilemez)' : ''}</label>
-            <select value={fazDurum} onChange={(e) => setFazDurum(e.target.value as PhaseStatus)} className="pax-input" required={!phaseOptionalCustomer} disabled={isTechnicalActivity || phaseOptionalCustomer} style={{ width: '100%', minHeight: 48, fontSize: 16, opacity: (isTechnicalActivity || phaseOptionalCustomer) ? 0.75 : 1 }}>
+            <ActivitySelect value={fazDurum} label="Faz Durum" onValueChange={(value) => setFazDurum(value as PhaseStatus)} className="pax-input" required={!phaseOptionalCustomer} disabled={isTechnicalActivity || phaseOptionalCustomer} style={{ width: '100%', minHeight: 48, fontSize: 16, opacity: (isTechnicalActivity || phaseOptionalCustomer) ? 0.75 : 1 }}>
               {FAZ_DURUMLARI.map(durum => <option key={durum} value={durum}>{durum}</option>)}
-            </select>
+            </ActivitySelect>
           </div>
 
           <div>
             <label className="pax-label" style={{ display: 'block', marginBottom: 8 }}>Bekleyen Taraf {phaseOptionalCustomer ? '' : '*'} {isTechnicalActivity && !phaseOptionalCustomer ? '(otomatik / değiştirilemez)' : ''}</label>
-            <select value={bekleyenTaraf} onChange={(e) => setBekleyenTaraf(e.target.value as WaitingSide)} className="pax-input" required={!phaseOptionalCustomer} disabled={isTechnicalActivity || phaseOptionalCustomer} style={{ width: '100%', minHeight: 48, fontSize: 16, opacity: (isTechnicalActivity || phaseOptionalCustomer) ? 0.75 : 1 }}>
+            <ActivitySelect value={bekleyenTaraf} label="Bekleyen Taraf" onValueChange={(value) => setBekleyenTaraf(value as WaitingSide)} className="pax-input" required={!phaseOptionalCustomer} disabled={isTechnicalActivity || phaseOptionalCustomer} style={{ width: '100%', minHeight: 48, fontSize: 16, opacity: (isTechnicalActivity || phaseOptionalCustomer) ? 0.75 : 1 }}>
               <option value="">Seçin...</option>
               {waitingSideOptions.map(taraf => <option key={taraf} value={taraf}>{taraf}</option>)}
-            </select>
+            </ActivitySelect>
             {phaseMetaLoading && <div style={{ marginTop: 6, fontSize: 12, color: 'var(--text-3)' }}>Faz bilgileri alınıyor...</div>}
           </div>
 
@@ -608,9 +610,9 @@ export default function QuickActivityClient() {
               </div>
               <div>
                 <label className="pax-label" style={{ display: 'block', marginBottom: 8 }}>Aktivite Tipi *</label>
-                <select value={sonrakiTip} onChange={(e) => setSonrakiTip(e.target.value as ActivityType)} className="pax-input" required={sonrakiAksiyonVar} style={{ width: '100%', minHeight: 48, fontSize: 16 }}>
+                <ActivitySelect value={sonrakiTip} label="Sonraki Aktivite Tipi" onValueChange={(value) => setSonrakiTip(value as ActivityType)} className="pax-input" required={sonrakiAksiyonVar} style={{ width: '100%', minHeight: 48, fontSize: 16 }}>
                   {visibleNextActivityTypes.map(tip => <option key={tip} value={tip}>{tip}</option>)}
-                </select>
+                </ActivitySelect>
               </div>
               <div>
                 <label className="pax-label" style={{ display: 'block', marginBottom: 8 }}>Not (Opsiyonel)</label>

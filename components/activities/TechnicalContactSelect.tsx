@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import ActivitySelect from './ActivitySelect';
 import type { TechnicalContact } from '@/lib/technical-contacts';
 
 export default function TechnicalContactSelect({ customerId, value, originalId, onChange }: {
@@ -27,11 +28,11 @@ export default function TechnicalContactSelect({ customerId, value, originalId, 
   const selected = rows.find(row => row.id === value);
   return <div style={{ minWidth: 0 }}>
     <label className="pax-label" htmlFor="activity-technical-contact">Teknik Yetkili (isteğe bağlı)</label>
-    <select id="activity-technical-contact" className="pax-input" style={{ width: '100%', minWidth: 0 }} value={value || ''} disabled={loading || !!error} onChange={e => onChange(e.target.value || null)}>
+    <ActivitySelect label="Teknik Yetkili" id="activity-technical-contact" className="pax-input" style={{ width: '100%', minWidth: 0 }} value={value || ''} disabled={loading || !!error} onValueChange={value => onChange(value || null)}>
       <option value="">{loading ? 'Yetkililer yükleniyor...' : 'Yetkili seçin'}</option>
       {rows.filter(row => row.is_active || row.id === originalId).map(row => <option key={row.id} value={row.id}>{row.full_name}{row.title ? ` · ${row.title}` : ''}{row.is_active ? '' : ' (Pasif)'}</option>)}
       {value && !selected && <option value={value}>Mevcut yetkili bağlantısı</option>}
-    </select>
+    </ActivitySelect>
     {selected && <p style={{ overflowWrap: 'anywhere' }}>{[selected.phone, selected.email].filter(Boolean).join(' · ') || 'İletişim bilgisi belirtilmemiş.'}</p>}
     {error && <p role="alert">{error} Mevcut yetkili bağlantısı korunur.</p>}
     <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 8 }}>
