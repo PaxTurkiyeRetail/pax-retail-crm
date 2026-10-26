@@ -10,7 +10,7 @@ export async function GET(request: Request) {
     const user = await requireReportsAccessOrThrow();
     const params = new URL(request.url).searchParams;
     const year = Number(params.get('year')) || undefined;
-    const payload = await buildRetailOperasyon({ year, accountManager: params.get('accountManager') || undefined });
+    const payload = await buildRetailOperasyon({ year, accountManager: params.getAll('accountManager') });
     const any = userHasPermission(user, 'forecast.write.any');
     const own = userHasPermission(user, 'forecast.write.own');
     const allowed = (owner?: string | null) => any || (own && owner === user.id);

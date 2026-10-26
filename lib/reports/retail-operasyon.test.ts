@@ -12,6 +12,21 @@ beforeEach(() => {
 });
 
 describe('Retail canonical live sources', () => {
+  it('combines multiple managers without duplicating customers and scopes every source', async () => {
+    query.mockImplementation(async (sql: string, params: unknown[]) => {
+      if (sql.includes('k.satici_etiketi')) return { rows: [
+        { id: 'a', owner_user_id: 'one', sorumlu: 'Ali' },
+        { id: 'b', owner_user_id: 'two', sorumlu: 'Ayşe' },
+        { id: 'c', owner_user_id: 'three', sorumlu: 'Can' },
+      ] };
+      expect(params.at(-1)).toEqual(['a', 'b']);
+      return { rows: [] };
+    });
+    const result = await buildRetailOperasyon({ year: 2026, accountManager: ['user:one', 'user:two', 'user:one'] });
+    expect(result.crm.map(row => row.id)).toEqual(['a', 'b']);
+    expect(result.selectedAccountManagers).toEqual(['user:one', 'user:two']);
+    expect(kasapos).toHaveBeenCalledWith({ year: 2026, department: 'Retail', customerIds: ['a', 'b'] });
+  });
   it('scopes every source by current customer ownership and keeps the full manager list', async () => {
     query.mockImplementation(async (sql: string, params: unknown[]) => {
       if (sql.includes('k.satici_etiketi')) return { rows: [

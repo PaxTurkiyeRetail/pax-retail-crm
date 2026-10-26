@@ -70,6 +70,7 @@ export type RetailKasaRow = {
 export type RetailOperasyonPayload = {
   accountManagers?: Array<{ value: string; label: string }>;
   accountManager?: string;
+  selectedAccountManagers?: string[];
   canEditRetailPlan?: boolean;
   canEditForecast?: boolean;
   year: number;
@@ -253,16 +254,18 @@ export function retailAccountManagerKey(row: RetailCrmRow): string {
   return row.ownerUserId ? `user:${row.ownerUserId}` : row.owner.trim() ? `name:${row.owner.trim()}` : 'unassigned';
 }
 
-export async function buildRetailOperasyon(options?: { year?: number; accountManager?: string }): Promise<RetailOperasyonPayload> {
+export async function buildRetailOperasyon(options?: { year?: number; accountManager?: string | string[] }): Promise<RetailOperasyonPayload> {
   const req = options?.year;
   const year = Number.isInteger(req) && req! > 2000 ? req! : new Date().getFullYear();
   const pool = await fetchCrmPool([year, year + 1]);
-  const accountManager = options?.accountManager?.trim() || '';
+  const requestedManagers = options?.accountManager;
+  const selectedAccountManagers = [...new Set((Array.isArray(requestedManagers) ? requestedManagers : [requestedManagers ?? '']).map(value => value.trim()).filter(Boolean))];
+  const selected = new Set(selectedAccountManagers);
   const managers = new Map<string, string>();
   for (const row of pool) managers.set(retailAccountManagerKey(row), row.owner.trim() || (row.ownerUserId ? 'İsimsiz Account Manager' : 'Atanmamış'));
   const accountManagers = [...managers].map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label, 'tr'));
-  const crm = accountManager ? pool.filter(row => retailAccountManagerKey(row) === accountManager) : pool;
-  const customerIds = accountManager ? crm.map(row => row.id) : undefined;
+  const crm = selected.size ? pool.filter(row => selected.has(retailAccountManagerKey(row))) : pool;
+  const customerIds = selected.size ? crm.map(row => row.id) : undefined;
   const [sales, opps, kasa, rental] = await Promise.all([
     fetchSales(year, customerIds),
     fetchOpportunities([year, year + 1], customerIds),
@@ -272,7 +275,8 @@ export async function buildRetailOperasyon(options?: { year?: number; accountMan
   const ref = kasa.refMonthIndex;
   return {
     accountManagers,
-    accountManager,
+    accountManager: selectedAccountManagers.length === 1 ? selectedAccountManagers[0] : '',
+    selectedAccountManagers,
     year,
     generatedAt: new Date().toISOString(),
     sales,

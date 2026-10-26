@@ -43,7 +43,7 @@ export default function RetailOperasyonClient() {
   const [planning, setPlanning] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [yearChoice, setYearChoice] = useState(new Date().getFullYear());
-  const [accountManager, setAccountManager] = useState('');
+  const [selectedManagers, setSelectedManagers] = useState<string[]>([]);
   const [accountManagers, setAccountManagers] = useState<NonNullable<RetailOperasyonPayload['accountManagers']>>([]);
   const [editingPlan,setEditingPlan]=useState<{row:RetailOpportunity;year:number}|null>(null);
   const activeRequest=useRef<AbortController|null>(null);
@@ -57,14 +57,15 @@ export default function RetailOperasyonClient() {
     const controller=new AbortController();activeRequest.current=controller;requestBusy.current=true;
     setBusy(true); setError('');
     try {
-      const params = new URLSearchParams({ year: String(yearChoice), accountManager });
+      const params = new URLSearchParams({ year: String(yearChoice) });
+      selectedManagers.forEach(value => params.append('accountManager', value));
       const r = await fetch(`/api/reports/retail-operasyon?${params}`, { cache: 'no-store',signal:controller.signal });
       const j = await r.json();
       if (!r.ok) throw new Error(j?.error?.message||j?.message || 'Veri alınamadı');
       if(version===requestVersion.current&&!controller.signal.aborted){setData(j);setAccountManagers(j.accountManagers ?? []);}
     } catch (e) { if(version===requestVersion.current&&!controller.signal.aborted)setError(e instanceof Error ? e.message : 'Veri alınamadı'); }
     finally { if(version===requestVersion.current&&!controller.signal.aborted){requestBusy.current=false;setBusy(false);} }
-  }, [yearChoice, accountManager]);
+  }, [yearChoice, selectedManagers]);
   useEffect(() => { void reload();const controller=activeRequest.current;return()=>controller?.abort(); }, [reload]);
   useEffect(() => {
     if ((tab === 3||editingPlan) && data?.canEditForecast && !quickOptions) loadForecastQuickAddOptions().then(setQuickOptions).catch((e) => setError(e.message));
@@ -80,6 +81,15 @@ export default function RetailOperasyonClient() {
     window.addEventListener('keydown', close);
     return () => window.removeEventListener('keydown', close);
   }, [planning]);
+
+  function changeManagers(values: string[]) {
+    requestVersion.current++;
+    activeRequest.current?.abort();
+    requestBusy.current = false;
+    setPlanning(null); setEditingPlan(null); setData(null);
+    setQ(''); setFilters({ kasa: '', pos: '', posOwner: '', status: '' });
+    setSelectedManagers(values);
+  }
 
   const year = data?.year ?? yearChoice;
   const planNow = useMemo(() => (data?.opportunities.current ?? []).filter((o) => o.includeInRetailPlan !== false), [data]);
@@ -139,9 +149,9 @@ export default function RetailOperasyonClient() {
   const subtitles = ['Gerçekleşen satışlar, KasaPOS entegrasyonu ve kiralama operasyonu.', 'Yıl sonuna kadar beklenen satış ve kiralama fırsatları.', 'Gelecek yılın firma, model ve ay bazında planı.', 'Müşteri havuzunu incele, canlı Forecast fırsatlarını oluştur.', 'Gerçekleşen sonuçlar ve yıl sonu senaryosu, model ve ay bazında.', 'CRM planları ve projeksiyonun birleşik aylık görünümü.'];
 
   return <div className={s.root}>
-    <header className={s.top}><div><span className={s.eyebrow}>PAX TÜRKİYE · RETAIL</span><h1>Gerçekleşen / Bütçe</h1><p>Gerçekleşen sonuçlar ve bütçe planları tek yerde.</p></div><div className={s.actions}><span className={s.live}><i />Canlı CRM verisi</span><label>Account Manager <select aria-label="Account Manager" value={accountManager} disabled={busy} onChange={(e) => { requestVersion.current++;activeRequest.current?.abort();requestBusy.current=false;setPlanning(null);setEditingPlan(null);setData(null);setQ('');setFilters({ kasa: '', pos: '', posOwner: '', status: '' });setAccountManager(e.target.value); }}><option value="">Tüm Account Managerlar</option>{accountManager && !accountManagers.some(manager => manager.value === accountManager) && <option value={accountManager}>Seçili Account Manager (müşteri yok)</option>}{accountManagers.map(manager => <option key={manager.value} value={manager.value}>{manager.label}</option>)}</select></label><label>Rapor yılı <select aria-label="Rapor yılı" value={yearChoice} disabled={busy} onChange={(e) => { requestVersion.current++;activeRequest.current?.abort();requestBusy.current=false;setPlanning(null);setEditingPlan(null);setData(null); setYearChoice(Number(e.target.value)); }}>{Array.from({ length: 7 }, (_, i) => new Date().getFullYear() - 3 + i).map((y) => <option key={y}>{y}</option>)}</select></label><button className={s.button} disabled={busy} onClick={() => void reload()}><RefreshCw size={14} />{busy ? 'Yenileniyor…' : 'Yenile'}</button></div></header>
+    <header className={s.top}><div><span className={s.eyebrow}>PAX TÜRKİYE · RETAIL</span><h1>Gerçekleşen / Bütçe</h1><p>Gerçekleşen sonuçlar ve bütçe planları tek yerde.</p></div><div className={s.actions}><span className={s.live}><i />Canlı CRM verisi</span><details className={s.managerFilter}><summary>Account Manager · {selectedManagers.length ? `${selectedManagers.length} kişi seçili` : 'Tümü'}</summary><div className={s.managerOptions}><button type="button" className={s.button} onClick={() => changeManagers([])}>Tümünü göster</button>{[...accountManagers, ...selectedManagers.filter(value => !accountManagers.some(manager => manager.value === value)).map(value => ({ value, label: 'Seçili Account Manager (müşteri yok)' }))].map(manager => <label key={manager.value}><input type="checkbox" checked={selectedManagers.includes(manager.value)} onChange={e => changeManagers(e.target.checked ? [...selectedManagers, manager.value] : selectedManagers.filter(value => value !== manager.value))} />{manager.label}</label>)}<small>Seçim yapılmazsa tümü gösterilir.</small></div></details><label>Rapor yılı <select aria-label="Rapor yılı" value={yearChoice} disabled={busy} onChange={(e) => { requestVersion.current++;activeRequest.current?.abort();requestBusy.current=false;setPlanning(null);setEditingPlan(null);setData(null); setYearChoice(Number(e.target.value)); }}>{Array.from({ length: 7 }, (_, i) => new Date().getFullYear() - 3 + i).map((y) => <option key={y}>{y}</option>)}</select></label><button className={s.button} disabled={busy} onClick={() => void reload()}><RefreshCw size={14} />{busy ? 'Yenileniyor…' : 'Yenile'}</button></div></header>
     <nav className={s.nav} aria-label="Retail raporları">{tabs.map((label, i) => <button key={i} aria-current={tab === i ? 'page' : undefined} className={tab === i ? s.active : ''} onClick={() => setTab(i)}>{label}</button>)}</nav>
-    <div className={s.sectionHeading}><div><h2>{tabs[tab].replace(/^\d\. /, '')}</h2><p>{subtitles[tab]}</p><p>Account Manager: <strong>{accountManager ? accountManagers.find(manager => manager.value === accountManager)?.label ?? 'Seçili Account Manager (müşteri yok)' : 'Tümü'}</strong> · Altı sekmenin tamamına uygulanır · Güncel müşteri sorumlusu esas alınır.</p></div>{data && <span className={s.timestamp}>Son güncelleme {new Date(data.generatedAt).toLocaleString('tr-TR')}</span>}</div>
+    <div className={s.sectionHeading}><div><h2>{tabs[tab].replace(/^\d\. /, '')}</h2><p>{subtitles[tab]}</p><p>Account Manager: <strong>{selectedManagers.length ? selectedManagers.map(value => accountManagers.find(manager => manager.value === value)?.label ?? 'Seçili Account Manager (müşteri yok)').join(', ') : 'Tümü'}</strong> · Altı sekmenin tamamına uygulanır · Güncel müşteri sorumlusu esas alınır.</p></div>{data && <span className={s.timestamp}>Son güncelleme {new Date(data.generatedAt).toLocaleString('tr-TR')}</span>}</div>
     {error && <div className={s.error} role="alert">{error}<button className={s.button} onClick={() => void reload()}>Tekrar dene</button></div>}
     {!data && <div className={s.empty} role="status">{busy ? 'Canlı veriler hazırlanıyor…' : 'Rapor verisi yüklenemedi.'}</div>}
     {data && <>

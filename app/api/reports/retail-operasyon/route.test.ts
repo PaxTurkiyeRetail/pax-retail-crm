@@ -15,9 +15,13 @@ beforeEach(() => {
   mocks.build.mockResolvedValue(payload);
 });
 describe('Retail native per-record edit flags', () => {
+  it('passes multiple selected managers together', async () => {
+    await GET(new Request('http://localhost/api/reports/retail-operasyon?year=2026&accountManager=user%3Aa&accountManager=user%3Ab'));
+    expect(mocks.build).toHaveBeenCalledWith({ year: 2026, accountManager: ['user:a', 'user:b'] });
+  });
   it('passes the selected manager to the report without changing edit permissions', async () => {
     const response = await GET(new Request('http://localhost/api/reports/retail-operasyon?year=2026&accountManager=user%3Aother'));
-    expect(mocks.build).toHaveBeenCalledWith({ year: 2026, accountManager: 'user:other' });
+    expect(mocks.build).toHaveBeenCalledWith({ year: 2026, accountManager: ['user:other'] });
     const result = await response.json() as Flags;
     expect(result.canEditForecast).toBe(false);
     expect(result.crm.every(row => !row.canPlan)).toBe(true);
@@ -26,7 +30,7 @@ describe('Retail native per-record edit flags', () => {
     mocks.access.mockResolvedValueOnce({ id: 'actor', permissions: ['forecast.write.any'] });
     const response = await GET(new Request('http://localhost/api/reports/retail-operasyon?year=2027'));
     expect(response.status).toBe(200);
-    expect(mocks.build).toHaveBeenCalledWith({ year: 2027, accountManager: undefined });
+    expect(mocks.build).toHaveBeenCalledWith({ year: 2027, accountManager: [] });
     const result = await response.json() as Flags;
     expect(result.canEditForecast).toBe(true);
     expect([...result.opportunities.current, ...result.opportunities.next].map(r => r.canEdit)).toEqual([true, true, true]);
