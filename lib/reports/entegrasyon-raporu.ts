@@ -15,6 +15,7 @@ export type EntegrasyonRaporuRow = {
   customerId: string;
   musteri: string;
   isKolu: string | null;
+  mevcutPosSayisi: number | null;
   entegrasyonModeli: string;
   aktifFazNo: number | null;
   aktifFazAdi: string | null;
@@ -49,6 +50,7 @@ export async function buildEntegrasyonRaporu(options?: { isKolu?: string; allowe
         d.customer_id::text as customer_id,
         d.musteri,
         d.is_kolu,
+        k.mevcut_pos_sayisi,
         case when d.is_ortagi_rolu then 'İş Ortağı' else 'Müşteri (Kendi Entegrasyonu)' end as entegrasyon_modeli,
         d.aktif_faz_no,
         d.aktif_faz_adi,
@@ -56,6 +58,7 @@ export async function buildEntegrasyonRaporu(options?: { isKolu?: string; allowe
         pe.notlar as son_not,
         pe.created_at as son_event_tarihi
       from public.crm_entegrasyon_durumu d
+      left join public.musteri_kunye_v2 k on k.musteri_id = d.customer_id
       left join lateral (
         select pe_1.notlar, pe_1.created_at
         from public.pipeline_eventleri pe_1
@@ -78,6 +81,7 @@ export async function buildEntegrasyonRaporu(options?: { isKolu?: string; allowe
       customerId: String(row.customer_id),
       musteri: String(row.musteri ?? '').trim(),
       isKolu: cleanText(row.is_kolu),
+      mevcutPosSayisi: row.mevcut_pos_sayisi == null ? null : Number(row.mevcut_pos_sayisi),
       entegrasyonModeli: String(row.entegrasyon_modeli),
       aktifFazNo: row.aktif_faz_no != null ? Number(row.aktif_faz_no) : null,
       aktifFazAdi: cleanText(row.aktif_faz_adi),

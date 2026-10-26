@@ -8,6 +8,7 @@ type Row = {
   customerId: string;
   musteri: string;
   isKolu: string | null;
+  mevcutPosSayisi: number | null;
   entegrasyonModeli: string;
   aktifFazNo: number | null;
   aktifFazAdi: string | null;
@@ -134,11 +135,12 @@ export default function EntegrasyonRaporuClient() {
   const exportExcel = useCallback(async () => {
     setExporting(true);
     try {
-      const header = ['Firma', 'Entegrasyon Modeli', 'İş Kolu', 'Aktif Faz', 'Son Not'];
+      const header = ['Firma', 'Entegrasyon Modeli', 'İş Kolu', 'Mevcut Pos Sayısı', 'Aktif Faz', 'Son Not'];
       const rows = sortedRows.map((row) => [
         row.musteri,
         row.entegrasyonModeli,
         row.isKolu ?? '-',
+        row.mevcutPosSayisi ?? '-',
         row.aktifFazNo != null ? `Faz ${row.aktifFazNo}${row.aktifFazAdi ? ` — ${row.aktifFazAdi}` : ''}` : '-',
         row.sonNot ?? '-',
       ]);
@@ -197,15 +199,16 @@ export default function EntegrasyonRaporuClient() {
               <th style={{ padding: '10px 14px' }}>Firma</th>
               <th style={{ padding: '10px 14px' }}>Model</th>
               <th style={{ padding: '10px 14px' }}>İş Kolu</th>
+              <th style={{ padding: '10px 14px', whiteSpace: 'nowrap', textAlign: 'right' }}>Mevcut Pos Sayısı</th>
               <th style={{ padding: '10px 14px' }}>Aktif Faz</th>
               <th style={{ padding: '10px 14px' }}>Son Not</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={5} style={{ padding: 20, textAlign: 'center', color: 'var(--text-3)' }}>Yükleniyor…</td></tr>
+              <tr><td colSpan={6} style={{ padding: 20, textAlign: 'center', color: 'var(--text-3)' }}>Yükleniyor…</td></tr>
             ) : sortedRows.length === 0 ? (
-              <tr><td colSpan={5} style={{ padding: 20, textAlign: 'center', color: 'var(--text-3)' }}>Kayıt yok.</td></tr>
+              <tr><td colSpan={6} style={{ padding: 20, textAlign: 'center', color: 'var(--text-3)' }}>Kayıt yok.</td></tr>
             ) : sortedRows.map((row) => {
               // 16.09: eşik artık sunucuda hesaplanıyor (crm_entegrasyon_durumu, migration 037) —
               // iş ortağı vs son müşteri farklı fazlarda "tamamlandı" sayılıyor, tek sabit sayı
@@ -222,6 +225,7 @@ export default function EntegrasyonRaporuClient() {
                   <td style={{ padding: '10px 14px', fontWeight: 600 }}>{row.musteri}</td>
                   <td style={{ padding: '10px 14px' }}>{row.entegrasyonModeli}</td>
                   <td style={{ padding: '10px 14px' }}>{row.isKolu ?? '—'}</td>
+                  <td style={{ padding: '10px 14px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{row.mevcutPosSayisi == null ? '—' : row.mevcutPosSayisi.toLocaleString('tr-TR')}</td>
                   <td style={{ padding: '10px 14px', fontWeight: done ? 700 : 400, color: done ? '#15803d' : undefined }}>
                     {row.aktifFazNo != null ? `Faz ${row.aktifFazNo}${row.aktifFazAdi ? ` — ${row.aktifFazAdi}` : ''}` : '—'}
                     {done ? ' ✅' : ''}
