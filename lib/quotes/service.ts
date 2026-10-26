@@ -1,4 +1,5 @@
 import 'server-only';
+import { ApiError } from '@/lib/http/api-error';
 import type { PgClient } from '@/lib/pg/client';
 import { STATIC_QUOTE_PRICING_RULES, STATIC_QUOTE_PRODUCTS, normalizeQuoteProduct, type QuotePricingRule, type QuoteProduct } from '@/lib/quotes/catalog';
 import { manualUnitPrice, normalizeSaleType, priceLine, sumLineTotals, type SaleType } from '@/lib/quotes/line-pricing';
@@ -157,9 +158,9 @@ export function resolveQuoteLines(
         manual_unit_price: manual,
       }, rules, product);
       if (!priced.priced) {
-        throw new Error(saleType === 'rental'
+        throw new ApiError('PRICE_RULE_NOT_FOUND', saleType === 'rental'
           ? `${product.name}: ${priced.problem}`
-          : `Fiyat kuralı bulunamadı: ${product.name} (${item.quantity})`);
+          : `Fiyat kuralı bulunamadı: ${product.name} (${item.quantity}). Ürün satırına özel birim fiyat girin veya fiyat baremini tanımlayın.`, 400);
       }
       return {
         product_id: item.product_id,

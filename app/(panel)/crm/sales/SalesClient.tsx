@@ -62,9 +62,9 @@ type ChannelOption = { value: string; label: string };
 type OwnerOption = { id: string | null; name: string };
 type CustomerOption = { id: string; musteri: string };
 type ProductOption = { id: string; code: string; name: string; product_type: string; is_recurring: boolean; rental_monthly_price: number | null };
-type NewLine = { uid: string; product_id: string; quantity: string; sale_type: 'sale' | 'rental' };
+type NewLine = { uid: string; product_id: string; quantity: string; sale_type: 'sale' | 'rental'; manual_unit_price: string };
 
-const newLine = (): NewLine => ({ uid: Math.random().toString(36).slice(2), product_id: '', quantity: '1', sale_type: 'sale' });
+const newLine = (): NewLine => ({ uid: Math.random().toString(36).slice(2), product_id: '', quantity: '1', sale_type: 'sale', manual_unit_price: '' });
 /** Kanal listede etiketiyle gösterilir ("Direkt Satis" değil "Direkt Satış"); liste dışı değer ham görünür. */
 const channelLabel = (channels: ChannelOption[], value: string | null) =>
   (value ? channels.find((channel) => channel.value === value)?.label ?? value : null);
@@ -188,7 +188,10 @@ export default function SalesClient() {
   async function submitCreate() {
     const lines = newLines
       .filter((line) => line.product_id && Number(line.quantity) > 0)
-      .map((line) => ({ product_id: line.product_id, quantity: Math.floor(Number(line.quantity)), sale_type: line.sale_type }));
+      .map((line) => ({ product_id: line.product_id, quantity: Math.floor(Number(line.quantity)), sale_type: line.sale_type, manual_unit_price: canOverridePrice && line.sale_type === 'sale' && line.manual_unit_price.trim() !== '' ? Number(line.manual_unit_price) : null }));
+    if (lines.some((line) => line.manual_unit_price != null && (!Number.isFinite(line.manual_unit_price) || line.manual_unit_price <= 0))) {
+      setMsg('Özel birim fiyat sıfırdan büyük bir sayı olmalıdır.'); return;
+    }
     if (!newCustomer) { setMsg('Müşteri seçilmeli.'); return; }
     if (!lines.length) { setMsg('En az bir ürün satırı girilmeli.'); return; }
     setBusy(true);
@@ -411,7 +414,7 @@ export default function SalesClient() {
               <small style={hintStyle}>Boş bırakılan anlaşma fiyatıyla birlikte tutar katalog kademesinden yeniden hesaplanır (teklifteki ürün dağılımı korunur).</small>
             </label>
             <label style={fieldStyle}>
-              <span style={labelStyle}>Anlaşma Fiyatı (USD) — opsiyonel</span>
+                <span style={labelStyle}>Anlaşma Fiyatı (USD) — toplam tutar, opsiyonel</span>
               <input type="number" min={0} step="0.01" disabled={!canOverridePrice} title={canOverridePrice ? undefined : 'Özel fiyat yetkisi gerekli'} value={formManual} onChange={(e) => setFormManual(e.target.value)} placeholder="Boş = katalogdan hesapla" style={inputStyle} />
               <small style={hintStyle}>Doldurursan katalog hesabı ezilir ve kayıt &quot;anlaşma fiyatı&quot; olarak işaretlenir.</small>
             </label>
@@ -508,7 +511,7 @@ export default function SalesClient() {
                 </select>
               </label>
               {canOverridePrice ? <label style={fieldStyle}>
-                <span style={labelStyle}>Anlaşma Fiyatı (USD) — opsiyonel</span>
+                <span style={labelStyle}>Anlaşma Fiyatı (USD) — toplam tutar, opsiyonel</span>
                 <input inputMode="numeric" value={newAgreed} onChange={(e) => setNewAgreed(e.target.value.replace(/[^\d.]/g, ''))} placeholder="Boş = katalogdan hesapla" style={inputStyle} />
               </label> : null}
             </div>
@@ -551,6 +554,22 @@ export default function SalesClient() {
                       disabled={newLines.length === 1}
                       aria-label="Satırı kaldır"
                     >×</button>
+                    {canOverridePrice && line.sale_type === 'sale' ? (
+                      <label style={{ ...fieldStyle, gridColumn: '1 / -1' }}>
+                        <span style={labelStyle}>Özel Birim Fiyat (USD) — opsiyonel</span>
+                        <input
+                          type="number" min="0.01" step="0.01" inputMode="decimal"
+                          aria-label={`Satır ${index + 1} özel birim fiyat`}
+                          value={line.manual_unit_price}
+                          onChange={(e) => setNewLines((prev) => prev.map((row) => row.uid === line.uid ? { ...row, manual_unit_price: e.target.value } : row))}
+                          placeholder="Boş = katalog baremi"
+                          style={inputStyle}
+                        />
+                        <small style={{ color: 'var(--text-3)' }}>
+                          {Number(line.manual_unit_price) > 0 ? `${line.quantity || '0'} × ${line.manual_unit_price} USD = ${(Number(line.quantity) * Number(line.manual_unit_price)).toLocaleString('tr-TR', { maximumFractionDigits: 2 })} USD` : 'Baremden farklı birim fiyat girebilirsiniz.'}
+                        </small>
+                      </label>
+                    ) : null}
                   </div>
                 ))}
               </div>

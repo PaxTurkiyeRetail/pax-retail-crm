@@ -363,7 +363,7 @@ export async function saleAmountWarnings(saleId: string, amount: number, deviceC
 /* Doğrudan (teklifsiz) satış — Sinan/Furkan, 10.09; migration 027           */
 /* ------------------------------------------------------------------------ */
 
-export type DirectSaleLineInput = { product_id: string; quantity: number; sale_type?: 'sale' | 'rental'; rental_start_date?: string | null; rental_end_date?: string | null };
+export type DirectSaleLineInput = { product_id: string; quantity: number; manual_unit_price?: number | null; sale_type?: 'sale' | 'rental'; rental_start_date?: string | null; rental_end_date?: string | null };
 
 export type DirectSaleInput = {
   customerId: string;
@@ -386,7 +386,7 @@ export type DirectSaleActor = { id: string; name: string; email: string };
  *
  * Sahiplik kontrolü ÇAĞIRANDA (API): account_manager yalnız kendi portföyündeki firmaya.
  */
-export async function createDirectSale(actor: DirectSaleActor, input: DirectSaleInput) {
+export async function createDirectSale(actor: DirectSaleActor, input: DirectSaleInput, options: { allowManualPrice?: boolean } = {}) {
   const { getQuoteCatalog, resolveQuoteLines } = await import('@/lib/quotes/service');
   const { createPgAdminClient } = await import('@/lib/pg/admin');
   // Katalog DB'den (Ürün & Fiyat Yönetimi'ndeki yürürlükteki liste); `getQuoteCatalog()` istemcisiz
@@ -396,11 +396,13 @@ export async function createDirectSale(actor: DirectSaleActor, input: DirectSale
     input.lines.map((line) => ({
       product_id: line.product_id,
       quantity: Number(line.quantity ?? 0),
+      manual_unit_price: line.manual_unit_price ?? null,
       sale_type: line.sale_type ?? 'sale',
       rental_start_date: line.rental_start_date ?? null,
       rental_end_date: line.rental_end_date ?? null,
     })),
     catalog,
+    options,
   );
   if (!resolved.items.length) throw new ApiError('SALE_NO_LINES', 'En az bir ürün satırı girilmeli.', 400);
 
@@ -413,8 +415,9 @@ export async function createDirectSale(actor: DirectSaleActor, input: DirectSale
   const hardwareAmount = round2(Math.max(0, resolved.totalAmount - rentalTotal));
 
   const agreed = input.agreedAmount == null ? null : Number(input.agreedAmount);
-  const manual = agreed != null && Number.isFinite(agreed) && agreed >= 0 && round2(agreed) !== round2(resolved.totalAmount);
-  const amount = manual ? round2(agreed as number) : round2(resolved.totalAmount);
+  const totalOverride = agreed != null && Number.isFinite(agreed) && agreed >= 0 && round2(agreed) !== round2(resolved.totalAmount);
+  const manual = totalOverride || resolved.items.some((line) => line.price_source === 'manual');
+  const amount = totalOverride ? round2(agreed as number) : round2(resolved.totalAmount);
 
   const { rows } = await db.query<{ id: string }>(
     `

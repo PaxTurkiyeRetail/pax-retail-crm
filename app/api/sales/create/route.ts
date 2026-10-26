@@ -23,8 +23,11 @@ const lineSchema = z.object({
   product_id: z.string().uuid('Ürün seçilmeli.'),
   quantity: z.number().int().min(1).max(100000),
   sale_type: z.enum(['sale', 'rental']).optional(),
+  manual_unit_price: z.number().positive('Özel birim fiyat sıfırdan büyük olmalıdır.').nullish(),
   rental_start_date: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/).nullish(),
   rental_end_date: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/).nullish(),
+}).refine((line) => line.sale_type !== 'rental' || line.manual_unit_price == null, {
+  message: 'Özel birim satış fiyatı kiralama satırında kullanılamaz.', path: ['manual_unit_price'],
 });
 
 const createSchema = z.object({
@@ -53,7 +56,7 @@ export async function POST(request: Request) {
     }
 
     // Anlaşma fiyatı yalnız quote.price.override ile (13.10.2026).
-    if (input.agreed_amount != null && !userHasPermission(me, 'quote.price.override')) {
+    if ((input.agreed_amount != null || input.lines.some((line) => line.manual_unit_price != null)) && !userHasPermission(me, 'quote.price.override')) {
       return NextResponse.json({ message: 'Anlaşma fiyatı girme yetkiniz yok; tutar katalogdan hesaplanır.' }, { status: 403 });
     }
 
@@ -68,11 +71,13 @@ export async function POST(request: Request) {
         lines: input.lines.map((line) => ({
           product_id: line.product_id,
           quantity: line.quantity,
+          manual_unit_price: line.manual_unit_price ?? null,
           sale_type: line.sale_type ?? 'sale',
           rental_start_date: line.rental_start_date ?? null,
           rental_end_date: line.rental_end_date ?? null,
         })),
       },
+      { allowManualPrice: userHasPermission(me, 'quote.price.override') },
     );
 
     await tryRecordAuditEvent({
