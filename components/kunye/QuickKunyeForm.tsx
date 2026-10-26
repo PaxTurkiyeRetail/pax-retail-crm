@@ -37,6 +37,7 @@ type KunyeFormData = {
   firma_adi: string;
   magaza_sayisi: string;
   franchise_sayisi: string;
+  mevcut_pos_sayisi: string;
   
   sabit_kasa_adedi: string;
   kasapos_firmasi: string;
@@ -78,6 +79,7 @@ const EMPTY_FORM: KunyeFormData = {
   firma_adi: '',
   magaza_sayisi: '',
   franchise_sayisi: '',
+  mevcut_pos_sayisi: '',
   sabit_kasa_adedi: '',
   kasapos_firmasi: '',
   pos_modeli: '',
@@ -351,6 +353,25 @@ export default function QuickKunyeForm({ musteriId, musteriAdi, existingData, on
             </div>
 
             {/* Mağaza Sayısı */}
+            <div>
+              <label htmlFor="mevcut-pos-sayisi" className="pax-label" style={{ display: 'block', marginBottom: 8 }}>
+                Mevcut Pos Sayısı
+              </label>
+              <input
+                id="mevcut-pos-sayisi"
+                type="number"
+                min={0}
+                max={2147483647}
+                step={1}
+                value={form.mevcut_pos_sayisi ?? ''}
+                onChange={(e) => updateForm('mevcut_pos_sayisi', e.target.value)}
+                className="pax-input"
+                placeholder="Örn: 150"
+                style={{ width: '100%', minHeight: 48, fontSize: 16 }}
+              />
+              <small className="muted">Firmanın mevcut POS cihazı adedi. Bilinmiyorsa boş bırakın.</small>
+            </div>
+
             <div>
               <label className="pax-label" style={{ display: 'block', marginBottom: 8 }}>
                 Mağaza Sayısı

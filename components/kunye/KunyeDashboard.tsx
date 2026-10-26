@@ -319,6 +319,7 @@ export default function KunyeDashboard({ kunye, musteriAdi, sektorVeSorumlu, akt
           isKolu && { icon: '🧭', label: 'İş Kolu', val: isKolu },
           kunye.satici_etiketi && { icon: '🏷️', label: 'Satıcı Etiketi', val: kunye.satici_etiketi },
           kunye.magaza_sayisi && { icon: '🏪', label: 'Mağaza', val: kunye.magaza_sayisi },
+          kunye.mevcut_pos_sayisi != null && String(kunye.mevcut_pos_sayisi).trim() !== '' && { icon: '💳', label: 'Mevcut Pos Sayısı', val: String(kunye.mevcut_pos_sayisi) },
           kunye.franchise_sayisi && kunye.franchise_sayisi !== '0' && { icon: '🔗', label: 'Franchise', val: kunye.franchise_sayisi },
           kunye.sabit_kasa_adedi && kunye.sabit_kasa_adedi !== 'Kullanılmıyor' && { icon: '🖥️', label: 'Sabit Kasa', val: kunye.sabit_kasa_adedi },
           kunye.kasapos_firmasi && { icon: '🏢', label: 'Kasa Firması', val: kunye.kasapos_firmasi },

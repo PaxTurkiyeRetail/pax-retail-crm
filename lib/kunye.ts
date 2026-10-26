@@ -2,6 +2,7 @@ export type KunyePayload = {
   firma_adi?: string | null;
   magaza_sayisi?: string | null;
   franchise_sayisi?: string | null;
+  mevcut_pos_sayisi?: string | null;
 
   sabit_kasa_adedi?: string | null;
   kasapos_firmasi?: string | null;
@@ -248,6 +249,19 @@ function nullableInt(value: unknown) {
   return Number.isFinite(n) ? n : null;
 }
 
+export function parseMevcutPosSayisi(value: unknown): number | null {
+  if (value != null && typeof value !== 'string' && typeof value !== 'number') {
+    throw Object.assign(new Error('Mevcut Pos Sayısı bir tam sayı olmalıdır.'), { status: 400 });
+  }
+  const raw = trimOrNull(value);
+  if (raw === null) return null;
+  const count = Number(raw);
+  if (!/^[0-9]+$/.test(raw) || !Number.isSafeInteger(count) || count > 2147483647) {
+    throw Object.assign(new Error('Mevcut Pos Sayısı 0 ile 2147483647 arasında bir tam sayı olmalıdır.'), { status: 400 });
+  }
+  return count;
+}
+
 export function normalizeKunyePayload(input: Record<string, unknown>): KunyePayload {
   const reyon_kullaniliyor = trimOrNull(input.reyon_kullaniliyor) ?? 'Hayır';
   const el_terminali_kullaniliyor = trimOrNull(input.el_terminali_kullaniliyor) ?? 'Hayır';
@@ -257,6 +271,7 @@ export function normalizeKunyePayload(input: Record<string, unknown>): KunyePayl
     firma_adi: trimOrNull(input.firma_adi),
     magaza_sayisi: trimOrNull(input.magaza_sayisi),
     franchise_sayisi: trimOrNull(input.franchise_sayisi),
+    mevcut_pos_sayisi: parseMevcutPosSayisi(input.mevcut_pos_sayisi)?.toString() ?? null,
 
     sabit_kasa_adedi: trimOrNull(input.sabit_kasa_adedi),
     kasapos_firmasi: trimOrNull(input.kasapos_firmasi),
@@ -352,6 +367,7 @@ export function mapKunyeDbToUi(
     firma_adi: trimOrNull(row.firma_adi),
     magaza_sayisi: normalizeRangeValue(row.magaza_sayisi),
     franchise_sayisi: normalizeRangeValue(row.franchise_sayisi, true),
+    mevcut_pos_sayisi: trimOrNull(row.mevcut_pos_sayisi),
 
     // Net sayı (KasaPOS raporu aktif satış kasası); eski aralık değerleri olduğu gibi gösterilir.
     sabit_kasa_adedi: trimOrNull(row.sabit_kasa_adedi),
@@ -411,6 +427,7 @@ export function mapKunyeUiToDb(payload: KunyePayload): Record<string, any> {
   return {
     magaza_sayisi: nullableText(payload.magaza_sayisi),
     franchise_sayisi: nullableText(payload.franchise_sayisi),
+    mevcut_pos_sayisi: parseMevcutPosSayisi(payload.mevcut_pos_sayisi),
 
     sabit_kasa_adedi: nullableText(payload.sabit_kasa_adedi),
     kasapos_firmasi: nullableText(payload.kasapos_firmasi),
