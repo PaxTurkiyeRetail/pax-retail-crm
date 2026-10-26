@@ -19,6 +19,12 @@ case "$ACTIVE_BUILD" in .next|.next-a|.next-b) ;; *) echo "Gecersiz aktif build"
 if [[ "$ACTIVE_BUILD" == ".next-a" ]]; then export NEXT_DIST_DIR=".next-b"; else export NEXT_DIST_DIR=".next-a"; fi
 echo "Build slot: $ACTIVE_BUILD -> $NEXT_DIST_DIR"
 
+# Next, distDir değişince üretilen tip referansını yeniden yazar. Kaynak ağacı
+# temiz kalsın; sonraki git pull bu otomatik değişikliğe takılmasın.
+TYPE_ENV_BACKUP="$(mktemp)"
+cp next-env.d.ts "$TYPE_ENV_BACKUP"
+trap 'cp "$TYPE_ENV_BACKUP" next-env.d.ts; rm -f "$TYPE_ENV_BACKUP"' EXIT
+
 npm ci
 npm run verify
 
