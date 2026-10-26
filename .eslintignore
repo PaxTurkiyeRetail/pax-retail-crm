@@ -1,5 +1,7 @@
 node_modules
 .next
+.next-a
+.next-b
 next-env.d.ts
 Claude outputs
 .theme-audit

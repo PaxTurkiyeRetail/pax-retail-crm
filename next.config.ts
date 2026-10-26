@@ -1,6 +1,12 @@
 import type { NextConfig } from "next";
+import { existsSync, readFileSync } from 'node:fs';
+
+const savedBuild = existsSync('.next-active') ? readFileSync('.next-active', 'utf8').trim() : '.next';
+const distDir = process.env.NEXT_DIST_DIR || savedBuild;
+if (!['.next', '.next-a', '.next-b'].includes(distDir)) throw new Error('Invalid Next build directory.');
 
 const nextConfig: NextConfig = {
+  distDir,
   experimental: {
     cpus: 2,
     // dynamic sayfalarda client Router Cache kapalı: RBAC yetki değişikliği

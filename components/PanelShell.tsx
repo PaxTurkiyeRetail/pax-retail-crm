@@ -13,6 +13,7 @@ import "@/styles/globals.css";
 import "@/styles/premium-ui.css";
 import "@/styles/premium-enterprise.css";
 import "@/styles/mobile-hardening.css";
+import "@/styles/customers-hero.css";
 
 function roleLabel(role: AllowedRole) {
   if (role === "super_admin") return "Super Admin";

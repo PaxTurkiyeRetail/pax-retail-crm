@@ -1,3 +1,9 @@
+const fs = require('node:fs');
+const path = require('node:path');
+const marker = path.join(__dirname, '.next-active');
+const buildDir = process.env.NEXT_DIST_DIR || (fs.existsSync(marker) ? fs.readFileSync(marker, 'utf8').trim() : '.next');
+if (!['.next', '.next-a', '.next-b'].includes(buildDir)) throw new Error('Invalid Next build directory.');
+
 module.exports = {
   apps: [
     {
@@ -13,6 +19,7 @@ module.exports = {
       time: true,
       env: {
         NODE_ENV: 'production',
+        NEXT_DIST_DIR: buildDir,
       },
     },
   ],

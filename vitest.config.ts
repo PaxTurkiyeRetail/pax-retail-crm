@@ -11,7 +11,7 @@ export default defineConfig({
     environment: 'node',
     include: ['**/*.test.ts'],
     // Claude teslimat klasörü ve harness çıktıları test/derleme kapsamı dışında (tsconfig/eslintignore ile aynı).
-    exclude: ['**/node_modules/**', '**/.next/**', '**/.claude/**', 'Claude outputs/**', '.theme-audit/**'],
+    exclude: ['**/node_modules/**', '**/.next/**', '**/.next-a/**', '**/.next-b/**', '**/.claude/**', 'Claude outputs/**', '.theme-audit/**'],
     passWithNoTests: false,
   },
 });

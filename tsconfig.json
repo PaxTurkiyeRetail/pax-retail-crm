@@ -36,10 +36,14 @@
     "**/*.ts",
     "**/*.tsx",
     "next-env.d.ts",
-    ".next/types/**/*.ts"
+    ".next/types/**/*.ts",
+    ".next-a/types/**/*.ts",
+    ".next-b/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",
+    ".next-a",
+    ".next-b",
     "Claude outputs",
     ".theme-audit"
   ]

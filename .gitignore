@@ -1,5 +1,9 @@
 node_modules/
 .next/
+.next-a/
+.next-b/
+.next-active
+.next-active.tmp
 .env
 .env.local
 .env.*.local

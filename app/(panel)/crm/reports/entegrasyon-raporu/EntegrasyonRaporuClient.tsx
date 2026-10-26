@@ -199,7 +199,7 @@ export default function EntegrasyonRaporuClient() {
               <th style={{ padding: '10px 14px' }}>Firma</th>
               <th style={{ padding: '10px 14px' }}>Model</th>
               <th style={{ padding: '10px 14px' }}>İş Kolu</th>
-              <th style={{ padding: '10px 14px', whiteSpace: 'nowrap', textAlign: 'right' }}>Mevcut Pos Sayısı</th>
+              <th style={{ padding: '10px 40px 10px 14px', whiteSpace: 'nowrap', textAlign: 'right' }}>Mevcut Pos Sayısı</th>
               <th style={{ padding: '10px 14px' }}>Aktif Faz</th>
               <th style={{ padding: '10px 14px' }}>Son Not</th>
             </tr>
@@ -225,7 +225,7 @@ export default function EntegrasyonRaporuClient() {
                   <td style={{ padding: '10px 14px', fontWeight: 600 }}>{row.musteri}</td>
                   <td style={{ padding: '10px 14px' }}>{row.entegrasyonModeli}</td>
                   <td style={{ padding: '10px 14px' }}>{row.isKolu ?? '—'}</td>
-                  <td style={{ padding: '10px 14px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{row.mevcutPosSayisi == null ? '—' : row.mevcutPosSayisi.toLocaleString('tr-TR')}</td>
+                  <td style={{ padding: '10px 40px 10px 14px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{row.mevcutPosSayisi == null ? '—' : row.mevcutPosSayisi.toLocaleString('tr-TR')}</td>
                   <td style={{ padding: '10px 14px', fontWeight: done ? 700 : 400, color: done ? '#15803d' : undefined }}>
                     {row.aktifFazNo != null ? `Faz ${row.aktifFazNo}${row.aktifFazAdi ? ` — ${row.aktifFazAdi}` : ''}` : '—'}
                     {done ? ' ✅' : ''}
