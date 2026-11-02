@@ -131,6 +131,8 @@ describe('POST /api/integrations/portal/events', () => {
 
   it('builds readable notes for every event type', () => {
     expect(portalEventNote({ ...base, type: 'partner.artifact_downloaded', productLine: 'A2A', version: null } as never)).toBe('SDK/paket indirildi · A2A (Portal)');
+    expect(portalEventNote({ ...base, type: 'partner.artifact_downloaded', title: 'PaxManager Entegrasyon Dokümanı' } as never)).toBe('PaxManager Entegrasyon Dokümanı · sürüm 2.4.1 indirildi (Portal)');
+    expect(portalEventNote({ ...base, type: 'partner.artifact_downloaded', title: 'SDK Paketi', version: null, backfill: true } as never)).toBe('[Portal geçmiş aktarımı] SDK Paketi indirildi (Portal)');
     expect(portalEventNote({ ...base, type: 'partner.line_revoked', productLine: 'D2D_DLL', version: null } as never)).toBe('Ürün hattı erişimi kaldırıldı · D2D-DLL (Portal)');
   });
 });

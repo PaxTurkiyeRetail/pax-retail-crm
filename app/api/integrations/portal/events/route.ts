@@ -31,16 +31,22 @@ const EventSchema = z.object({
   crmFirmId: z.guid(),
   productLine: z.enum(['A2A', 'D2D_DLL', 'D2D_JAR']).nullish(),
   version: z.string().trim().max(64).nullish(),
+  title: z.string().trim().max(200).nullish(),
   userEmail: z.email().max(254).nullish(),
   backfill: z.boolean(),
 });
 export type PortalEvent = z.infer<typeof EventSchema>;
 
 export function portalEventNote(event: PortalEvent) {
+  const prefix = event.backfill ? BACKFILL_PREFIX : '';
+  // İndirmede doküman/dosya adı varsa açıkça yazılır: "<ad> · sürüm <v> indirildi".
+  if (event.type === 'partner.artifact_downloaded' && event.title) {
+    return `${prefix}${event.title}${event.version ? ` · sürüm ${event.version}` : ''} indirildi (Portal)`;
+  }
   const parts: string[] = [TYPE_LABELS[event.type]];
   if (event.productLine) parts.push(LINE_LABELS[event.productLine]);
   if (event.version) parts.push(`sürüm ${event.version}`);
-  return `${event.backfill ? BACKFILL_PREFIX : ''}${parts.join(' · ')} (Portal)`;
+  return `${prefix}${parts.join(' · ')} (Portal)`;
 }
 
 function json(body: unknown, status: number) {
@@ -132,7 +138,7 @@ export async function POST(request: Request) {
         event.crmFirmId, expectedPhase, AKSIYON, event.occurredAt, portalEventNote(event),
         JSON.stringify({
           source: 'portal', channel: 'Portal', eventId: event.eventId, type: event.type, occurredAt: event.occurredAt,
-          productLine: event.productLine ?? null, version: event.version ?? null, userEmail: event.userEmail ?? null,
+          productLine: event.productLine ?? null, version: event.version ?? null, title: event.title ?? null, userEmail: event.userEmail ?? null,
           backfill: event.backfill,
         }),
         CREATED_BY,
