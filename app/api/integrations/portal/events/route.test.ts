@@ -30,12 +30,13 @@ function signed(body: unknown, opts: { secret?: string; skew?: number; raw?: str
   const sig = signPortalRequest(opts.secret ?? SECRET, portalSigningText(ts, 'POST', new URL(URL_), raw));
   return new Request(URL_, { method: 'POST', body: raw, headers: { 'content-type': 'application/json', 'x-pax-timestamp': ts, 'x-pax-signature': sig } });
 }
-const happy = (phase: number | null = 7): Step[] => [
-  { match: /for update of m/, rows: [{ integration_enabled: true, phase_no: phase }] },
+const happy = (phase: number | null = 4, firm: Record<string, unknown> = {}): Step[] => [
+  { match: /for update of m/, rows: [{ integration_enabled: true, partner_active: true, phase_no: phase, ...firm }] },
   { match: /insert into public\.portal_event_receipts/, rows: [{ event_id: EVENT }] },
   { match: /insert into public\.pipeline_eventleri/, rows: [{ id: 'pe-1' }] },
-  { match: /select active_phase_no/, rows: phase == null ? [] : [{ phase_no: phase }] },
+  { match: /select active_phase_no/, rows: [{ phase_no: phase || 3 }] },
 ];
+const inserts = () => state.sql.filter((s) => /insert into public\.pipeline_eventleri/.test(s.sql));
 const ran = (re: RegExp) => state.sql.some((s) => re.test(s.sql));
 
 describe('POST /api/integrations/portal/events', () => {
@@ -45,26 +46,40 @@ describe('POST /api/integrations/portal/events', () => {
   it('writes an Entegrasyon Süreci activity that does not affect the phase', async () => {
     const res = await POST(signed(base));
     expect(res.status).toBe(201);
-    expect(await res.json()).toEqual({ pipelineEventId: 'pe-1' });
-    const insert = state.sql.find((s) => /insert into public\.pipeline_eventleri/.test(s.sql))!;
+    expect(await res.json()).toEqual({ pipelineEventId: 'pe-1', partnerRoleOpened: false, integrationEnabled: false, phaseStarted: false });
+    expect(inserts()).toHaveLength(1);
+    expect(ran(/insert into public\.organization_roles|update public\.musteriler/)).toBe(false);
+    const insert = inserts()[0];
     expect(insert.sql).toMatch(/'note_added', 'Tamamlandı'/);
     expect(insert.sql).toMatch(/'account', false, 'business_partner'/);
     expect(insert.sql).toMatch(/at time zone 'Europe\/Istanbul'/);
     const [firm, phase, aksiyon, occurred, note, payload, createdBy] = insert.params!;
-    expect([firm, phase, aksiyon, occurred, createdBy]).toEqual([FIRM, 7, 'AKTIVITE:Entegrasyon Süreci', base.occurredAt, 'PAX Portal']);
+    expect([firm, phase, aksiyon, occurred, createdBy]).toEqual([FIRM, 4, 'AKTIVITE:Entegrasyon Süreci', base.occurredAt, 'PAX Portal']);
     expect(note).toBe('Ürün hattı erişimi verildi · D2D-JAR · sürüm 2.4.1 (Portal)');
     expect(JSON.parse(payload as string)).toMatchObject({ source: 'portal', channel: 'Portal', eventId: EVENT, backfill: false });
     expect(ran(/^commit$/)).toBe(true);
     expect(state.released).toBe(1);
   });
 
-  it('prefixes backfilled events and keeps a null phase when the process has not started', async () => {
-    state.steps = happy(null);
-    const res = await POST(signed({ ...base, type: 'partner.registered', productLine: null, version: null, backfill: true }));
-    expect(res.status).toBe(201);
-    const insert = state.sql.find((s) => /insert into public\.pipeline_eventleri/.test(s.sql))!;
-    expect(insert.params![1]).toBeNull();
-    expect(insert.params![4]).toBe('[Portal geçmiş aktarımı] Portal kaydı oluşturuldu (Portal)');
+  it('opens partner role and capability, starts phase 3 when no phase, then logs a non-phase activity', async () => {
+    for (const phase of [null, 0]) {
+      state.sql = [];
+      state.steps = happy(phase, { integration_enabled: false, partner_active: null });
+      const res = await POST(signed({ ...base, type: 'partner.registered', productLine: null, version: null, backfill: true }));
+      expect(res.status).toBe(201);
+      expect(await res.json()).toEqual({ pipelineEventId: 'pe-1', partnerRoleOpened: true, integrationEnabled: true, phaseStarted: true });
+      const role = state.sql.find((s) => /insert into public\.organization_roles/.test(s.sql))!;
+      expect(role.sql).toMatch(/on conflict \(customer_id, role_key\) do update/);
+      expect(role.params).toEqual([FIRM, 'Entegrasyon Firması']);
+      expect(ran(/update public\.musteriler set integration_enabled = true/)).toBe(true);
+      const [start, activity] = inserts();
+      expect(start.sql).toMatch(/'Devam Ediyor'/);
+      expect(start.sql).toMatch(/'account', true, 'business_partner'/);
+      expect(start.params![1]).toBe(3);
+      expect(activity.sql).toMatch(/'account', false, 'business_partner'/);
+      expect(activity.params![1]).toBe(3);
+      expect(activity.params![4]).toBe('[Portal geçmiş aktarımı] Portal kaydı oluşturuldu (Portal)');
+    }
   });
 
   it('returns duplicate without writing an activity for a repeated eventId', async () => {
@@ -76,17 +91,17 @@ describe('POST /api/integrations/portal/events', () => {
     expect(ran(/^rollback$/)).toBe(true);
   });
 
-  it('returns 404 for unknown or non-partner firms', async () => {
+  it('returns 404 for unknown firms', async () => {
     state.steps = [];
     expect((await POST(signed(base))).status).toBe(404);
     expect(ran(/portal_event_receipts/)).toBe(false);
   });
 
-  it('returns 422 when the firm has no integration capability', async () => {
-    state.steps = [{ match: /for update of m/, rows: [{ integration_enabled: false, phase_no: 3 }] }];
-    const res = await POST(signed(base));
-    expect(res.status).toBe(422);
-    expect(await res.json()).toEqual({ message: 'integration_disabled' });
+  it('does not open role or phase for a duplicate on a new firm', async () => {
+    state.steps = happy(null, { integration_enabled: false, partner_active: false })
+      .map((s) => (/portal_event_receipts/.test(s.match.source) ? { ...s, rows: [] } : s));
+    expect((await POST(signed(base))).status).toBe(200);
+    expect(ran(/insert into public\.organization_roles|update public\.musteriler|pipeline_eventleri/)).toBe(false);
   });
 
   it('rolls back with 409 if the partner phase changed during the write', async () => {

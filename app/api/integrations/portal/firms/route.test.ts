@@ -20,25 +20,26 @@ describe('GET /api/integrations/portal/firms', () => {
     vi.stubEnv('PAX_CRM_SHARED_SECRET', SECRET);
     state.calls = [];
     state.rows = [
-      { id: 'f1', name: 'Ortak A', phase_no: 3, phase_name: 'Test', account_manager: 'Ali', owner_user_id: 'u1', domains: ['ortaka.com'] },
-      { id: 'f2', name: 'Ortak B', phase_no: null, phase_name: null, account_manager: null, owner_user_id: null, domains: null },
+      { id: 'f1', name: 'Ortak A', phase_no: 3, phase_name: 'Test', customer_phase_no: null, customer_phase_name: null, roles: ['business_partner'], integration_enabled: true, account_manager: 'Ali', owner_user_id: 'u1', domains: ['ortaka.com'] },
+      { id: 'f2', name: 'Müşteri B', phase_no: null, phase_name: null, customer_phase_no: 6, customer_phase_name: 'Canlı', roles: null, integration_enabled: false, account_manager: null, owner_user_id: null, domains: null },
     ];
   });
   afterEach(() => vi.unstubAllEnvs());
 
-  it('returns business partners for a valid signature', async () => {
+  it('returns partners and customers with roles and phases for a valid signature', async () => {
     const res = await GET(signed('/api/integrations/portal/firms?q=ortak'));
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ firms: [
-      { id: 'f1', name: 'Ortak A', partnerPhase: { no: 3, name: 'Test' }, accountManager: 'Ali', ownerUserId: 'u1', contactEmailDomains: ['ortaka.com'], city: null },
-      { id: 'f2', name: 'Ortak B', partnerPhase: null, accountManager: null, ownerUserId: null, contactEmailDomains: [], city: null },
+      { id: 'f1', name: 'Ortak A', roles: ['business_partner'], integrationEnabled: true, partnerPhase: { no: 3, name: 'Test' }, customerPhase: null, accountManager: 'Ali', ownerUserId: 'u1', contactEmailDomains: ['ortaka.com'], city: null },
+      { id: 'f2', name: 'Müşteri B', roles: [], integrationEnabled: false, partnerPhase: null, customerPhase: { no: 6, name: 'Canlı' }, accountManager: null, ownerUserId: null, contactEmailDomains: [], city: null },
     ] });
   });
 
-  it('queries only active business_partner roles, read-only, never full emails', async () => {
+  it('queries all firms without a role filter, read-only, never full emails', async () => {
     await GET(signed('/api/integrations/portal/firms'));
     const { sql } = state.calls[0];
-    expect(sql).toMatch(/role_key = 'business_partner' and r\.is_active/);
+    expect(sql).not.toMatch(/\bjoin public\.organization_roles/);
+    expect(sql).toMatch(/context_key = 'customer'/);
     expect(sql).not.toMatch(/\b(insert|update|delete)\b/i);
     expect(sql).not.toMatch(/full_name/);
   });
