@@ -36,6 +36,8 @@ export function middleware(request: NextRequest) {
     pathname === '/api/health' ||
     pathname === '/api/healthz' ||
     pathname === '/api/tv/pair' ||
+    // PAX Portal makine çağrıları: HMAC imzası route içinde doğrulanır (lib/integrations/portal-auth).
+    pathname.startsWith('/api/integrations/portal/') ||
     // TV cihazı: cookie geçerliliği route içinde DB'den doğrulanır (lib/tv-devices).
     (TV_READABLE_APIS.includes(pathname) && Boolean(request.cookies.get('crm_tv')?.value));
   const isPublicPage =
