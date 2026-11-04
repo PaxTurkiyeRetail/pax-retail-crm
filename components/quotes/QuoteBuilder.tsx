@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import ActivitySelect from '@/components/activities/ActivitySelect';
 import { priceLine, sumLineTotals, type SaleType } from '@/lib/quotes/line-pricing';
 
 type Product = {
@@ -155,11 +156,11 @@ export default function QuoteBuilder({ showHero = false }: Props) {
       <div className="pax-card" style={{ display: 'grid', gap: 16 }}>
         <h3 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>📋 Teklif Detayları</h3>
         <div>
-          <label className="pax-label" style={{ display: 'block', marginBottom: 8 }}>Müşteri *</label>
-          <select value={customerId} onChange={(e) => setCustomerId(e.target.value)} className="pax-input" required style={{ width: '100%', minHeight: 48, fontSize: 16 }}>
+          <label htmlFor="quote-customer" className="pax-label" style={{ display: 'block', marginBottom: 8 }}>Müşteri *</label>
+          <ActivitySelect id="quote-customer" label="Müşteri" value={customerId} onValueChange={setCustomerId} className="pax-input" required style={{ width: '100%', minHeight: 48, fontSize: 16 }}>
             <option value="">Müşteri seç...</option>
             {customers.map(c => <option key={c.id} value={c.id}>{c.musteri}</option>)}
-          </select>
+          </ActivitySelect>
           {selectedCustomer && (
             <div style={{ marginTop: 8, fontSize: 13, color: 'var(--text-3)' }}>
               {selectedCustomer.sektor && `${selectedCustomer.sektor} • `}
