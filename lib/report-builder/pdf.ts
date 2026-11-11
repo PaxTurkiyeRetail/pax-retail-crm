@@ -88,6 +88,8 @@ type Ctx = {
   accent: RGB;
   fontSize?: number;
   wordWrap?: boolean;
+  /** İlk sayfadan sonra geçilecek sayfa düzeni (antet yalnız ilk sayfada). */
+  later?: { top: number; bottom: number; decorate: (p: PDFPage) => void };
 };
 
 function fit(font: PDFFont, text: string, size: number, maxW: number): string {
@@ -129,6 +131,7 @@ export function pdfColumnWidths(total:number,weights:(number|undefined)[]) {
 function newPage(c: Ctx) {
   c.page = c.doc.addPage([c.size.w, c.size.h]);
   c.pages.push(c.page);
+  if (c.later && c.pages.length > 1) { c.decorate = c.later.decorate; c.box.top = c.later.top; c.box.bottom = c.later.bottom; }
   c.decorate(c.page);
   c.y = c.box.top;
 }
@@ -158,7 +161,7 @@ function visibleColumns(w: DataWidget, result: ReportResult): Array<ColumnMeta &
   });
 }
 
-function drawTable(c: Ctx, headers: string[], rows: string[][], opts: { numeric: boolean[]; widths?:(number|undefined)[]; align?:('left'|'center'|'right'|undefined)[]; wordWrap?:(boolean|undefined)[]; fill?: (r: number, col: number) => RGB | null; colorText?: (r: number, col: number) => RGB | null; bar?: (r:number,col:number)=>{start:number;width:number;color:RGB}|null; density: string }) {
+function drawTable(c: Ctx, headers: string[], rows: string[][], opts: { numeric: boolean[]; widths?:(number|undefined)[]; align?:('left'|'center'|'right'|undefined)[]; wordWrap?:(boolean|undefined)[]; fill?: (r: number, col: number) => RGB | null; colorText?: (r: number, col: number) => RGB | null; bar?: (r:number,col:number)=>{start:number;width:number;color:RGB}|null; bold?: (r:number)=>boolean; density: string }) {
   const fs = c.fontSize ?? (opts.density === 'compact' ? 7 : opts.density === 'comfortable' ? 9 : 8);
   const lineH=fs*1.25;
   const pad=opts.density==='compact'?3:4;
@@ -201,7 +204,7 @@ function drawTable(c: Ctx, headers: string[], rows: string[][], opts: { numeric:
   ensure(c, headerH+lineH+pad*2);
   header();
   rows.forEach((row, r) => {
-    const fonts=row.map((_,i)=>i===0&&r===rows.length-1&&row[0]==='Toplam'?c.bold:c.regular);
+    const fonts=row.map((_,i)=>opts.bold?.(r)||(i===0&&r===rows.length-1&&row[0]==='Toplam')?c.bold:c.regular);
     const cells=row.map((text,i)=>lines(text,i,fonts[i]));
     const maxLines=Math.max(1,...cells.map(v=>v.length));
     let offset=0;
@@ -228,18 +231,42 @@ function drawTable(c: Ctx, headers: string[], rows: string[][], opts: { numeric:
 function renderFlatTable(c: Ctx, w: DataWidget, result: ReportResult) {
   // Hiç verisi olmayan boyut sütunları (tümü boş) PDF'te yer kaplamasın.
   const empty = (v: unknown) => v === null || v === undefined || String(v).trim() === '' || String(v).trim() === '—';
-  const cols = visibleColumns(w, result).filter((col) => col.role !== 'dimension' || result.rows.length === 0 || !result.rows.every((r) => empty(r[col.key])));
-  const rows = result.rows.map((r) => cols.map((col) => {const rule=resolveConditionalRule(w.style.conditional,col,r[col.key],result.columns,r);return formatCell(col,r[col.key])+(rule?.label?' · '+rule.label:'');}));
-  drawTable(c, cols.map((col) => col.label), rows, {
+  const allCols = visibleColumns(w, result).filter((col) => col.role !== 'dimension' || result.rows.length === 0 || !result.rows.every((r) => empty(r[col.key])));
+  const groupCol = w.pdf.groupBy ? allCols.find((col) => col.key === w.pdf.groupBy || col.sourceField === w.pdf.groupBy) : undefined;
+  const cols = groupCol ? allCols.filter((col) => col !== groupCol) : allCols;
+  const fmtRow = (r: ResultRow) => cols.map((col) => {const rule=resolveConditionalRule(w.style.conditional,col,r[col.key],result.columns,r);return formatCell(col,r[col.key])+(rule?.label?' · '+rule.label:'');});
+  // Gruplu düzen: grup başlığı satırı → kayıtlar → ara toplam. Kaynak satır eşlemesi koşullu renk/bar için tutulur.
+  type Item = { kind: 'group' | 'data' | 'sub'; src?: ResultRow; cells: string[] };
+  const items: Item[] = [];
+  const sumRow = (rows: ResultRow[], label: string): string[] => cols.map((col, i) => {
+    if (i === 0) return label;
+    if (col.type !== 'number' || col.role === 'dimension') return '';
+    return formatCell(col, rows.reduce((a, r) => a + (Number(r[col.key] ?? 0) || 0), 0));
+  });
+  if (groupCol) {
+    const groups = new Map<string, ResultRow[]>();
+    for (const r of result.rows) { const k = formatCell(groupCol, r[groupCol.key]); (groups.get(k) ?? groups.set(k, []).get(k)!).push(r); }
+    for (const [k, rows] of groups) {
+      items.push({ kind: 'group', cells: cols.map((_, i) => i === 0 ? `${k}  ·  ${rows.length} kayıt` : '') });
+      rows.forEach((r) => items.push({ kind: 'data', src: r, cells: fmtRow(r) }));
+      items.push({ kind: 'sub', cells: sumRow(rows, `${k} toplamı`) });
+    }
+    items.push({ kind: 'sub', cells: sumRow(result.rows, 'Genel toplam') });
+  } else result.rows.forEach((r) => items.push({ kind: 'data', src: r, cells: fmtRow(r) }));
+  const GROUP_BG = tint(TOKEN_RGB[w.style.accent ?? 'primary'], .1);
+  const SUB_BG = rgb(0.965, 0.97, 0.975);
+  drawTable(c, cols.map((col) => col.label), items.map((it) => it.cells), {
     numeric: cols.map((col) => col.type === 'number'),
     density: w.style.density,
     widths:cols.map(col=>columnSetting(w,col)?.width),
     align:cols.map(col=>columnSetting(w,col)?.align),
-    wordWrap:cols.map(col=>columnSetting(w,col)?.wordWrap),
-    bar:(r,i)=>{const col=cols[i];if(!columnSetting(w,col)?.dataBar)return null;const extent=dataBarExtent(result.rows.map(row=>row[col.key]),result.rows[r][col.key]);return extent?{...extent,color:TOKEN_RGB[w.style.accent??'primary']}:null;},
-    fill:(r,i)=>{const tok=matchRule(w.style.conditional,cols[i],result.rows[r][cols[i].key],result.columns,result.rows[r]);return tok?tint(TOKEN_RGB[tok],.12):null;},
+    wordWrap:cols.map((col,i)=>groupCol&&i===0?false:columnSetting(w,col)?.wordWrap),
+    bold:(r)=>items[r].kind!=='data',
+    bar:(r,i)=>{const src=items[r].src;const col=cols[i];if(!src||!columnSetting(w,col)?.dataBar)return null;const extent=dataBarExtent(result.rows.map(row=>row[col.key]),src[col.key]);return extent?{...extent,color:TOKEN_RGB[w.style.accent??'primary']}:null;},
+    fill:(r,i)=>{const it=items[r];if(it.kind==='group')return GROUP_BG;if(it.kind==='sub')return SUB_BG;const tok=matchRule(w.style.conditional,cols[i],it.src![cols[i].key],result.columns,it.src!);return tok?tint(TOKEN_RGB[tok],.12):null;},
     colorText: (r, i) => {
-      const tok = matchRule(w.style.conditional, cols[i], result.rows[r][cols[i].key], result.columns,result.rows[r]);
+      const it = items[r]; if (!it.src) return null;
+      const tok = matchRule(w.style.conditional, cols[i], it.src[cols[i].key], result.columns, it.src);
       return tok ? TOKEN_RGB[tok] : null;
     },
   });
@@ -537,6 +564,22 @@ export async function renderPagePdf(input: RenderPdfInput): Promise<Uint8Array> 
     fontSize:input.page.pdf.fontSize,
     wordWrap:input.page.pdf.wordWrap,
   };
+  if (input.letterhead && input.page.pdf.letterheadFirstPageOnly) {
+    // Sonraki sayfalar: antet yok; ince başlık şeridi + standart kenar boşluğu.
+    const top = size.h - 15 * MM - 20;
+    const title = input.page.title;
+    const dateText = input.date.split('-').reverse().join('.');
+    c.later = {
+      top,
+      bottom: 15 * MM + 14,
+      decorate: (p) => {
+        const y = size.h - 15 * MM;
+        p.drawText(fit(bold, title, 9, (box.right - box.left) * 0.7), { x: box.left, y: y - 9, size: 9, font: bold, color: TEXT });
+        p.drawText(dateText, { x: box.right - regular.widthOfTextAtSize(dateText, 7.5), y: y - 8.5, size: 7.5, font: regular, color: MUTED });
+        p.drawLine({ start: { x: box.left, y: y - 14 }, end: { x: box.right, y: y - 14 }, thickness: 0.8, color: c.accent });
+      },
+    };
+  }
   newPage(c);
 
   if (showTitle) {
@@ -561,13 +604,13 @@ export async function renderPagePdf(input: RenderPdfInput): Promise<Uint8Array> 
       default: renderFlatTable(c, w, d.result);
     }
   };
-  const fullH = box.top - box.bottom;
   const ordered = pdfWidgetOrder(input.page);
   for (let i = 0; i < ordered.length; i++) {
     const w = ordered[i];
-    if (w.pdf.pageBreakBefore && c.y < box.top) newPage(c);
+    if (w.pdf.pageBreakBefore && c.y < c.box.top) newPage(c);
     if (w.type === 'text') { if(!(showTitle&&input.page.pdf.hideRepeatedTitle!==false&&w.variant==='heading'&&w.text.trim()===input.page.title.trim()))renderText(c, w); continue; }
     if (!isDataWidget(w)) continue;
+    const fullH = c.box.top - c.box.bottom;
     // Aynı satırdaki (lg.y) yan yana widget'lar PDF'te de yan yana: sütun genişliği 12'lik ızgaradan.
     const row: DataWidget[] = [w];
     for (let j = i + 1; j < ordered.length; j++) {
@@ -590,7 +633,7 @@ export async function renderPagePdf(input: RenderPdfInput): Promise<Uint8Array> 
         renderData(r);
         minY = Math.min(minY, c.page === startPage ? c.y : saved.bottom);
       }
-      c.box = saved; c.page = c.pages[c.pages.length - 1];
+      c.box = { ...saved, top: c.box.top, bottom: c.box.bottom }; c.page = c.pages[c.pages.length - 1];
       c.y = c.page === startPage ? minY : c.y;
       i += row.length - 1;
       continue;
@@ -600,7 +643,7 @@ export async function renderPagePdf(input: RenderPdfInput): Promise<Uint8Array> 
 
   const total = c.pages.length;
   c.pages.forEach((p, i) => {
-    const y = (margins.bottom + safe.bottom) * MM;
+    const y = c.later && i > 0 ? 15 * MM : (margins.bottom + safe.bottom) * MM;
     if (footerText) p.drawText(fit(regular, footerText, 7, (box.right - box.left) * 0.7), { x: box.left, y, size: 7, font: regular, color: MUTED });
     if (showPageNumbers) {
       const t = `${i + 1} / ${total}`;

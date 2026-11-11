@@ -62,6 +62,8 @@ export const widgetStyleSchema = z.object({
 export const pdfOptionsSchema = z.object({
   hideInPdf: z.boolean().default(false),
   pageBreakBefore: z.boolean().default(false),
+  /** Tabloyu PDF'te bu sütuna göre gruplar: grup başlığı + ara toplam, sütun tekrar etmez. */
+  groupBy: z.string().max(80).optional(),
 });
 
 export const DATA_WIDGET_TYPES = ['kpi', 'kpi_strip', 'table', 'pivot', 'bar', 'line', 'pie', 'heatmap'] as const;
@@ -153,6 +155,8 @@ export const pageDefinitionSchema = z.object({
     fontSize: z.number().min(6).max(12).optional(),
     wordWrap: z.boolean().optional(),
     hideRepeatedTitle: z.boolean().optional(),
+    /** Antet yalnız ilk sayfada; sonraki sayfalarda ince başlık şeridi. */
+    letterheadFirstPageOnly: z.boolean().optional(),
     marginsMm: z.object({top:z.number().min(5).max(60),right:z.number().min(5).max(60),bottom:z.number().min(5).max(60),left:z.number().min(5).max(60)}).optional(),
   }).default({}),
 }).superRefine((page, ctx) => {
