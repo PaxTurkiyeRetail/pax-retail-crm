@@ -1,7 +1,7 @@
 'use client';
 // Widget render'ları — saf görünüm katmanı. İleride components/ui ile değiştirilebilir:
 // yalnız bu klasör değişir, veri sözleşmesi (ReportResult / WidgetData) sabit kalır.
-import type { ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import type { ColumnMeta } from '@/lib/report-builder/types';
 import type { ColorToken, PageWidget } from '@/lib/report-builder/page-types';
 import type { WidgetData } from '@/lib/report-builder/pdf';
@@ -14,6 +14,9 @@ export type RecordDrillHandler = (row: Record<string, unknown>, column: ColumnMe
 
 type Style = Extract<PageWidget, { query: unknown }>['style'];
 type NumberFormat = NonNullable<Style['numberFormat']>;
+
+/** Drill-down değeri: global/stüdyo button stillerini (kenarlık, padding, min-height, kalın font) sıfırlar; metin gibi görünür. */
+const DRILL_BTN = 'inline! min-h-0! cursor-pointer rounded-none! border-0! bg-transparent! p-0! font-[inherit]! text-inherit! shadow-none! underline decoration-dotted decoration-[var(--muted)] underline-offset-4 hover:text-[var(--accent)]! hover:translate-y-0!';
 
 const compact = new Intl.NumberFormat('tr-TR', { notation: 'compact', maximumFractionDigits: 1 });
 
@@ -48,7 +51,7 @@ export function KpiStrip({ result, style, onDrill }: { result: ReportResult; sty
         return (
           <div key={col.key} className="rounded-lg border p-3" style={{ borderColor: 'var(--border)', borderTop: `3px solid ${TOKEN_CSS[rc ?? style?.accent ?? 'primary']}` }}>
             <div className="text-xs text-[var(--muted)]">{col.label}</div>
-            <div className="mt-1 text-xl font-semibold tabular-nums">{onDrill ? <button type="button" className="cursor-pointer underline decoration-dotted underline-offset-4" title="Katkıda bulunan kayıtlar" onClick={() => onDrill(row, col)}>{fmt(col, v, format)}</button> : fmt(col, v, format)}</div>
+            <div className="mt-1 text-xl font-semibold tabular-nums">{onDrill ? <button type="button" className={DRILL_BTN} title="Katkıda bulunan kayıtlar" onClick={() => onDrill(row, col)}>{fmt(col, v, format)}</button> : fmt(col, v, format)}</div>
             {matched?.label&&<div className="mt-1 text-xs font-medium">{matched.label}</div>}
             {delta !== null && (
               <div className="mt-0.5 text-xs tabular-nums" style={{ color: TOKEN_CSS[delta >= 0 ? 'success' : 'danger'] }}>
@@ -64,18 +67,67 @@ export function KpiStrip({ result, style, onDrill }: { result: ReportResult; sty
   );
 }
 
+const TOOL_BTN = 'inline-flex! h-7! min-h-7! items-center! gap-1 rounded-md! border! border-[var(--border)]! bg-[var(--surface)]! px-2.5! py-0! text-[12px]! font-medium! leading-none! shadow-none! hover:translate-y-0! hover:bg-[var(--surface-2)]!';
+
 export function DataTableView({ result, style, onDrill }: { result: ReportResult; style?: Style; onDrill?: RecordDrillHandler }) {
   const cols = visibleColumns(result, style);
   const pad = DENSITY_PAD[style?.density ?? 'normal'];
+  const [fit, setFit] = useState(true);
+  const [widths, setWidths] = useState<Record<string, number>>({});
+  const [sort, setSort] = useState<{ key: string; dir: 1 | -1 } | null>(null);
+  const [q, setQ] = useState('');
+  const rows = useMemo(() => {
+    const needle = q.trim().toLocaleLowerCase('tr');
+    let out = needle ? result.rows.filter((r) => cols.some(({ col }) => String(r[col.key] ?? '').toLocaleLowerCase('tr').includes(needle))) : result.rows;
+    if (sort) {
+      const { key, dir } = sort;
+      out = [...out].sort((a, b) => {
+        const x = a[key], y = b[key];
+        if (typeof x === 'number' && typeof y === 'number') return (x - y) * dir;
+        return String(x ?? '').localeCompare(String(y ?? ''), 'tr', { numeric: true }) * dir;
+      });
+    }
+    return out;
+  }, [result.rows, q, sort, cols]);
+  const startResize = (key: string, e: React.PointerEvent) => {
+    e.preventDefault(); e.stopPropagation();
+    const th = (e.currentTarget as HTMLElement).parentElement as HTMLElement;
+    const startX = e.clientX, startW = th.getBoundingClientRect().width;
+    const move = (ev: PointerEvent) => setWidths((w) => ({ ...w, [key]: Math.max(60, Math.round(startW + ev.clientX - startX)) }));
+    const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
+    window.addEventListener('pointermove', move); window.addEventListener('pointerup', up);
+  };
   if (!result.rows.length) return <p className="pax-empty text-sm">Kayıt yok</p>;
+  const customWidth = Object.keys(widths).length > 0;
   return (
-    <div className="h-full overflow-auto">
-      <table className="pax-table w-full">
-        <thead className="sticky top-0" style={{ background: 'var(--surface)' }}>
-          <tr>{cols.map(({ col }) => <th key={col.key} scope="col" className={`${pad} ${col.role !== 'dimension' ? 'text-right' : 'text-left'}`}>{col.label}</th>)}</tr>
+    <div className="flex h-full min-h-0 flex-col gap-2">
+      <div className="flex flex-wrap items-center gap-2 text-[12px] text-[var(--muted)]">
+        <span className="font-medium tabular-nums">{rows.length.toLocaleString('tr-TR')}{rows.length !== result.rows.length ? ` / ${result.rows.length.toLocaleString('tr-TR')}` : ''} satır</span>
+        <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Tabloda ara…" aria-label="Tabloda ara" className="h-7! min-h-7! w-48 rounded-md! border border-[var(--border)] bg-[var(--surface)] px-2.5! text-[12px]! text-[var(--text)]" />
+        <div className="ml-auto flex items-center gap-1.5">
+          <button type="button" className={TOOL_BTN} aria-pressed={fit} onClick={() => { setFit(true); setWidths({}); }} title="Tüm sütunları ekran genişliğine sığdır (metin kayar)">⇔ Tam sığdır</button>
+          <button type="button" className={TOOL_BTN} aria-pressed={!fit} onClick={() => setFit(false)} title="Sütunlar içeriği kadar genişler; yatay kaydırma">↔ Doğal genişlik</button>
+          {(customWidth || sort) && <button type="button" className={TOOL_BTN} onClick={() => { setWidths({}); setSort(null); }}>Sıfırla</button>}
+        </div>
+      </div>
+      <div className="min-h-0 flex-1 overflow-auto rounded-lg border border-[var(--border)] [scrollbar-color:var(--muted)_transparent] [scrollbar-gutter:stable] [scrollbar-width:auto]">
+      <table className="pax-table" style={{ width: fit && !customWidth ? '100%' : 'max-content', minWidth: '100%', tableLayout: fit || customWidth ? 'fixed' : 'auto' }}>
+        <thead className="sticky top-0 z-[1] shadow-[0_1px_0_var(--border)]" style={{ background: 'var(--surface)' }}>
+          <tr>{cols.map(({ col }) => {
+            const active = sort?.key === col.key;
+            return (
+              <th key={col.key} scope="col" aria-sort={active ? (sort!.dir === 1 ? 'ascending' : 'descending') : 'none'} style={widths[col.key] ? { width: widths[col.key] } : undefined}
+                className={`${pad} relative cursor-pointer select-none whitespace-normal break-words ${col.role !== 'dimension' ? 'text-right' : 'text-left'}`}
+                onClick={() => setSort((s) => (s?.key === col.key ? (s.dir === 1 ? { key: col.key, dir: -1 } : null) : { key: col.key, dir: 1 }))}>
+                {col.label}<span aria-hidden className="ml-1 text-[10px] opacity-60">{active ? (sort!.dir === 1 ? '▲' : '▼') : ''}</span>
+                <span role="separator" aria-orientation="vertical" aria-label={`${col.label} genişliğini ayarla`} onPointerDown={(e) => startResize(col.key, e)} onClick={(e) => e.stopPropagation()} onDoubleClick={(e) => { e.stopPropagation(); setWidths((w) => { const n = { ...w }; delete n[col.key]; return n; }); }}
+                  className="absolute top-0 right-0 h-full w-2 cursor-col-resize border-r-2 border-transparent hover:border-[var(--accent)]" />
+              </th>
+            );
+          })}</tr>
         </thead>
         <tbody>
-          {result.rows.map((r, i) => (
+          {rows.map((r, i) => (
             <tr key={i}>
               {cols.map(({ col, format }) => {
                 const matched=resolveConditionalRule(style?.conditional??[],col,r[col.key],result.columns,r);const rc=matched?.color;
@@ -83,8 +135,8 @@ export function DataTableView({ result, style, onDrill }: { result: ReportResult
                 const barColor=TOKEN_SOFT[rc??style?.accent??'primary'];
                 const backgroundImage=bar?`linear-gradient(to right, transparent ${bar.start*100}%, ${barColor} ${bar.start*100}%, ${barColor} ${(bar.start+bar.width)*100}%, transparent ${(bar.start+bar.width)*100}%)`:undefined;
                 return (
-                  <td key={col.key} className={`${pad} ${col.role !== 'dimension' ? 'text-right tabular-nums' : ''}`} style={{...(rc?{backgroundColor:TOKEN_SOFT[rc],color:TOKEN_CSS[rc],fontWeight:600}:{}),backgroundImage}}>
-                    {onDrill && col.role !== 'dimension' && !col.key.endsWith(PREV_SUFFIX) ? <button type="button" className="cursor-pointer underline decoration-dotted underline-offset-4" title="Katkıda bulunan kayıtlar" onClick={() => onDrill(r, col)}>{fmt(col, r[col.key], format)}</button> : fmt(col, r[col.key], format)}{matched?.label&&<span className="ml-2 inline-block text-[10px] font-medium">{matched.label}</span>}
+                  <td key={col.key} className={`${pad} ${fit || customWidth ? 'break-words whitespace-normal' : 'whitespace-nowrap'} ${col.role !== 'dimension' ? 'text-right tabular-nums' : ''}`} style={{...(rc?{backgroundColor:TOKEN_SOFT[rc],color:TOKEN_CSS[rc],fontWeight:600}:{}),backgroundImage}}>
+                    {onDrill && col.role !== 'dimension' && !col.key.endsWith(PREV_SUFFIX) ? <button type="button" className={DRILL_BTN} title="Katkıda bulunan kayıtlar" onClick={() => onDrill(r, col)}>{fmt(col, r[col.key], format)}</button> : fmt(col, r[col.key], format)}{matched?.label&&<span className="ml-2 inline-block text-[10px] font-medium">{matched.label}</span>}
                   </td>
                 );
               })}
@@ -92,7 +144,8 @@ export function DataTableView({ result, style, onDrill }: { result: ReportResult
           ))}
         </tbody>
       </table>
-      {result.truncated && <p className="mt-1 text-xs text-[var(--muted)]">Satır limiti nedeniyle kesildi.</p>}
+      </div>
+      {result.truncated && <p className="text-xs text-[var(--muted)]">Satır limiti nedeniyle kesildi.</p>}
     </div>
   );
 }
@@ -151,7 +204,7 @@ export function PivotView({ result, forecast, pivotColumn, heat, style, onDrill 
                   }
                   return (
                     <td key={cv} className={`${pad} text-right tabular-nums`} style={{ background: color ? TOKEN_SOFT[color] : bg, fontStyle: isForecast ? 'italic' : undefined }} title={isForecast ? 'Tahmin' : undefined}>
-                      {drillRow && onDrill ? <button type="button" className="cursor-pointer underline decoration-dotted underline-offset-4" title="Katkıda bulunan kayıtlar" onClick={() => onDrill(drillRow, measure)}>{fmt(measure, v, style?.numberFormat)}</button> : v === null ? '' : fmt(measure, v, style?.numberFormat)}{isForecast && <span className="sr-only"> (tahmin)</span>}{matched?.label&&<span className="ml-2 text-[10px]">{matched.label}</span>}
+                      {drillRow && onDrill ? <button type="button" className={DRILL_BTN} title="Katkıda bulunan kayıtlar" onClick={() => onDrill(drillRow, measure)}>{fmt(measure, v, style?.numberFormat)}</button> : v === null ? '' : fmt(measure, v, style?.numberFormat)}{isForecast && <span className="sr-only"> (tahmin)</span>}{matched?.label&&<span className="ml-2 text-[10px]">{matched.label}</span>}
                     </td>
                   );
                 })}

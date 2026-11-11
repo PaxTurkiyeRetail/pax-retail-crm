@@ -272,6 +272,13 @@ const CUSTOMER_PORTFOLIO: DatasetDef = {
     left join public.musteri_pipeline mp on mp.musteri_id = m.id
     left join lateral (select ft.asama_adi from public.faz_tanimlari ft where ft.faz_no = mp.aktif_faz_no limit 1) ft on true
     left join lateral (
+      -- Satıcı departmanı: admin/users ekranında kullanıcıya atanan departmanlar (sorumlu ↔ ad / e-posta).
+      select string_agg(distinct d, ', ' order by d) as owner_departments
+      from public.allowed_users au cross join lateral unnest(au.departments) d
+      where nullif(trim(m.sorumlu), '') is not null
+        and lower(trim(m.sorumlu)) in (lower(trim(coalesce(au.full_name, ''))), lower(trim(au.email)), lower(split_part(trim(au.email), '@', 1)))
+    ) od on true
+    left join lateral (
       select count(*) as quote_count from public.quotes q0 where q0.customer_id = m.id
     ) qc on true
     left join lateral (
@@ -307,9 +314,10 @@ const CUSTOMER_PORTFOLIO: DatasetDef = {
     phase_name: { label: 'Aktif faz', sql: `coalesce(ft.asama_adi, 'Fazsız')`, type: 'string', group: 'Faz' },
     has_quote: { label: 'Teklif var mı', sql: `case when qc.quote_count > 0 then 'Teklif var' else 'Teklif yok' end`, type: 'string', group: 'Teklif', options: ['Teklif var', 'Teklif yok'], description: 'Firmanın herhangi bir teklifi var mı.' },
     last_quote_no: { label: 'Son teklif no', sql: `coalesce(lq.quote_no, '—')`, type: 'string', group: 'Teklif', description: 'Firmanın en son teklifinin numarası.' },
-    last_quote_status: { label: 'Son teklif durumu', sql: `case when lq.status is null then '—' when lq.status = 'closed' then 'closed/' || coalesce(lq.closed_reason, '—') else lq.status end`, type: 'string', group: 'Teklif', description: 'draft / sent / closed/won|lost|expired|no_interest.' },
+    last_quote_status: { label: 'Son teklif durumu', sql: `case when lq.status is null then '—' when lq.status = 'draft' then 'Taslak' when lq.status = 'sent' then 'Gönderildi' when lq.status = 'closed' then case lq.closed_reason when 'won' then 'Kazanıldı' when 'lost' then 'Kaybedildi' when 'expired' then 'Süresi doldu' when 'no_interest' then 'İlgilenmiyor' else 'Kapandı' end else lq.status end`, type: 'string', group: 'Teklif', options: ['Taslak', 'Gönderildi', 'Kazanıldı', 'Kaybedildi', 'Süresi doldu', 'İlgilenmiyor', 'Kapandı', '—'], description: 'Taslak / Gönderildi / Kazanıldı / Kaybedildi / Süresi doldu / İlgilenmiyor.' },
     last_quote_date: { label: 'Son teklif tarihi', sql: 'lq.proposal_date', type: 'date', grains: ALL_GRAINS, group: 'Teklif', description: 'En son teklifin tarihi; teklif yoksa boş.' },
     poc_status: { label: 'POC durumu', sql: `case mp.aktif_faz_no when 11 then 'Konsinye' when 12 then 'Pilot / POC' when 13 then 'Uçtan Uca Test' else case when mp.aktif_faz_no > 13 then 'POC sonrası' else 'POC yok' end end`, type: 'string', group: 'POC', options: ['Konsinye', 'Pilot / POC', 'Uçtan Uca Test', 'POC sonrası', 'POC yok'], description: 'Faz 11 Konsinye, 12 Pilot / POC, 13 Uçtan Uca Test; daha ileri fazda "POC sonrası"; aksi halde "POC yok".' },
+    owner_department: { label: 'Satıcı departmanı', sql: `coalesce(od.owner_departments, 'Atanmamış')`, type: 'string', group: 'Müşteri', description: 'Admin › Kullanıcılar ekranında satıcıya atanan departman(lar). Birden fazlaysa virgülle; Retail satıcıları için "içerir: Retail" filtresi kullanın.' },
     rental_period: { label: 'Kiralama dönemi', sql: `case when ix.rental_start is null then '—' else to_char(ix.rental_start, 'DD.MM.YYYY') || ' – ' || coalesce(to_char(ix.rental_end, 'DD.MM.YYYY'), '…') end`, type: 'string', group: 'Satış', description: 'Aktif kiralama kalemlerinin en erken başlangıcı – en geç bitişi.' },
     sale_kind: { label: 'Kiralama / Satış', sql: `case when coalesce(sx.has_sale, false) and coalesce(sx.has_rental, false) then 'Satış + Kiralama' when sx.has_rental then 'Kiralama' when sx.has_sale then 'Satış' else 'Yok' end`, type: 'string', group: 'Satış', options: ['Satış', 'Kiralama', 'Satış + Kiralama', 'Yok'], description: 'Aktif satış kayıtlarına göre; karma kayıt iki türü de sayar.' },
   },
