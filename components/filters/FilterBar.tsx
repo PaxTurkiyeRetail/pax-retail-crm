@@ -233,27 +233,43 @@ function FilterBody({ api, config, allowedDepartments, actions, extraFields, sho
         {has('period') && (
           <div className="col-span-full flex min-w-0 flex-col gap-1">
             <span className="text-[11px] font-medium tracking-wide text-text-3 uppercase">{label('period')}</span>
-            <div role="radiogroup" aria-label={label('period')} className="flex flex-wrap gap-1.5">
-              {PERIOD_CHIPS.map((p) => {
-                const active = (values.period ?? config.defaults?.period ?? 'this_week') === p;
-                return (
-                  <button
-                    key={p}
-                    type="button"
-                    role="radio"
-                    aria-checked={active}
-                    onClick={() => set({ period: p })}
-                    className={cn(
-                      // Global `.pax-main-inner button` kuralları (850 kalınlık, 42px min-height) ezmesin diye !important.
-                      'h-8! min-h-8! cursor-pointer rounded-lg! border border-solid px-3! text-[13px]! leading-none! font-medium! whitespace-nowrap transition-colors',
-                      active ? 'border-accent bg-accent text-white' : 'border-border bg-surface text-text-2 hover:border-accent/40 hover:bg-accent-soft hover:text-accent',
-                    )}
-                  >
-                    {PERIOD_CHIP_LABELS[p] ?? PERIOD_LABELS[p]}
-                  </button>
-                );
-              })}
-              {period && <span className="self-center pl-1 text-sm text-text-3">{period.label}</span>}
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              {/* Segmented control: tek kapsül, seçili dilim yükseltilmiş kart. */}
+              <div
+                role="radiogroup"
+                aria-label={label('period')}
+                className="inline-flex max-w-full gap-0.5 overflow-x-auto rounded-xl border border-solid border-border bg-surface-2 p-1 [scrollbar-width:none]"
+              >
+                {PERIOD_CHIPS.map((p) => {
+                  const active = (values.period ?? config.defaults?.period ?? 'this_week') === p;
+                  return (
+                    <button
+                      key={p}
+                      type="button"
+                      role="radio"
+                      aria-checked={active}
+                      onClick={() => set({ period: p })}
+                      className={cn(
+                        // Global `.pax-main-inner button` kuralları (850 kalınlık, 42px min-height) ezmesin diye !important.
+                        'h-8! min-h-8! shrink-0 cursor-pointer rounded-lg! border-0! px-3.5! text-[13px]! leading-none! whitespace-nowrap transition-all duration-150',
+                        active
+                          ? 'bg-surface! font-semibold! text-accent! shadow-[0_1px_2px_rgba(15,23,42,.08),0_2px_8px_rgba(15,23,42,.06)]!'
+                          : 'bg-transparent! font-medium! text-text-3! hover:bg-surface/60! hover:text-text!',
+                      )}
+                    >
+                      {PERIOD_CHIP_LABELS[p] ?? PERIOD_LABELS[p]}
+                    </button>
+                  );
+                })}
+              </div>
+              {period && (
+                <span className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-accent-soft px-3 text-[13px] font-semibold text-accent">
+                  <svg aria-hidden viewBox="0 0 24 24" className="size-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" />
+                  </svg>
+                  {period.label}
+                </span>
+              )}
             </div>
           </div>
         )}
