@@ -419,7 +419,7 @@ function renderText(c: Ctx, w: Extract<PageWidget, { type: 'text' }>) {
   const font = w.variant === 'heading' ? c.bold : c.regular;
   const lines = wrap(font, w.text || w.title, size, width(c));
   // Bölüm başlığı sayfa dibinde yalnız kalmasın.
-  if (w.variant === 'heading') ensure(c, size + 110);
+  if (w.variant === 'heading') ensure(c, size + 200);
   for (const line of lines) {
     ensure(c, size + 4);
     c.page.drawText(line, { x: c.box.left, y: c.y - size, size, font, color: w.variant === 'note' ? MUTED : TEXT });
