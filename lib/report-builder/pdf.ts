@@ -335,44 +335,78 @@ function chartSeries(result: ReportResult) {
   return { measure, points };
 }
 
+/** Eksen üst sınırını okunur bir değere yuvarlar (1, 2, 2.5, 5 × 10^n). */
+function niceMax(v: number) {
+  if (v <= 0) return 1;
+  const p = Math.pow(10, Math.floor(Math.log10(v)));
+  for (const m of [1, 2, 2.5, 5, 10]) if (m * p >= v) return m * p;
+  return 10 * p;
+}
+
+/** Çok serili (gruplu) bar/çizgi: lejant, değer etiketleri, yuvarlanmış eksen. */
 function renderBarLine(c: Ctx, w: DataWidget, result: ReportResult) {
-  const s = chartSeries(result);
-  if (!s || !s.points.length) return note(c, 'Veri yok');
+  const dim = result.columns.find((col) => col.role === 'dimension');
+  const measures = visibleColumns(w, result).filter((col) => col.role !== 'dimension').slice(0, 4);
+  const rows = result.rows.slice(0, 40);
+  if (!measures.length || !rows.length) return note(c, 'Veri yok');
   const H = 170;
   ensure(c, H + 10);
-  const left = c.box.left + 40;
-  const W = c.box.right - left;
   const top = c.y;
-  const base = c.y - H + 22;
-  const plotH = H - 30;
-  const max = Math.max(...s.points.map((p) => p.value), 0) || 1;
-  const min = Math.min(...s.points.map((p) => p.value), 0);
+  const palette = measures.map((_, i) => i === 0 ? (w.style.accent ? TOKEN_RGB[w.style.accent] : c.accent) : TOKEN_RGB[PIE_TOKENS[(i + 1) % PIE_TOKENS.length]]);
+  // Lejant
+  let lx = c.box.left;
+  measures.forEach((m, i) => {
+    c.page.drawRectangle({ x: lx, y: top - 8, width: 7, height: 7, color: palette[i] });
+    c.page.drawText(m.label, { x: lx + 10, y: top - 7.5, size: 7, font: c.regular, color: TEXT });
+    lx += 22 + c.regular.widthOfTextAtSize(m.label, 7);
+  });
+  const vals = rows.flatMap((r) => measures.map((m) => Number(r[m.key] ?? 0) || 0));
+  const max = niceMax(Math.max(...vals, 0));
+  const min = Math.min(...vals, 0) < 0 ? -niceMax(-Math.min(...vals)) : 0;
   const span = max - min || 1;
+  const axisW = 34;
+  const left = c.box.left + axisW;
+  const W = c.box.right - left;
+  const base = top - H + 20;
+  const plotH = H - 40;
   const yOf = (v: number) => base + ((v - min) / span) * plotH;
   for (let i = 0; i <= 4; i++) {
     const v = min + (span * i) / 4;
     const y = yOf(v);
-    c.page.drawLine({ start: { x: left, y }, end: { x: c.box.right, y }, thickness: 0.3, color: LINE });
-    const t = formatCell(s.measure, Math.round(v));
-    c.page.drawText(fit(c.regular, t, 6, 36), { x: c.box.left, y: y - 2, size: 6, font: c.regular, color: MUTED });
+    c.page.drawLine({ start: { x: left, y }, end: { x: c.box.right, y }, thickness: i === 0 ? 0.6 : 0.25, color: LINE, dashArray: i === 0 ? undefined : [2, 2] });
+    const t = formatCell(measures[0], Math.round(v));
+    c.page.drawText(fit(c.regular, t, 6, axisW - 4), { x: left - 4 - c.regular.widthOfTextAtSize(fit(c.regular, t, 6, axisW - 4), 6), y: y - 2, size: 6, font: c.regular, color: MUTED });
   }
-  const color = w.style.accent ? TOKEN_RGB[w.style.accent] : c.accent;
-  const step = W / s.points.length;
-  const labelEvery = Math.max(1, Math.ceil(s.points.length / 14));
-  s.points.forEach((p, i) => {
+  const step = W / rows.length;
+  const labelEvery = Math.max(1, Math.ceil(rows.length / 14));
+  const showValues = rows.length * measures.length <= 40;
+  const groupW = Math.min(step * 0.7, 34 * measures.length);
+  const bw = groupW / measures.length;
+  rows.forEach((r, i) => {
     const cx = left + step * i + step / 2;
-    if (w.type === 'bar') {
-      const bw = Math.max(2, Math.min(step * 0.62, 36));
-      const y0 = yOf(Math.max(0, min));
-      c.page.drawRectangle({ x: cx - bw / 2, y: Math.min(y0, yOf(p.value)), width: bw, height: Math.abs(yOf(p.value) - y0), color });
-    } else if (i > 0) {
-      const prev = s.points[i - 1];
-      c.page.drawLine({ start: { x: cx - step, y: yOf(prev.value) }, end: { x: cx, y: yOf(p.value) }, thickness: 1.4, color });
-    }
-    if (w.type === 'line') c.page.drawCircle({ x: cx, y: yOf(p.value), size: 1.8, color });
+    measures.forEach((m, k) => {
+      const v = Number(r[m.key] ?? 0) || 0;
+      if (w.type === 'bar') {
+        const x = cx - groupW / 2 + k * bw;
+        const y0 = yOf(0);
+        c.page.drawRectangle({ x: x + 0.6, y: Math.min(y0, yOf(v)), width: Math.max(1, bw - 1.2), height: Math.abs(yOf(v) - y0), color: palette[k] });
+        if (showValues) {
+          const t = formatCell(m, v);
+          const tw = c.bold.widthOfTextAtSize(t, 6);
+          if (tw <= bw + 8) c.page.drawText(t, { x: x + bw / 2 - tw / 2, y: Math.max(y0, yOf(v)) + 2.5, size: 6, font: c.bold, color: TEXT });
+        }
+      } else {
+        if (i > 0) {
+          const pv = Number(rows[i - 1][m.key] ?? 0) || 0;
+          c.page.drawLine({ start: { x: cx - step, y: yOf(pv) }, end: { x: cx, y: yOf(v) }, thickness: 1.4, color: palette[k] });
+        }
+        c.page.drawCircle({ x: cx, y: yOf(v), size: 1.8, color: palette[k] });
+      }
+    });
     if (i % labelEvery === 0) {
-      const t = fit(c.regular, p.label, 6, step * labelEvery - 2);
-      c.page.drawText(t, { x: cx - c.regular.widthOfTextAtSize(t, 6) / 2, y: base - 12, size: 6, font: c.regular, color: MUTED });
+      const label = dim ? formatCell(dim, r[dim.key]) : '';
+      const t = fit(c.regular, label, 6.5, step * labelEvery - 2);
+      c.page.drawText(t, { x: cx - c.regular.widthOfTextAtSize(t, 6.5) / 2, y: base - 11, size: 6.5, font: c.regular, color: TEXT });
     }
   });
   c.y = top - H - 6;
@@ -404,6 +438,12 @@ function renderPie(c: Ctx, w: DataWidget, result: ReportResult) {
     c.page.drawSvgPath(d, { x: cx, y: cy, color: TOKEN_RGB[PIE_TOKENS[i % PIE_TOKENS.length]], borderColor: rgb(1, 1, 1), borderWidth: 0.8 });
     a0 = a1;
   });
+  // Donut: ortada toplam
+  c.page.drawCircle({ x: cx, y: cy, size: r * 0.58, color: rgb(1, 1, 1) });
+  const tot = formatCell(s.measure, total);
+  const ts = Math.min(14, r * 0.32);
+  c.page.drawText(tot, { x: cx - c.bold.widthOfTextAtSize(tot, ts) / 2, y: cy - ts / 3 + 3, size: ts, font: c.bold, color: TEXT });
+  c.page.drawText('Toplam', { x: cx - c.regular.widthOfTextAtSize('Toplam', 6) / 2, y: cy - ts / 3 - 7, size: 6, font: c.regular, color: MUTED });
   const lx = cx + r + 24;
   pts.forEach((p, i) => {
     const y = c.y - 14 - i * 11;
