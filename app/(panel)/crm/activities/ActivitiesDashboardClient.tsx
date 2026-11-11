@@ -7,7 +7,7 @@ import { getSlaPresentation, getSlaState } from '@/lib/sla';
 import { formatDate, toLocalDateInputValue } from '@/lib/utils';
 import ActivitiesDashboard from '@/components/activities/ActivitiesDashboard';
 import { useConfiguredPageSize } from '@/components/hooks/useConfiguredPageSize';
-import { FilterBar, ScopeLabel } from '@/components/filters/FilterBar';
+import { FilterBar, FilterSelectField, ScopeLabel } from '@/components/filters/FilterBar';
 import { useUrlFilters } from '@/lib/filters/use-url-filters';
 import { resolvePeriod } from '@/lib/filters/period';
 import type { FilterOption, PageFilterConfig } from '@/lib/filters/schema';
@@ -506,23 +506,17 @@ export default function ActivitiesPage({ ownerOptions, allowedDepartments }: { o
           config={filterConfig}
           allowedDepartments={allowedDepartments}
           showScope={false}
-          actions={(
+          extraFields={(
             <>
-              <label className="command-select-wrap">
-                <span className="command-label">SLA / risk</span>
-                <select className="command-select" value={sla} onChange={(e) => setSla(e.target.value)}>
-                  <option value="">Tüm SLA</option>
-                  {SLA_OPTIONS.filter(Boolean).map((v) => <option key={v} value={v}>{SLA_LABELS[v]}</option>)}
-                </select>
-              </label>
-              <label className="command-select-wrap">
-                <span className="command-label">Blokaj</span>
-                <select className="command-select" value={blockedFilter} onChange={(e) => setBlockedFilter(e.target.value)}>
-                  <option value="">Tümü</option>
-                  <option value="blocked">Sadece blokajlı</option>
-                  <option value="unblocked">Sadece blokajsız</option>
-                </select>
-              </label>
+              <FilterSelectField label="SLA / risk" value={sla} onChange={setSla}>
+                <option value="">Tümü</option>
+                {SLA_OPTIONS.filter(Boolean).map((v) => <option key={v} value={v}>{SLA_LABELS[v]}</option>)}
+              </FilterSelectField>
+              <FilterSelectField label="Blokaj" value={blockedFilter} onChange={setBlockedFilter}>
+                <option value="">Tümü</option>
+                <option value="blocked">Sadece blokajlı</option>
+                <option value="unblocked">Sadece blokajsız</option>
+              </FilterSelectField>
             </>
           )}
         />

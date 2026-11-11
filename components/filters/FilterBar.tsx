@@ -25,6 +25,8 @@ type CommonProps = {
   allowedDepartments?: Department[] | null;
   /** Kapsam satırının sağına ek içerik (ör. dışa aktar). */
   actions?: ReactNode;
+  /** Sayfaya özel ek alanlar (FilterField ile) — standart alanlarla aynı gridde gösterilir. */
+  extraFields?: ReactNode;
   /** false → kapsam satırı gizli. */
   showScope?: boolean;
 };
@@ -46,12 +48,21 @@ export function FilterBar(props: CommonProps & ({ mode?: 'auto' } | { mode: 'for
   return <AutoFilterBar {...props} />;
 }
 
-function AutoFilterBar({ config, allowedDepartments, actions, showScope = true }: CommonProps) {
+function AutoFilterBar({ config, allowedDepartments, actions, extraFields, showScope = true }: CommonProps) {
   const api = useUrlFilters(config, { allowedDepartments });
-  return <FilterBody api={api} config={config} allowedDepartments={allowedDepartments} actions={actions} showScope={showScope} auto />;
+  return <FilterBody api={api} config={config} allowedDepartments={allowedDepartments} actions={actions} extraFields={extraFields} showScope={showScope} auto />;
 }
 
-function FormFilterBar({ config, allowedDepartments, actions, showScope = true, values, action }: CommonProps & { values: FilterValues; action?: string }) {
+/** Sayfaya özel select için standart görünümlü alan. */
+export function FilterSelectField({ label, value, onChange, children }: { label: string; value: string; onChange: (v: string) => void; children: ReactNode }) {
+  return (
+    <StackField label={label}>
+      <Select className={cn(ctl, 'min-w-36')} value={value} onChange={(e) => onChange(e.target.value)}>{children}</Select>
+    </StackField>
+  );
+}
+
+function FormFilterBar({ config, allowedDepartments, actions, extraFields, showScope = true, values, action }: CommonProps & { values: FilterValues; action?: string }) {
   const [draft, setDraft] = useState<FilterValues>(values);
   useEffect(() => setDraft(values), [values]);
   const api: Api = {
@@ -72,7 +83,7 @@ function FormFilterBar({ config, allowedDepartments, actions, showScope = true, 
         const v = draft[k];
         return v && config.defaults?.[k] !== v ? <input key={k} type="hidden" name={k} value={v} /> : null;
       })}
-      <FilterBody api={api} config={config} allowedDepartments={allowedDepartments} actions={actions} showScope={showScope} auto={false} />
+      <FilterBody api={api} config={config} allowedDepartments={allowedDepartments} actions={actions} extraFields={extraFields} showScope={showScope} auto={false} />
     </form>
   );
 }
@@ -121,8 +132,8 @@ function SearchInput({ value, onChange, auto, label }: { value: string; onChange
   );
 }
 
-function FilterBody({ api, config, allowedDepartments, actions, showScope, auto }: {
-  api: Api; config: PageFilterConfig; allowedDepartments?: Department[] | null; actions?: ReactNode; showScope: boolean; auto: boolean;
+function FilterBody({ api, config, allowedDepartments, actions, extraFields, showScope, auto }: {
+  api: Api; config: PageFilterConfig; allowedDepartments?: Department[] | null; actions?: ReactNode; extraFields?: ReactNode; showScope: boolean; auto: boolean;
 }) {
   const { values, set, remove, reset, activeCount } = api;
   const has = (k: FilterKey) => config.keys.includes(k);
@@ -192,14 +203,14 @@ function FilterBody({ api, config, allowedDepartments, actions, showScope, auto 
   const footer = (
     <>
       <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-        <span className="text-sm font-medium text-text-2">{activeCount ? `${activeCount} filtre aktif` : 'Filtre yok'}</span>
+        {activeCount > 0 && <span className="text-sm font-medium text-text-2">{activeCount} filtre aktif</span>}
         {chips.map((c) => (
           <span key={c.key} className="inline-flex h-8 max-w-full items-center gap-1 rounded-full border border-solid border-accent/30 bg-accent-soft pr-1 pl-3 text-sm text-accent">
             <span className="truncate" title={c.text}>{c.text}</span>
             <button
               type="button"
               aria-label={`${c.text} filtresini kaldır`}
-              className="inline-flex size-7 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent text-accent hover:bg-accent/15"
+              className="inline-flex size-6! min-h-6! cursor-pointer items-center justify-center rounded-full border-0 bg-transparent text-accent hover:bg-accent/15"
               onClick={() => remove(c.key)}
             >×</button>
           </span>
@@ -207,8 +218,8 @@ function FilterBody({ api, config, allowedDepartments, actions, showScope, auto 
       </div>
       <div className="flex items-center gap-2">
         {actions}
-        {!auto && <Button type="submit" variant="primary" className="h-9! sm:h-9!">Uygula</Button>}
-        <Button type="button" className="h-9! text-sm! sm:h-9!" disabled={!activeCount} onClick={reset}>Sıfırla</Button>
+        {!auto && <Button type="submit" variant="primary" className="h-9! min-h-9! text-sm! font-semibold! sm:h-9!">Uygula</Button>}
+        {activeCount > 0 && <Button type="button" className="h-9! min-h-9! text-sm! font-medium! sm:h-9!" onClick={reset}>Sıfırla</Button>}
       </div>
     </>
   );
@@ -233,7 +244,8 @@ function FilterBody({ api, config, allowedDepartments, actions, showScope, auto 
                     aria-checked={active}
                     onClick={() => set({ period: p })}
                     className={cn(
-                      'h-9 cursor-pointer rounded-lg border border-solid px-3 text-sm font-medium whitespace-nowrap transition-colors',
+                      // Global `.pax-main-inner button` kuralları (850 kalınlık, 42px min-height) ezmesin diye !important.
+                      'h-8! min-h-8! cursor-pointer rounded-lg! border border-solid px-3! text-[13px]! leading-none! font-medium! whitespace-nowrap transition-colors',
                       active ? 'border-accent bg-accent text-white' : 'border-border bg-surface text-text-2 hover:border-accent/40 hover:bg-accent-soft hover:text-accent',
                     )}
                   >
@@ -246,6 +258,7 @@ function FilterBody({ api, config, allowedDepartments, actions, showScope, auto 
           </div>
         )}
         {fields}
+        {extraFields}
       </FilterGrid>
       {showScope && (
         <ScopeLabel
