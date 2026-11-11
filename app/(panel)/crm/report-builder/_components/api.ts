@@ -30,6 +30,7 @@ async function call<T>(url: string, init?: RequestInit, listKind?:ReportListKind
 
 export const api = {
   datasets: () => call<{ datasets: DatasetCatalogEntry[]; scope: 'all' | 'own' | null }>('/api/report-builder/datasets',undefined,'datasets'),
+  ownerOptions: () => call<{ options: OwnerOptionLite[] }>('/api/report-builder/owner-options'),
   query: (definition: ReportDefinitionInput) => call<ReportResult & { scope: string }>('/api/report-builder/query', { method: 'POST', body: JSON.stringify({ definition }) }),
   definitions: () => call<{ definitions: SavedDefinitionLite[]; userId: string }>('/api/report-builder/definitions',undefined,'definitions'),
   createDefinition: (body: object) => call<{ id: string }>('/api/report-builder/definitions', { method: 'POST', body: JSON.stringify(body) }),
@@ -74,6 +75,15 @@ export function saveBlob(blob: Blob, name: string) {
   const a = document.createElement('a');
   a.href = url; a.download = name; a.click();
   setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+export type OwnerOptionLite = { value: string; label: string; group: string | null };
+
+let ownerOptionsCache: Promise<OwnerOptionLite[]> | null = null;
+/** Satıcı seçenekleri oturum başına bir kez yüklenir; hata olursa sonraki çağrı yeniden dener. */
+export function loadOwnerOptionsOnce(): Promise<OwnerOptionLite[]> {
+  ownerOptionsCache ??= api.ownerOptions().then((r) => r.options).catch((e) => { ownerOptionsCache = null; throw e; });
+  return ownerOptionsCache;
 }
 
 export type SavedDefinitionLite = { id: string; title: string; description: string; owner_user_id?: string; owner_name: string | null; visibility: string; is_favorite?: boolean; definition: ReportDefinitionInput; updated_at: string; version: number };

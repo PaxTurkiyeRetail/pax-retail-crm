@@ -10,7 +10,7 @@ import {
   DEPARTMENT_VALUES, FILTER_OPS, RELATIVE_PRESETS, TIME_GRAINS, VIZ_TYPES,
   type FilterOp, type ReportDefinitionInput, type TimeGrain, type VizType,
 } from '@/lib/report-builder/types';
-import { api, downloadCsv, fetchPdf, saveBlob, type SavedDefinitionLite } from './api';
+import { api, downloadCsv, fetchPdf, loadOwnerOptionsOnce, saveBlob, type OwnerOptionLite, type SavedDefinitionLite } from './api';
 import { DEPARTMENT_LABEL, GRAIN_LABEL, OP_LABEL, PRESET_LABEL, VIZ_LABEL } from './labels';
 import { ResultView } from './renderers/WidgetRenderer';
 import { TOKEN_CSS } from './renderers/tokens';
@@ -264,8 +264,13 @@ export default function QueryBuilder({ datasets, initial, onApply, onCancel }: P
 }
 
 export function FilterRow({ ds, filter, onChange, onRemove }: { ds: DatasetCatalogEntry; filter: Filter; onChange: (f: Filter) => void; onRemove: () => void }) {
-  const fields = [...ds.dimensions.map((d) => ({ key: d.key, label: d.label, type: d.type, options: d.options })), ...ds.measures.map((m) => ({ key: m.key, label: `Σ ${m.label}`, type: 'number' as const, options: null }))];
+  const fields = [...ds.dimensions.map((d) => ({ key: d.key, label: d.label, type: d.type, options: d.options, optionSource: d.optionSource ?? null })), ...ds.measures.map((m) => ({ key: m.key, label: `Σ ${m.label}`, type: 'number' as const, options: null, optionSource: null }))];
   const meta = fields.find((f) => f.key === filter.field);
+  const [owners, setOwners] = useState<OwnerOptionLite[] | null>(null);
+  useEffect(() => { if (meta?.optionSource === 'owners') loadOwnerOptionsOnce().then(setOwners).catch(() => setOwners([])); }, [meta?.optionSource]);
+  const choices: Choice[] | null = meta?.optionSource === 'owners'
+    ? (owners?.length ? owners : null) : meta?.options ? meta.options.map((o) => ({ value: o, label: o, group: null })) : null;
+  const pickOp = filter.op === 'eq' || filter.op === 'neq' || LIST_OPS.includes(filter.op);
   const listId = `opts-${filter.field}`;
   const issue = filterInputIssue(filter);
   const operators = FILTER_OPS.filter((op) => ds.measures.some((measure) => measure.key === filter.field) ? ['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'between'].includes(op) : meta?.type === 'boolean' ? ['eq', 'neq', 'is_null', 'not_null'].includes(op) : meta?.type === 'string' ? !['gt', 'gte', 'lt', 'lte', 'between'].includes(op) : !['contains', 'starts_with'].includes(op));
@@ -292,6 +297,8 @@ export function FilterRow({ ds, filter, onChange, onRemove }: { ds: DatasetCatal
           </div>
         : meta?.type === 'boolean'
         ? <select aria-label="Değer" className="pax-input" value={String(filter.value ?? 'true')} onChange={(e) => setRaw(e.target.value)}><option value="true">Evet</option><option value="false">Hayır</option></select>
+        : choices && pickOp
+        ? <ChoicePicker choices={choices} multiple={LIST_OPS.includes(filter.op)} value={filter.value} onChange={(value) => onChange({ ...filter, value })} />
         : <>
             <input key={`${filter.field}-${filter.op}`} aria-label="Değer" aria-invalid={!!issue} list={meta?.options ? listId : undefined} className="pax-input w-32" type={meta?.type === 'date' && !LIST_OPS.includes(filter.op) && filter.op !== 'between' ? 'date' : 'text'}
               placeholder={LIST_OPS.includes(filter.op) || filter.op === 'between' ? 'a, b' : ''} defaultValue={raw} onChange={(e) => setRaw(e.target.value)} />
@@ -359,4 +366,16 @@ export function CalcEditor({ calcs, measures, measureCatalog = [], onChange }: {
       </details>
     </details>
   );
+}
+
+type Choice = { value: string; label: string; group: string | null };
+/** Sabit / satıcı listesi: tekil koşulda açılır liste, liste koşulunda çoklu seçim. Listede olmayan kayıtlı değer korunur. */
+function ChoicePicker({ choices, multiple, value, onChange }: { choices: Choice[]; multiple: boolean; value: unknown; onChange: (value: string | string[]) => void }) {
+  const selected = (Array.isArray(value) ? value : value === undefined || value === '' ? [] : [value]).map(String);
+  const all = [...choices, ...selected.filter((v) => !choices.some((c) => c.value === v)).map((v) => ({ value: v, label: v, group: null }))];
+  const groups = [...new Set(all.map((c) => c.group).filter((g): g is string => !!g))];
+  const opts = <>{all.filter((c) => !c.group).map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}{groups.map((g) => <optgroup key={g} label={g}>{all.filter((c) => c.group === g).map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}</optgroup>)}</>;
+  return multiple
+    ? <select multiple aria-label="Değerler" className="pax-input min-w-40" size={Math.min(6, Math.max(3, all.length))} value={selected} onChange={(e) => onChange(Array.from(e.target.selectedOptions, (o) => o.value))}>{opts}</select>
+    : <select aria-label="Değer" className="pax-input min-w-40" value={selected[0] ?? ''} onChange={(e) => onChange(e.target.value)}><option value="">Seçin…</option>{opts}</select>;
 }

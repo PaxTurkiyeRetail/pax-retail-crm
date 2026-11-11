@@ -29,6 +29,8 @@ export type DimensionDef = {
   grains?: readonly TimeGrain[];
   /** Arayüzde öneri listesi (sabit kümeler). */
   options?: readonly string[];
+  /** Dinamik seçenek kaynağı: 'owners' = hesap yöneticisi listesi (ad değeri). */
+  optionSource?: 'owners';
 };
 
 export type MeasureDef = {
@@ -86,7 +88,7 @@ export const DEPARTMENTS = ['Retail', 'Vertical', 'Bank'] as const;
 const customerDims = (alias = 'm'): Record<string, DimensionDef> => ({
   customer_id: { label: 'Müşteri kayıt kimliği', sql: `${alias}.id::text`, type: 'string', group: 'Kayıt bağlantıları' },
   customer: { label: 'Müşteri', sql: `${alias}.musteri`, type: 'string', group: 'Müşteri' },
-  customer_owner: { label: 'Müşteri sorumlusu', sql: `coalesce(nullif(trim(${alias}.sorumlu), ''), 'Havuz')`, type: 'string', group: 'Müşteri' },
+  customer_owner: { label: 'Müşteri sorumlusu', sql: `coalesce(nullif(trim(${alias}.sorumlu), ''), 'Havuz')`, type: 'string', group: 'Müşteri', optionSource: 'owners' },
   sector: { label: 'Sektör', sql: `coalesce(nullif(trim(${alias}.sektor), ''), '—')`, type: 'string', group: 'Müşteri' },
   /** Departman = musteriler.is_kolu (kişi değil, departman bazlı ayrım). */
   department: { label: 'Departman', sql: `coalesce(nullif(trim(${alias}.is_kolu), ''), '—')`, type: 'string', group: 'Müşteri', options: DEPARTMENTS },
@@ -113,7 +115,7 @@ const SALES: DatasetDef = {
   dimensions: {
     sale_id: { label: 'Satış kayıt kimliği', sql: 's.id::text', type: 'string', group: 'Kayıt bağlantıları' },
     sale_date: { label: 'Satış tarihi', sql: 's.sale_date', type: 'date', grains: ALL_GRAINS, group: 'Satış' },
-    owner: { label: 'Satıcı', sql: `coalesce(nullif(trim(s.owner_name), ''), 'Havuz Account')`, type: 'string', group: 'Satış' },
+    owner: { label: 'Satıcı', sql: `coalesce(nullif(trim(s.owner_name), ''), 'Havuz Account')`, type: 'string', group: 'Satış', optionSource: 'owners' },
     sales_channel: { label: 'Satış kanalı', sql: `coalesce(s.sales_channel, '—')`, type: 'string', group: 'Satış' },
     source: { label: 'Kaynak', sql: 's.source', type: 'string', group: 'Satış', options: ['quote', 'direct'] },
     sale_type: { label: 'Satış tipi', sql: 's.sale_type', type: 'string', group: 'Satış', options: ['sale', 'rental', 'mixed'], description: 'mixed: satış ve kiralama kalemleri aynı kayıtta.' },
@@ -149,7 +151,7 @@ const SALE_ITEMS: DatasetDef = {
   dimensions: {
     sale_id: { label: 'Satış kayıt kimliği', sql: 's.id::text', type: 'string', group: 'Kayıt bağlantıları' },
     sale_date: { label: 'Satış tarihi', sql: 's.sale_date', type: 'date', grains: ALL_GRAINS, group: 'Satış' },
-    owner: { label: 'Satıcı', sql: `coalesce(nullif(trim(s.owner_name), ''), 'Havuz Account')`, type: 'string', group: 'Satış' },
+    owner: { label: 'Satıcı', sql: `coalesce(nullif(trim(s.owner_name), ''), 'Havuz Account')`, type: 'string', group: 'Satış', optionSource: 'owners' },
     sales_channel: { label: 'Satış kanalı', sql: `coalesce(s.sales_channel, '—')`, type: 'string', group: 'Satış' },
     product_code: { label: 'Model / ürün kodu', sql: `upper(trim(i.product_code))`, type: 'string', group: 'Kalem' },
     product_name: { label: 'Ürün adı', sql: `coalesce(i.product_name, i.product_code)`, type: 'string', group: 'Kalem' },
@@ -182,7 +184,7 @@ const FORECAST: DatasetDef = {
   owner: { userId: 'f.owner_user_id::text', email: 'f.owner_email', name: 'f.owner_name' },
   dimensions: {
     forecast_month: { label: 'Forecast ayı', sql: 'make_date(f.forecast_year, f.forecast_month, 1)', type: 'date', grains: ['month', 'quarter', 'year'], group: 'Forecast' },
-    owner: { label: 'Satıcı', sql: `coalesce(nullif(trim(f.owner_name), ''), '—')`, type: 'string', group: 'Forecast' },
+    owner: { label: 'Satıcı', sql: `coalesce(nullif(trim(f.owner_name), ''), '—')`, type: 'string', group: 'Forecast', optionSource: 'owners' },
     sales_channel: { label: 'Satış kanalı', sql: 'f.sales_channel', type: 'string', group: 'Forecast' },
     probability: { label: 'Olasılık (%)', sql: 'f.probability', type: 'number', group: 'Forecast', options: ['30', '60', '90'] },
     sale_type: { label: 'Satış / kiralama', sql: 'f.sale_type', type: 'string', group: 'Forecast', options: ['sale', 'rental'], description: 'Forecast satırının satış veya kiralama planı.' },
@@ -295,7 +297,7 @@ const CUSTOMER_PORTFOLIO: DatasetDef = {
     last_quote_no: { label: 'Son teklif no', sql: `coalesce(lq.quote_no, '—')`, type: 'string', group: 'Teklif', description: 'Firmanın en son teklifinin numarası.' },
     last_quote_status: { label: 'Son teklif durumu', sql: `case when lq.status is null then '—' when lq.status = 'closed' then 'closed/' || coalesce(lq.closed_reason, '—') else lq.status end`, type: 'string', group: 'Teklif', description: 'draft / sent / closed/won|lost|expired|no_interest.' },
     last_quote_date: { label: 'Son teklif tarihi', sql: 'lq.proposal_date', type: 'date', grains: ALL_GRAINS, group: 'Teklif', description: 'En son teklifin tarihi; teklif yoksa boş.' },
-    poc_status: { label: 'POC durumu', sql: `case when mp.aktif_faz_no between 11 and 13 then coalesce(ft.asama_adi, 'POC') when mp.aktif_faz_no > 13 then 'POC sonrası' else 'POC yok' end`, type: 'string', group: 'POC', description: 'Faz 11–13 (Konsinye / POC / Test) ise faz adı; daha ileri fazda "POC sonrası"; aksi halde "POC yok".' },
+    poc_status: { label: 'POC durumu', sql: `case mp.aktif_faz_no when 11 then 'Konsinye' when 12 then 'Pilot / POC' when 13 then 'Uçtan Uca Test' else case when mp.aktif_faz_no > 13 then 'POC sonrası' else 'POC yok' end end`, type: 'string', group: 'POC', options: ['Konsinye', 'Pilot / POC', 'Uçtan Uca Test', 'POC sonrası', 'POC yok'], description: 'Faz 11 Konsinye, 12 Pilot / POC, 13 Uçtan Uca Test; daha ileri fazda "POC sonrası"; aksi halde "POC yok".' },
     sale_kind: { label: 'Kiralama / Satış', sql: `case when coalesce(sx.has_sale, false) and coalesce(sx.has_rental, false) then 'Satış + Kiralama' when sx.has_rental then 'Kiralama' when sx.has_sale then 'Satış' else 'Yok' end`, type: 'string', group: 'Satış', options: ['Satış', 'Kiralama', 'Satış + Kiralama', 'Yok'], description: 'Aktif satış kayıtlarına göre; karma kayıt iki türü de sayar.' },
   },
   measures: {
@@ -321,7 +323,7 @@ const QUOTES: DatasetDef = {
     proposal_date: { label: 'Teklif tarihi', sql: 'q.proposal_date', type: 'date', grains: ALL_GRAINS, group: 'Teklif' },
     valid_until: { label: 'Teklif geçerlilik tarihi', sql: 'q.valid_until', type: 'date', grains: ALL_GRAINS, group: 'Teklif', description: 'Teklif kaydında saklanan son geçerlilik günü.' },
     closed_date: { label: 'Kapanış tarihi', sql: `(coalesce(q.closed_at, q.updated_at) at time zone 'Europe/Istanbul')::date`, type: 'date', grains: ALL_GRAINS, group: 'Teklif' },
-    owner: { label: 'Satıcı', sql: `coalesce(nullif(trim(q.owner_name), ''), '—')`, type: 'string', group: 'Teklif' },
+    owner: { label: 'Satıcı', sql: `coalesce(nullif(trim(q.owner_name), ''), '—')`, type: 'string', group: 'Teklif', optionSource: 'owners' },
     status: { label: 'Durum', sql: 'q.status', type: 'string', group: 'Teklif' },
     closed_reason: { label: 'Kapanış nedeni', sql: `coalesce(q.closed_reason, '—')`, type: 'string', group: 'Teklif' },
     probability: { label: 'Olasılık (%)', sql: 'q.probability', type: 'number', group: 'Teklif' },
@@ -357,7 +359,7 @@ const SERVICE_INVOICE_ITEMS: DatasetDef = {
   owner: { userId: 's.owner_user_id::text', name: 's.owner_name' },
   dimensions: {
     period_month: { label: 'Fatura dönemi', sql: 's.period_month', type: 'date', grains: ['month', 'quarter', 'year'], group: 'Fatura' },
-    owner: { label: 'Satıcı', sql: `coalesce(nullif(trim(s.owner_name), ''), '—')`, type: 'string', group: 'Fatura' },
+    owner: { label: 'Satıcı', sql: `coalesce(nullif(trim(s.owner_name), ''), '—')`, type: 'string', group: 'Fatura', optionSource: 'owners' },
     service_key: { label: 'Hizmet kalemi', sql: 'lower(btrim(i.service_key))', type: 'string', group: 'Kalem' },
     service_label: { label: 'Hizmet adı', sql: 'i.service_label', type: 'string', group: 'Kalem' },
     is_integration_device: { label: 'KasaPOS entegrasyon kalemi', sql: INTEGRATION_KEYS_SQL, type: 'boolean', group: 'Kalem', description: 'Canlı Ekran / KasaPOS raporuyla aynı kalem kümesi' },
@@ -426,7 +428,7 @@ const KASAPOS_SNAPSHOT: DatasetDef = {
   owner: { userId: 'm.owner_user_id::text', name: 'm.sorumlu' },
   dimensions: {
     ...customerDims(),
-    owner: { label: 'Müşteri sorumlusu', sql: `coalesce(nullif(trim(m.sorumlu), ''), 'Havuz')`, type: 'string', group: 'Müşteri' },
+    owner: { label: 'Müşteri sorumlusu', sql: `coalesce(nullif(trim(m.sorumlu), ''), 'Havuz')`, type: 'string', group: 'Müşteri', optionSource: 'owners' },
     period_month: { label: 'Son fatura referans ayı (güncel stok)', sql: 'snapshot.period_month', type: 'date', grains: ['month', 'quarter', 'year'], group: 'KasaPOS' },
   },
   measures: {
@@ -454,7 +456,7 @@ const PERFORMANCE_COMPARISON: DatasetDef = {
   owner: { userId: 'pc.owner_user_id', email: 'pc.owner_email', name: 'pc.owner_label' },
   dimensions: {
     month: { label: 'Ay (aylık hedef payı)', sql: 'pc.month', type: 'date', grains: ['month', 'quarter', 'year'], group: 'Dönem', description: 'Ayın ilk günü; tam ay dönemleri kullanın.' },
-    owner: { label: 'Account', sql: 'pc.owner_label', type: 'string', group: 'Account' },
+    owner: { label: 'Account', sql: 'pc.owner_label', type: 'string', group: 'Account', optionSource: 'owners' },
   },
   measures: {
     actual_quantity: { label: 'Gerçekleşen satılan cihaz', sql: 'coalesce(sum(pc.actual_quantity), 0)', format: 'number' },
@@ -475,7 +477,7 @@ const ACTUAL_FORECAST: DatasetDef = {
   description:'Müşteri, model kodu, Account ve tam ay üzerinden cihaz satışı ile Forecast karşılaştırması. Kiralama ve kalemsiz satışlar hariçtir. Model kodu eksik kayıtlar birbirine eşleştirilmez. Fark gerçekleşen eksi tahmindir; hedef veya USD Forecast tutarı üretilmez.',
   permission:'quote.read',requiredPermissions:['quote.read','forecast.read'],from:ACTUAL_FORECAST_FROM,baseWhere:[],defaultDateField:'month',
   owner:{userId:'af.owner_user_id',email:'af.owner_email',name:'af.owner_name'},
-  dimensions:{...customerDims(),model:{label:'Model kodu',sql:'af.model',type:'string',group:'Ortak kırılımlar'},owner:{label:'Account',sql:"coalesce(nullif(trim(af.owner_name),''),af.owner_email,'Havuz')",type:'string',group:'Ortak kırılımlar'},month:{label:'Ay',sql:'af.month',type:'date',grains:['month','quarter','year'],group:'Ortak kırılımlar'}},
+  dimensions:{...customerDims(),model:{label:'Model kodu',sql:'af.model',type:'string',group:'Ortak kırılımlar'},owner:{label:'Account',sql:"coalesce(nullif(trim(af.owner_name),''),af.owner_email,'Havuz')",type:'string',group:'Ortak kırılımlar',optionSource:'owners'},month:{label:'Ay',sql:'af.month',type:'date',grains:['month','quarter','year'],group:'Ortak kırılımlar'}},
   measures:{actual_quantity:{label:'Gerçekleşen cihaz satışı',sql:'coalesce(sum(af.actual_quantity),0)',format:'number'},forecast_quantity:{label:'Forecast cihaz adedi',sql:'coalesce(sum(af.forecast_quantity),0)',format:'number'},weighted_forecast_quantity:{label:'Olasılık ağırlıklı Forecast',sql:'coalesce(sum(af.weighted_forecast_quantity),0)',format:'number'},quantity_gap:{label:'Gerçekleşen − Forecast',sql:'sum(af.actual_quantity)-sum(af.forecast_quantity)',format:'number'},weighted_gap:{label:'Gerçekleşen − ağırlıklı Forecast',sql:'sum(af.actual_quantity)-sum(af.weighted_forecast_quantity)',format:'number'},actual_usd:{label:'Gerçekleşen kalem tutarı (yalnız USD)',sql:'coalesce(sum(af.actual_usd),0)',format:'money'}},
 };
 
@@ -497,6 +499,8 @@ export function getDataset(key: string): DatasetDef | null {
   return Object.prototype.hasOwnProperty.call(DATASETS, key) ? DATASETS[key] : null;
 }
 
+export type CatalogDimension = { key: string; label: string; type: FieldType; group: string | null; grains: readonly TimeGrain[] | null; options: readonly string[] | null; optionSource?: 'owners' | null; description: string | null };
+
 /** İstemciye giden katalog: SQL parçaları dışarı sızmaz. */
 export function datasetCatalog(canAccess: (permission: Permission) => boolean) {
   return Object.values(DATASETS)
@@ -506,8 +510,8 @@ export function datasetCatalog(canAccess: (permission: Permission) => boolean) {
       label: dataset.label,
       description: dataset.description,
       defaultDateField: dataset.defaultDateField,
-      dimensions: Object.entries(dataset.dimensions).map(([key, d]) => ({
-        key, label: d.label, type: d.type, group: d.group ?? null, grains: d.grains ?? null, options: d.options ?? null, description: d.description ?? null,
+      dimensions: Object.entries(dataset.dimensions).map(([key, d]): CatalogDimension => ({
+        key, label: d.label, type: d.type, group: d.group ?? null, grains: d.grains ?? null, options: d.options ?? null, optionSource: d.optionSource ?? null, description: d.description ?? null,
       })),
       measures: Object.entries(dataset.measures).map(([key, m]) => ({
         key, label: m.label, format: m.format, description: m.description ?? null,
