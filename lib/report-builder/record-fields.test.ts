@@ -16,6 +16,9 @@ describe('existing record details in the report field catalog', () => {
     ['forecast', 'line_count', 'include_in_retail_plan', true],
     ['quotes', 'quote_count', 'valid_until', '2026-10-31'],
     ['customers', 'customer_count', 'pipeline_policy', 'phase_optional'],
+    ['customer_portfolio', 'customer_count', 'sale_kind', 'Kiralama'],
+    ['customer_portfolio', 'customer_count', 'poc_status', 'POC yok'],
+    ['customer_portfolio', 'quote_count', 'has_quote', 'Teklif var'],
   ] as const)('supports %s / %s / %s filtering and grouping', (dataset, measure, field, value) => {
     const definition = parseReportDefinition({
       dataset, measures: [measure], dimensions: [{ field }], filters: [{ field, op: 'eq', value }],

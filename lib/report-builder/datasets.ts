@@ -258,6 +258,55 @@ const CUSTOMERS: DatasetDef = {
   },
 };
 
+// Satıcı → firma → teklif → POC → satış/kiralama portföy listesi. Firma başına tek satır;
+// teklif = firmanın en son teklifi, satış = aktif satışların özeti, POC = faz 11–13 (live-board PHASE_GROUPS 'poc').
+const CUSTOMER_PORTFOLIO: DatasetDef = {
+  key: 'customer_portfolio',
+  label: 'Firma portföyü · teklif / POC / satış',
+  description: 'Firma başına tek satır: sorumlu satıcı, son teklif, POC durumu (faz 11–13 Konsinye / POC / Test) ve aktif satış/kiralama özeti. Satıcı → Firma → Teklif → POC → Satış kırılımı için.',
+  permission: 'customer.read',
+  requiredPermissions: ['customer.read', 'quote.read'],
+  from: `public.musteriler m
+    left join public.musteri_pipeline mp on mp.musteri_id = m.id
+    left join lateral (select ft.asama_adi from public.faz_tanimlari ft where ft.faz_no = mp.aktif_faz_no limit 1) ft on true
+    left join lateral (
+      select count(*) as quote_count from public.quotes q0 where q0.customer_id = m.id
+    ) qc on true
+    left join lateral (
+      select q.quote_no, q.status, q.closed_reason, q.proposal_date, q.total_amount
+      from public.quotes q where q.customer_id = m.id
+      order by q.proposal_date desc nulls last, q.created_at desc limit 1
+    ) lq on true
+    left join lateral (
+      select count(*) as sale_count,
+        bool_or(s.sale_type in ('sale', 'mixed')) as has_sale,
+        bool_or(s.sale_type in ('rental', 'mixed')) as has_rental,
+        coalesce(sum(s.amount) filter (where s.currency = 'USD'), 0) as amount_usd
+      from public.crm_sales s where s.customer_id = m.id and s.status = 'active'
+    ) sx on true`,
+  baseWhere: [],
+  defaultDateField: 'created_date',
+  owner: { userId: 'm.owner_user_id::text', name: 'm.sorumlu' },
+  dimensions: {
+    ...customerDims(),
+    created_date: { label: 'Kayıt tarihi', sql: `(m.created_at at time zone 'Europe/Istanbul')::date`, type: 'date', grains: ALL_GRAINS, group: 'Müşteri' },
+    phase_name: { label: 'Aktif faz', sql: `coalesce(ft.asama_adi, 'Fazsız')`, type: 'string', group: 'Faz' },
+    has_quote: { label: 'Teklif var mı', sql: `case when qc.quote_count > 0 then 'Teklif var' else 'Teklif yok' end`, type: 'string', group: 'Teklif', options: ['Teklif var', 'Teklif yok'], description: 'Firmanın herhangi bir teklifi var mı.' },
+    last_quote_no: { label: 'Son teklif no', sql: `coalesce(lq.quote_no, '—')`, type: 'string', group: 'Teklif', description: 'Firmanın en son teklifinin numarası.' },
+    last_quote_status: { label: 'Son teklif durumu', sql: `case when lq.status is null then '—' when lq.status = 'closed' then 'closed/' || coalesce(lq.closed_reason, '—') else lq.status end`, type: 'string', group: 'Teklif', description: 'draft / sent / closed/won|lost|expired|no_interest.' },
+    last_quote_date: { label: 'Son teklif tarihi', sql: 'lq.proposal_date', type: 'date', grains: ALL_GRAINS, group: 'Teklif', description: 'En son teklifin tarihi; teklif yoksa boş.' },
+    poc_status: { label: 'POC durumu', sql: `case when mp.aktif_faz_no between 11 and 13 then coalesce(ft.asama_adi, 'POC') when mp.aktif_faz_no > 13 then 'POC sonrası' else 'POC yok' end`, type: 'string', group: 'POC', description: 'Faz 11–13 (Konsinye / POC / Test) ise faz adı; daha ileri fazda "POC sonrası"; aksi halde "POC yok".' },
+    sale_kind: { label: 'Kiralama / Satış', sql: `case when coalesce(sx.has_sale, false) and coalesce(sx.has_rental, false) then 'Satış + Kiralama' when sx.has_rental then 'Kiralama' when sx.has_sale then 'Satış' else 'Yok' end`, type: 'string', group: 'Satış', options: ['Satış', 'Kiralama', 'Satış + Kiralama', 'Yok'], description: 'Aktif satış kayıtlarına göre; karma kayıt iki türü de sayar.' },
+  },
+  measures: {
+    customer_count: { label: 'Firma sayısı', sql: 'count(*)', format: 'number' },
+    quote_count: { label: 'Teklif sayısı', sql: 'coalesce(sum(qc.quote_count), 0)', format: 'number' },
+    last_quote_amount: { label: 'Son teklif tutarı', sql: 'coalesce(sum(lq.total_amount), 0)', format: 'money', description: 'Para birimi karışık olabilir.' },
+    sale_count: { label: 'Aktif satış adedi', sql: 'coalesce(sum(sx.sale_count), 0)', format: 'number' },
+    sale_amount_usd: { label: 'Satış cirosu (USD)', sql: 'coalesce(sum(sx.amount_usd), 0)', format: 'money' },
+  },
+};
+
 const QUOTES: DatasetDef = {
   key: 'quotes',
   label: 'Teklifler',
@@ -440,6 +489,7 @@ export const DATASETS: Readonly<Record<string, DatasetDef>> = Object.freeze({
   forecast: FORECAST,
   activities: ACTIVITIES,
   customers: CUSTOMERS,
+  customer_portfolio: CUSTOMER_PORTFOLIO,
   quotes: QUOTES,
 });
 

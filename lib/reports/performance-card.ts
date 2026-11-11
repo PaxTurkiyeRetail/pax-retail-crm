@@ -12,15 +12,18 @@
  * 100'e ölçeklenir (uydurma puan yok).
  */
 import type { Tone } from './live-board-shared';
+import { resolvePreset } from '@/lib/report-builder/dates';
+import { formatPeriodLabel } from '@/lib/filters/period';
 
-export type PerfPeriodKind = 'month' | 'quarter' | 'ytd';
+export type PerfPeriodKind = 'week' | 'month' | 'quarter' | 'ytd';
 export const PERF_PERIODS: Array<{ key: PerfPeriodKind; label: string }> = [
+  { key: 'week', label: 'Haftalık' },
   { key: 'month', label: 'Aylık' },
   { key: 'quarter', label: '3 Aylık' },
   { key: 'ytd', label: 'YTD' },
 ];
 export function isPerfPeriod(value: unknown): value is PerfPeriodKind {
-  return value === 'month' || value === 'quarter' || value === 'ytd';
+  return value === 'week' || value === 'month' || value === 'quarter' || value === 'ytd';
 }
 
 export type PerfDimensionKey = 'commercial' | 'bizdev' | 'customer' | 'activity' | 'crm';
@@ -125,7 +128,15 @@ export function perfRange(kind: PerfPeriodKind, todayKey: string): PerfRange {
   let label: string;
   let periodKey: string;
   let months: number;
-  if (kind === 'month') {
+  if (kind === 'week') {
+    // Pazartesi–Pazar (Europe/Istanbul gün anahtarı üzerinden) — merkezi this_week çözümü.
+    const w = resolvePreset('this_week', todayKey);
+    from = w.from;
+    end = w.to;
+    label = `Haftalık Performans · ${formatPeriodLabel(from, end)}`;
+    periodKey = `w-${from}`;
+    months = 7 / 30;
+  } else if (kind === 'month') {
     from = `${y}-${pad(m)}-01`;
     end = `${y}-${pad(m)}-${pad(lastDay(y, m))}`;
     label = `Aylık Performans · ${MONTHS_LONG[m - 1]} ${y}`;

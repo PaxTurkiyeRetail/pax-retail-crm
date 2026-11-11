@@ -53,6 +53,12 @@ describe('perfRange / trendMonths', () => {
     expect(ytd.periodKey).toBe('ytd-2026');
     expect(ytd.from).toBe('2026-01-01');
   });
+  it('haftalık: Pazartesi–Pazar, ay sınırı', () => {
+    const w = perfRange('week', '2026-11-11');
+    expect(w).toMatchObject({ from: '2026-11-09', end: '2026-11-15', to: '2026-11-11', periodKey: 'w-2026-11-09', elapsedPct: 43 });
+    expect(w.label).toBe('Haftalık Performans · 09–15 Kas 2026');
+    expect(perfRange('week', '2026-11-01')).toMatchObject({ from: '2026-10-26', end: '2026-11-01', elapsedPct: 100 });
+  });
   it('son 6 ay, eskiden yeniye', () => {
     const m = trendMonths('2026-03-15');
     expect(m).toHaveLength(6);

@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 // PERFORMANS KARNESİ (05.10.2026) — yalnız report.performance.read (admin + super_admin).
-// GET ?period=month|quarter|ytd (varsayılan ytd) · &detail=events&owner=<ad> → Hareket Dökümü.
+// GET ?period=week|month|quarter|ytd (varsayılan ytd) · &detail=events&owner=<ad> → Hareket Dökümü.
 export async function GET(request: Request) {
   try {
     await requirePerformanceAccessOrThrow();

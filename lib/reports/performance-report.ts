@@ -46,7 +46,9 @@ const Q_OWNERS = `
 // Ciro + fatura adedi, ay bazında (dönem ve 6 aylık trend aynı satırlardan).
 const Q_SALES = `
   select s.owner_user_id::text as owner_user_id, s.owner_name, to_char(s.sale_date, 'YYYY-MM') as month,
-         count(*)::int as cnt, sum(s.amount)::float8 as amount
+         count(*)::int as cnt, sum(s.amount)::float8 as amount,
+         (count(*) filter (where s.sale_date >= $3::date))::int as period_cnt,
+         coalesce(sum(s.amount) filter (where s.sale_date >= $3::date), 0)::float8 as period_amount
   from public.crm_sales s
   where s.status = 'active' and s.sale_date between $1::date and $2::date
   group by 1, 2, 3
@@ -174,11 +176,14 @@ export async function buildPerformanceReport(options: { period: PerfPeriodKind; 
   const trendFrom = `${trend[0]}-01`;
   const salesFrom = trendFrom < range.from ? trendFrom : range.from;
   const periodMonths = monthsBetween(range.from, range.end);
+  const weekDays = range.kind === 'week'
+    ? Array.from({ length: 7 }, (_, i) => new Date(Date.UTC(Number(range.from.slice(0, 4)), Number(range.from.slice(5, 7)) - 1, Number(range.from.slice(8, 10)) + i)).toISOString().slice(0, 10))
+    : [];
 
   const [live, ownerRes, salesRes, deviceRes, wonRes, quoteRiskRes, pocRes, meetingRes, convRes, targetRes, listRows] = await Promise.all([
     buildLiveBoard({ today }),
     db.query(Q_OWNERS),
-    db.query(Q_SALES, [salesFrom, todayKey]),
+    db.query(Q_SALES, [salesFrom, todayKey, range.from]),
     safe(db.query(Q_DEVICES, [range.from, todayKey])),
     db.query(Q_WON, [range.from, todayKey]),
     db.query(Q_OPEN_QUOTE_RISKS, [todayKey, STALE_QUOTE_DAYS]),
@@ -217,13 +222,12 @@ export async function buildPerformanceReport(options: { period: PerfPeriodKind; 
     if (teamToo) fn(team);
     if (owner && accs.has(owner)) fn(accs.get(owner)!);
   };
-  const periodFromMonth = range.from.slice(0, 7);
 
   for (const r of salesRes.rows as Row[]) {
     const month = String(r.month);
     each(resolve(r.owner_user_id, r.owner_name), (a) => {
       a.amountByMonth.set(month, (a.amountByMonth.get(month) ?? 0) + num(r.amount));
-      if (month >= periodFromMonth) { a.revenue += num(r.amount); a.invoices += num(r.cnt); }
+      a.revenue += num(r.period_amount); a.invoices += num(r.period_cnt);
     });
   }
   for (const r of deviceRes.rows as Row[]) {
@@ -276,9 +280,20 @@ export async function buildPerformanceReport(options: { period: PerfPeriodKind; 
     for (const m of months) { const v = monthShare(rows, m); if (v != null) { total += v; any = true; } }
     return any ? Math.round(total) : null;
   };
-  const periodTarget = (userId: string | undefined, code: string) => sumMonths(userTargets(userId, code), periodMonths);
+  // Haftalık: her günün payı = o ayın hedef payı / ayın gün sayısı (ay sınırını aşan hafta doğru bölünür).
+  const sumDays = (rows: Row[]): number | null => {
+    let total = 0;
+    let any = false;
+    for (const day of weekDays) {
+      const v = monthShare(rows, day.slice(0, 7));
+      if (v != null) { total += v / new Date(Date.UTC(Number(day.slice(0, 4)), Number(day.slice(5, 7)), 0)).getUTCDate(); any = true; }
+    }
+    return any ? Math.round(total) : null;
+  };
+  const sumPeriod = (rows: Row[]) => (range.kind === 'week' ? sumDays(rows) : sumMonths(rows, periodMonths));
+  const periodTarget = (userId: string | undefined, code: string) => sumPeriod(userTargets(userId, code));
   const teamTarget = (code: string): number | null => {
-    const company = sumMonths(companyTargets(code), periodMonths);
+    const company = sumPeriod(companyTargets(code));
     if (company != null) return company;
     const parts = owners.map((o) => periodTarget(idByOwner.get(o.owner), code)).filter((v): v is number => v != null);
     return parts.length ? parts.reduce((s, v) => s + v, 0) : null;
