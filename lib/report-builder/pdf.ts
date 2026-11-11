@@ -137,17 +137,22 @@ const ensure = (c: Ctx, need: number) => {
 };
 const width = (c: Ctx) => c.box.right - c.box.left;
 
-function drawTitle(c: Ctx, w: PageWidget) {
+/** Başlık içeriğinden ayrı sayfaya düşmesin: başlık + asgari içerik yüksekliği birlikte sığmalı. */
+function drawTitle(c: Ctx, w: PageWidget, keepWith = 60) {
   if (!w.title || w.style.showTitle === false) return;
-  ensure(c, 30);
+  ensure(c, 18 + keepWith);
   c.page.drawText(fit(c.bold, w.title, 11, width(c)), { x: c.box.left, y: c.y - 11, size: 11, font: c.bold, color: TEXT });
   c.y -= 18;
 }
 
+/** Sonuç sütun anahtarı SQL takma adıdır; ayar alan adıyla (sourceField) kaydedilmiş olabilir. */
+function columnSetting(w: DataWidget, col: ColumnMeta) {
+  return w.style.columns.find((s) => s.key === col.key) ?? w.style.columns.find((s) => !!col.sourceField && s.key === col.sourceField);
+}
+
 function visibleColumns(w: DataWidget, result: ReportResult): Array<ColumnMeta & { label: string }> {
-  const settings = new Map(w.style.columns.map((s) => [s.key, s]));
-  return result.columns.filter((col) => !settings.get(col.key)?.hidden).map((col) => {
-    const s = settings.get(col.key);
+  return result.columns.filter((col) => !columnSetting(w, col)?.hidden).map((col) => {
+    const s = columnSetting(w, col);
     const fmt = s?.format && s.format !== 'compact' ? s.format : col.format;
     return { ...col, label: s?.label || col.label, format: fmt };
   });
@@ -226,10 +231,10 @@ function renderFlatTable(c: Ctx, w: DataWidget, result: ReportResult) {
   drawTable(c, cols.map((col) => col.label), rows, {
     numeric: cols.map((col) => col.type === 'number'),
     density: w.style.density,
-    widths:cols.map(col=>w.style.columns.find(s=>s.key===col.key)?.width),
-    align:cols.map(col=>w.style.columns.find(s=>s.key===col.key)?.align),
-    wordWrap:cols.map(col=>w.style.columns.find(s=>s.key===col.key)?.wordWrap),
-    bar:(r,i)=>{const col=cols[i];if(!w.style.columns.find(setting=>setting.key===col.key)?.dataBar)return null;const extent=dataBarExtent(result.rows.map(row=>row[col.key]),result.rows[r][col.key]);return extent?{...extent,color:TOKEN_RGB[w.style.accent??'primary']}:null;},
+    widths:cols.map(col=>columnSetting(w,col)?.width),
+    align:cols.map(col=>columnSetting(w,col)?.align),
+    wordWrap:cols.map(col=>columnSetting(w,col)?.wordWrap),
+    bar:(r,i)=>{const col=cols[i];if(!columnSetting(w,col)?.dataBar)return null;const extent=dataBarExtent(result.rows.map(row=>row[col.key]),result.rows[r][col.key]);return extent?{...extent,color:TOKEN_RGB[w.style.accent??'primary']}:null;},
     fill:(r,i)=>{const tok=matchRule(w.style.conditional,cols[i],result.rows[r][cols[i].key],result.columns,result.rows[r]);return tok?tint(TOKEN_RGB[tok],.12):null;},
     colorText: (r, i) => {
       const tok = matchRule(w.style.conditional, cols[i], result.rows[r][cols[i].key], result.columns,result.rows[r]);
@@ -357,7 +362,7 @@ function renderBarLine(c: Ctx, w: DataWidget, result: ReportResult) {
   s.points.forEach((p, i) => {
     const cx = left + step * i + step / 2;
     if (w.type === 'bar') {
-      const bw = Math.max(2, step * 0.62);
+      const bw = Math.max(2, Math.min(step * 0.62, 36));
       const y0 = yOf(Math.max(0, min));
       c.page.drawRectangle({ x: cx - bw / 2, y: Math.min(y0, yOf(p.value)), width: bw, height: Math.abs(yOf(p.value) - y0), color });
     } else if (i > 0) {
@@ -381,9 +386,9 @@ function renderPie(c: Ctx, w: DataWidget, result: ReportResult) {
   const pts = s.points.filter((p) => p.value > 0).slice(0, 12);
   const total = pts.reduce((a, p) => a + p.value, 0);
   if (!total) return note(c, 'Veri yok');
-  const H = 150;
+  const H = Math.max(150, pts.length * 11 + 20);
   ensure(c, H + 10);
-  const r = 60;
+  const r = Math.min(60, Math.max(30, width(c) / 6));
   const cx = c.box.left + r + 10;
   const cy = c.y - H / 2;
   let a0 = -Math.PI / 2;
@@ -413,12 +418,25 @@ function renderText(c: Ctx, w: Extract<PageWidget, { type: 'text' }>) {
   const size = w.variant === 'heading' ? 14 : w.variant === 'note' ? 7.5 : 9;
   const font = w.variant === 'heading' ? c.bold : c.regular;
   const lines = wrap(font, w.text || w.title, size, width(c));
+  // Bölüm başlığı sayfa dibinde yalnız kalmasın.
+  if (w.variant === 'heading') ensure(c, size + 110);
   for (const line of lines) {
     ensure(c, size + 4);
     c.page.drawText(line, { x: c.box.left, y: c.y - size, size, font, color: w.variant === 'note' ? MUTED : TEXT });
     c.y -= size + 4;
   }
   c.y -= 6;
+}
+
+/** Yan yana yerleşim ve başlık-içerik birlikteliği için kaba yükseklik tahmini (pt). */
+function estimateHeight(w: DataWidget, d?: WidgetData): number {
+  const rows = d?.result?.rows.length ?? 0;
+  switch (w.type) {
+    case 'kpi': case 'kpi_strip': return 58;
+    case 'bar': case 'line': return 180;
+    case 'pie': return Math.max(150, Math.min(rows, 12) * 11 + 20) + 6;
+    default: return (rows + 1) * 15 + 24;
+  }
 }
 
 /** Widget'ları PDF akış sırasına dizer: (y, x); sekmeler PDF'te sırayla açılır. */
@@ -488,13 +506,11 @@ export async function renderPagePdf(input: RenderPdfInput): Promise<Uint8Array> 
     c.y -= 12;
   }
 
-  for (const w of pdfWidgetOrder(input.page)) {
-    if (w.pdf.pageBreakBefore && c.y < box.top) newPage(c);
-    if (w.type === 'text') { if(!(showTitle&&input.page.pdf.hideRepeatedTitle!==false&&w.variant==='heading'&&w.text.trim()===input.page.title.trim()))renderText(c, w); continue; }
-    if (!isDataWidget(w)) continue;
-    if(!(showTitle && input.page.pdf.hideRepeatedTitle!==false && w.title.trim()===input.page.title.trim()))drawTitle(c, w);
+  const hasTitle = (w: PageWidget) => !!w.title && w.style.showTitle !== false && !(showTitle && input.page.pdf.hideRepeatedTitle !== false && w.title.trim() === input.page.title.trim());
+  const renderData = (w: DataWidget) => {
     const d = input.data[w.id];
-    if (!d || d.error || !d.result) { note(c, d?.error ? `Hata: ${d.error}` : 'Veri yok'); continue; }
+    if (hasTitle(w)) drawTitle(c, w, Math.min(estimateHeight(w, d), 120));
+    if (!d || d.error || !d.result) { note(c, d?.error ? `Hata: ${d.error}` : 'Veri yok'); return; }
     switch (w.type) {
       case 'kpi': case 'kpi_strip': renderKpi(c, w, d.result); break;
       case 'bar': case 'line': renderBarLine(c, w, d.result); break;
@@ -502,6 +518,42 @@ export async function renderPagePdf(input: RenderPdfInput): Promise<Uint8Array> 
       case 'pivot': case 'heatmap': renderPivot(c, w, d.result, d.forecast); break;
       default: renderFlatTable(c, w, d.result);
     }
+  };
+  const fullH = box.top - box.bottom;
+  const ordered = pdfWidgetOrder(input.page);
+  for (let i = 0; i < ordered.length; i++) {
+    const w = ordered[i];
+    if (w.pdf.pageBreakBefore && c.y < box.top) newPage(c);
+    if (w.type === 'text') { if(!(showTitle&&input.page.pdf.hideRepeatedTitle!==false&&w.variant==='heading'&&w.text.trim()===input.page.title.trim()))renderText(c, w); continue; }
+    if (!isDataWidget(w)) continue;
+    // Aynı satırdaki (lg.y) yan yana widget'lar PDF'te de yan yana: sütun genişliği 12'lik ızgaradan.
+    const row: DataWidget[] = [w];
+    for (let j = i + 1; j < ordered.length; j++) {
+      const n = ordered[j];
+      if (n.layout.lg.y !== w.layout.lg.y || !isDataWidget(n) || n.pdf.pageBreakBefore) break;
+      row.push(n);
+    }
+    const heights = row.map((r) => estimateHeight(r, input.data[r.id]) + (hasTitle(r) ? 18 : 0));
+    const rowH = Math.max(...heights);
+    if (row.length > 1 && rowH <= fullH * 0.9) {
+      ensure(c, rowH);
+      const saved = { ...c.box };
+      const startY = c.y; const startPage = c.page;
+      const W = saved.right - saved.left; const gap = 14;
+      let minY = startY;
+      for (const r of row) {
+        const lg = r.layout.lg;
+        c.box = { ...saved, left: saved.left + (W * lg.x) / 12 + (lg.x > 0 ? gap / 2 : 0), right: saved.left + (W * Math.min(12, lg.x + lg.w)) / 12 - (lg.x + lg.w < 12 ? gap / 2 : 0) };
+        c.page = startPage; c.y = startY;
+        renderData(r);
+        minY = Math.min(minY, c.page === startPage ? c.y : saved.bottom);
+      }
+      c.box = saved; c.page = c.pages[c.pages.length - 1];
+      c.y = c.page === startPage ? minY : c.y;
+      i += row.length - 1;
+      continue;
+    }
+    renderData(w);
   }
 
   const total = c.pages.length;
