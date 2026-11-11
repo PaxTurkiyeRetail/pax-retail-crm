@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
 import { createPgServerClient } from '@/lib/pg/server';
 import { createPgAdminClient } from '@/lib/pg/admin';
-import { requireCrmAccessOrThrow, userHasPermission } from '@/lib/authz';
+import { requireCrmAccessOrThrow } from '@/lib/authz';
 import { getKunyeStatus, mapKunyeDbToUi, normalizeKunyeStatusFilter } from '@/lib/kunye';
 import { fetchAllByCustomerIds, fetchAllRows } from '@/lib/reporting';
+import { applyCustomerDbFilters, effectiveIntegration, parseFazNoFilter, resolveVisibleCustomerIds } from '../customer-filters';
 import { isReportOnlyCustomer } from '@/lib/report-only-customers';
 
 export const dynamic = 'force-dynamic';
@@ -23,10 +24,6 @@ function normalizeSearchText(value: string | null | undefined) {
     .replace(/[çÇ]/g, 'c')
     .replace(/[^a-z0-9]+/g, ' ')
     .trim();
-}
-
-function escapeIlike(value: string) {
-  return String(value ?? '').replace(/[\%_]/g, ' ').trim();
 }
 
 function phaseSearchText(phaseNo: number | null | undefined) {
@@ -59,36 +56,37 @@ export async function GET(request: Request) {
     const kasaFirmasi = String(url.searchParams.get('kasa_firmasi') ?? '').trim();
     const kunyeStatus = normalizeKunyeStatusFilter(url.searchParams.get('kunye_status'));
     const fazNoRaw = String(url.searchParams.get('faz_no') ?? '').trim();
-    const fazNo = fazNoRaw ? Number(fazNoRaw) : NaN;
+    const fazNo = parseFazNoFilter(fazNoRaw);
 
     const pgClient = await createPgServerClient();
     const admin = createPgAdminClient();
-    const canReadAny = userHasPermission(me, 'customer.read.any');
-    const visibleCustomerResult = canReadAny
-      ? { data: null as any[] | null, error: null as any }
-      : await admin.from('musteriler').select('id').eq('owner_user_id', me.id).limit(10000);
-    if (visibleCustomerResult.error) return NextResponse.json({ message: visibleCustomerResult.error.message }, { status: 500 });
-    const visibleCustomerIds = canReadAny ? null : (visibleCustomerResult.data ?? []).map((row: any) => String(row.id ?? '')).filter(Boolean);
+    // Liste ile aynı kapsam: sahiplik + departman + satıcı (id/ad, yalnız read.any) + etkin entegrasyon.
+    const visible = await resolveVisibleCustomerIds(me, admin, url.searchParams.get('department') || url.searchParams.get('is_kolu'), {
+      ownerId: url.searchParams.get('owner_id'),
+      ownerName: owner,
+      integration,
+    });
+    if (visible.error) return NextResponse.json({ message: visible.error }, { status: 500 });
+    const visibleCustomerIds = visible.ids;
     const rawBaseRows = await fetchAllRows<any>((from, to) => {
       let qy = pgClient
         .from('vw_crm_musteriler')
         .select('musteri_id,sektor,sorumlu,entegrasyon_tipi,aktif_faz_no,musteri')
         .order('musteri', { ascending: true })
         .range(from, to);
-      if (visibleCustomerIds) qy = qy.in('musteri_id', visibleCustomerIds.length ? visibleCustomerIds : ['__none__']);
-      if (owner) qy = qy.ilike('sorumlu', escapeIlike(owner));
-      if (sector) qy = qy.ilike('sektor', escapeIlike(sector));
-      // entegrasyon_tipi enum oldugu icin DB tarafinda ilike kullanilmaz; asagida JS filtresi uygulanir.
-      if (Number.isFinite(fazNo)) qy = qy.eq('aktif_faz_no', fazNo);
-      // q filtresi asagida normalize edilerek uygulaniyor.
-      // Boylece musteri aramalarinda buyuk-kucuk harf ve Turkce karakter
-      // farklari nedeniyle kayit kacirma problemi yasamiyoruz.
+      // q hem DB'de (liste ile ayni ilike) hem asagida normalize edilerek uygulanir.
+      qy = applyCustomerDbFilters(qy, { owner: '', sector, fazNo, q, visibleCustomerIds });
       return qy;
     });
 
     const baseRows = rawBaseRows.filter((row: any) => !isReportOnlyCustomer(row));
 
     const ids = baseRows.map((row: any) => String(row.musteri_id ?? '').trim()).filter(Boolean);
+    // Entegrasyon: liste ile aynı kaynak (musteriler.integration_type_key, yoksa view değeri).
+    const integrationMeta = ids.length
+      ? await fetchAllByCustomerIds<any>(admin, 'musteriler', 'id,integration_type_key', ids, undefined, { idColumn: 'id' })
+      : [];
+    const integrationMap = new Map(integrationMeta.map((row: any) => [String(row.id), row.integration_type_key]));
     const kunyeler = ids.length
       ? await fetchAllByCustomerIds<any>(
           admin,
@@ -106,6 +104,7 @@ export async function GET(request: Request) {
       return {
         ...row,
         ...(kunye ?? null),
+        entegrasyon_tipi: effectiveIntegration({ integration_type_key: integrationMap.get(String(row.musteri_id)), entegrasyon_tipi: row.entegrasyon_tipi }),
         kasa_firmasi: kunye?.kasapos_firmasi ?? null,
         kunye_durumu: status.status,
         kunye_eksik_sayisi: status.missing,
@@ -123,11 +122,6 @@ export async function GET(request: Request) {
         row.entegrasyon_tipi,
         phaseSearchText(row.aktif_faz_no),
       ].some((value) => normalizeSearchText(value).includes(needle)));
-    }
-
-    if (integration) {
-      const integrationNeedle = normalizeSearchText(integration);
-      enriched = enriched.filter((row: any) => normalizeSearchText(row.entegrasyon_tipi).includes(integrationNeedle));
     }
 
     if (kasaFirmasi) {

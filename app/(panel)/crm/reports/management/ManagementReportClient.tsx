@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { ScopeLabel } from '@/components/filters/FilterBar';
+import { DEPARTMENTS } from '@/lib/departments';
 import { Badge, Button, DataTable, FilterGrid, Input, KpiStrip, Notice, Page, PageHeader, Section, Select, StackField, type Column, type Tone } from '@/components/ui';
 
 type ReportRow = {
@@ -44,7 +46,7 @@ const SLA: Record<string, { label: string; tone: Tone }> = {
   unscheduled: { label: 'Tarihsiz', tone: 'neutral' },
 };
 const sla = (s?: string) => SLA[s || 'unscheduled'] ?? SLA.unscheduled;
-const kunye = (v?: string) => (v === 'Var' ? 'Tamam' : (v ?? '-'));
+const kunye = (v?: string) => (v === 'Var' ? 'Tamam' : (v || 'Belirtilmemiş'));
 
 type Row = ReportRow & { no: number };
 
@@ -88,12 +90,15 @@ export default function ManagementReportPage() {
   const [waitingFilter, setWaitingFilter] = useState('');
   const [slaFilter, setSlaFilter] = useState('');
   const [kunyeFilter, setKunyeFilter] = useState('');
+  const [department, setDepartment] = useState('');
+  const [allowedDepartments, setAllowedDepartments] = useState<string[] | null>(null);
+  const [generatedAt, setGeneratedAt] = useState<string | null>(null);
 
   const load = async () => {
     setLoading(true);
     setMsg(null);
     try {
-      const res = await fetch('/api/reports/management', { cache: 'no-store' });
+      const res = await fetch(`/api/reports/management${department ? `?department=${encodeURIComponent(department)}` : ''}`, { cache: 'no-store' });
       const payload = await res.json().catch(() => ({}));
       if (!res.ok) {
         setMsg(payload?.message || 'Rapor yüklenemedi');
@@ -103,12 +108,16 @@ export default function ManagementReportPage() {
       setRows(payload.rows ?? []);
       setTotals({ ...EMPTY_TOTALS, ...(payload.totals ?? {}) });
       setHighlights({ ...EMPTY_HIGHLIGHTS, ...(payload.highlights ?? {}) });
+      setAllowedDepartments(Array.isArray(payload.allowedDepartments) ? payload.allowedDepartments : null);
+      setGeneratedAt(payload.generatedAt ?? null);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { void load(); }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { void load(); }, [department]);
+  const departmentOptions = DEPARTMENTS.filter((d) => !allowedDepartments?.length || allowedDepartments.includes(d));
 
   const filteredRows = useMemo(() => rows.filter((row) => {
     const needle = q.trim().toLocaleLowerCase('tr');
@@ -142,6 +151,7 @@ export default function ManagementReportPage() {
     setWaitingFilter('');
     setSlaFilter('');
     setKunyeFilter('');
+    setDepartment('');
   };
 
   return (
@@ -152,6 +162,12 @@ export default function ManagementReportPage() {
         actions={<Button variant="secondary" size="sm" onClick={() => void load()} disabled={loading}>{loading ? 'Yükleniyor' : 'Yenile'}</Button>}
       />
       {msg && <Notice>{msg}</Notice>}
+      {/* Portföy anlık görünümdür (dönemden bağımsız): kapsam = departman · veri tarihi. */}
+      <ScopeLabel
+        mode="snapshot"
+        department={department || (departmentOptions.length === 1 ? departmentOptions[0] : 'Tüm departmanlar')}
+        owner={generatedAt ? `Veri tarihi: ${new Date(generatedAt).toLocaleString('tr-TR', { dateStyle: 'short', timeStyle: 'short' })}` : undefined}
+      />
       <KpiStrip items={kpis} />
       <div className="grid gap-5 md:grid-cols-2">
         <MiniList title="Portföy Sahipliği" items={highlights.owners} />
@@ -160,8 +176,14 @@ export default function ManagementReportPage() {
       <FilterGrid
         footer={<><span>{filteredRows.length} müşteri</span><Button variant="ghost" size="sm" onClick={clearFilters}>Filtreleri temizle</Button></>}
       >
-        <StackField label="Arama"><Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Müşteri, sektör, sorumlu, aksiyon" /></StackField>
-        <StackField label="Sorumlu">
+        <StackField label="Departman">
+          <Select value={department} onChange={(e) => setDepartment(e.target.value)}>
+            {departmentOptions.length > 1 && <option value="">Tümü</option>}
+            {departmentOptions.map((d) => <option key={d} value={d}>{d}</option>)}
+          </Select>
+        </StackField>
+        <StackField label="Ara"><Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Müşteri, sektör, sorumlu, aksiyon" /></StackField>
+        <StackField label="Satıcı">
           <Select value={ownerFilter} onChange={(e) => setOwnerFilter(e.target.value)}>
             <option value="">Tümü</option>
             {highlights.owners.map((i) => <option key={i.label} value={i.label}>{i.label}</option>)}

@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ScopeLabel } from '@/components/filters/FilterBar';
 import '@/styles/phase-report.css';
 
 type MacroGroup = 'Fazsız' | 'Fırsat' | 'İlk Temas' | 'Business' | 'Operasyon' | 'Yayılım';
@@ -132,6 +133,14 @@ export default function PhaseReportPage({ embedded = false }: { embedded?: boole
     });
   }, [payload.rows, activeGroup, search, sectorFilter, integrationFilter, kunyeFilter, sortBy, sortDir]);
 
+  // KPI şeridi ekrandaki filtreleri izler (grup, arama, sektör, entegrasyon, künye).
+  const kpiTotals = useMemo(() => {
+    const total = filteredRows.length;
+    const withPhase = filteredRows.filter(r => r.aktif_faz_no != null).length;
+    return { total, withPhase, withoutPhase: total - withPhase, phaseCoveragePct: total ? Math.round((withPhase / total) * 100) : 0 };
+  }, [filteredRows]);
+  const kpiFiltered = activeGroup !== 'all' || !!search.trim() || !!sectorFilter || !!integrationFilter || !!kunyeFilter;
+
   // Seçilen gruba ait faz kırılımı
   const activeBreakdown = useMemo(() => {
     const group = activeGroup === 'all' ? null : activeGroup;
@@ -211,24 +220,28 @@ export default function PhaseReportPage({ embedded = false }: { embedded?: boole
       </div>
 
       {/* ── KPI STRIP ── */}
+      <ScopeLabel
+        mode="snapshot"
+        owner={[seller && seller !== 'Tüm Satıcılar' ? seller : 'Tüm portföy', kpiFiltered ? 'Süzülmüş' : ''].filter(Boolean).join(' · ')}
+      />
       <div className="ph-kpi-strip">
         <div className="ph-kpi-item">
-          <div className="ph-kpi-num">{payload.totals.total}</div>
+          <div className="ph-kpi-num">{kpiTotals.total.toLocaleString('tr-TR')}</div>
           <div className="ph-kpi-lbl">Toplam firma</div>
         </div>
         <div className="ph-kpi-sep" />
         <div className="ph-kpi-item">
-          <div className="ph-kpi-num green">{payload.totals.withPhase}</div>
+          <div className="ph-kpi-num green">{kpiTotals.withPhase.toLocaleString('tr-TR')}</div>
           <div className="ph-kpi-lbl">Faz girilmiş</div>
         </div>
         <div className="ph-kpi-sep" />
         <div className="ph-kpi-item">
-          <div className="ph-kpi-num amber">{payload.totals.withoutPhase}</div>
+          <div className="ph-kpi-num amber">{kpiTotals.withoutPhase.toLocaleString('tr-TR')}</div>
           <div className="ph-kpi-lbl">Faz girilmemiş</div>
         </div>
         <div className="ph-kpi-sep" />
         <div className="ph-kpi-item">
-          <div className="ph-kpi-num">%{payload.totals.phaseCoveragePct}</div>
+          <div className="ph-kpi-num">%{kpiTotals.phaseCoveragePct}</div>
           <div className="ph-kpi-lbl">Faz kapsaması</div>
         </div>
         {loading && <div className="ph-loading-dot" />}

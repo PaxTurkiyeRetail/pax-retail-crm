@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import JSZip from 'jszip';
-import type { WeeklyManagementPresentationPayload, PresentationCustomer, ActivityRow, WeeklyActivityNarrativeItem } from '@/lib/weekly-management-presentation';
+import type { WeeklyManagementPresentationPayload, PresentationCustomer, ActivityRow, WeeklyActivityNarrativeItem, WeeklyPresentationOptions } from '@/lib/weekly-management-presentation';
 import { buildWeeklyManagementPresentation } from '@/lib/weekly-management-presentation';
 import { BUSINESS_PARTNER_RESPONSIBLE, normalizeResponsible } from '@/lib/report-only-customers';
 import {
@@ -2864,7 +2864,7 @@ async function applyAllSlideReplacements(zip: JSZip, pristineZip: JSZip, payload
   }
 }
 
-export async function generateWeeklyManagementPresentationPptx(admin: any, options?: { from?: string; to?: string; owner?: string; segment?: string; sellerMode?: boolean }) {
+export async function generateWeeklyManagementPresentationPptx(admin: any, options?: WeeklyPresentationOptions) {
   const payload = await buildWeeklyManagementPresentation(admin, options);
   const templatePath = path.join(process.cwd(), 'templates', 'weekly-management-template.pptx');
   const templateBuffer = await fs.readFile(templatePath);

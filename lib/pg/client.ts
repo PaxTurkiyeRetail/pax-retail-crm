@@ -8,7 +8,8 @@ type Filter =
   | { kind: 'is'; column: string; value: any }
   | { kind: 'not'; column: string; operator: string; value: any }
   | { kind: 'or'; value: string }
-  | { kind: 'match'; value: Record<string, any> };
+  | { kind: 'match'; value: Record<string, any> }
+  | { kind: 'activityDate'; from: string | null; to: string | null };
 
 type Order = { column: string; ascending: boolean };
 
@@ -167,6 +168,11 @@ class QueryBuilder {
   ilike(column: string, value: any) { this.filters.push({ kind: 'ilike', column, value }); return this; }
   or(value: string) { this.filters.push({ kind: 'or', value }); return this; }
   match(value: Record<string, any>) { this.filters.push({ kind: 'match', value }); return this; }
+  /** Aktivite günü (İstanbul) aralığı: coalesce(aktivite_tarihi, created_at İstanbul günü) ∈ [from, to]. */
+  activityDateRange(from?: string | null, to?: string | null) {
+    if (from || to) this.filters.push({ kind: 'activityDate', from: from || null, to: to || null });
+    return this;
+  }
   not(column: string, operator: string, value: any) { this.filters.push({ kind: 'not', column, operator, value }); return this; }
   order(column: string, options?: { ascending?: boolean }) { this.orders.push({ column, ascending: options?.ascending !== false }); return this; }
   limit(value: number) { this._limit = value; return this; }
@@ -184,6 +190,12 @@ class QueryBuilder {
           clauses.push(`${quoteIdent(column)} = $${index++}`);
           params.push(value);
         }
+        continue;
+      }
+      if (filter.kind === 'activityDate') {
+        const dayExpr = `coalesce("aktivite_tarihi", ("created_at" at time zone 'Europe/Istanbul')::date)`;
+        if (filter.from) { clauses.push(`${dayExpr} >= $${index++}::date`); params.push(filter.from); }
+        if (filter.to) { clauses.push(`${dayExpr} < ($${index++}::date + 1)`); params.push(filter.to); }
         continue;
       }
       if (filter.kind === 'or') {

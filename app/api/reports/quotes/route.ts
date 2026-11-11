@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireReportsAccessOrThrow, userHasPermission } from '@/lib/authz';
+import { applyQuoteScopeFilters, readQuoteScopeFilters } from '@/app/api/quotes/quote-filters';
 import { createPgAdminClient } from '@/lib/pg/admin';
 import { fetchAllRows } from '@/lib/reporting';
 import { addDaysToIsoDate, getTurkeyTodayIso } from '@/lib/quotes/service';
@@ -75,7 +76,7 @@ export async function GET(request: Request) {
     const admin = createPgAdminClient();
     const url = new URL(request.url);
 
-    const owner = String(url.searchParams.get('owner') ?? '').trim();
+    const scope = readQuoteScopeFilters(url);
     const status = String(url.searchParams.get('status') ?? '').trim().toLowerCase();
     const q = String(url.searchParams.get('q') ?? '').trim().toLocaleLowerCase('tr');
 
@@ -86,7 +87,10 @@ export async function GET(request: Request) {
           .select('id,customer_id,owner_name,owner_user_id,quote_no,opportunity_title,status,closed_reason,probability,proposal_date,valid_until,follow_up_date,total_amount,total_device_count,created_at,closed_at')
           .order('created_at', { ascending: false })
           .range(from, to);
-        if (owner) query = query.ilike('owner_name', owner.replace(/[\%_]/g, ' ').trim());
+        // Dönem (teklif tarihi), Satıcı (id|ad), Departman: /api/quotes/* ile aynı kurallar.
+        const scoped = await applyQuoteScopeFilters(query, admin, me, scope);
+        if (scoped.error) return { data: null, error: { message: scoped.error } };
+        query = scoped.query;
         if (status) query = query.ilike('status', status);
         if (!userHasPermission(me, 'quote.read.any')) query = query.eq('owner_user_id', me.id);
         return await query;
@@ -295,7 +299,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       ownerOptions,
-      filters: { owner, status, q },
+      filters: { owner: scope.ownerName, from: scope.from, to: scope.to, status, q },
       summary: {
         totalQuotes,
         activeQuotes: activeQuotes.length,

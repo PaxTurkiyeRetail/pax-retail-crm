@@ -4,7 +4,6 @@
   .quote-detail-head-grid,
   .quote-detail-meta-grid,
   .quote-catalog-layout,
-  .quote-report-filter-grid,
   .quote-report-chart-grid {
     grid-template-columns: minmax(0, 1fr) !important;
   }
@@ -28,11 +27,6 @@
 
   .quote-catalog-rule-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-  }
-
-  .quote-report-filter-grid > button,
-  .quote-report-filter-grid > a {
-    width: 100%;
   }
 }
 

@@ -154,12 +154,50 @@ export async function repriceFromCatalog(quoteId: string, newDeviceCount: number
   };
 }
 
-export async function listSales(options?: { owner?: string; status?: string; q?: string; limit?: number }) {
-  const owner = String(options?.owner ?? '').trim();
-  const status = String(options?.status ?? '').trim();
-  const search = String(options?.q ?? '').trim();
-  const limit = Math.min(500, Math.max(1, Number(options?.limit ?? 200)));
+export type SalesFilter = {
+  /** Satıcı: id verilirse owner_user_id ile; kaydında id olmayan eski satışlar ad ile eşleşir. */
+  ownerId?: string | null;
+  ownerName?: string | null;
+  status?: string | null;
+  q?: string | null;
+  /** musteriler.is_kolu (null/boş = tümü). */
+  departments?: string[] | null;
+  /** sale_date aralığı (inclusive). */
+  from?: string | null;
+  to?: string | null;
+};
 
+/** Liste ve özetin ortak WHERE'i (s = crm_sales, m = musteriler). */
+export function salesWhere(filter: SalesFilter, values: unknown[] = []) {
+  const push = (v: unknown) => { values.push(v); return `$${values.length}`; };
+  const parts: string[] = [];
+  const ownerId = String(filter.ownerId ?? '').trim();
+  const ownerName = String(filter.ownerName ?? '').trim();
+  if (ownerId) {
+    const id = push(ownerId);
+    parts.push(ownerName
+      ? `(s.owner_user_id = ${id} or (nullif(s.owner_user_id, '') is null and s.owner_name = ${push(ownerName)}))`
+      : `s.owner_user_id = ${id}`);
+  } else if (ownerName) {
+    parts.push(`s.owner_name = ${push(ownerName)}`);
+  }
+  const status = String(filter.status ?? '').trim();
+  if (status) parts.push(`s.status = ${push(status)}`);
+  const search = String(filter.q ?? '').trim();
+  if (search) {
+    const p = push(search);
+    parts.push(`(m.musteri ilike '%' || ${p} || '%' or coalesce(s.quote_no, '') ilike '%' || ${p} || '%')`);
+  }
+  if (filter.departments?.length) parts.push(`m.is_kolu = any(${push(filter.departments)}::text[])`);
+  if (filter.from) parts.push(`s.sale_date >= ${push(filter.from)}::date`);
+  if (filter.to) parts.push(`s.sale_date <= ${push(filter.to)}::date`);
+  return { where: parts.length ? parts.join(' and ') : 'true', values };
+}
+
+export async function listSales(filter: SalesFilter, page: { limit: number; offset: number }) {
+  const { where, values } = salesWhere(filter);
+  const limit = Math.min(500, Math.max(1, Math.floor(page.limit)));
+  const offset = Math.max(0, Math.floor(page.offset));
   const { rows } = await db.query(
     `
       select s.id::text, s.quote_id::text, s.customer_id::text, m.musteri, s.quote_no, s.owner_name,
@@ -176,30 +214,37 @@ export async function listSales(options?: { owner?: string; status?: string; q?:
       from public.crm_sales s
       join public.musteriler m on m.id = s.customer_id
       left join public.quotes q on q.id = s.quote_id
-      where ($1 = '' or s.owner_name = $1)
-        and ($2 = '' or s.status = $2)
-        and ($3 = '' or m.musteri ilike '%' || $3 || '%' or coalesce(s.quote_no, '') ilike '%' || $3 || '%')
+      where ${where}
       order by s.sale_date desc, s.created_at desc
-      limit $4
+      limit ${limit} offset ${offset}
     `,
-    [owner, status, search, limit],
+    values,
   );
   return rows as unknown as SaleRow[];
 }
 
-/** Satış özeti: adet/tutar + dönüşüm oranı için kazanılan sayısı. */
-export async function salesSummary(year: number) {
+/**
+ * Satış özeti — listeyle AYNI filtre (satıcı · dönem · arama). Tutar/cihaz yalnız aktif satışları
+ * sayar; total = filtreye uyan tüm satırlar (sayfalama için).
+ */
+export async function salesSummary(filter: SalesFilter) {
+  const { where, values } = salesWhere({ ...filter, status: null });
+  const status = String(filter.status ?? '').trim();
+  values.push(status);
+  const st = `$${values.length}`;
   const { rows } = await db.query(
     `
-      select count(*)::int as sale_count,
-             coalesce(sum(amount), 0)::float8 as amount,
-             coalesce(sum(device_count), 0)::int as devices
-      from public.crm_sales
-      where status = 'active' and extract(year from sale_date) = $1
+      select count(*) filter (where s.status = 'active' and (${st} = '' or ${st} = 'active'))::int as sale_count,
+             coalesce(sum(s.amount) filter (where s.status = 'active' and (${st} = '' or ${st} = 'active')), 0)::float8 as amount,
+             coalesce(sum(s.device_count) filter (where s.status = 'active' and (${st} = '' or ${st} = 'active')), 0)::int as devices,
+             count(*) filter (where ${st} = '' or s.status = ${st})::int as total
+      from public.crm_sales s
+      join public.musteriler m on m.id = s.customer_id
+      where ${where}
     `,
-    [year],
+    values,
   );
-  return rows[0] as { sale_count: number; amount: number; devices: number };
+  return rows[0] as { sale_count: number; amount: number; devices: number; total: number };
 }
 
 

@@ -1,8 +1,13 @@
 ﻿'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { FilterBar } from '@/components/filters/FilterBar';
+import { normalizeDepartments } from '@/lib/departments';
+import type { PageFilterConfig } from '@/lib/filters/schema';
+import { parsePhaseRange, trFold } from '@/lib/filters/sql';
+import { useUrlFilters } from '@/lib/filters/use-url-filters';
 
-const KOLU_SIRA: Record<string, number> = { Retail: 0, Vertical: 1 };
+const KOLU_SIRA: Record<string, number> = { Retail: 0, Bank: 1, Vertical: 2 };
 
 type Row = {
   customerId: string;
@@ -89,11 +94,35 @@ async function downloadStyledXlsx(filename: string, header: string[], dataRows: 
 }
 
 export default function EntegrasyonRaporuClient() {
-  const [isKolu, setIsKolu] = useState('');
   const [data, setData] = useState<Payload>(EMPTY);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [exporting, setExporting] = useState(false);
+  const [loadedAt, setLoadedAt] = useState<Date | null>(null);
+
+  const allowedDepartments = useMemo(
+    () => (data.allowedDepartments?.length ? normalizeDepartments(data.allowedDepartments) : null),
+    [data.allowedDepartments],
+  );
+  const phaseOptions = useMemo(() => {
+    const names = new Map<number, string | null>();
+    for (const r of data.rows) if (r.aktifFazNo != null && !names.has(r.aktifFazNo)) names.set(r.aktifFazNo, r.aktifFazAdi);
+    return [...names.entries()].sort((a, b) => a[0] - b[0])
+      .map(([no, name]) => ({ value: String(no), label: `Faz ${no}${name ? ` — ${name}` : ''}` }));
+  }, [data.rows]);
+  const modelOptions = useMemo(
+    () => [...new Set(data.rows.map((r) => r.entegrasyonModeli).filter(Boolean))]
+      .sort((a, b) => a.localeCompare(b, 'tr')).map((m) => ({ value: m, label: m })),
+    [data.rows],
+  );
+  // Ayrı "model" filtre anahtarı yok: 'status' alanı "Model" etiketiyle kullanılır.
+  const filterConfig = useMemo<PageFilterConfig>(() => ({
+    keys: ['department', 'phase', 'status', 'q'],
+    labels: { status: 'Model' },
+    options: { phase: phaseOptions, status: modelOptions },
+  }), [phaseOptions, modelOptions]);
+  const { values } = useUrlFilters(filterConfig, { allowedDepartments });
+  const isKolu = values.department ?? '';
 
   const load = useCallback(async (isKoluFilter: string) => {
     setLoading(true);
@@ -105,9 +134,7 @@ export default function EntegrasyonRaporuClient() {
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json?.message || 'Rapor yüklenemedi.');
       setData(json);
-      // Tek departmanlı kullanıcı: varsayılan o departman.
-      const allowed: string[] | null = Array.isArray(json?.allowedDepartments) ? json.allowedDepartments : null;
-      if (allowed && allowed.length === 1 && isKoluFilter !== allowed[0]) setIsKolu(allowed[0]);
+      setLoadedAt(new Date());
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Rapor yüklenemedi.');
     } finally {
@@ -117,20 +144,20 @@ export default function EntegrasyonRaporuClient() {
 
   useEffect(() => { void load(isKolu); }, [load, isKolu]);
 
-  const filterOptions = useMemo(() => {
-    const allowed = data.allowedDepartments;
-    if (!allowed || !allowed.length) return ['', 'Retail', 'Vertical'];
-    return allowed.length === 1 ? allowed : ['', ...allowed];
-  }, [data.allowedDepartments]);
-
   const sortedRows = useMemo(() => {
-    return [...data.rows].sort((a, b) => {
-      const sa = KOLU_SIRA[a.isKolu ?? ''] ?? 99;
-      const sb = KOLU_SIRA[b.isKolu ?? ''] ?? 99;
-      if (sa !== sb) return sa - sb;
-      return a.musteri.localeCompare(b.musteri, 'tr');
-    });
-  }, [data.rows]);
+    const phase = values.phase ? parsePhaseRange(values.phase) : null;
+    const q = values.q ? trFold(values.q) : '';
+    return data.rows
+      .filter((r) => !phase || (r.aktifFazNo != null && r.aktifFazNo >= phase.min && r.aktifFazNo <= phase.max))
+      .filter((r) => !values.status || r.entegrasyonModeli === values.status)
+      .filter((r) => !q || trFold(`${r.musteri} ${r.sonNot ?? ''}`).includes(q))
+      .sort((a, b) => {
+        const sa = KOLU_SIRA[a.isKolu ?? ''] ?? 99;
+        const sb = KOLU_SIRA[b.isKolu ?? ''] ?? 99;
+        if (sa !== sb) return sa - sb;
+        return a.musteri.localeCompare(b.musteri, 'tr');
+      });
+  }, [data.rows, values.phase, values.status, values.q]);
 
   const exportExcel = useCallback(async () => {
     setExporting(true);
@@ -157,34 +184,27 @@ export default function EntegrasyonRaporuClient() {
         <p style={{ margin: '6px 0 0', color: 'var(--text-3)', fontSize: 13 }}>
           Entegrasyon süreci açık müşterilerin ve iş ortaklarının aktif fazı ile son aktivite notu.
         </p>
-        <div style={{ display: 'flex', gap: 12, marginTop: 14, alignItems: 'center', flexWrap: 'wrap' }}>
-          {filterOptions.map((opt) => (
-            <button
-              key={opt || 'all'}
-              type="button"
-              onClick={() => setIsKolu(opt)}
-              style={{
-                padding: '6px 14px',
-                borderRadius: 8,
-                border: '1px solid var(--border-1, #ccc)',
-                background: isKolu === opt ? '#1F4E79' : 'transparent',
-                color: isKolu === opt ? '#fff' : 'inherit',
-                fontWeight: isKolu === opt ? 600 : 400,
-                cursor: 'pointer',
-              }}
-            >
-              {opt || 'Tümü'}
-            </button>
-          ))}
-          <span style={{ fontSize: 13, color: 'var(--text-3)' }}>{data.summary.total} firma</span>
-          <button
-            type="button"
-            className="secondary"
-            onClick={() => void exportExcel()}
-            disabled={exporting || !data.rows.length}
-          >
-            {exporting ? 'Hazırlanıyor…' : 'Excel İndir'}
-          </button>
+        <div style={{ marginTop: 14 }}>
+          <FilterBar
+            config={filterConfig}
+            allowedDepartments={allowedDepartments}
+            actions={(
+              <>
+                <span style={{ fontSize: 13, color: 'var(--text-3)' }}>
+                  {sortedRows.length.toLocaleString('tr-TR')} firma
+                  {loadedAt ? ` · Veri tarihi: ${loadedAt.toLocaleString('tr-TR', { dateStyle: 'short', timeStyle: 'short' })}` : ''}
+                </span>
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => void exportExcel()}
+                  disabled={exporting || !sortedRows.length}
+                >
+                  {exporting ? 'Hazırlanıyor…' : 'Excel İndir'}
+                </button>
+              </>
+            )}
+          />
         </div>
       </div>
 

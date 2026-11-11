@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import LiveBoard from '@/components/reports/LiveBoard';
 import PhaseReport from '@/app/(panel)/crm/reports/phase-report/PhaseReportClient';
 import { appToast } from '@/lib/app-toast';
+import { istanbulDateKey, shiftDateKey } from '@/lib/activities/activity-date';
 import { followupPptxFileName } from '@/lib/reports/seller-followup-pptx-shared';
 import '@/styles/seller-followup.css';
 
@@ -105,16 +106,16 @@ function formatDate(value: string | null) {
   return date.toLocaleDateString('tr-TR', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
+// Gün/hafta İstanbul saatine göre (UTC'de gece 00-03 arası bir önceki güne kayıyordu).
 function todayInput() {
-  return new Date().toISOString().slice(0, 10);
+  return istanbulDateKey();
 }
 
 function weekStartInput() {
-  const now = new Date();
-  const day = now.getDay();
+  const today = istanbulDateKey();
+  const day = new Date(`${today}T00:00:00Z`).getUTCDay();
   const diff = day === 0 ? 6 : day - 1; // pazartesi başlangıç
-  const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - diff);
-  return monday.toISOString().slice(0, 10);
+  return shiftDateKey(today, -diff);
 }
 
 /** Gerçekleşme/hedef hücresi: hedef 0 ise sadece gerçekleşen gösterilir. */
@@ -280,7 +281,8 @@ export default function SellerFollowupClient({ tvScreens }: { tvScreens?: TabKey
 
   return (
     <main className="sfu-page pax-page-container">
-      {showFollowupData && (<>
+      {/* Faz sekmesinde takip listesi başlığı/satıcı seçimi/KPI'ları gizlenir: Faz raporunun kendi Satıcı filtresi ve KPI'ları var. */}
+      {showFollowupData && tab !== 'faz' && (<>
       <section className="sfu-hero">
         <div className="sfu-hero-copy">
           <span className="sfu-eyebrow">Rapor Merkezi · Dashboard</span>

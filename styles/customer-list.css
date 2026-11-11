@@ -14,6 +14,7 @@
   display: grid;
   gap: 18px;
   padding-bottom: 40px;
+  min-width: 0; /* grid çocuğu: geniş kolon ızgarası sayfayı yatay taşırmasın */
   color: var(--text);
   --cl-accent: #1d4ed8;
 }
@@ -50,16 +51,6 @@
 .cl-shell .cl-hero p { margin: 0; color: rgba(255, 255, 255, 0.86); font-size: 14px; line-height: 1.65; }
 .cl-shell .cl-hero p b { color: #fff; }
 .cl-shell .cl-hero-actions { position: relative; z-index: 1; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
-.cl-shell .cl-hero .cl-search,
-.cl-shell .cl-hero .cl-select {
-  min-height: 42px; padding: 0 12px; border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.26) !important;
-  background: rgba(255, 255, 255, 0.14) !important;
-  color: #fff !important; font-weight: 700; font-size: 14px;
-}
-.cl-shell .cl-hero .cl-search { min-width: 220px; }
-.cl-shell .cl-hero .cl-search::placeholder { color: rgba(255, 255, 255, 0.7); }
-.cl-shell .cl-hero .cl-select option { background: #0f172a; color: #fff; }
 
 /* --- Düğmeler --------------------------------------------------------------- */
 .cl-shell .cl-btn {
@@ -109,19 +100,7 @@
 .cl-shell .cl-cat-badge.gold   { background: var(--chip-gold-bg);   border-color: var(--chip-gold-bd);   color: var(--chip-gold-color); }
 .cl-shell .cl-cat-badge.violet { background: var(--chip-violet-bg); border-color: var(--chip-violet-bd); color: var(--chip-violet-color); }
 
-/* --- Sekmeler ----------------------------------------------------------------- */
-.cl-shell .cl-tabs { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-.cl-shell .cl-tab {
-  display: inline-flex; align-items: center; gap: 8px;
-  min-height: 40px; padding: 0 14px 0 8px; border-radius: 999px;
-  border: 1px solid var(--border); background: var(--surface); color: var(--text-2);
-  font-weight: 800; font-size: 14px; cursor: pointer;
-}
-.cl-shell .cl-tab:first-child { padding-left: 16px; }
-.cl-shell .cl-tab:hover { border-color: var(--accent-border); color: var(--text); }
-.cl-shell .cl-tab.active { color: #fff; border-color: #1d4ed8; background: #1d4ed8; }
-.cl-shell .cl-tab.active .cl-cat-badge { background: rgba(255, 255, 255, 0.16); border-color: rgba(255, 255, 255, 0.3); color: #fff; }
-.cl-shell .cl-filter-note { margin-left: 6px; font-size: 13px; color: var(--text-3); font-weight: 700; }
+.cl-shell .cl-filter-note { font-size: 13px; color: var(--text-3); font-weight: 700; }
 
 /* --- Durumlar ------------------------------------------------------------------ */
 .cl-shell .cl-state {
@@ -148,8 +127,8 @@
 /* Kişi kolonları: Excel görünümü. */
 .cl-shell .cl-grid {
   display: grid;
-  /* 7 kolon (ekip + Havuz Account + Yemek Kartları) 1140 px'e sığar (~160 px); 8 kolona kadar kırpılmaz */
-  grid-template-columns: repeat(var(--cl-cols, 6), minmax(140px, 1fr));
+  /* Kolonlar sığdığı kadar yan yana, sığmayan alt satıra iner (yatay taşma yok). */
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
   gap: 0;
 }
 .cl-shell .cl-col {

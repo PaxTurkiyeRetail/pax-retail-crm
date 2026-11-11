@@ -1,6 +1,12 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { FilterBar, ScopeLabel } from '@/components/filters/FilterBar';
+import { useUrlFilters } from '@/lib/filters/use-url-filters';
+import { resolvePeriod } from '@/lib/filters/period';
+import type { FilterOption, PageFilterConfig } from '@/lib/filters/schema';
+import { DEPARTMENT_LABELS, type Department } from '@/lib/departments';
+import { resolveOwner } from '@/lib/reports/owner-filter';
 import Link from 'next/link';
 
 type Summary = {
@@ -123,13 +129,32 @@ function pct(value: number) {
   return `%${Number(value || 0).toFixed(1)}`;
 }
 
-export default function QuoteReportsPage() {
+const STATUS_OPTIONS: FilterOption[] = [
+  { value: 'draft', label: 'Taslak' },
+  { value: 'sent', label: 'Aktif / Gönderildi' },
+  { value: 'closed', label: 'Kapatılmış' },
+];
+
+export default function QuoteReportsPage({ ownerOptions, allowedDepartments }: { ownerOptions: FilterOption[]; allowedDepartments: Department[] | null }) {
   const [payload, setPayload] = useState<Payload>(EMPTY);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const [q, setQ] = useState('');
-  const [status, setStatus] = useState('');
-  const [owner, setOwner] = useState('');
+  // Filtreler URL'de. Dönem seçilmezse tüm teklifler; seçilirse teklif tarihi aralığı.
+  const filterConfig = useMemo<PageFilterConfig>(() => ({
+    keys: ownerOptions.length ? ['period', 'from', 'to', 'department', 'owner', 'status', 'q'] : ['period', 'from', 'to', 'department', 'status', 'q'],
+    labels: { q: 'Ara' },
+    options: { owner: ownerOptions, status: STATUS_OPTIONS },
+  }), [ownerOptions]);
+  const { values: filters } = useUrlFilters(filterConfig, { allowedDepartments });
+  const period = filters.period ? resolvePeriod({ period: filters.period, from: filters.from, to: filters.to }) : null;
+  const selectedOwner = resolveOwner(filters.owner, ownerOptions);
+  const q = filters.q ?? '';
+  const status = filters.status ?? '';
+  const department = filters.department ?? '';
+  const ownerId = selectedOwner?.id ?? '';
+  const ownerName = selectedOwner?.name ?? '';
+  const periodFrom = period?.from ?? '';
+  const periodTo = period?.to ?? '';
 
   const load = async () => {
     setLoading(true);
@@ -138,7 +163,11 @@ export default function QuoteReportsPage() {
       const params = new URLSearchParams();
       if (q.trim()) params.set('q', q.trim());
       if (status) params.set('status', status);
-      if (owner) params.set('owner', owner);
+      if (ownerId) params.set('owner_id', ownerId);
+      if (ownerName) params.set('owner', ownerName);
+      if (department) params.set('department', department);
+      if (periodFrom) params.set('from', periodFrom);
+      if (periodTo) params.set('to', periodTo);
       const res = await fetch(`/api/reports/quotes?${params.toString()}`, { cache: 'no-store' });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -154,7 +183,7 @@ export default function QuoteReportsPage() {
 
   useEffect(() => {
     void load();
-  }, [q, status, owner]);
+  }, [q, status, ownerId, ownerName, department, periodFrom, periodTo]);
 
   const summaryCards = useMemo(() => ([
     { label: 'Toplam Teklif', value: payload.summary.totalQuotes, hint: 'Seçili filtrelerdeki tüm teklif' },
@@ -173,7 +202,7 @@ export default function QuoteReportsPage() {
   ]), [payload.summary]);
 
   return (
-    <main className="pax-page-container" style={{ display: 'grid', gap: 18 }}>
+    <main className="pax-page-container" style={{ display: 'grid', gap: 18, gridTemplateColumns: 'minmax(0, 1fr)' }}>
       <div className="pax-hero">
         <span className="pax-hero-eyebrow">Rapor Merkezi · Teklifler</span>
         <h1 className="pax-hero-title">Teklif KPI & Rapor Dashboard</h1>
@@ -185,21 +214,15 @@ export default function QuoteReportsPage() {
       </div>
 
       <section style={surface}>
-        <div className="quote-report-filter-grid" style={{ display: 'grid', gap: 12, gridTemplateColumns: '2fr 1fr 1fr auto' }}>
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Müşteri, teklif no, satışçı veya durum ara" style={inputStyle} />
-          <select value={status} onChange={(e) => setStatus(e.target.value)} style={inputStyle}>
-            <option value="">Tüm Durumlar</option>
-            <option value="draft">Taslak</option>
-            <option value="sent">Aktif / Gönderildi</option>
-            <option value="closed">Kapatılmış</option>
-          </select>
-          <select value={owner} onChange={(e) => setOwner(e.target.value)} style={inputStyle}>
-            <option value="">Tüm Satışçılar</option>
-            {payload.ownerOptions.map((item) => <option key={item} value={item}>{item}</option>)}
-          </select>
-          <button onClick={() => { setQ(''); setStatus(''); setOwner(''); }} style={buttonGhost}>Temizle</button>
-        </div>
+        <FilterBar config={filterConfig} allowedDepartments={allowedDepartments} showScope={false} />
       </section>
+
+      <ScopeLabel
+        mode={period ? 'period' : 'snapshot'}
+        period={period?.label}
+        department={department ? DEPARTMENT_LABELS[department] : undefined}
+        owner={selectedOwner?.name}
+      />
 
       {message ? <div style={{ ...surface, color: '#b91c1c' }}>{message}</div> : null}
 
@@ -249,7 +272,7 @@ export default function QuoteReportsPage() {
         </div>
       </section>
 
-      <section className="quote-report-chart-grid" style={{ display: 'grid', gap: 12, gridTemplateColumns: '1.2fr 1fr' }}>
+      <section className="quote-report-chart-grid" style={{ display: 'grid', gap: 12, gridTemplateColumns: 'minmax(0, 1.2fr) minmax(0, 1fr)' }}>
         <div style={surface}>
           <SectionTitle title="Aylık Trend" subtitle="Son 12 ayda teklif akışı ve satış cirosu" />
           <div style={{ overflowX: 'auto' }}>

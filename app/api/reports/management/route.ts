@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { requireReportsAccessOrThrow } from '@/lib/authz';
+import { getUserDepartments, requireReportsAccessOrThrow } from '@/lib/authz';
+import { resolveDepartmentFilter } from '@/lib/departments';
 import { createPgAdminClient } from '@/lib/pg/admin';
 import { getKunyeStatus, mapKunyeDbToUi } from '@/lib/kunye';
 import { activityLabelFromRow, isDisplayableActivityRow, presentDurum } from '@/lib/activities/presentation';
@@ -22,17 +23,22 @@ type BaseRow = {
   bekleyen_taraf: string | null;
 };
 
-function summarize(rows: any[], key: string, limit = 5) {
+const UNSPECIFIED = 'Belirtilmemiş';
+
+/** Tam liste (kırpma yok); boş değer 'Belirtilmemiş'. */
+function summarize(rows: any[], key: string) {
   return Object.entries(rows.reduce<Record<string, number>>((acc, row) => {
-    const label = String(row?.[key] ?? '-').trim() || '-';
+    const label = String(row?.[key] ?? '').trim() || UNSPECIFIED;
     acc[label] = (acc[label] ?? 0) + 1;
     return acc;
-  }, {})).sort((a, b) => b[1] - a[1]).slice(0, limit).map(([label, value]) => ({ label, value }));
+  }, {})).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'tr')).map(([label, value]) => ({ label, value }));
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    await requireReportsAccessOrThrow();
+    const me = await requireReportsAccessOrThrow();
+    const allowedDepartments = await getUserDepartments(me);
+    const departments = resolveDepartmentFilter(new URL(request.url).searchParams.get('department'), allowedDepartments);
     const admin = createPgAdminClient();
 
     const data = await fetchAllRows<BaseRow>((from, to) => {
@@ -43,7 +49,15 @@ export async function GET() {
         .range(from, to);
     });
 
-    const baseRows = ((data ?? []) as BaseRow[]).filter((row: any) => !isReportOnlyCustomer(row));
+    let baseRows = ((data ?? []) as BaseRow[]).filter((row: any) => !isReportOnlyCustomer(row));
+    if (departments && baseRows.length) {
+      // vw_crm_musteriler is_kolu taşımaz; departman musteriler.is_kolu üzerinden süzülür.
+      const deptRows = await fetchAllByCustomerIds<{ id: string; is_kolu: string | null }>(
+        admin, 'musteriler', 'id,is_kolu', baseRows.map((r) => r.musteri_id).filter(Boolean) as string[], undefined, { idColumn: 'id' },
+      );
+      const inDept = new Set(deptRows.filter((r) => (departments as string[]).includes(String(r.is_kolu ?? '').trim())).map((r) => String(r.id)));
+      baseRows = baseRows.filter((r) => r.musteri_id && inDept.has(String(r.musteri_id)));
+    }
     const ids = baseRows.map((r) => r.musteri_id).filter(Boolean) as string[];
     const kunyeMap = new Map<string, any>();
     const latestActivityMap = new Map<string, any>();
@@ -80,7 +94,7 @@ export async function GET() {
     const rows = baseRows.map((r) => {
       const aktifFazNo = r.aktif_faz_no ?? null;
       const mevcutFaz = aktifFazNo != null ? `FAZ ${aktifFazNo}` : '-';
-      const bekleyenTaraf = ((r.bekleyen_taraf ?? '').trim()) || '-';
+      const bekleyenTaraf = ((r.bekleyen_taraf ?? '').trim()) || UNSPECIFIED;
       const rawKunye = r.musteri_id ? (kunyeMap.get(r.musteri_id) ?? null) : null;
       const kunye = mapKunyeDbToUi(rawKunye);
       const kunyeDurum = getKunyeStatus({ ...kunye, ...(rawKunye ?? {}), firma_adi: r.musteri, has_kunye_record: Boolean(kunye) }).status;
@@ -92,7 +106,7 @@ export async function GET() {
         entegrasyon_tipi: (r.entegrasyon_tipi ?? '').trim() || '-',
         mevcut_faz: mevcutFaz,
         son_aksiyon: latestActivity?.activity_label || (r.aktif_faz_adi ?? '').trim() || '-',
-        sorumlu: (r.sorumlu ?? '').trim() || '-',
+        sorumlu: (r.sorumlu ?? '').trim() || UNSPECIFIED,
         satis_olasiligi_durumu: '-',
         sonraki_adim: ((r.son_not ?? '').trim()) || '-',
         bekleyen_taraf: bekleyenTaraf,
@@ -115,6 +129,8 @@ export async function GET() {
     return NextResponse.json({
       rows,
       totals,
+      allowedDepartments,
+      generatedAt: new Date().toISOString(),
       highlights: {
         owners: summarize(rows, 'sorumlu'),
         waiting: summarize(rows, 'bekleyen_taraf'),

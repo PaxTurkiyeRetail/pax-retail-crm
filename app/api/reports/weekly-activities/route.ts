@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server';
-import { requireReportsAccessOrThrow } from '@/lib/authz';
+import { getUserDepartments, requireReportsAccessOrThrow } from '@/lib/authz';
+import { resolveDepartmentFilter } from '@/lib/departments';
+import { parsePhaseRange, trFold } from '@/lib/filters/sql';
 import { createPgAdminClient } from '@/lib/pg/admin';
-import { activityLabelFromRow, normalizeDurum, presentDurum } from '@/lib/activities/presentation';
-import { normalizeChannel, isSalesChannel, isTechnicalChannel } from '@/lib/activity-channels';
+import { activityLabelFromRow, DURUM_CANONICAL, normalizeDurum, presentDurum } from '@/lib/activities/presentation';
+import { ACTIVITY_CHANNEL_OPTIONS, normalizeChannel, isSalesChannel, isTechnicalChannel } from '@/lib/activity-channels';
 import { fetchAllRows, formatIstanbulDayKey, inclusiveDayCount } from '@/lib/reporting';
 
 export const dynamic = 'force-dynamic';
@@ -28,37 +30,33 @@ function toDateInput(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 
-function uniqueSorted(values: Array<string | null | undefined>) {
-  return Array.from(new Set(values.map((item) => String(item ?? '').trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'tr'));
-}
-
 export async function GET(req: Request) {
   try {
-    await requireReportsAccessOrThrow();
+    const me = await requireReportsAccessOrThrow();
     const url = new URL(req.url);
     const from = String(url.searchParams.get('from') ?? '').trim() || toDateInput(startOfWeek(new Date()));
     const to = String(url.searchParams.get('to') ?? '').trim() || toDateInput(endOfWeek(new Date()));
+    // Satıcı: owner_id (created_by_user_id) öncelikli, yoksa ad (created_by/owner).
+    const ownerId = String(url.searchParams.get('owner_id') ?? '').trim();
     const owner = String(url.searchParams.get('owner') ?? '').trim();
-    const responsible = String(url.searchParams.get('responsible') ?? '').trim();
-    const customer = String(url.searchParams.get('customer') ?? '').trim();
     const channel = String(url.searchParams.get('channel') ?? '').trim();
-    const phase = String(url.searchParams.get('phase') ?? '').trim();
-    const waiting = String(url.searchParams.get('waiting') ?? '').trim();
+    const role = String(url.searchParams.get('role') ?? '').trim();
+    const phase = parsePhaseRange(url.searchParams.get('phase'));
     const status = normalizeDurum(url.searchParams.get('status')) ?? '';
+    const q = trFold(String(url.searchParams.get('q') ?? '').trim());
+    const deptFilter = resolveDepartmentFilter(url.searchParams.get('department'), await getUserDepartments(me));
     const daySpan = inclusiveDayCount(from, to);
 
     const admin = createPgAdminClient();
     const data = await fetchAllRows<any>((rangeFrom, rangeTo) => {
       let query = admin
         .from('pipeline_eventleri')
-        .select('id,musteri_id,faz_no,durum,aksiyon,owner,partner_owner,notlar,created_at,created_by,activity_context,musteriler(musteri,sorumlu,sektor,entegrasyon_tipi)')
-        .gte('created_at', `${from}T00:00:00`)
-        .lte('created_at', `${to}T23:59:59`)
+        .select('id,musteri_id,faz_no,durum,aksiyon,owner,partner_owner,notlar,created_at,created_by,created_by_user_id,activity_context,musteriler(musteri,sorumlu,sektor,entegrasyon_tipi,is_kolu)')
+        .activityDateRange(from, to)
         .order('created_at', { ascending: false })
         .range(rangeFrom, rangeTo);
 
-      if (phase) query = query.eq('faz_no', Number(phase));
-      if (waiting) query = query.eq('partner_owner', waiting);
+      if (phase) query = query.gte('faz_no', phase.min).lte('faz_no', phase.max);
       if (status) query = query.eq('durum', status);
       return query;
     });
@@ -66,7 +64,6 @@ export async function GET(req: Request) {
     let rows = (data ?? [])
       .filter((row: any) => {
         const rawAction = String(row?.aksiyon ?? '').trim();
-        const normalizedStatus = normalizeDurum(row?.durum);
         return rawAction.startsWith('AKTIVITE:');
       })
       .map((row: any) => ({
@@ -84,12 +81,19 @@ export async function GET(req: Request) {
         channel: normalizeChannel(activityLabelFromRow(row)),
         notes: String(row.notlar ?? '').trim(),
         activity_context: row.activity_context ?? 'customer',
+        created_by_user_id: row.created_by_user_id != null ? String(row.created_by_user_id) : '',
+        department: String(row?.musteriler?.is_kolu ?? ''),
       }));
 
-    if (owner) rows = rows.filter((row) => row.created_by === owner);
-    if (responsible) rows = rows.filter((row) => row.responsible === responsible);
-    if (customer) rows = rows.filter((row) => row.customer === customer);
+    if (deptFilter) rows = rows.filter((row) => (deptFilter as string[]).includes(row.department));
+    if (ownerId || owner) {
+      const ownerFold = trFold(owner);
+      rows = rows.filter((row) => (ownerId && row.created_by_user_id === ownerId) || (ownerFold && trFold(row.created_by) === ownerFold));
+    }
     if (channel) rows = rows.filter((row) => row.channel === channel);
+    if (role === 'sales') rows = rows.filter((row) => isSalesChannel(row.channel));
+    if (role === 'technical') rows = rows.filter((row) => isTechnicalChannel(row.channel));
+    if (q) rows = rows.filter((row) => [row.customer, row.created_by, row.responsible, row.notes].some((v) => trFold(v).includes(q)));
 
     const byPersonMap = new Map<string, any>();
     const byCustomerMap = new Map<string, any>();
@@ -189,13 +193,9 @@ export async function GET(req: Request) {
       filters: {
         from,
         to,
-        ownerOptions: uniqueSorted(rows.map((row) => row.created_by)),
-        responsibleOptions: uniqueSorted(rows.map((row) => row.responsible)),
-        customerOptions: uniqueSorted(rows.map((row) => row.customer)),
-        channelOptions: uniqueSorted(rows.map((row) => row.channel)),
-        phaseOptions: uniqueSorted(rows.map((row) => row.phase)),
-        waitingOptions: uniqueSorted(rows.map((row) => row.waiting)),
-        statusOptions: uniqueSorted(rows.map((row) => row.status)),
+        // Seçenekler sabit: filtrelenmiş satırlardan türetilmez (seçim yapınca liste daralmasın).
+        channelOptions: [...ACTIVITY_CHANNEL_OPTIONS],
+        statusOptions: Object.values(DURUM_CANONICAL),
       },
       kpis,
       byPerson,

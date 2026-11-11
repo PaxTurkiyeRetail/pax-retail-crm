@@ -3,6 +3,7 @@ import { requirePermissionOrThrow, userHasPermission } from '@/lib/authz';
 import { createPgAdminClient } from '@/lib/pg/admin';
 import { addDaysToIsoDate, getTurkeyTodayIso, isMissingRelationError } from '@/lib/quotes/service';
 import { isReportOnlyCustomer } from '@/lib/report-only-customers';
+import { applyQuoteScopeFilters, readQuoteScopeFilters } from '../quote-filters';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -20,10 +21,6 @@ function parsePositiveInt(value: string | null, fallback: number) {
   return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
 }
 
-function escapeIlike(value: string) {
-  return String(value ?? '').replace(/[\%_]/g, ' ').trim();
-}
-
 export async function GET(request: Request) {
   try {
     const me = await requirePermissionOrThrow('quote.read');
@@ -31,7 +28,6 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const q = String(url.searchParams.get('q') ?? '').trim().toLocaleLowerCase('tr');
     const status = String(url.searchParams.get('status') ?? '').trim().toLowerCase();
-    const owner = String(url.searchParams.get('owner') ?? '').trim();
     const page = parsePositiveInt(url.searchParams.get('page'), 1);
     const pageSize = Math.min(parsePositiveInt(url.searchParams.get('pageSize'), 20), 100);
     const from = (page - 1) * pageSize;
@@ -49,7 +45,9 @@ export async function GET(request: Request) {
     }
 
     if (status) quoteQuery = quoteQuery.ilike('status', status);
-    if (owner) quoteQuery = quoteQuery.ilike('owner_name', escapeIlike(owner));
+    const scoped = await applyQuoteScopeFilters(quoteQuery, admin, me, readQuoteScopeFilters(url));
+    if (scoped.error) return NextResponse.json({ message: scoped.error }, { status: 500 });
+    quoteQuery = scoped.query;
 
     // Arama modunda müşteri/ürün özetinde de filtre olabildiği için önce sınırlı havuz alıp
     // uygulama katmanında süzüyoruz. Normal modda gerçek server-side pagination çalışır.

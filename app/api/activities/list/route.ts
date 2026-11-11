@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
-import { requireActivityReadOrThrow, userHasPermission } from '@/lib/authz';
+import { getUserDepartments, requireActivityReadOrThrow, userHasPermission } from '@/lib/authz';
+import { resolveDepartmentFilter } from '@/lib/departments';
+import { parsePhaseRange } from '@/lib/filters/sql';
+import { fetchAllRows } from '@/lib/reporting';
 import { createPgAdminClient } from '@/lib/pg/admin';
 import { DURUM_CANONICAL, activityLabelFromRow, isDisplayableActivityRow, normalizeDurum, presentDurum } from '@/lib/activities/presentation';
 import { getSlaPresentation, matchesSlaFilter } from '@/lib/sla';
@@ -46,22 +49,39 @@ export async function GET(req: Request) {
     const url = new URL(req.url);
     const q = (url.searchParams.get('q') ?? '').trim();
     const owner = (url.searchParams.get('owner') ?? '').trim();
+    // Satıcı: kullanıcı id (created_by_user_id); owner (ad) ile birlikte gelirse OR'lanır.
+    const ownerIdRaw = (url.searchParams.get('owner_id') ?? '').trim();
+    const ownerId = /^[A-Za-z0-9_-]{1,64}$/.test(ownerIdRaw) ? ownerIdRaw : '';
     const responsible = (url.searchParams.get('responsible') ?? '').trim();
     const sla = (url.searchParams.get('sla') ?? '').trim();
     const fazNoRaw = (url.searchParams.get('faz_no') ?? '').trim();
-    const fazNo = fazNoRaw ? Number(fazNoRaw) : NaN;
+    // faz_no: '7' tek faz ya da '1-4' aralık.
+    const fazRange = parsePhaseRange(fazNoRaw);
     const durum = normalizeDurum(url.searchParams.get('durum')) ?? '';
     const partner = (url.searchParams.get('partner_owner') ?? '').trim();
     const fromDate = (url.searchParams.get('from') ?? '').trim();
     const toDate = (url.searchParams.get('to') ?? '').trim();
     const page = parsePositiveInt(url.searchParams.get('page'), 1);
     const analyticsMode = (url.searchParams.get('analytics') ?? '').trim() === '1';
+    // analytics=1: KPI'lar filtrelenmiş kümenin tamamından (sayfalama/1000 sınırı yok).
     const pageSize = Math.min(parsePositiveInt(url.searchParams.get('pageSize'), 20), analyticsMode ? 1000 : 100);
     const blockedFilter = (url.searchParams.get('blocked') ?? '').trim();
 
     const serverToday = getTurkeyToday();
 
     const admin = createPgAdminClient();
+
+    // Departman: müşterinin iş kolu (musteriler.is_kolu), kullanıcının departman kapsamıyla.
+    let departmentCustomerIds: string[] | null = null;
+    const deptFilter = resolveDepartmentFilter(url.searchParams.get('department'), await getUserDepartments(me));
+    if (deptFilter) {
+      const { data: deptRows, error: deptError } = await admin.from('musteriler').select('id').in('is_kolu', deptFilter).limit(20000);
+      if (deptError) return NextResponse.json({ message: deptError.message }, { status: 500 });
+      const ids = (deptRows ?? []).map((row: any) => String(row.id ?? '').trim()).filter(Boolean);
+      if (!ids.length) return NextResponse.json({ rows: [], total: 0, page, pageSize, serverToday });
+      departmentCustomerIds = ids;
+    }
+    const scopedCustomerIds = departmentCustomerIds;
 
     let matchedCustomerIds: string[] | null = null;
     if (q || responsible) {
@@ -91,65 +111,85 @@ export async function GET(req: Request) {
       ? 'id,musteri_id,faz_no,durum,aksiyon,owner,partner_owner,created_at,hedef_tarihi,created_by,is_blocked,activity_scope,activity_context,musteriler(musteri,sektor,sorumlu,customer_type)'
       : 'id,musteri_id,faz_no,iteration_no,event_type,durum,aksiyon,owner,partner_owner,notlar,created_at,hedef_tarihi,created_by,is_blocked,blocked_note,blocked_at,blocked_by,activity_scope,activity_context,musteriler(musteri,sektor,entegrasyon_tipi,satis_olasiligi,sorumlu,customer_type)';
 
-    let query = admin
-      .from('pipeline_eventleri')
-      .select(baseSelect, { count: needsClientFiltering ? undefined : 'exact' })
-      .order('created_at', { ascending: false });
+    const buildQuery = (withCount: boolean) => {
+      let query = admin
+        .from('pipeline_eventleri')
+        .select(baseSelect, { count: withCount ? 'exact' : undefined })
+        .order('created_at', { ascending: false });
 
-    if (!userHasPermission(me, 'activity.read.any')) {
-      query = query.or(`created_by_user_id.eq.${me.id},created_by_email.ilike.${escapeIlike(me.email)}`);
-    }
-
-    if (Number.isFinite(fazNo)) query = query.eq('faz_no', fazNo);
-    if (partner) query = query.eq('partner_owner', partner);
-    if (durum) query = query.eq('durum', durum);
-    if (fromDate) query = query.gte('created_at', `${fromDate}T00:00:00`);
-    if (toDate) query = query.lte('created_at', `${toDate}T23:59:59`);
-    if (blockedFilter === 'blocked') query = query.eq('is_blocked', true);
-    if (blockedFilter === 'unblocked') query = query.or('is_blocked.is.null,is_blocked.eq.false');
-
-    if (owner) {
-      const ownerNeedle = escapeIlike(owner);
-      query = query.or(`created_by.ilike.${ownerNeedle},owner.ilike.${ownerNeedle}`);
-    }
-
-    if (responsible && matchedCustomerIds) {
-      query = query.in('musteri_id', matchedCustomerIds);
-    }
-
-    if (q) {
-      const needle = escapeIlike(q);
-      if (needle) {
-        const like = `%${needle}%`;
-        const activityOrParts = [
-          `aksiyon.ilike.${like}`,
-          `notlar.ilike.${like}`,
-          `owner.ilike.${like}`,
-          `created_by.ilike.${like}`,
-          `partner_owner.ilike.${like}`,
-        ];
-        const canonicalDurumForSearch = normalizeDurum(needle);
-        if (canonicalDurumForSearch && Object.values(DURUM_CANONICAL).includes(canonicalDurumForSearch)) {
-          activityOrParts.push(`durum.eq.${canonicalDurumForSearch}`);
-        }
-        if (matchedCustomerIds?.length) {
-          for (const chunk of chunkArray(matchedCustomerIds, 80)) {
-            activityOrParts.push(`musteri_id.in.(${chunk.join(',')})`);
-          }
-        }
-        query = query.or(activityOrParts.join(','));
+      if (!userHasPermission(me, 'activity.read.any')) {
+        query = query.or(`created_by_user_id.eq.${me.id},created_by_email.ilike.${escapeIlike(me.email)}`);
       }
-    }
 
-    if (!needsClientFiltering) {
-      const from = (page - 1) * pageSize;
-      query = query.range(from, from + pageSize - 1);
+      if (fazRange) {
+        query = fazRange.min === fazRange.max
+          ? query.eq('faz_no', fazRange.min)
+          : query.gte('faz_no', fazRange.min).lte('faz_no', fazRange.max);
+      }
+      if (scopedCustomerIds) query = query.in('musteri_id', scopedCustomerIds);
+      if (partner) query = query.eq('partner_owner', partner);
+      if (durum) query = query.eq('durum', durum);
+      query = query.activityDateRange(fromDate, toDate);
+      if (blockedFilter === 'blocked') query = query.eq('is_blocked', true);
+      if (blockedFilter === 'unblocked') query = query.or('is_blocked.is.null,is_blocked.eq.false');
+
+      if (ownerId || owner) {
+        const ownerNeedle = escapeIlike(owner);
+        const ownerParts = [
+          ownerId ? `created_by_user_id.eq.${ownerId}` : '',
+          // id seçiliyse ad yalnız hesabı bağlanmamış eski kayıtlar için (created_by).
+          ownerNeedle && !/[,()]/.test(ownerNeedle) ? `created_by.ilike.${ownerNeedle}` : '',
+          ownerNeedle && !ownerId && !/[,()]/.test(ownerNeedle) ? `owner.ilike.${ownerNeedle}` : '',
+        ].filter(Boolean);
+        if (ownerParts.length) query = query.or(ownerParts.join(','));
+      }
+
+      if (responsible && matchedCustomerIds) {
+        query = query.in('musteri_id', matchedCustomerIds);
+      }
+
+      if (q) {
+        const needle = escapeIlike(q);
+        if (needle) {
+          const like = `%${needle}%`;
+          const activityOrParts = [
+            `aksiyon.ilike.${like}`,
+            `notlar.ilike.${like}`,
+            `owner.ilike.${like}`,
+            `created_by.ilike.${like}`,
+            `partner_owner.ilike.${like}`,
+          ];
+          const canonicalDurumForSearch = normalizeDurum(needle);
+          if (canonicalDurumForSearch && Object.values(DURUM_CANONICAL).includes(canonicalDurumForSearch)) {
+            activityOrParts.push(`durum.eq.${canonicalDurumForSearch}`);
+          }
+          if (matchedCustomerIds?.length) {
+            for (const chunk of chunkArray(matchedCustomerIds, 80)) {
+              activityOrParts.push(`musteri_id.in.(${chunk.join(',')})`);
+            }
+          }
+          query = query.or(activityOrParts.join(','));
+        }
+      }
+      return query;
+    };
+
+    let data: any[] | null = null;
+    let count: number | null = null;
+    if (analyticsMode) {
+      // Tüm filtrelenmiş küme (1000'lik partiler) — KPI'lar ilk sayfadan değil.
+      data = await fetchAllRows<any>((from, to) => buildQuery(false).range(from, to));
+    } else if (needsClientFiltering) {
+      const result = await buildQuery(false).limit(5000);
+      if (result.error) return NextResponse.json({ message: result.error.message }, { status: 500 });
+      data = result.data ?? [];
     } else {
-      query = query.limit(analyticsMode ? 1000 : 5000);
+      const from = (page - 1) * pageSize;
+      const result = await buildQuery(true).range(from, from + pageSize - 1);
+      if (result.error) return NextResponse.json({ message: result.error.message }, { status: 500 });
+      data = result.data ?? [];
+      count = result.count ?? null;
     }
-
-    const { data, error, count } = await query;
-    if (error) return NextResponse.json({ message: error.message }, { status: 500 });
 
     const phaseNos = Array.from(new Set((data ?? []).map((row: any) => Number(row?.faz_no)).filter((value: number) => Number.isFinite(value))));
     const [customerPhaseResult, partnerPhaseResult] = await Promise.all([
@@ -198,6 +238,8 @@ export async function GET(req: Request) {
       });
 
     rows = rows.filter((row: any) => matchesSlaFilter(sla, row.due_date, row.activity_status));
+
+    if (analyticsMode) return NextResponse.json({ rows, total: rows.length, page: 1, pageSize: rows.length, serverToday });
 
     const total = needsClientFiltering ? rows.length : Number(count ?? rows.length);
     const from = (page - 1) * pageSize;

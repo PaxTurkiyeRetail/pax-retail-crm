@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { verifyPortalRequest } from '@/lib/integrations/portal-auth';
+import { PORTAL_EVENT_TYPE_LABELS, portalEventNote } from '@/lib/integrations/portal-event-note';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,20 +14,11 @@ const CREATED_BY = 'PAX Portal';
 const PARTNER_SUBTYPE = 'Entegrasyon Firması';
 const START_PHASE = 3;
 const START_NOTE = "Portal bağlantısıyla entegrasyon süreci Faz 3'ten başlatıldı (Portal)";
-const BACKFILL_PREFIX = '[Portal geçmiş aktarımı] ';
-
-const TYPE_LABELS = {
-  'partner.registered': 'Portal kaydı oluşturuldu',
-  'partner.profile_completed': 'Portal profili tamamlandı',
-  'partner.line_granted': 'Ürün hattı erişimi verildi',
-  'partner.line_revoked': 'Ürün hattı erişimi kaldırıldı',
-  'partner.artifact_downloaded': 'SDK/paket indirildi',
-} as const;
-const LINE_LABELS = { A2A: 'A2A', D2D_DLL: 'D2D-DLL', D2D_JAR: 'D2D-JAR' } as const;
+type EventType = keyof typeof PORTAL_EVENT_TYPE_LABELS;
 
 const EventSchema = z.object({
   eventId: z.guid(),
-  type: z.enum(Object.keys(TYPE_LABELS) as [keyof typeof TYPE_LABELS, ...(keyof typeof TYPE_LABELS)[]]),
+  type: z.enum(Object.keys(PORTAL_EVENT_TYPE_LABELS) as [EventType, ...EventType[]]),
   occurredAt: z.iso.datetime({ offset: true }),
   crmFirmId: z.guid(),
   productLine: z.enum(['A2A', 'D2D_DLL', 'D2D_JAR']).nullish(),
@@ -35,19 +27,6 @@ const EventSchema = z.object({
   userEmail: z.email().max(254).nullish(),
   backfill: z.boolean(),
 });
-export type PortalEvent = z.infer<typeof EventSchema>;
-
-export function portalEventNote(event: PortalEvent) {
-  const prefix = event.backfill ? BACKFILL_PREFIX : '';
-  // İndirmede doküman/dosya adı varsa açıkça yazılır: "<ad> · sürüm <v> indirildi".
-  if (event.type === 'partner.artifact_downloaded' && event.title) {
-    return `${prefix}${event.title}${event.version ? ` · sürüm ${event.version}` : ''} indirildi (Portal)`;
-  }
-  const parts: string[] = [TYPE_LABELS[event.type]];
-  if (event.productLine) parts.push(LINE_LABELS[event.productLine]);
-  if (event.version) parts.push(`sürüm ${event.version}`);
-  return `${prefix}${parts.join(' · ')} (Portal)`;
-}
 
 function json(body: unknown, status: number) {
   return NextResponse.json(body, { status });

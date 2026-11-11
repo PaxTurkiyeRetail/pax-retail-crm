@@ -20,7 +20,8 @@ const PRIORITY_COLORS: Record<string,string> = { critical:'#b91c1c', high:'#c241
 const PRIORITY_BG: Record<string,string>     = { critical:'#fee2e2', high:'#ffedd5', medium:'#fef9c3', low:'#f0fdf4' };
 const SLA_COLORS: Record<string,string>  = { on_time:'#166534', at_risk:'#b45309', breached:'#b91c1c', na:'#64748b' };
 const SLA_BG: Record<string,string>     = { on_time:'#dcfce7', at_risk:'#fef3c7', breached:'#fee2e2', na:'#f1f5f9' };
-const SLA_LABELS: Record<string,string> = { on_time:'Zamanında', at_risk:'Riskli', breached:'Gecikti', na:'—' };
+const SLA_LABELS: Record<string,string> = { on_time:'Zamanında', at_risk:'Riskli', breached:'Gecikti', na:'SLA yok' };
+const PRIORITY_LABELS: Record<string,string> = { critical:'Kritik', high:'Yüksek', medium:'Orta', low:'Düşük' };
 const STATUS_BG: Record<string,string>  = { open:'#dbeafe', assigned:'#e0f2fe', in_progress:'#fef3c7', waiting:'#f3f4f6', resolved:'#dcfce7', closed:'#f1f5f9' };
 const STATUS_COLOR: Record<string,string> = { open:'#1d4ed8', assigned:'#0369a1', in_progress:'#b45309', waiting:'#4b5563', resolved:'#166534', closed:'#475569' };
 
@@ -81,9 +82,11 @@ export default function RequestsClient({ userRole, userId, canManage, onNewReque
     <main className="pax-page-container">
       <style jsx>{`
         .filters { background:var(--surface); border:1px solid var(--border); border-radius:20px; padding:14px 16px; display:grid; gap:10px; }
-        .filter-row { display:grid; grid-template-columns:1fr auto auto auto auto auto; gap:8px; align-items:center; }
+        .filter-row { display:grid; grid-template-columns:1fr auto auto auto auto auto; gap:8px; align-items:end; }
+        .ffield { display:grid; gap:4px; min-width:0; }
+        .flabel { font-size:11px; font-weight:700; color:var(--text-3); }
         .sel { padding:10px 12px; border:1px solid var(--border); border-radius:12px; font-size:12px; background:var(--surface); color:var(--text); outline:none; cursor:pointer; }
-        .search-wrap { position:relative; }
+        .search-wrap { position:relative; display:block; }
         .search-wrap input { width:100%; padding:10px 12px 10px 34px; border:1px solid var(--border); border-radius:12px; font-size:13px; background:var(--surface); color:var(--text); outline:none; }
         .search-icon { position:absolute; left:11px; top:50%; transform:translateY(-50%); color:var(--text-4); font-size:15px; pointer-events:none; }
         .new-btn { display:inline-flex; align-items:center; gap:5px; padding:10px 16px; background:linear-gradient(135deg,#1d4ed8,#2563eb); color:#fff; border-radius:12px; font-size:13px; font-weight:700; text-decoration:none; white-space:nowrap; }
@@ -115,27 +118,42 @@ export default function RequestsClient({ userRole, userId, canManage, onNewReque
       {/* Filters */}
       <div className="filters">
         <div className="filter-row">
-          <div className="search-wrap">
-            <span className="search-icon">⌕</span>
-            <input value={q} onChange={e => setQ(e.target.value)} placeholder="Talep ara..." />
-          </div>
-          <select className="sel" value={statusFilter} onChange={e => setStatus(e.target.value)}>
-            <option value="">Tüm durumlar</option>
-            {Object.entries(STATUS_LABELS).map(([v,l]) => <option key={v} value={v}>{l}</option>)}
-          </select>
-          <select className="sel filter-extras" value={priorityFilter} onChange={e => setPri(e.target.value)}>
-            <option value="">Öncelik</option>
-            {['critical','high','medium','low'].map(p => <option key={p} value={p}>{p}</option>)}
-          </select>
-          <select className="sel filter-extras" value={slaFilter} onChange={e => setSla(e.target.value)}>
-            <option value="">SLA</option>
-            {Object.entries(SLA_LABELS).map(([v,l]) => <option key={v} value={v}>{l}</option>)}
-          </select>
-          {isAdmin && (
-            <select className="sel filter-extras" value={assigneeFilter} onChange={e => setAss(e.target.value)}>
-              <option value="">Tüm atananlar</option>
-              {options.users.map(u => <option key={u.user_id} value={u.user_id}>{u.full_name}</option>)}
+          <label className="ffield">
+            <span className="flabel">Ara</span>
+            <span className="search-wrap">
+              <span className="search-icon">⌕</span>
+              <input value={q} onChange={e => setQ(e.target.value)} placeholder="Talep ara..." />
+            </span>
+          </label>
+          <label className="ffield">
+            <span className="flabel">Durum</span>
+            <select className="sel" value={statusFilter} onChange={e => setStatus(e.target.value)}>
+              <option value="">Tümü</option>
+              {Object.entries(STATUS_LABELS).map(([v,l]) => <option key={v} value={v}>{l}</option>)}
             </select>
+          </label>
+          <label className="ffield filter-extras">
+            <span className="flabel">Öncelik</span>
+            <select className="sel" value={priorityFilter} onChange={e => setPri(e.target.value)}>
+              <option value="">Tümü</option>
+              {Object.entries(PRIORITY_LABELS).map(([v,l]) => <option key={v} value={v}>{l}</option>)}
+            </select>
+          </label>
+          <label className="ffield filter-extras">
+            <span className="flabel">SLA</span>
+            <select className="sel" value={slaFilter} onChange={e => setSla(e.target.value)}>
+              <option value="">Tümü</option>
+              {Object.entries(SLA_LABELS).map(([v,l]) => <option key={v} value={v}>{l}</option>)}
+            </select>
+          </label>
+          {isAdmin && (
+            <label className="ffield filter-extras">
+              <span className="flabel">Atanan</span>
+              <select className="sel" value={assigneeFilter} onChange={e => setAss(e.target.value)}>
+                <option value="">Tümü</option>
+                {options.users.map(u => <option key={u.user_id} value={u.user_id}>{u.full_name}</option>)}
+              </select>
+            </label>
           )}
           <button onClick={() => onNewRequest?.()} className="new-btn" style={{ border:'none', cursor:'pointer' }}>+ Yeni</button>
         </div>
@@ -149,7 +167,7 @@ export default function RequestsClient({ userRole, userId, canManage, onNewReque
 
       {/* List header */}
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'2px 4px' }}>
-        <span style={{ fontSize:12, color:'var(--text-3)', fontWeight:600 }}>{total} kayıt · sayfa {page}/{totalPages}</span>
+        <span style={{ fontSize:12, color:'var(--text-3)', fontWeight:600 }}>{total.toLocaleString('tr-TR')} kayıt · sayfa {page}/{totalPages}</span>
         {isAdmin && <Link href="/requests/dashboard" style={{ fontSize:12, color:'var(--accent)', fontWeight:700, textDecoration:'none' }}>Dashboard →</Link>}
       </div>
 
@@ -175,7 +193,7 @@ export default function RequestsClient({ userRole, userId, canManage, onNewReque
                 </div>
                 <div className="req-meta">
                   <Pill label={STATUS_LABELS[r.status]||r.status} bg={STATUS_BG[r.status]||'#f1f5f9'} color={STATUS_COLOR[r.status]||'#475569'} />
-                  <Pill label={r.priority} bg={PRIORITY_BG[r.priority]||'#f1f5f9'} color={PRIORITY_COLORS[r.priority]||'#475569'} />
+                  <Pill label={PRIORITY_LABELS[r.priority]||r.priority} bg={PRIORITY_BG[r.priority]||'#f1f5f9'} color={PRIORITY_COLORS[r.priority]||'#475569'} />
                   {r.request_categories && (
                     <Pill label={r.request_categories.name} bg={r.request_categories.color+'22'} color={r.request_categories.color} />
                   )}

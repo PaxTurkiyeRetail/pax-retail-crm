@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { requireReportsAccessOrThrow } from '@/lib/authz';
+import { getUserDepartments, requireReportsAccessOrThrow } from '@/lib/authz';
+import { resolveDepartmentFilter } from '@/lib/departments';
 import { createPgAdminClient } from '@/lib/pg/admin';
 import { getKunyeStatus, mapKunyeDbToUi } from '@/lib/kunye';
 import { fetchAllByCustomerIds, fetchAllRows } from '@/lib/reporting';
@@ -172,9 +173,11 @@ async function loadLatestQuotesByCustomer(admin: ReturnType<typeof createPgAdmin
 
 export async function GET(request: Request) {
   try {
-    await requireReportsAccessOrThrow();
+    const me = await requireReportsAccessOrThrow();
     const admin = createPgAdminClient();
     const url = new URL(request.url);
+    const allowedDepartments = await getUserDepartments(me);
+    const departments = resolveDepartmentFilter(url.searchParams.get('department'), allowedDepartments);
 
     const selectedKasapos = String(url.searchParams.get('kasapos') ?? '').trim();
 
@@ -186,7 +189,7 @@ export async function GET(request: Request) {
         .range(from, to);
     });
 
-    const baseRowsRaw = (customers ?? [])
+    let baseRowsRaw = (customers ?? [])
       .filter((row: any) => !isReportOnlyCustomer(row))
       .map((row) => ({
         musteri_id: String(row.musteri_id ?? '').trim(),
@@ -197,6 +200,15 @@ export async function GET(request: Request) {
         sektor: String((row as any).sektor ?? '').trim() || null,
       }))
       .filter((row): row is { musteri_id: string; musteri: string; aktif_faz_no: number | null; aktif_faz_adi: string | null; sorumlu: string | null; sektor: string | null } => Boolean(row.musteri_id));
+
+    if (departments && baseRowsRaw.length) {
+      // vw_crm_musteriler is_kolu taşımaz; departman musteriler.is_kolu üzerinden süzülür.
+      const deptRows = await fetchAllByCustomerIds<{ id: string; is_kolu: string | null }>(
+        admin, 'musteriler', 'id,is_kolu', baseRowsRaw.map((r) => r.musteri_id), undefined, { idColumn: 'id' },
+      );
+      const inDept = new Set(deptRows.filter((r) => (departments as string[]).includes(String(r.is_kolu ?? '').trim())).map((r) => String(r.id)));
+      baseRowsRaw = baseRowsRaw.filter((r) => inDept.has(r.musteri_id));
+    }
 
     const baseRows = await appendLastStayedPhase(baseRowsRaw);
 
@@ -268,6 +280,8 @@ export async function GET(request: Request) {
     return NextResponse.json({
       kasaposOptions,
       selectedKasapos: effectiveKasapos,
+      allowedDepartments,
+      generatedAt: new Date().toISOString(),
       rows,
       totals: {
         totalCompanies: rows.length,

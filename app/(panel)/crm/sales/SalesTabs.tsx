@@ -6,7 +6,7 @@ import Link from 'next/link';
 export type SalesTab = 'cihaz' | 'hizmet';
 
 const TABS: Array<{ key: SalesTab; href: string; label: string; hint: string }> = [
-  { key: 'cihaz', href: '/crm/sales', label: 'Cihaz Satışları', hint: 'teklifden ve teklifsiz satışlar · USD' },
+  { key: 'cihaz', href: '/crm/sales', label: 'Cihaz Satışları', hint: 'tekliften ve teklifsiz satışlar · USD' },
   { key: 'hizmet', href: '/crm/sales?tab=hizmet', label: 'Hizmet Faturaları', hint: 'aylık entegrasyon / kullanım faturaları · TL & USD' },
 ];
 

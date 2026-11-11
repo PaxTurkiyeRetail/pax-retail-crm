@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import '@/styles/reports-weekly-management-presentation.css';
 import { appToast } from '@/lib/app-toast';
+import { ScopeLabel } from '@/components/filters/FilterBar';
+import { DEPARTMENTS } from '@/lib/departments';
 
 type Customer = {
   musteri_id: string;
@@ -65,6 +67,7 @@ type Payload = {
     riskSummary: string[];
   };
   customers: Customer[];
+  allowedDepartments?: string[] | null;
 };
 
 const EMPTY: Payload = {
@@ -87,6 +90,9 @@ function thisWeekRange() {
   const fmt = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   return { from: fmt(start), to: fmt(end) };
 }
+
+/** Seçili dönemden hesaplanan KPI’lar; diğerleri anlık (dönemden bağımsız) portföy değeridir. */
+const PERIOD_KPIS = new Set(['Haftalık Aktivite', 'Aktif Kişi']);
 
 function numberFormat(value: number) {
   return value.toLocaleString('tr-TR');
@@ -146,6 +152,7 @@ export default function WeeklyManagementPresentationPage() {
   const [to, setTo] = useState(defaults.to);
   const [owner, setOwner] = useState('');
   const [segment, setSegment] = useState('');
+  const [department, setDepartment] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -154,6 +161,7 @@ export default function WeeklyManagementPresentationPage() {
       const params = new URLSearchParams({ from, to });
       if (owner) params.set('owner', owner);
       if (segment) params.set('segment', segment);
+      if (department) params.set('department', department);
       const res = await fetch(`/api/reports/weekly-management-presentation?${params.toString()}`, { cache: 'no-store' });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -165,7 +173,7 @@ export default function WeeklyManagementPresentationPage() {
     } finally {
       setLoading(false);
     }
-  }, [from, to, owner, segment]);
+  }, [from, to, owner, segment, department]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -177,6 +185,7 @@ export default function WeeklyManagementPresentationPage() {
       const params = new URLSearchParams({ from, to });
       if (owner) params.set('owner', owner);
       if (segment) params.set('segment', segment);
+      if (department) params.set('department', department);
       const res = await fetch(`/api/reports/weekly-management-presentation/pptx?${params.toString()}`, { cache: 'no-store' });
       if (!res.ok) {
         const json = await res.json().catch(() => ({}));
@@ -203,6 +212,8 @@ export default function WeeklyManagementPresentationPage() {
   };
 
   const printDeck = () => window.print();
+  const departmentOptions = DEPARTMENTS.filter((d) => !payload.allowedDepartments?.length || payload.allowedDepartments.includes(d));
+  const scopeDepartment = department || (departmentOptions.length === 1 ? departmentOptions[0] : 'Tüm departmanlar');
   const combinedWeeklyItems = useMemo(() => buildCombinedWeeklyItems(payload), [payload]);
 
   return (
@@ -232,6 +243,13 @@ export default function WeeklyManagementPresentationPage() {
             </select>
           </label>
           <label>
+            <span>Departman</span>
+            <select value={department} onChange={(e) => setDepartment(e.target.value)}>
+              {departmentOptions.length > 1 ? <option value="">Tümü</option> : null}
+              {departmentOptions.map((item) => <option key={item} value={item}>{item}</option>)}
+            </select>
+          </label>
+          <label>
             <span>Segment</span>
             <select value={segment} onChange={(e) => setSegment(e.target.value)}>
               <option value="">Tümü</option>
@@ -242,6 +260,7 @@ export default function WeeklyManagementPresentationPage() {
         {message ? <div className="wmp-message">{message}</div> : null}
       </section>
 
+      <ScopeLabel period={`${formatDate(from)} – ${formatDate(to)}`} department={scopeDepartment} owner={owner || 'Tüm satıcılar'} />
       <section className="wmp-kpi-grid">
         {[
           ['Toplam Firma', numberFormat(payload.summary.totalAccounts)],
@@ -256,7 +275,7 @@ export default function WeeklyManagementPresentationPage() {
           ['Teklif Tutarı', moneyFormat(payload.summary.quoteAmount)],
           ['Künye Tamamlama', `%${payload.summary.kunyeCoveragePct}`],
         ].map(([label, value]) => (
-          <div className={`wmp-kpi-card${label === 'Teklif Tutarı' ? ' offer-amount' : ''}`} key={label}><span>{label}</span><strong>{value}</strong></div>
+          <div className={`wmp-kpi-card${label === 'Teklif Tutarı' ? ' offer-amount' : ''}`} key={label}><span>{label}</span><strong>{value}</strong><ScopeLabel mode={PERIOD_KPIS.has(label) ? 'period' : 'snapshot'} /></div>
         ))}
       </section>
 

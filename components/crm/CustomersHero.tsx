@@ -1,6 +1,6 @@
 'use client';
 
-import type { CSSProperties } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import '@/styles/customers-hero.css';
 
 type SummaryItem = { label: string; value: number };
@@ -23,6 +23,8 @@ type Props = {
   visibleOwnerBars: BarItem[];
   fieldOwnerMax: number;
   fieldAccountCount: number;
+  /** KPI kapsam rozeti (Anlık · Departman · Satıcı). */
+  scope?: ReactNode;
 };
 
 const _svg = { fill: 'none', stroke: 'currentColor', strokeWidth: '1.75', strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
@@ -34,7 +36,7 @@ export default function CustomersHero({
   stats, completionRate,
   kunyeDonutStyle, kasaDonutStyle, accountDonutStyle,
   kasaBreakdown, topSectors, sectorMax,
-  visibleOwnerBars, fieldOwnerMax, fieldAccountCount,
+  visibleOwnerBars, fieldOwnerMax, fieldAccountCount, scope,
 }: Props) {
   const havuzOwner = visibleOwnerBars.find(b => b.label === 'Havuz Account');
 
@@ -45,14 +47,15 @@ export default function CustomersHero({
         <span className="pax-hero-eyebrow">Müşteri Portföyü</span>
         <h1 className="pax-hero-title">Müşteriler</h1>
         <p className="pax-hero-description">Portföy kalitesi, künye doluluk oranı, sektör dağılımı ve sahiplik özeti.</p>
+        {scope}
         <div className="pax-hero-stats">
           <div className="pax-hero-stat">
             <div className="pax-hero-stat-label">Toplam Müşteri</div>
-            <div className="pax-hero-stat-value">{stats.total}</div>
+            <div className="pax-hero-stat-value">{stats.total.toLocaleString('tr-TR')}</div>
           </div>
           <div className="pax-hero-stat">
             <div className="pax-hero-stat-label">Künye Tamam</div>
-            <div className="pax-hero-stat-value">{stats.kunyeVar}</div>
+            <div className="pax-hero-stat-value">{stats.kunyeVar.toLocaleString('tr-TR')}</div>
           </div>
           <div className="pax-hero-stat">
             <div className="pax-hero-stat-label">Künye Oranı</div>
@@ -60,7 +63,7 @@ export default function CustomersHero({
           </div>
           <div className="pax-hero-stat">
             <div className="pax-hero-stat-label">Sektör</div>
-            <div className="pax-hero-stat-value">{stats.sectors}</div>
+            <div className="pax-hero-stat-value">{stats.sectors.toLocaleString('tr-TR')}</div>
           </div>
         </div>
       </section>

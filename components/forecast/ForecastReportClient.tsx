@@ -1,6 +1,12 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { FilterBar } from '@/components/filters/FilterBar';
+import { useUrlFilters } from '@/lib/filters/use-url-filters';
+import { filtersToQuery, type FilterOption } from '@/lib/filters/schema';
+import type { Department } from '@/lib/departments';
+import { FORECAST_EXTRA_KEYS, forecastFilterConfig } from '@/lib/reports/forecast-filters';
+import { useUrlParams } from '@/lib/reports/use-url-params';
 import JSZip from 'jszip';
 
 type Option = { label: string; value: string };
@@ -31,7 +37,7 @@ type Payload = {
     totalQuantity: number;
     weightedQuantity: number;
   };
-  ownerOptions: string[];
+  ownerOptions: FilterOption[];
   salesChannels: Option[];
   probabilities: Option[];
   months: MonthOption[];
@@ -72,25 +78,6 @@ function exportModelName(row: ForecastReportRow) {
   return row.product_code_snapshot || row.product_name_snapshot || '-';
 }
 
-function buildMonthlyModelSummary(rows: ForecastReportRow[], weighted = false) {
-  const map = new Map<string, { period: string; year: number; month: number; model: string; quantity: number }>();
-  rows.forEach((row) => {
-    const period = row.forecast_label || '-';
-    const year = Number(row.forecast_year || 0);
-    const month = Number(row.forecast_month || 0);
-    const model = exportModelName(row);
-    const key = `${year}||${month}||${period}||${model}`;
-    const existing = map.get(key) ?? { period, year, month, model, quantity: 0 };
-    const quantity = weighted ? (Number(row.quantity || 0) * Number(row.probability || 0)) / 100 : Number(row.quantity || 0);
-    existing.quantity += quantity;
-    map.set(key, existing);
-  });
-  const values = Array.from(map.values()).map((item) => ({
-    ...item,
-    quantity: Math.round(item.quantity),
-  }));
-  return values.sort((a, b) => (a.year - b.year) || (a.month - b.month) || a.model.localeCompare(b.model, 'tr'));
-}
 
 type ForecastPivotPeriod = { key: string; label: string; year: number; month: number };
 type ForecastPivotRow = { model: string; quantities: Record<string, number> };
@@ -350,21 +337,21 @@ async function buildForecastXlsxBlob(rows: ForecastReportRow[]) {
 
 export default function ForecastReportClient() {
   const [payload, setPayload] = useState<Payload>(EMPTY);
-  const [q, setQ] = useState('');
-  const [owner, setOwner] = useState('');
-  const [channel, setChannel] = useState('');
-  const [probability, setProbability] = useState('');
-  const [year, setYear] = useState('');
-  const [month, setMonth] = useState('');
+  const [ownerOptions, setOwnerOptions] = useState<FilterOption[] | null>(null);
+  const [allowedDepartments, setAllowedDepartments] = useState<Department[] | null>(null);
+  // Satıcı · Departman · Ara merkezi FilterBar'da; Kanal · Oran · Ay · Yıl sayfaya özel (ikisi de URL'de).
+  const filterConfig = useMemo(() => forecastFilterConfig(ownerOptions ?? undefined), [ownerOptions]);
+  const { values: filters } = useUrlFilters(filterConfig, { allowedDepartments });
+  const filterQuery = filtersToQuery(filters, filterConfig).toString();
+  const extra = useUrlParams(FORECAST_EXTRA_KEYS);
+  const { channel, probability, year, month } = extra.values;
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
     setMessage(null);
-    const params = new URLSearchParams();
-    if (q.trim()) params.set('q', q.trim());
-    if (owner) params.set('owner', owner);
+    const params = new URLSearchParams(filterQuery);
     if (channel) params.set('channel', channel);
     if (probability) params.set('probability', probability);
     if (year) params.set('year', year);
@@ -374,6 +361,8 @@ export default function ForecastReportClient() {
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json?.message || 'Forecast raporu alınamadı.');
       setPayload({ ...EMPTY, ...json });
+      setOwnerOptions((json.ownerOptions ?? []) as FilterOption[]);
+      setAllowedDepartments((json.allowedDepartments ?? null) as Department[] | null);
       if (json?.message && json?.message !== 'forecast_module_not_setup') setMessage(json.message);
     } catch (error: any) {
       setPayload(EMPTY);
@@ -383,7 +372,8 @@ export default function ForecastReportClient() {
     }
   }
 
-  useEffect(() => { void load(); }, [q, owner, channel, probability, year, month]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { void load(); }, [filterQuery, channel, probability, year, month]);
 
   const cards = useMemo(() => ([
     { label: 'Forecast Satırı', value: numberFormat(payload.summary.totalLines), hint: 'Toplam ürün/dönem kaydı', tone: 'slate' },
@@ -426,15 +416,14 @@ export default function ForecastReportClient() {
             <span>Rapor Filtreleri</span>
             <h2>Account, kanal ve dönem bazlı analiz</h2>
           </div>
-          <button type="button" className="premium-btn secondary" onClick={() => { setQ(''); setOwner(''); setChannel(''); setProbability(''); setYear(''); setMonth(''); }}>Temizle</button>
+          <button type="button" className="premium-btn secondary" onClick={() => extra.set({ channel: '', probability: '', year: '', month: '' })}>Kanal / Oran / Dönem temizle</button>
         </div>
+        <FilterBar config={filterConfig} allowedDepartments={allowedDepartments} />
         <div className="premium-filter-grid forecast-report-filter-grid">
-          <label className="premium-field wide"><span>Arama</span><input value={q} onChange={(event) => setQ(event.target.value)} placeholder="Müşteri, ürün, sektör veya account ara" /></label>
-          <label className="premium-field"><span>Account</span><select value={owner} onChange={(event) => setOwner(event.target.value)}><option value="">Tüm Accountlar</option>{payload.ownerOptions.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
-          <label className="premium-field"><span>Kanal</span><select value={channel} onChange={(event) => setChannel(event.target.value)}><option value="">Tüm Kanallar</option>{payload.salesChannels.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
-          <label className="premium-field"><span>Oran</span><select value={probability} onChange={(event) => setProbability(event.target.value)}><option value="">Tüm Oranlar</option>{payload.probabilities.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
-          <label className="premium-field"><span>Ay</span><select value={month} onChange={(event) => setMonth(event.target.value)}><option value="">Tüm Aylar</option>{payload.months.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
-          <label className="premium-field"><span>Yıl</span><select value={year} onChange={(event) => setYear(event.target.value)}><option value="">Tüm Yıllar</option>{payload.years.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
+          <label className="premium-field"><span>Kanal</span><select value={channel} onChange={(event) => extra.set({ channel: event.target.value })}><option value="">Tüm Kanallar</option>{payload.salesChannels.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
+          <label className="premium-field"><span>Oran</span><select value={probability} onChange={(event) => extra.set({ probability: event.target.value })}><option value="">Tüm Oranlar</option>{payload.probabilities.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
+          <label className="premium-field"><span>Ay</span><select value={month} onChange={(event) => extra.set({ month: event.target.value })}><option value="">Tüm Aylar</option>{payload.months.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
+          <label className="premium-field"><span>Yıl</span><select value={year} onChange={(event) => extra.set({ year: event.target.value })}><option value="">Tüm Yıllar</option>{payload.years.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
         </div>
       </section>
 
@@ -450,7 +439,7 @@ export default function ForecastReportClient() {
 
       <section className="premium-summary-grid forecast-summary-grid">
         <MiniSummary title="Dönem Kırılımı" rows={payload.monthSummary} />
-        <MiniSummary title="Account Kırılımı" rows={payload.ownerSummary} />
+        <MiniSummary title="Satıcı (Account sahibi) Kırılımı" rows={payload.ownerSummary} />
         <MiniSummary title="Satış Kanalı" rows={payload.channelSummary} />
         <MiniSummary title="Gerçekleşme Oranı" rows={payload.probabilitySummary} />
       </section>

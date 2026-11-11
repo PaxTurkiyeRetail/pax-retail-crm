@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requirePermissionOrThrow, userHasPermission } from '@/lib/authz';
 import { createPgAdminClient } from '@/lib/pg/admin';
 import { addDaysToIsoDate, getTurkeyTodayIso, isMissingRelationError } from '@/lib/quotes/service';
+import { applyQuoteScopeFilters, readQuoteScopeFilters } from '../quote-filters';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -13,7 +14,6 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const q = String(url.searchParams.get('q') ?? '').trim().toLocaleLowerCase('tr');
     const status = String(url.searchParams.get('status') ?? '').trim().toLowerCase();
-    const owner = String(url.searchParams.get('owner') ?? '').trim();
 
     let query = admin
       .from('quotes')
@@ -21,7 +21,9 @@ export async function GET(request: Request) {
       .limit(5000);
 
     if (status) query = query.ilike('status', status);
-    if (owner) query = query.ilike('owner_name', owner.replace(/[\%_]/g, ' ').trim());
+    const scoped = await applyQuoteScopeFilters(query, admin, me, readQuoteScopeFilters(url));
+    if (scoped.error) return NextResponse.json({ message: scoped.error }, { status: 500 });
+    query = scoped.query;
     if (!userHasPermission(me, 'quote.read.any')) query = query.eq('owner_user_id', me.id);
 
     const { data, error } = await query;

@@ -108,7 +108,11 @@ export default function RetailOperasyonClient() {
     return crm.filter((r) => (!term || [r.name, r.sector, r.kasa, r.owner, r.status, r.pos, r.banks].join(' ').toLocaleLowerCase('tr-TR').includes(term)) && Object.entries(filters).every(([k, v]) => !v || r[k as keyof typeof filters] === v))
       .sort((a, b) => order === 'register' ? (b.register ?? -1) - (a.register ?? -1) || a.name.localeCompare(b.name, 'tr') : (order === 'pos' ? a.pos.localeCompare(b.pos, 'tr') : a.name.localeCompare(b.name, 'tr')));
   }, [crm, q, filters, order]);
-  const planned = new Set(planNext.map((r) => r.customerId).filter(Boolean));
+  // CRM Havuzu KPI'ları arama/süzgeçleri izler: planlanan firma/cihaz yalnız görünen firmalar için sayılır.
+  const crmFiltered = crmRows.length !== crm.length;
+  const crmIds = new Set(crmRows.map((r) => r.id));
+  const planNextVisible = crmFiltered ? planNext.filter((r) => r.customerId && crmIds.has(r.customerId)) : planNext;
+  const planned = new Set(planNextVisible.map((r) => r.customerId).filter(Boolean));
 
   async function updateMonth(row: RetailOpportunity, month: number) {
     if (!row.id || !row.canEdit || row.source!=='forecast') return;
@@ -176,10 +180,10 @@ export default function RetailOperasyonClient() {
       {tab === 2 && opportunities(planNext, true)}
       {tab === 3 && <>
         <Metrics items={[
-          { label: 'CRM firması', value: nf.format(crm.length) }, { label: 'POS markası bilinen', value: nf.format(crm.filter((r) => r.pos && !/bilinmeyen/i.test(r.pos)).length) },
-          { label: 'Kasa firması bilinen', value: nf.format(crm.filter((r) => r.kasa && !/bilinmeyen/i.test(r.kasa)).length) }, { label: 'Planlanan firma', value: nf.format(planned.size), sub: `${nf.format(sum(planNext, (r) => r.qty))} cihaz · ${year + 1}` },
+          { label: 'CRM firması', value: nf.format(crmRows.length), sub: crmFiltered ? `Süzülmüş · toplam ${nf.format(crm.length)}` : undefined }, { label: 'POS markası bilinen', value: nf.format(crmRows.filter((r) => r.pos && !/bilinmeyen/i.test(r.pos)).length) },
+          { label: 'Kasa firması bilinen', value: nf.format(crmRows.filter((r) => r.kasa && !/bilinmeyen/i.test(r.kasa)).length) }, { label: 'Planlanan firma', value: nf.format(planned.size), sub: `${nf.format(sum(planNextVisible, (r) => r.qty))} cihaz · ${year + 1}` },
         ]} />
-        <div className={s.two}><Distribution title="Kasa firması dağılımı" rows={crm} field="kasa" /><Distribution title="POS markası dağılımı" rows={crm} field="pos" /></div>
+        <div className={s.two}><Distribution title="Kasa firması dağılımı" rows={crmRows} field="kasa" /><Distribution title="POS markası dağılımı" rows={crmRows} field="pos" /></div>
         <div className={s.banner}><strong>{year + 1} firma planını buradan oluştur</strong><p>Firma satırındaki “Plan ekle” ile model, adet ve ay seç. Kaydettiğin plan Forecast ve aylık sonuçlara yansır.</p></div>
         <div className={s.actions}><input aria-label="CRM havuzunda ara" placeholder="Firma, sektör, kasa, POS veya Account ara…" value={q} onChange={(e) => setQ(e.target.value)} />
           {(['kasa', 'pos', 'posOwner', 'status'] as const).map((key) => <select key={key} aria-label={{ kasa: 'Kasa firması', pos: 'POS markası', posOwner: 'POS sahipliği', status: 'CRM statüsü' }[key]} value={filters[key]} onChange={(e) => setFilters({ ...filters, [key]: e.target.value })}><option value="">{{ kasa: 'Tüm kasa firmaları', pos: 'Tüm POS markaları', posOwner: 'Tüm sahiplikler', status: 'Tüm statüler' }[key]}</option>{[...new Set(crm.map((r) => r[key]).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'tr')).map((v) => <option key={v}>{v}</option>)}</select>)}

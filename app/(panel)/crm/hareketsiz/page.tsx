@@ -1,12 +1,15 @@
 import Link from 'next/link';
-import { requireCrmAccessOrThrow, requireScreenAccessOrThrow } from '@/lib/authz';
+import { getUserDepartments, requireCrmAccessOrThrow, requireScreenAccessOrThrow, userHasPermission } from '@/lib/authz';
 import { isInactiveRow, loadHunterFarmerActivity } from '@/lib/reports/inactive-customers';
 import {
   INACTIVE_SORT_DEFAULT_DIR, isInactiveSort, sortInactiveRows,
   type InactiveSort, type InactiveSortDir,
 } from '@/lib/reports/inactive-customers-shared';
-import { LIVE_BOARD_RULES, OWNER_ORDER, normalizeName, ownerOrderCompare } from '@/lib/reports/live-board-shared';
-import { GhostFilterBar, ownerOptions } from '@/components/reports/GhostFilterBar';
+import { LIVE_BOARD_RULES, normalizeName, ownerOrderCompare } from '@/lib/reports/live-board-shared';
+import { parseFilters, type PageFilterConfig } from '@/lib/filters/schema';
+import { ownerValueFromName, resolveOwner } from '@/lib/reports/owner-filter';
+import { loadOwnerOptions } from '@/lib/reports/owner-filter.server';
+import { FilterBar } from '@/components/filters/FilterBar';
 import '@/styles/inactive.css';
 
 // HAREKETSİZ FİRMALAR — Çağdaş Bey, 11.09.2026:
@@ -38,13 +41,24 @@ function fmtDay(value: string | null) {
 export default async function InactiveCustomersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ satici?: string; gun?: string; sirala?: string; yon?: string }>;
+  searchParams: Promise<{ owner?: string; satici?: string; gun?: string; sirala?: string; yon?: string }>;
 }) {
-  await requireCrmAccessOrThrow();
+  const me = await requireCrmAccessOrThrow();
   await requireScreenAccessOrThrow('screen.crm.customers.view');
 
   const params = await searchParams;
-  const ownerFilter = String(params.satici ?? '').trim();
+  // Satıcı: kullanıcı id (?owner=); Canlı Ekran'ın eski ad linkleri (?satici=Ad) de çözülür.
+  // customer.read.any yoksa kapsam kullanıcının kendisine sabitlenir.
+  const ownerOpts = await loadOwnerOptions({ departments: await getUserDepartments(me), includePseudo: false });
+  const canSeeAll = userHasPermission(me, 'customer.read.any');
+  const filterConfig: PageFilterConfig = {
+    keys: ['owner'],
+    options: { owner: canSeeAll ? ownerOpts : ownerOpts.filter((o) => o.value === String(me.id)) },
+    labels: { owner: 'Satıcı (Account sahibi)' },
+  };
+  const filters = parseFilters({ owner: params.owner ?? ownerValueFromName(params.satici, ownerOpts) }, filterConfig);
+  if (!canSeeAll) filters.owner = String(me.id);
+  const ownerFilter = resolveOwner(filters.owner, ownerOpts)?.name ?? (canSeeAll ? '' : String(me.full_name ?? me.email ?? ''));
   const days = Math.min(365, Math.max(1, Number(params.gun) || LIVE_BOARD_RULES.inactiveOwnerDays));
 
   // Varsayılan: en uzun süredir hareketsiz olan başta (tek kişi filtresi yoksa da aynı).
@@ -54,7 +68,10 @@ export default async function InactiveCustomersPage({
     : INACTIVE_SORT_DEFAULT_DIR[sort];
 
   const all = await loadHunterFarmerActivity();
-  const scoped = ownerFilter ? all.filter((row) => normalizeName(row.owner) === normalizeName(ownerFilter)) : all;
+  const ownerId = filters.owner && !filters.owner.startsWith('n-') ? filters.owner : null;
+  const scoped = ownerFilter
+    ? all.filter((row) => (ownerId && row.ownerUserId === ownerId) || normalizeName(row.owner) === normalizeName(ownerFilter))
+    : all;
   const rows = sortInactiveRows(scoped.filter((row) => isInactiveRow(row, days)), sort, dir, ownerOrderCompare);
   const unmatched = scoped.filter((row) => !row.matched);
   const owners = Array.from(new Set(rows.map((row) => row.owner)));
@@ -63,7 +80,7 @@ export default async function InactiveCustomersPage({
   // doğal yönüyle başlar (gün → en çok bekleyen, firma → A'dan Z'ye).
   const sortHref = (key: InactiveSort) => {
     const query = new URLSearchParams();
-    if (ownerFilter) query.set('satici', ownerFilter);
+    if (filters.owner && canSeeAll) query.set('owner', filters.owner);
     if (params.gun) query.set('gun', String(days));
     query.set('sirala', key);
     query.set('yon', key === sort ? (dir === 'asc' ? 'desc' : 'asc') : INACTIVE_SORT_DEFAULT_DIR[key]);
@@ -82,14 +99,25 @@ export default async function InactiveCustomersPage({
         </p>
       </section>
 
-      <GhostFilterBar
+      <FilterBar
+        mode="form"
         action="/crm/hareketsiz"
-        className="iv-filter"
-        fields={[
-          { name: 'satici', label: 'Satıcı', value: ownerFilter, options: ownerOptions(OWNER_ORDER.filter((name) => !['İş Ortakları', 'Havuz Account', 'Yemek Kartları'].includes(name)), ownerFilter || null) },
-          { name: 'gun', label: 'Hareketsizlik eşiği', value: String(days), options: Array.from(new Set([7, 15, 30, 60, 90, days])).sort((a, b) => a - b).map((value) => ({ value: String(value), label: `${value} gün` })) },
-        ]}
-        hidden={{ sirala: sort, yon: dir }}
+        config={filterConfig}
+        values={filters}
+        actions={(
+          <>
+            <input type="hidden" name="sirala" value={sort} />
+            <input type="hidden" name="yon" value={dir} />
+            <label className="flex items-center gap-1.5 text-sm text-text-2">
+              Hareketsizlik eşiği
+              <select name="gun" defaultValue={String(days)} className="h-9 rounded-lg border border-border bg-surface px-2 text-sm">
+                {Array.from(new Set([7, 15, 30, 60, 90, days])).sort((a, b) => a - b).map((value) => (
+                  <option key={value} value={String(value)}>{value} gün</option>
+                ))}
+              </select>
+            </label>
+          </>
+        )}
       />
 
       <div className="iv-summary">

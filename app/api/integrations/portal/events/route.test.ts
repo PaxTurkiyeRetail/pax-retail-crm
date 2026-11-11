@@ -16,7 +16,8 @@ vi.mock('@/lib/db', () => ({
     }),
   },
 }));
-import { POST, portalEventNote } from './route';
+import { POST } from './route';
+import { portalEventNote } from '@/lib/integrations/portal-event-note';
 
 const SECRET = 'test-secret';
 const URL_ = 'http://crm.local/api/integrations/portal/events';

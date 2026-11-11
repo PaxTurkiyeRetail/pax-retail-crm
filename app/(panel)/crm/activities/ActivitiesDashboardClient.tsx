@@ -7,6 +7,12 @@ import { getSlaPresentation, getSlaState } from '@/lib/sla';
 import { formatDate, toLocalDateInputValue } from '@/lib/utils';
 import ActivitiesDashboard from '@/components/activities/ActivitiesDashboard';
 import { useConfiguredPageSize } from '@/components/hooks/useConfiguredPageSize';
+import { FilterBar, ScopeLabel } from '@/components/filters/FilterBar';
+import { useUrlFilters } from '@/lib/filters/use-url-filters';
+import { resolvePeriod } from '@/lib/filters/period';
+import type { FilterOption, PageFilterConfig } from '@/lib/filters/schema';
+import { DEPARTMENT_LABELS, type Department } from '@/lib/departments';
+import { resolveOwner } from '@/lib/reports/owner-filter';
 
 type ActivityRow = {
   id: string;
@@ -50,7 +56,6 @@ type FilterOptions = {
   responsibleOptions: string[];
 };
 
-type TimeRange = 'week' | 'month' | 'quarter' | 'all';
 type RoleKey = 'sales' | 'rs';
 
 const EMPTY_OPTIONS: FilterOptions = {
@@ -80,12 +85,6 @@ const PHASE_DEFS = [
 ] as const;
 
 
-function toIsoDate(d: Date) {
-  const copy = new Date(d);
-  copy.setHours(0, 0, 0, 0);
-  return toLocalDateInputValue(copy);
-}
-
 function getSaturdayFridayWeekRange(baseDate = new Date()) {
   const start = new Date(baseDate);
   const diffToSaturday = (start.getDay() + 1) % 7;
@@ -99,20 +98,6 @@ function getSaturdayFridayWeekRange(baseDate = new Date()) {
   return { start, end };
 }
 
-function getRangeDates(range: TimeRange) {
-  if (range === 'all') return { from: '', to: '' };
-  if (range === 'week') {
-    const { start, end } = getSaturdayFridayWeekRange(new Date());
-    return { from: toIsoDate(start), to: toIsoDate(end) };
-  }
-
-  const end = new Date();
-  const start = new Date();
-  if (range === 'month') start.setDate(end.getDate() - 29);
-  if (range === 'quarter') start.setDate(end.getDate() - 89);
-  return { from: toIsoDate(start), to: toIsoDate(end) };
-}
-
 function percentage(value: number, total: number) {
   if (!total) return 0;
   return Math.max(0, Math.min(100, Math.round((value / total) * 100)));
@@ -123,40 +108,44 @@ function resolveRole(row: ActivityRow): RoleKey {
 }
 
 
-export default function ActivitiesPage() {
+export default function ActivitiesPage({ ownerOptions, allowedDepartments }: { ownerOptions: FilterOption[]; allowedDepartments: Department[] | null }) {
   const [rows, setRows] = useState<ActivityRow[]>([]);
   const [analyticsRows, setAnalyticsRows] = useState<ActivityRow[]>([]);
   const [options, setOptions] = useState<FilterOptions>(EMPTY_OPTIONS);
   const [fazDefinitions, setFazDefinitions] = useState<Record<number, string>>({});
   const [partnerFazDefinitions, setPartnerFazDefinitions] = useState<Record<number, string>>({});
-  const [q, setQ] = useState('');
-  const [debouncedQ, setDebouncedQ] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize] = useConfiguredPageSize();
   const [total, setTotal] = useState(0);
   const [msg, setMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [serverToday, setServerToday] = useState<string | null>(null);
-  const [status, setStatus] = useState('');
-  const [fazNo, setFazNo] = useState('');
   const [sla, setSla] = useState('');
-  const [owner, setOwner] = useState('');
-  const [responsible, setResponsible] = useState('');
-  const [fromDate, setFromDate] = useState('');
-  const [toDate, setToDate] = useState('');
-  const [timeRange, setTimeRange] = useState<TimeRange>('week');
-  const [showAdvanced, setShowAdvanced] = useState(false);
   const [blockedFilter, setBlockedFilter] = useState('');
   const [blockingRowId, setBlockingRowId] = useState<string | null>(null);
 
-  const rangeDates = useMemo(() => getRangeDates(timeRange), [timeRange]);
-  const effectiveFrom = fromDate || rangeDates.from;
-  const effectiveTo = toDate || rangeDates.to;
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => setDebouncedQ(q.trim()), 220);
-    return () => window.clearTimeout(timer);
-  }, [q]);
+  // Merkezi filtreler URL'de; Satıcı = aktiviteyi giren kullanıcı (id, yoksa ad).
+  const filterConfig = useMemo<PageFilterConfig>(() => ({
+    keys: ownerOptions.length ? ['period', 'from', 'to', 'department', 'owner', 'phase', 'status', 'q'] : ['period', 'from', 'to', 'department', 'phase', 'status', 'q'],
+    defaults: { period: 'this_week' },
+    labels: { q: 'Ara' },
+    options: {
+      owner: ownerOptions,
+      phase: Array.from({ length: 25 }, (_, i) => ({ value: String(i + 1), label: `Faz ${i + 1}` })),
+      status: options.statusOptions.map((v) => ({ value: v, label: v })),
+    },
+  }), [ownerOptions, options.statusOptions]);
+  const { values: filters, activeCount: urlActiveCount } = useUrlFilters(filterConfig, { allowedDepartments });
+  const period = useMemo(() => resolvePeriod({ period: filters.period, from: filters.from, to: filters.to }), [filters.period, filters.from, filters.to]);
+  const selectedOwner = resolveOwner(filters.owner, ownerOptions);
+  const debouncedQ = filters.q ?? '';
+  const status = filters.status ?? '';
+  const fazNo = filters.phase ?? '';
+  const department = filters.department ?? '';
+  const ownerId = selectedOwner?.id ?? '';
+  const ownerName = selectedOwner?.name ?? '';
+  const effectiveFrom = period.from;
+  const effectiveTo = period.to;
 
   useEffect(() => {
     const loadOptions = async () => {
@@ -197,7 +186,7 @@ export default function ActivitiesPage() {
   useEffect(() => {
     // Filtre değişince sayfa sıfırla
     setPage(1);
-  }, [debouncedQ, status, fazNo, sla, owner, responsible, blockedFilter, effectiveFrom, effectiveTo]);
+  }, [debouncedQ, status, fazNo, sla, ownerId, ownerName, department, blockedFilter, effectiveFrom, effectiveTo]);
 
   const buildActivityParams = (extra: Record<string, string>) => {
     const p = new URLSearchParams({ ...extra });
@@ -205,8 +194,9 @@ export default function ActivitiesPage() {
     if (status) p.set('durum', status);
     if (fazNo) p.set('faz_no', fazNo);
     if (sla) p.set('sla', sla);
-    if (owner) p.set('owner', owner);
-    if (responsible) p.set('responsible', responsible);
+    if (ownerId) p.set('owner_id', ownerId);
+    if (ownerName) p.set('owner', ownerName);
+    if (department) p.set('department', department);
     if (blockedFilter) p.set('blocked', blockedFilter);
     if (effectiveFrom) p.set('from', effectiveFrom);
     if (effectiveTo) p.set('to', effectiveTo);
@@ -239,7 +229,7 @@ export default function ActivitiesPage() {
     };
     void loadList();
     return () => controller.abort();
-  }, [debouncedQ, page, pageSize, status, fazNo, sla, owner, responsible, blockedFilter, effectiveFrom, effectiveTo]);
+  }, [debouncedQ, page, pageSize, status, fazNo, sla, ownerId, ownerName, department, blockedFilter, effectiveFrom, effectiveTo]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -258,7 +248,7 @@ export default function ActivitiesPage() {
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [debouncedQ, status, fazNo, sla, owner, responsible, blockedFilter, effectiveFrom, effectiveTo]);
+  }, [debouncedQ, status, fazNo, sla, ownerId, ownerName, department, blockedFilter, effectiveFrom, effectiveTo]);
 
   const slimRows = useMemo<ActivityRowWithSla[]>(
     () => rows.map((row) => ({ ...row, sla: row.sla_presentation ?? getSlaPresentation(row.due_date, row.activity_status, serverToday) })),
@@ -484,26 +474,17 @@ export default function ActivitiesPage() {
     }
   };
 
-  const activeFilterCount = [debouncedQ, status, fazNo, sla, owner, responsible, blockedFilter, fromDate, toDate].filter(Boolean).length;
+  const activeFilterCount = urlActiveCount + [sla, blockedFilter].filter(Boolean).length;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
-
-  const clearFilters = () => {
-    setQ('');
-    setStatus('');
-    setFazNo('');
-    setSla('');
-    setOwner('');
-    setResponsible('');
-    setBlockedFilter('');
-    setFromDate('');
-    setToDate('');
-    setTimeRange('week');
-    setShowAdvanced(false);
-    setPage(1);
-  };
 
   return (
     <main className="pax-page-container crm-activities-page">
+      <ScopeLabel
+        mode="period"
+        period={period.label}
+        department={department ? DEPARTMENT_LABELS[department] : undefined}
+        owner={selectedOwner?.name}
+      />
 
       <ActivitiesDashboard
         slaHealthPct={slaHealthPct}
@@ -521,89 +502,38 @@ export default function ActivitiesPage() {
       />
 
       <section className="command-bar">
-        <div className="command-shell">
-          <div className="command-main">
-            <div className="command-search">
-              <span style={{ color: 'var(--text-3)' }}>⌕</span>
-              <input aria-label="Müşteri, aktivite veya firma ara" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Müşteri, aktivite veya firma ara" />
-            </div>
-            <label className="command-select-wrap">
-              <span className="command-label">Sorumlu</span>
-              <select className="command-select" value={responsible} onChange={(e) => setResponsible(e.target.value)}>
-                <option value="">Tüm sorumlular</option>
-                {options.responsibleOptions.map((v) => <option key={v} value={v}>{v}</option>)}
-              </select>
-            </label>
-            <label className="command-select-wrap">
-              <span className="command-label">Durum</span>
-              <select className="command-select" value={status} onChange={(e) => setStatus(e.target.value)}>
-                <option value="">Tüm durumlar</option>
-                {options.statusOptions.map((v) => <option key={v} value={v}>{v}</option>)}
-              </select>
-            </label>
-          </div>
-        </div>
-
-        <div className="command-toolbar">
-          <div className="command-meta-left">
-            <span className="status-chip">{total} toplam sonuç</span>
-            <span className="status-chip">{rows.length} görünür kayıt</span>
-            <span className="status-chip">{pageSize} / sayfa</span>
-            {activeFilterCount > 0 ? <span className="chip active">{activeFilterCount} aktif filtre</span> : null}
-          </div>
-          <div className="command-actions">
-            <button className={`segment-btn${timeRange === 'week' ? ' active' : ''}`} onClick={() => setTimeRange('week')}>Haftalık</button>
-            <button className={`segment-btn${timeRange === 'month' ? ' active' : ''}`} onClick={() => setTimeRange('month')}>Aylık</button>
-            <button className={`segment-btn${timeRange === 'quarter' ? ' active' : ''}`} onClick={() => setTimeRange('quarter')}>Üç Aylık</button>
-            <button className={`segment-btn${timeRange === 'all' ? ' active' : ''}`} onClick={() => setTimeRange('all')}>Tümü</button>
-            <button className="command-action" onClick={() => setShowAdvanced((v) => !v)}>{showAdvanced ? 'Detaylı aramayı kapat' : 'Detaylı arama'}</button>
-            <button className="command-action ghost" onClick={clearFilters}>Sıfırla</button>
-          </div>
-        </div>
-
-        {showAdvanced ? (
-          <div className="advanced-shell">
-            <div className="advanced-grid">
-              <label className="field">
-                <span className="field-label">Faz</span>
-                <select className="select" value={fazNo} onChange={(e) => setFazNo(e.target.value)}>
-                  <option value="">Tüm fazlar</option>
-                  {options.phaseOptions.map((v) => <option key={v} value={v}>{`FAZ ${v}`}</option>)}
-                </select>
-              </label>
-              <label className="field">
-                <span className="field-label">SLA / risk</span>
-                <select className="select" value={sla} onChange={(e) => setSla(e.target.value)}>
+        <FilterBar
+          config={filterConfig}
+          allowedDepartments={allowedDepartments}
+          showScope={false}
+          actions={(
+            <>
+              <label className="command-select-wrap">
+                <span className="command-label">SLA / risk</span>
+                <select className="command-select" value={sla} onChange={(e) => setSla(e.target.value)}>
                   <option value="">Tüm SLA</option>
                   {SLA_OPTIONS.filter(Boolean).map((v) => <option key={v} value={v}>{SLA_LABELS[v]}</option>)}
                 </select>
               </label>
-              <label className="field">
-                <span className="field-label">Aktiviteyi giren</span>
-                <select className="select" value={owner} onChange={(e) => setOwner(e.target.value)}>
-                  <option value="">Tüm kişiler</option>
-                  {options.ownerOptions.map((v) => <option key={v} value={v}>{v}</option>)}
-                </select>
-              </label>
-              <label className="field">
-                <span className="field-label">Blokaj</span>
-                <select className="select" value={blockedFilter} onChange={(e) => setBlockedFilter(e.target.value)}>
+              <label className="command-select-wrap">
+                <span className="command-label">Blokaj</span>
+                <select className="command-select" value={blockedFilter} onChange={(e) => setBlockedFilter(e.target.value)}>
                   <option value="">Tümü</option>
                   <option value="blocked">Sadece blokajlı</option>
                   <option value="unblocked">Sadece blokajsız</option>
                 </select>
               </label>
-              <label className="field">
-                <span className="field-label">Başlangıç tarihi</span>
-                <input className="input" type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
-              </label>
-              <label className="field">
-                <span className="field-label">Bitiş tarihi</span>
-                <input className="input" type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
-              </label>
-            </div>
+            </>
+          )}
+        />
+        <div className="command-toolbar">
+          <div className="command-meta-left">
+            <span className="status-chip">{total.toLocaleString('tr-TR')} toplam sonuç</span>
+            <span className="status-chip">{rows.length.toLocaleString('tr-TR')} görünür kayıt</span>
+            <span className="status-chip">{pageSize} / sayfa</span>
+            {activeFilterCount > 0 ? <span className="chip active">{activeFilterCount} aktif filtre</span> : null}
           </div>
-        ) : null}
+        </div>
       </section>
 
       {msg ? <div className="message">{msg}</div> : null}

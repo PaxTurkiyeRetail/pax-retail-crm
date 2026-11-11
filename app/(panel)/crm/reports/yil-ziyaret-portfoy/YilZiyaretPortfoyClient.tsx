@@ -1,6 +1,10 @@
 'use client';
 
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
+import { FilterBar, ScopeLabel } from '@/components/filters/FilterBar';
+import { DEPARTMENT_LABELS, normalizeDepartments } from '@/lib/departments';
+import type { PageFilterConfig } from '@/lib/filters/schema';
+import { useUrlFilters } from '@/lib/filters/use-url-filters';
 
 type Row = {
   owner: string;
@@ -31,7 +35,9 @@ type Row = {
 
 type DetailKind = 'forecast' | 'kunye' | 'kunyeTamam' | 'hunter' | 'farmer' | 'kasa' | 'banka' | 'lead' | 'total' | 'active' | 'covered';
 
-type Payload = { generatedAt: string; rows: Row[] };
+type Payload = { generatedAt: string; rows: Row[]; allowedDepartments?: string[] | null };
+
+const FILTER_CONFIG: PageFilterConfig = { keys: ['department'] };
 
 const EMPTY: Payload = { generatedAt: '', rows: [] };
 
@@ -47,12 +53,18 @@ export default function YilZiyaretPortfoyClient() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [openDetail, setOpenDetail] = useState<{ owner: string; kind: DetailKind } | null>(null);
+  const allowedDepartments = useMemo(
+    () => (data.allowedDepartments?.length ? normalizeDepartments(data.allowedDepartments) : null),
+    [data.allowedDepartments],
+  );
+  const { values } = useUrlFilters(FILTER_CONFIG, { allowedDepartments });
+  const department = values.department ?? '';
 
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch('/api/reports/yil-ziyaret-portfoy', { cache: 'no-store' });
+      const res = await fetch(`/api/reports/yil-ziyaret-portfoy${department ? `?department=${department}` : ''}`, { cache: 'no-store' });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json?.message || 'Rapor yüklenemedi.');
       setData(json);
@@ -61,7 +73,7 @@ export default function YilZiyaretPortfoyClient() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [department]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -77,8 +89,18 @@ export default function YilZiyaretPortfoyClient() {
         <p style={{ margin: '6px 0 0', color: 'var(--text-3)', fontSize: 13 }}>
           Tüm satışçıların yıl içi ziyaret hedefi ve portföy sağlığı (hareketsiz firma, temas edilen müşteri, ortalama temas) tek tabloda.
         </p>
-        <div style={{ display: 'flex', gap: 12, marginTop: 14, alignItems: 'center', flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 13, color: 'var(--text-3)' }}>{data.rows.length} satışçı</span>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 14 }}>
+          <FilterBar
+            config={FILTER_CONFIG}
+            allowedDepartments={allowedDepartments}
+            showScope={false}
+            actions={<span style={{ fontSize: 13, color: 'var(--text-3)' }}>{data.rows.length.toLocaleString('tr-TR')} satışçı</span>}
+          />
+          <ScopeLabel
+            period={`${new Date().getFullYear()} yıl başından bugüne`}
+            department={department ? DEPARTMENT_LABELS[department] : allowedDepartments?.length === 1 ? DEPARTMENT_LABELS[allowedDepartments[0]] : 'Tüm departmanlar'}
+            owner={data.generatedAt ? `Veri tarihi: ${new Date(data.generatedAt).toLocaleString('tr-TR', { dateStyle: 'short', timeStyle: 'short' })}` : undefined}
+          />
         </div>
       </div>
 

@@ -13,7 +13,13 @@
 
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import Link from 'next/link';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import SalesReportDownload from '@/components/sales/SalesReportDownload';
+import { FilterBar, ScopeLabel } from '@/components/filters/FilterBar';
+import { useUrlFilters } from '@/lib/filters/use-url-filters';
+import { filtersToQuery, type FilterOption } from '@/lib/filters/schema';
+import type { Department } from '@/lib/departments';
+import { salesFilterConfig } from '@/lib/quotes/sales-filters';
 import { DEFAULT_RENTAL_OPS_STATUS, RENTAL_OPS_STATUSES, rentalOpsLabel } from '@/lib/sales/rental-ops';
 
 /** Tutar tutarlılık uyarılarını (045, engellemez) ekrandaki bilgi satırına çevirir. */
@@ -49,7 +55,7 @@ type SaleRow = {
   updated_by: string | null;
   /** Satış kanalı (Banka · Direkt Satış · Kanal) — Forecast listesiyle aynı kaynak (027). */
   sales_channel: string | null;
-  /** quote = kazanılan teklifden · direct = teklifsiz girildi (027). */
+  /** quote = kazanılan tekliften · direct = teklifsiz girildi (027). */
   source: 'quote' | 'direct';
   /** Kiralama operasyon takibi (045): boş = hazırlık. */
   rental_ops_status?: string | null;
@@ -80,17 +86,29 @@ const fmtDate = (value: string | null) => {
 
 export default function SalesClient() {
   const [rows, setRows] = useState<SaleRow[]>([]);
-  const [summary, setSummary] = useState<{ sale_count: number; amount: number; devices: number } | null>(null);
-  const [owners, setOwners] = useState<string[]>([]);
+  const [summary, setSummary] = useState<{ sale_count: number; amount: number; devices: number; total: number } | null>(null);
+  const [ownerOptions, setOwnerOptions] = useState<FilterOption[] | null>(null);
+  const [allowedDepartments, setAllowedDepartments] = useState<Department[] | null>(null);
+  const [periodLabel, setPeriodLabel] = useState('');
+  const [pageInfo, setPageInfo] = useState({ page: 1, pageSize: 100, total: 0 });
   const [canEdit, setCanEdit] = useState(false);
   const [canSeeAll, setCanSeeAll] = useState(false);
   const [canCreate, setCanCreate] = useState(false);
   const [canOverridePrice, setCanOverridePrice] = useState(false);
   const [channels, setChannels] = useState<ChannelOption[]>([]);
-  const [owner, setOwner] = useState('');
-  const [status, setStatus] = useState('active');
-  const [q, setQ] = useState('');
   const [loading, setLoading] = useState(true);
+  // Filtreler URL'de (FilterBar); satıcı seçenekleri yüklenene kadar URL'deki değer korunur.
+  const filterConfig = useMemo(
+    () => salesFilterConfig(ownerOptions ?? undefined, { withOwner: canSeeAll || ownerOptions === null }),
+    [ownerOptions, canSeeAll],
+  );
+  const { values: filters } = useUrlFilters(filterConfig, { allowedDepartments });
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const page = Math.max(1, Number(searchParams?.get('page')) || 1);
+  const owners = useMemo(() => (ownerOptions ?? []).filter((o) => !o.group).map((o) => o.label), [ownerOptions]);
+  const filterQuery = filtersToQuery(filters, filterConfig).toString();
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -122,10 +140,8 @@ export default function SalesClient() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const params = new URLSearchParams();
-    if (owner) params.set('owner', owner);
-    if (status) params.set('status', status);
-    if (q.trim()) params.set('q', q.trim());
+    const params = new URLSearchParams(filterQuery);
+    if (page > 1) params.set('page', String(page));
     const res = await fetch(`/api/sales/list?${params.toString()}`, { cache: 'no-store' });
     const json = await res.json().catch(() => ({}));
     if (!res.ok) {
@@ -135,14 +151,24 @@ export default function SalesClient() {
     }
     setRows((json.rows ?? []) as SaleRow[]);
     setSummary(json.summary ?? null);
-    setOwners((json.owners ?? []) as string[]);
+    setOwnerOptions((json.ownerOptions ?? []) as FilterOption[]);
+    setAllowedDepartments((json.allowedDepartments ?? null) as Department[] | null);
+    setPeriodLabel(String(json.periodLabel ?? ''));
+    setPageInfo({ page: Number(json.page) || 1, pageSize: Number(json.pageSize) || 100, total: Number(json.total) || 0 });
     setCanEdit(Boolean(json.canEdit));
     setCanSeeAll(Boolean(json.canSeeAll));
     setCanCreate(Boolean(json.canCreate));
     setCanOverridePrice(Boolean(json.canOverridePrice));
     setChannels((json.channels ?? []) as ChannelOption[]);
     setLoading(false);
-  }, [owner, status, q]);
+  }, [filterQuery, page]);
+
+  const goPage = (next: number) => {
+    const qs = new URLSearchParams(searchParams?.toString() ?? '');
+    if (next > 1) qs.set('page', String(next)); else qs.delete('page');
+    router.replace(qs.toString() ? `${pathname}?${qs}` : pathname, { scroll: false });
+  };
+  const pageCount = Math.max(1, Math.ceil(pageInfo.total / pageInfo.pageSize));
 
   useEffect(() => { void load(); }, [load]);
 
@@ -281,10 +307,10 @@ export default function SalesClient() {
           düzenlenir; teklif belgesi değişmez. Ciro raporları aktif satışları sayar.
         </p>
         <div className="pax-hero-stats">
-          <div className="pax-hero-stat"><div className="pax-hero-stat-label">Bu Yıl Satış</div><div className="pax-hero-stat-value">{summary?.sale_count ?? 0}</div></div>
-          <div className="pax-hero-stat"><div className="pax-hero-stat-label">Bu Yıl Ciro</div><div className="pax-hero-stat-value">{usd(summary?.amount ?? 0)}</div></div>
-          <div className="pax-hero-stat"><div className="pax-hero-stat-label">Bu Yıl Cihaz</div><div className="pax-hero-stat-value">{(summary?.devices ?? 0).toLocaleString('tr-TR')}</div></div>
-          <div className="pax-hero-stat"><div className="pax-hero-stat-label">Listede</div><div className="pax-hero-stat-value">{activeRows.length} · {usd(listAmount)}</div></div>
+          <div className="pax-hero-stat"><div className="pax-hero-stat-label">Satış · {periodLabel || 'Seçili dönem'}</div><div className="pax-hero-stat-value">{(summary?.sale_count ?? 0).toLocaleString('tr-TR')}</div></div>
+          <div className="pax-hero-stat"><div className="pax-hero-stat-label">Ciro · Seçili dönem</div><div className="pax-hero-stat-value">{usd(summary?.amount ?? 0)}</div></div>
+          <div className="pax-hero-stat"><div className="pax-hero-stat-label">Cihaz · Seçili dönem</div><div className="pax-hero-stat-value">{(summary?.devices ?? 0).toLocaleString('tr-TR')}</div></div>
+          <div className="pax-hero-stat"><div className="pax-hero-stat-label">Bu sayfada</div><div className="pax-hero-stat-value">{activeRows.length.toLocaleString('tr-TR')} · {usd(listAmount)}</div></div>
         </div>
         <div style={{ position: 'relative', zIndex: 1, display: 'flex', gap: 10, marginTop: 14, flexWrap: 'wrap' }}>
           {canCreate ? <button type="button" onClick={() => void openCreate()} style={{ ...ghostLink, border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 14 }}>+ Satış Ekle</button> : null}
@@ -298,22 +324,17 @@ export default function SalesClient() {
       {msg ? <div style={{ ...surface, borderColor: 'var(--chip-gold-bd)', background: 'var(--chip-gold-bg)', color: 'var(--chip-gold-color)', fontWeight: 700 }}>{msg}</div> : null}
 
       <section style={surface}>
-        <div style={{ display: 'grid', gap: 10, gridTemplateColumns: 'minmax(240px, 2fr) minmax(150px, 1fr) minmax(150px, 1fr) auto' }}>
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Müşteri veya teklif no ara" style={inputStyle} />
-          <select value={status} onChange={(e) => setStatus(e.target.value)} style={inputStyle}>
-            <option value="active">Aktif satışlar</option>
-            <option value="cancelled">İptal edilenler</option>
-            <option value="">Tümü</option>
-          </select>
-          {canSeeAll ? (
-            <select value={owner} onChange={(e) => setOwner(e.target.value)} style={inputStyle}>
-              <option value="">Tüm satıcılar</option>
-              {owners.map((name) => <option key={name} value={name}>{name}</option>)}
-            </select>
-          ) : null}
-          <button onClick={() => void load()} style={ghostButton} disabled={loading}>{loading ? 'Yükleniyor…' : 'Yenile'}</button>
-          {editedCount ? <span style={{ alignSelf: 'center', color: 'var(--text-3)', fontWeight: 700, fontSize: 13 }}>{editedCount} satış teklifden farklı</span> : null}
-        </div>
+        <FilterBar
+          config={filterConfig}
+          allowedDepartments={allowedDepartments}
+          actions={(
+            <>
+              {editedCount ? <span style={{ color: 'var(--text-3)', fontWeight: 700, fontSize: 13 }}>{editedCount.toLocaleString('tr-TR')} satış tekliften farklı</span> : null}
+              <button onClick={() => void load()} style={ghostButton} disabled={loading}>{loading ? 'Yükleniyor…' : 'Yenile'}</button>
+            </>
+          )}
+        />
+        {!canSeeAll && ownerOptions !== null ? <ScopeLabel className="mt-2" period={periodLabel} owner="Kendi satışlarım" /> : null}
       </section>
 
       <section style={surface}>
@@ -397,6 +418,13 @@ export default function SalesClient() {
             </tbody>
           </table>
         </div>
+        {pageInfo.total > pageInfo.pageSize ? (
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'flex-end', marginTop: 12, color: 'var(--text-2)', fontSize: 13, fontWeight: 700 }}>
+            <span>{pageInfo.total.toLocaleString('tr-TR')} kayıt · Sayfa {page.toLocaleString('tr-TR')} / {pageCount.toLocaleString('tr-TR')}</span>
+            <button type="button" style={ghostButton} disabled={loading || page <= 1} onClick={() => goPage(page - 1)}>Önceki</button>
+            <button type="button" style={ghostButton} disabled={loading || page >= pageCount} onClick={() => goPage(page + 1)}>Sonraki</button>
+          </div>
+        ) : null}
       </section>
 
       {editing ? (

@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createPgServerClient } from '@/lib/pg/server';
 import { createPgAdminClient } from '@/lib/pg/admin';
-import { getUserDepartments, requireCrmAccessOrThrow, userHasPermission } from '@/lib/authz';
-import { resolveDepartmentFilter } from '@/lib/departments';
+import { requireCrmAccessOrThrow } from '@/lib/authz';
+import { applyCustomerDbFilters, effectiveIntegration, escapeIlike, parseFazNoFilter, resolveVisibleCustomerIds, type FazNoFilter } from '../customer-filters';
 import { getKunyeStatus, mapKunyeDbToUi, normalizeKunyeStatusFilter } from '@/lib/kunye';
 import { appendLastStayedPhase } from '@/lib/crm-phase-history';
 import { isReportOnlyCustomer } from '@/lib/report-only-customers';
@@ -40,51 +40,11 @@ function phaseSearchText(phaseNo: number | null | undefined, phaseName: string |
   return `${phaseName ?? ''} Yazılım`;
 }
 
-function escapeIlike(value: string) {
-  return String(value ?? '').replace(/[\%_]/g, ' ').trim();
-}
-
-function applyDbFilters(query: any, params: {
-  owner: string;
-  sector: string;
-  integration: string;
-  fazNo: number;
-  q: string;
-  lite: boolean;
-  visibleCustomerIds?: string[] | null;
-}) {
-  const { owner, sector, integration, fazNo, q, visibleCustomerIds } = params;
-
-  if (visibleCustomerIds) query = query.in('musteri_id', visibleCustomerIds.length ? visibleCustomerIds : ['__none__']);
-  if (owner) query = query.ilike('sorumlu', escapeIlike(owner));
-  if (sector) query = query.ilike('sektor', escapeIlike(sector));
-  // entegrasyon_tipi enum oldugu icin DB tarafinda ilike kullanilmaz; JS tarafinda filtrelenir.
-  if (Number.isFinite(fazNo)) query = query.eq('aktif_faz_no', fazNo);
-
-  // Hiz: ana arama artik once DB tarafinda daraltilir.
-  // Sonucta yine UI tarafinda normalize kontrol uygulanir; fakat artik tum
-  // musteri havuzunu cekmek yerine Postgres sayfalama/count calisir.
-  if (q) {
-    const needle = escapeIlike(q);
-    if (needle) {
-      const like = `%${needle}%`;
-      query = query.or([
-        `musteri.ilike.${like}`,
-        `sektor.ilike.${like}`,
-        `sorumlu.ilike.${like}`,
-        `aktif_faz_adi.ilike.${like}`,
-      ].join(','));
-    }
-  }
-
-  return query;
-}
-
 async function fetchAllRows(pgClient: any, params: {
   owner: string;
   sector: string;
   integration: string;
-  fazNo: number;
+  fazNo: FazNoFilter;
   q: string;
   lite: boolean;
   visibleCustomerIds?: string[] | null;
@@ -100,7 +60,7 @@ async function fetchAllRows(pgClient: any, params: {
       .order('musteri', { ascending: true })
       .range(from, from + batchSize - 1);
 
-    query = applyDbFilters(query, params);
+    query = applyCustomerDbFilters(query, params);
 
     const { data, error } = await query;
     if (error) throw error;
@@ -120,7 +80,7 @@ async function fetchReportOnlyCustomerRows(admin: any, params: {
   owner: string;
   sector: string;
   integration: string;
-  fazNo: number;
+  fazNo: FazNoFilter;
   kasaFirmasi: string;
   kunyeStatus: string;
   visibleCustomerIds: string[] | null;
@@ -128,7 +88,7 @@ async function fetchReportOnlyCustomerRows(admin: any, params: {
   // Rapor müşterileri müşteri listesinde görünsün; fakat künye durumu,
   // kasa ve faz filtrelerinde yer almasın. Çünkü bu kayıtlar künye/faz
   // müşterisi değil, sadece teknik aktivite + yönetim sunumu kapsamındadır.
-  if (Number.isFinite(params.fazNo) || params.kasaFirmasi || params.kunyeStatus) return [];
+  if (params.fazNo || params.kasaFirmasi || params.kunyeStatus) return [];
 
   let roleQuery = admin.from('organization_roles').select('customer_id').eq('role_key', 'business_partner').eq('is_active', true).limit(10000);
   if (params.visibleCustomerIds) roleQuery = roleQuery.in('customer_id', params.visibleCustomerIds);
@@ -145,10 +105,8 @@ async function fetchReportOnlyCustomerRows(admin: any, params: {
     .in('id', partnerIds)
     .order('musteri', { ascending: true });
 
-  if (params.owner) query = query.ilike('sorumlu', escapeIlike(params.owner));
   if (params.visibleCustomerIds) query = query.in('id', params.visibleCustomerIds);
   if (params.sector) query = query.ilike('sektor', escapeIlike(params.sector));
-  const integrationNeedle = normalizeSearchText(params.integration);
 
   const { data, error } = await query;
   if (error) throw error;
@@ -156,7 +114,6 @@ async function fetchReportOnlyCustomerRows(admin: any, params: {
   return (data ?? [])
     // Ham musteriler satırında report_only kolonu yok; iş ortağı kimliği
     // customer_type üzerinden gelir (sorgu zaten business_partner filtreli).
-    .filter((row: any) => !integrationNeedle || normalizeSearchText(row.entegrasyon_tipi).includes(integrationNeedle))
     .map((row: any) => ({
     musteri_id: row.id,
     id: row.id,
@@ -196,7 +153,7 @@ export async function GET(request: Request) {
     const kasaFirmasi = String(url.searchParams.get('kasa_firmasi') ?? '').trim();
     const kunyeStatus = normalizeKunyeStatusFilter(url.searchParams.get('kunye_status'));
     const fazNoRaw = String(url.searchParams.get('faz_no') ?? '').trim();
-    const fazNo = fazNoRaw ? Number(fazNoRaw) : NaN;
+    const fazNo = parseFazNoFilter(fazNoRaw);
     const page = parsePositiveInt(url.searchParams.get('page'), 1);
     const defaultPageSize = lite ? 2000 : 10;
     const maxPageSize = lite ? 10000 : 100;
@@ -207,25 +164,17 @@ export async function GET(request: Request) {
     const pgClient = await createPgServerClient();
     const me = await requireCrmAccessOrThrow();
     const admin = createPgAdminClient();
-    const canReadAny = userHasPermission(me, 'customer.read.any');
-    const visibleCustomerResult = canReadAny
-      ? { data: null as any[] | null, error: null as any }
-      : await admin.from('musteriler').select('id').eq('owner_user_id', me.id).limit(10000);
-    if (visibleCustomerResult.error) return NextResponse.json({ message: visibleCustomerResult.error.message }, { status: 500 });
-    let visibleCustomerIds: string[] | null = canReadAny ? null : (visibleCustomerResult.data ?? []).map((row: any) => String(row.id ?? '')).filter(Boolean);
-    // Departman kapsamı (allowed_users.departments): kullanıcının departmanı varsa
-    // yalnız o iş kollarının müşterileri; ?is_kolu= izinli değilse izinli listeye daralır.
-    const deptFilter = resolveDepartmentFilter(url.searchParams.get('is_kolu'), await getUserDepartments(me));
-    if (deptFilter) {
-      const deptResult = await admin.from('musteriler').select('id').in('is_kolu', deptFilter).limit(20000);
-      if (deptResult.error) return NextResponse.json({ message: deptResult.error.message }, { status: 500 });
-      const deptIds = new Set<string>((deptResult.data ?? []).map((row: any) => String(row.id ?? '')).filter(Boolean));
-      visibleCustomerIds = visibleCustomerIds ? visibleCustomerIds.filter((id) => deptIds.has(id)) : Array.from(deptIds);
-    }
+    // Satıcı (id/ad), departman ve entegrasyon musteriler üzerinden tek yerde (stats ile aynı).
+    const visible = await resolveVisibleCustomerIds(me, admin, url.searchParams.get('department') || url.searchParams.get('is_kolu'), {
+      ownerId: url.searchParams.get('owner_id'),
+      ownerName: owner,
+      integration,
+    });
+    if (visible.error) return NextResponse.json({ message: visible.error }, { status: 500 });
+    const visibleCustomerIds = visible.ids;
     if (visibleCustomerIds?.length === 0) return NextResponse.json({ rows: [], total: 0, page, pageSize });
-    const effectiveOwner = canReadAny ? owner : '';
 
-    const needsClientFiltering = Boolean(kasaFirmasi || kunyeStatus || integration);
+    const needsClientFiltering = Boolean(kasaFirmasi || kunyeStatus);
     const shouldReturnAllLiteRows = (lite && includeAll) || needsClientFiltering || includeReportOnly;
     // Synthetic partner rows must be merged and scoped BEFORE pagination.
     // Appending every partner to an already paginated page repeats records and
@@ -235,9 +184,9 @@ export async function GET(request: Request) {
     let count: number | null = null;
 
     if (shouldReturnAllLiteRows) {
-      rows = (await fetchAllRows(pgClient, { owner: effectiveOwner, sector, integration, fazNo, q, lite, visibleCustomerIds })).filter((row: any) => includeReportOnly || !isReportOnlyCustomer(row));
+      rows = (await fetchAllRows(pgClient, { owner: '', sector, integration, fazNo, q, lite, visibleCustomerIds })).filter((row: any) => includeReportOnly || !isReportOnlyCustomer(row));
       if (includeReportOnly) {
-        const reportOnlyRows = await fetchReportOnlyCustomerRows(admin, { owner: effectiveOwner, sector, integration, fazNo, kasaFirmasi, kunyeStatus, visibleCustomerIds });
+        const reportOnlyRows = await fetchReportOnlyCustomerRows(admin, { owner: '', sector, integration, fazNo, kasaFirmasi, kunyeStatus, visibleCustomerIds });
         rows = mergeRowsByCustomerId([...rows, ...reportOnlyRows]);
       }
       count = rows.length;
@@ -248,7 +197,7 @@ export async function GET(request: Request) {
         .order('musteri', { ascending: true })
         .range(from, to - 1);
 
-      query = applyDbFilters(query, { owner: effectiveOwner, sector, integration, fazNo, q, lite, visibleCustomerIds });
+      query = applyCustomerDbFilters(query, { owner: '', sector, fazNo, q, visibleCustomerIds });
 
       const result = await query;
       if (result.error) return NextResponse.json({ message: result.error.message }, { status: 500 });
@@ -281,7 +230,7 @@ export async function GET(request: Request) {
         customer_type: customerMeta.customer_type ?? 'standard',
         pipeline_policy: customerMeta.pipeline_policy ?? 'phase_required',
         is_kolu: customerMeta.is_kolu ?? null,
-        entegrasyon_tipi: customerMeta.integration_type_key ?? row.entegrasyon_tipi ?? null,
+        entegrasyon_tipi: effectiveIntegration({ integration_type_key: customerMeta.integration_type_key, entegrasyon_tipi: row.entegrasyon_tipi }),
       };
       if (isReportOnlyCustomer(row)) {
         return {
@@ -322,11 +271,6 @@ export async function GET(request: Request) {
           phaseSearchText(row.aktif_faz_no, row.aktif_faz_adi),
         ].some((value) => normalizeSearchText(value).includes(needle));
       });
-    }
-
-    if (integration) {
-      const integrationNeedle = normalizeSearchText(integration);
-      enriched = enriched.filter((row: any) => normalizeSearchText(row.entegrasyon_tipi).includes(integrationNeedle));
     }
 
     if (kasaFirmasi) {

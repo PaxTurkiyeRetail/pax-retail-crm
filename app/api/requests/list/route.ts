@@ -34,9 +34,11 @@ export async function GET(req: Request) {
     if (mine || !userHasPermission(user, 'request.read.all')) {
       query = query.or(`requester_id.eq.${user.id},assignee_id.eq.${user.id}`);
     }
-    if (status)   query = query.ilike('status', status.replace(/[\%_]/g, ' ').trim());
-    if (priority) query = query.ilike('priority', priority.replace(/[\%_]/g, ' ').trim());
-    if (sla)      query = query.ilike('sla_status', sla.replace(/[\%_]/g, ' ').trim());
+    // Kodlar (in_progress, on_time, at_risk...) birebir eşleşir; '_' boşluğa çevrilmez.
+    if (status)   query = query.eq('status', status.trim());
+    if (priority) query = query.eq('priority', priority.trim());
+    if (sla === 'na') query = query.is('sla_status', null);
+    else if (sla) query = query.eq('sla_status', sla.trim());
     if (assignee) query = query.eq('assignee_id', assignee);
     if (q)        query = query.ilike('title', `%${q}%`);
 

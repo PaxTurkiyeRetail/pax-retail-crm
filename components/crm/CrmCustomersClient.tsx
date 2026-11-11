@@ -2,19 +2,20 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import type { CSSProperties } from 'react';
 // Inline SVG icons — no lucide dependency
 const _svg = { fill: 'none', stroke: 'currentColor', strokeWidth: '1.75', strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
 type IconProps = { size?: number; strokeWidth?: number; style?: CSSProperties };
-function Building2({ size = 16, strokeWidth = 1.75, style }: IconProps) { return <svg width={size} height={size} viewBox="0 0 24 24" {..._svg} strokeWidth={strokeWidth} style={style}><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22V12h6v10"/><path d="M8 7h.01M12 7h.01M16 7h.01M8 11h.01M12 11h.01M16 11h.01"/></svg>; }
 function ChevronDown({ size = 16, strokeWidth = 1.75, style }: IconProps) { return <svg width={size} height={size} viewBox="0 0 24 24" {..._svg} strokeWidth={strokeWidth} style={style}><polyline points="6 9 12 15 18 9"/></svg>; }
 function Filter({ size = 16, strokeWidth = 1.75, style }: IconProps) { return <svg width={size} height={size} viewBox="0 0 24 24" {..._svg} strokeWidth={strokeWidth} style={style}><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>; }
-function Layers3({ size = 16, strokeWidth = 1.75, style }: IconProps) { return <svg width={size} height={size} viewBox="0 0 24 24" {..._svg} strokeWidth={strokeWidth} style={style}><path d="M12 2 2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>; }
 function Plus({ size = 16, strokeWidth = 1.75, style }: IconProps) { return <svg width={size} height={size} viewBox="0 0 24 24" {..._svg} strokeWidth={strokeWidth} style={style}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>; }
-function Search({ size = 16, strokeWidth = 1.75, style }: IconProps) { return <svg width={size} height={size} viewBox="0 0 24 24" {..._svg} strokeWidth={strokeWidth} style={style}><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>; }
-function Target({ size = 16, strokeWidth = 1.75, style }: IconProps) { return <svg width={size} height={size} viewBox="0 0 24 24" {..._svg} strokeWidth={strokeWidth} style={style}><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>; }
-function Users({ size = 16, strokeWidth = 1.75, style }: IconProps) { return <svg width={size} height={size} viewBox="0 0 24 24" {..._svg} strokeWidth={strokeWidth} style={style}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>; }
-import { uniqueOptions, parsePhaseNo, sumPhaseRange } from '@/lib/utils';
+import { uniqueOptions, sumPhaseRange } from '@/lib/utils';
+import { FilterBar, ScopeLabel } from '@/components/filters/FilterBar';
+import { useUrlFilters } from '@/lib/filters/use-url-filters';
+import type { FilterOption, PageFilterConfig } from '@/lib/filters/schema';
+import { DEPARTMENT_LABELS, type Department } from '@/lib/departments';
+import { resolveOwner } from '@/lib/reports/owner-filter';
 import CustomersHero from '@/components/crm/CustomersHero';
 import { HAVUZ_ACCOUNT_NAME } from '@/lib/crm';
 import { isBusinessPartnerSector, resolveCustomerTypeForSector } from '@/lib/report-only-customers';
@@ -80,22 +81,24 @@ type FilterOptions = {
   defaultPageSize: number;
 };
 type PhaseBucket = { key: string; label: string; range: string; value: number; tone: string; filterValue: string };
-type FilterToken = { key: string; label: string; onClear: () => void };
-type ActionModeKey = 'all' | 'missing-kunye' | 'no-owner' | 'lead' | 'opportunity' | 'pilot' | 'rollout' | 'integration';
-
-type ActionMode = {
-  key: ActionModeKey;
-  title: string;
-  description: string;
-  iconLabel: string;
-  metric: (stats: StatsPayload) => number;
-};
-
-const KUNYE_OPTIONS = [
+const KUNYE_OPTIONS: FilterOption[] = [
   { value: 'Tamam', label: 'Tamam' },
   { value: 'Eksik', label: 'Eksik' },
   { value: 'Yok', label: 'Yok' },
-] as const;
+];
+
+// Faz kartlarıyla aynı aralıklar (buildPhaseBuckets).
+const PHASE_BUCKET_OPTIONS: FilterOption[] = [
+  { value: '1-4', label: 'Fırsat İlk Temas (Faz 1–4)' },
+  { value: '5-9', label: 'Analiz + Sunumlar (Faz 5–9)' },
+  { value: '10-14', label: 'Business (Faz 10–14)' },
+  { value: '15-23', label: 'Operasyon (Faz 15–23)' },
+  { value: '24-25', label: 'Yayılım (Faz 24–25)' },
+];
+
+/** FilterBar dışı sayfa filtreleri (merkezi şemada anahtar yok) — URL'de saklanır. */
+const EXTRA_FILTER_KEYS = ['sector', 'integration', 'kasa'] as const;
+type ExtraFilterKey = (typeof EXTRA_FILTER_KEYS)[number];
 
 const EMPTY_STATS: StatsPayload = {
   total: 0,
@@ -127,51 +130,6 @@ const EMPTY_OPTIONS: FilterOptions = {
   defaultPageSize: 25,
 };
 
-const ACTION_MODES: ActionMode[] = [
-  {
-    key: 'all',
-    title: 'Tüm portföy',
-    description: 'Tam müşteri görünümü',
-    iconLabel: '•',
-    metric: (stats) => stats.total,
-  },
-  {
-    key: 'missing-kunye',
-    title: 'Künye aksiyonu',
-    description: 'Eksik veya yok bilgiler',
-    iconLabel: '•',
-    metric: (stats) => stats.kunyeEksik + stats.kunyeYok,
-  },
-  {
-    key: 'lead',
-    title: 'Yeni lead alanı',
-    description: 'Faz 1-4 hızlı temas',
-    iconLabel: '•',
-    metric: (stats) => sumPhaseRange(stats.byPhase, 1, 4),
-  },
-  {
-    key: 'opportunity',
-    title: 'Opportunity takibi',
-    description: 'Faz 10-14 aktif satış',
-    iconLabel: '•',
-    metric: (stats) => sumPhaseRange(stats.byPhase, 10, 14),
-  },
-  {
-    key: 'pilot',
-    title: 'Pilot izleme',
-    description: 'Faz 15-23 yakın yönetim',
-    iconLabel: '•',
-    metric: (stats) => sumPhaseRange(stats.byPhase, 15, 23),
-  },
-  {
-    key: 'rollout',
-    title: 'Rollout odak',
-    description: 'Faz 24-25 canlıya geçiş',
-    iconLabel: '•',
-    metric: (stats) => sumPhaseRange(stats.byPhase, 24, 25),
-  },
-];
-
 // Rozet renkleri globals.css'teki chip token'larından gelir: her iki temada
 // tanımlı oldukları için koyu temada da kendi zemininde okunur kalırlar
 // (sabit açık renkler koyu ekranda "çıkartma" gibi duruyordu).
@@ -183,27 +141,6 @@ function statusTone(status?: string | null) {
     return { background: 'var(--chip-gold-bg)', color: 'var(--chip-gold-color)', border: '1px solid var(--chip-gold-bd)' };
   }
   return { background: 'var(--chip-gray-bg)', color: 'var(--chip-gray-color)', border: '1px solid var(--chip-gray-bd)' };
-}
-
-function ownerOptionKey(value: string | null | undefined) {
-  return String(value ?? '').trim().toLocaleLowerCase('tr-TR');
-}
-
-function normalizeOwnerOption(value: string | null | undefined) {
-  const raw = String(value ?? '').trim();
-  const key = ownerOptionKey(raw);
-  return raw;
-}
-
-function uniqueOwnerOptions(values: Array<string | null | undefined>): string[] {
-  const map = new Map<string, string>();
-  for (const value of values) {
-    const normalized = normalizeOwnerOption(value);
-    if (!normalized) continue;
-    const key = ownerOptionKey(normalized);
-    if (!map.has(key)) map.set(key, normalized);
-  }
-  return Array.from(map.values()).sort((a, b) => a.localeCompare(b, 'tr'));
 }
 
 
@@ -271,10 +208,6 @@ function getPhaseMeta(phaseNo: number | null | undefined) {
   return { label: 'Faz Yok', style: { background: 'var(--chip-gray-bg)', color: 'var(--chip-gray-color)', border: '1px solid var(--chip-gray-bd)' } };
 }
 
-function buildPhaseSearchAliases(phaseNo: number | null | undefined, phaseName: string | null | undefined) {
-  const meta = getPhaseMeta(phaseNo);
-  return [meta.label, phaseName ?? '', phaseNo != null ? `Faz ${phaseNo}` : '', 'Yazılım'].filter(Boolean).join(' ');
-}
 
 function getDisplayedPhase(row: CrmRow) {
   if (row.son_kalinan_faz_no != null) {
@@ -294,32 +227,47 @@ function getDisplayedPhase(row: CrmRow) {
   };
 }
 
-export default function CrmCustomersClient() {
+export default function CrmCustomersClient({ ownerOptions, allowedDepartments }: {
+  ownerOptions: FilterOption[];
+  allowedDepartments: Department[] | null;
+}) {
   const [rows, setRows] = useState<CrmRow[]>([]);
   const [me, setMe] = useState<Me | null>(null);
   const [allowed, setAllowed] = useState<AllowedUser[]>([]);
   const [filterOptions, setFilterOptions] = useState<FilterOptions>(EMPTY_OPTIONS);
 
-  const [q, setQ] = useState('');
-  const [debouncedQ, setDebouncedQ] = useState('');
-  const [page, setPage] = useState(1);
+  // Filtreler URL'de (FilterBar). Dashboard'daki "Aksiyon Gerekli" bağlantıları ?q=<firma> ile açar.
+  const filterConfig = useMemo<PageFilterConfig>(() => ({
+    keys: ownerOptions.length ? ['department', 'owner', 'phase', 'status', 'q'] : ['department', 'phase', 'status', 'q'],
+    labels: { status: 'Künye', q: 'Ara' },
+    options: { owner: ownerOptions, phase: PHASE_BUCKET_OPTIONS, status: KUNYE_OPTIONS },
+  }), [ownerOptions]);
+  const { values: filters, set: setFilters } = useUrlFilters(filterConfig, { allowedDepartments });
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const extraFilter = (key: ExtraFilterKey) => searchParams?.get(key)?.trim() ?? '';
+  const setExtraFilter = (key: ExtraFilterKey, value: string) => {
+    const next = new URLSearchParams(searchParams?.toString() ?? '');
+    if (value) next.set(key, value); else next.delete(key);
+    const qs = next.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  };
+  const debouncedQ = filters.q ?? '';
+  const selectedOwner = resolveOwner(filters.owner, ownerOptions);
+  const ownerFilter = filters.owner ?? '';
+  const departmentFilter = filters.department ?? '';
+  const sectorFilter = extraFilter('sector');
+  const integrationFilter = extraFilter('integration');
+  const kasaFilter = extraFilter('kasa');
+  const kunyeFilter = filters.status ?? '';
+  const fazFilter = filters.phase ?? '';
 
-  // Dashboard'daki "Aksiyon Gerekli" bağlantıları listeyi ?q=<firma> ile açar;
-  // arama kutusu ilk yüklemede bu değerle dolu gelir.
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const initialQ = new URLSearchParams(window.location.search).get('q')?.trim() ?? '';
-    if (initialQ) {
-      setQ(initialQ);
-      setDebouncedQ(initialQ);
-    }
-  }, []);
+  const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [total, setTotal] = useState(0);
   const [stats, setStats] = useState<StatsPayload>(EMPTY_STATS);
-  const [showSectorSummary, setShowSectorSummary] = useState(true);
-  const [showAdvanced, setShowAdvanced] = useState(false);
-  const [actionMode, setActionMode] = useState<ActionModeKey>('all');
+  const [showAdvanced, setShowAdvanced] = useState(() => EXTRA_FILTER_KEYS.some((key) => Boolean(searchParams?.get(key))));
 
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<ModalMode>('create');
@@ -344,13 +292,6 @@ export default function CrmCustomersClient() {
   // Farmer'a geçiş künyeden yapılır.
   const [pipelinePolicy, setPipelinePolicy] = useState('phase_required');
 
-  const [ownerFilter, setOwnerFilter] = useState('');
-  const [sectorFilter, setSectorFilter] = useState('');
-  const [integrationFilter, setIntegrationFilter] = useState('');
-  const [kasaFilter, setKasaFilter] = useState('');
-  const [kunyeFilter, setKunyeFilter] = useState('');
-  const [fazFilter, setFazFilter] = useState('');
-
   const displayMeName = useMemo(() => (me?.full_name ?? '').trim(), [me?.full_name]);
   const canAssignCustomers = Boolean(me?.permissions?.includes('customer.assign'));
   const canManageClassification = Boolean(me?.permissions?.includes('customer.classification.manage'));
@@ -363,47 +304,22 @@ export default function CrmCustomersClient() {
     || (canUpdateOwnCustomer && Boolean(me?.id) && row.owner_user_id === me?.id);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => setDebouncedQ(q.trim()), 220);
-    return () => window.clearTimeout(timer);
-  }, [q]);
-
-  useEffect(() => {
     setPage(1);
-  }, [debouncedQ, ownerFilter, sectorFilter, integrationFilter, kasaFilter, kunyeFilter, fazFilter, pageSize]);
+  }, [debouncedQ, ownerFilter, departmentFilter, sectorFilter, integrationFilter, kasaFilter, kunyeFilter, fazFilter, pageSize]);
 
-  useEffect(() => {
-    if (actionMode === 'all') return;
-
-    if (actionMode === 'missing-kunye') {
-      setKunyeFilter('Eksik');
-      setFazFilter('');
-      return;
-    }
-
-    if (actionMode === 'lead') {
-      setFazFilter('1-4');
-      setKunyeFilter('');
-      return;
-    }
-
-    if (actionMode === 'opportunity') {
-      setFazFilter('10-14');
-      setKunyeFilter('');
-      return;
-    }
-
-    if (actionMode === 'pilot') {
-      setFazFilter('15-23');
-      setKunyeFilter('');
-      return;
-    }
-
-    if (actionMode === 'rollout') {
-      setFazFilter('24-25');
-      setKunyeFilter('');
-      return;
-    }
-  }, [actionMode]);
+  /** list + stats aynı filtre parametreleri (sayılar tutarlı). */
+  function buildFilterParams(params: URLSearchParams) {
+    if (debouncedQ) params.set('q', debouncedQ);
+    if (selectedOwner?.id) params.set('owner_id', selectedOwner.id);
+    if (selectedOwner) params.set('owner', selectedOwner.name);
+    if (departmentFilter) params.set('department', departmentFilter);
+    if (sectorFilter) params.set('sector', sectorFilter);
+    if (integrationFilter) params.set('integration', integrationFilter);
+    if (kasaFilter) params.set('kasa_firmasi', kasaFilter);
+    if (kunyeFilter) params.set('kunye_status', kunyeFilter);
+    if (fazFilter) params.set('faz_no', fazFilter);
+    return params;
+  }
 
   async function loadBaseData() {
     const [meRes, usersRes, optionsRes] = await Promise.all([
@@ -433,15 +349,7 @@ export default function CrmCustomersClient() {
   }
 
   async function loadStats() {
-    const params = new URLSearchParams();
-    if (debouncedQ) params.set('q', debouncedQ);
-    if (ownerFilter) params.set('owner', ownerFilter);
-    if (sectorFilter) params.set('sector', sectorFilter);
-    if (integrationFilter) params.set('integration', integrationFilter);
-    if (kasaFilter) params.set('kasa_firmasi', kasaFilter);
-    if (kunyeFilter) params.set('kunye_status', kunyeFilter);
-    if (fazFilter) params.set('faz_no', fazFilter);
-
+    const params = buildFilterParams(new URLSearchParams());
     const statsRes = await fetch(`/api/crm/stats?${params.toString()}`, { cache: 'no-store' });
     if (statsRes.ok) {
       const statsJson = await statsRes.json().catch(() => ({}));
@@ -453,15 +361,7 @@ export default function CrmCustomersClient() {
     setMsg(null);
     setLoading(true);
     try {
-      const params = new URLSearchParams({ page: String(nextPage), pageSize: String(pageSize) });
-      if (debouncedQ) params.set('q', debouncedQ);
-      if (ownerFilter) params.set('owner', ownerFilter);
-      if (sectorFilter) params.set('sector', sectorFilter);
-      if (integrationFilter) params.set('integration', integrationFilter);
-      if (kasaFilter) params.set('kasa_firmasi', kasaFilter);
-      if (kunyeFilter) params.set('kunye_status', kunyeFilter);
-      if (fazFilter) params.set('faz_no', fazFilter);
-
+      const params = buildFilterParams(new URLSearchParams({ page: String(nextPage), pageSize: String(pageSize) }));
       params.set('include_report_only', '1');
 
       const listRes = await fetch(`/api/crm/list?${params.toString()}`, { cache: 'no-store' });
@@ -485,12 +385,7 @@ export default function CrmCustomersClient() {
 
   useEffect(() => {
     void Promise.all([loadStats(), loadRows(page)]);
-  }, [page, debouncedQ, ownerFilter, sectorFilter, integrationFilter, kasaFilter, kunyeFilter, fazFilter, pageSize]);
-
-  const ownerOptions = useMemo(
-    () => uniqueOwnerOptions([...filterOptions.ownerOptions, HAVUZ_ACCOUNT_NAME]),
-    [filterOptions.ownerOptions]
-  );
+  }, [page, debouncedQ, ownerFilter, departmentFilter, sectorFilter, integrationFilter, kasaFilter, kunyeFilter, fazFilter, pageSize]);
 
   const sectorOptions = useMemo(
     () =>
@@ -531,21 +426,11 @@ export default function CrmCustomersClient() {
   const maxPhaseBucket = Math.max(1, ...phaseBuckets.map((item) => item.value));
   const topOwners = (stats.byOwner.length ? stats.byOwner : [{ label: 'Kayıt yok', value: 0 }]).slice(0, 6);
   const topSectors = (stats.bySector.length ? stats.bySector : [{ label: 'Tanımsız', value: 0 }]).slice(0, 7);
-  const riskCount = stats.kunyeEksik + stats.kunyeYok;
   const sectorMax = Math.max(1, ...topSectors.map((item) => item.value));
-  const ownerMax = Math.max(1, ...topOwners.map((item) => item.value));
-  const havuzOwner = topOwners.find((item) => item.label === HAVUZ_ACCOUNT_NAME) ?? null;
   const fieldOwners = topOwners.filter((item) => item.label !== HAVUZ_ACCOUNT_NAME);
   const visibleOwnerBars = fieldOwners.length ? fieldOwners : topOwners;
   const fieldOwnerMax = Math.max(1, ...visibleOwnerBars.map((item) => item.value));
   const completionRate = stats.total ? Math.round((stats.kunyeVar / Math.max(1, stats.total)) * 100) : 0;
-  const riskRate = stats.total ? Math.round((riskCount / Math.max(1, stats.total)) * 100) : 0;
-  const top3SectorShare = stats.total
-    ? Math.round((topSectors.slice(0, 3).reduce((sum, item) => sum + item.value, 0) / Math.max(1, stats.total)) * 100)
-    : 0;
-  const accountShare = stats.total && visibleOwnerBars[0]?.value
-    ? Math.round((visibleOwnerBars[0].value / Math.max(1, stats.total)) * 100)
-    : 0;
   const fieldAccountCount = Math.max(0, fieldOwners.length);
   const kunyeDonutStyle = {
     background: `conic-gradient(#22c55e 0% ${completionRate}%, #f59e0b ${completionRate}% ${Math.min(100, completionRate + (stats.total ? Math.round((stats.kunyeEksik / Math.max(1, stats.total)) * 100) : 0))}%, #64748b ${Math.min(100, completionRate + (stats.total ? Math.round((stats.kunyeEksik / Math.max(1, stats.total)) * 100) : 0))}% 100%)`,
@@ -597,34 +482,6 @@ export default function CrmCustomersClient() {
   const kasaDonutStyle = {
     background: `conic-gradient(${kasaSegments})`,
   } as React.CSSProperties;
-  const topKasa = kasaBreakdown[0] ?? null;
-  const actionCards = ACTION_MODES.map((item) => ({ ...item, value: item.metric(stats) }));
-  const currentAction = actionCards.find((item) => item.key === actionMode) ?? actionCards[0];
-
-  const activeFilterTokens = useMemo<FilterToken[]>(() => {
-    const tokens: FilterToken[] = [];
-    if (actionMode !== 'all') {
-      tokens.push({
-        key: 'action-mode',
-        label: `Aksiyon modu: ${currentAction.title}`,
-        onClear: () => setActionMode('all'),
-      });
-    }
-    if (debouncedQ) tokens.push({ key: 'q', label: `Arama: ${debouncedQ}`, onClear: () => setQ('') });
-    if (ownerFilter) tokens.push({ key: 'owner', label: `Sorumlu: ${ownerFilter}`, onClear: () => setOwnerFilter('') });
-    if (kunyeFilter) tokens.push({ key: 'kunye', label: `Künye: ${kunyeFilter}`, onClear: () => setKunyeFilter('') });
-    if (fazFilter) tokens.push({ key: 'phase', label: `Faz: ${fazFilter}`, onClear: () => setFazFilter('') });
-    if (sectorFilter) tokens.push({ key: 'sector', label: `Sektör: ${sectorFilter}`, onClear: () => setSectorFilter('') });
-    if (kasaFilter) tokens.push({ key: 'kasa', label: `Kasa Firması: ${kasaFilter}`, onClear: () => setKasaFilter('') });
-    if (integrationFilter) {
-      tokens.push({
-        key: 'integration',
-        label: `Entegrasyon: ${integrationFilter}`,
-        onClear: () => setIntegrationFilter(''),
-      });
-    }
-    return tokens;
-  }, [actionMode, currentAction.title, debouncedQ, ownerFilter, kunyeFilter, fazFilter, sectorFilter, kasaFilter, integrationFilter]);
 
   const resetForm = () => {
     setEditingId(null);
@@ -765,21 +622,8 @@ export default function CrmCustomersClient() {
     }
   }
 
-  function clearFilters() {
-    setActionMode('all');
-    setQ('');
-    setOwnerFilter('');
-    setSectorFilter('');
-    setIntegrationFilter('');
-    setKasaFilter('');
-    setKunyeFilter('');
-    setFazFilter('');
-  }
-
-  function applyPhaseBucket(filterValue: string, actionKey: ActionModeKey) {
-    setActionMode(actionKey);
-    setFazFilter(filterValue);
-    setPage(1);
+  function applyPhaseBucket(filterValue: string) {
+    setFilters({ phase: fazFilter === filterValue ? undefined : filterValue });
   }
 
   return (
@@ -1223,53 +1067,11 @@ export default function CrmCustomersClient() {
         visibleOwnerBars={visibleOwnerBars}
         fieldOwnerMax={fieldOwnerMax}
         fieldAccountCount={fieldAccountCount}
+        scope={<ScopeLabel mode="snapshot" department={departmentFilter ? DEPARTMENT_LABELS[departmentFilter] : undefined} owner={selectedOwner?.name} />}
       />
 
             <section className="surface">
-        <div className="search-shell">
-          <label className="field">
-            <span className="field-label">Arama</span>
-            <div className="search-input">
-              <Search size={16} strokeWidth={1.7} />
-              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Müşteri, sektör, account, faz veya entegrasyon ara" />
-            </div>
-          </label>
-
-          <label className="field">
-            <span className="field-label">Müşteri sorumlusu</span>
-            <select className="select" value={ownerFilter} onChange={(e) => setOwnerFilter(e.target.value)}>
-              <option value="">Tüm sorumlular</option>
-              {ownerOptions.map((name) => (
-                <option key={name} value={name}>{name}</option>
-              ))}
-            </select>
-          </label>
-
-          <label className="field">
-            <span className="field-label">Künye durumu</span>
-            <select className="select" value={kunyeFilter} onChange={(e) => setKunyeFilter(e.target.value)}>
-              <option value="">Tüm durumlar</option>
-              {KUNYE_OPTIONS.map((item) => (
-                <option key={item.value} value={item.value}>{item.label}</option>
-              ))}
-            </select>
-          </label>
-
-          <label className="field">
-            <span className="field-label">Faz / aralık</span>
-            <select className="select" value={fazFilter} onChange={(e) => setFazFilter(e.target.value)}>
-              <option value="">Tüm fazlar</option>
-              <option value="1-4">Faz 1-4</option>
-              <option value="5-9">Faz 5-9</option>
-              <option value="10-14">Faz 10-14</option>
-              <option value="15-23">Faz 15-23</option>
-              <option value="24-25">Faz 24-25</option>
-              {filterOptions.phaseOptions.map((name) => (
-                <option key={name} value={name.replace('FAZ ', '')}>{name}</option>
-              ))}
-            </select>
-          </label>
-        </div>
+        <FilterBar config={filterConfig} allowedDepartments={allowedDepartments} showScope={false} />
 
         <div style={{ marginTop: 16 }}>
           <div className="section-note" style={{ marginBottom: 10 }}>
@@ -1282,7 +1084,7 @@ export default function CrmCustomersClient() {
                 type="button"
                 className={`phase-segment ${fazFilter === item.filterValue ? 'active' : ''}`}
                 style={{ background: item.tone }}
-                onClick={() => applyPhaseBucket(item.filterValue, item.key as ActionModeKey)}
+                onClick={() => applyPhaseBucket(item.filterValue)}
               >
                 <div className="phase-segment-head">
                   <div>
@@ -1310,7 +1112,7 @@ export default function CrmCustomersClient() {
           <div className="advanced-grid" style={{ marginTop: 14 }}>
             <label className="field">
               <span className="field-label">Sektör</span>
-              <select className="select" value={sectorFilter} onChange={(e) => setSectorFilter(e.target.value)}>
+              <select className="select" value={sectorFilter} onChange={(e) => setExtraFilter('sector', e.target.value)}>
                 <option value="">Tüm sektörler</option>
                 {sectorOptions.map((name) => (
                   <option key={name} value={name}>{name}</option>
@@ -1320,7 +1122,7 @@ export default function CrmCustomersClient() {
 
             <label className="field">
               <span className="field-label">Entegrasyon yapısı</span>
-              <select className="select" value={integrationFilter} onChange={(e) => setIntegrationFilter(e.target.value)}>
+              <select className="select" value={integrationFilter} onChange={(e) => setExtraFilter('integration', e.target.value)}>
                 <option value="">Tüm entegrasyonlar</option>
                 {integrationOptions.map((name) => (
                   <option key={name} value={name}>{name}</option>
@@ -1330,7 +1132,7 @@ export default function CrmCustomersClient() {
 
             <label className="field">
               <span className="field-label">Kasa firması</span>
-              <select className="select" value={kasaFilter} onChange={(e) => setKasaFilter(e.target.value)}>
+              <select className="select" value={kasaFilter} onChange={(e) => setExtraFilter('kasa', e.target.value)}>
                 <option value="">Tüm kasa firmaları</option>
                 {kasaOptions.map((name) => (
                   <option key={name} value={name}>{name}</option>
@@ -1356,29 +1158,6 @@ export default function CrmCustomersClient() {
           </div>
         ) : null}
       </section>
-
-      {activeFilterTokens.length ? (
-        <section className="result-bar">
-          <div className="result-copy">
-            <div className="result-metric">
-              <strong>{visibleTotal}</strong>
-              <span>Görünen müşteri</span>
-            </div>
-            <div className="section-note">Şu an görünüm, aksiyon modu ve filtrelerin birleşiminden oluşuyor. Toplam havuz: {total}</div>
-          </div>
-          <div className="token-row">
-            {activeFilterTokens.map((item) => (
-              <span className="token" key={item.key}>
-                {item.label}
-                <button type="button" onClick={item.onClear}>×</button>
-              </span>
-            ))}
-            <button type="button" onClick={clearFilters} style={{ minHeight: 36, padding: '0 12px', border: '1px solid var(--border)', borderRadius: 10, background: 'var(--surface)', color: 'var(--text-2)', fontWeight: 800, cursor: 'pointer' }}>
-              Tüm filtreleri temizle
-            </button>
-          </div>
-        </section>
-      ) : null}
 
       {msg ? <div className="message">{msg}</div> : null}
 

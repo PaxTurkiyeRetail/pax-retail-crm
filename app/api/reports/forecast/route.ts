@@ -1,7 +1,12 @@
 import { NextResponse } from 'next/server';
-import { requireReportsAccessOrThrow } from '@/lib/authz';
+import { getUserDepartments, requireReportsAccessOrThrow } from '@/lib/authz';
+import { resolveDepartmentFilter } from '@/lib/departments';
+import { parseFilters } from '@/lib/filters/schema';
+import { forecastFilterConfig } from '@/lib/reports/forecast-filters';
+import { resolveOwner } from '@/lib/reports/owner-filter';
+import { loadOwnerOptions } from '@/lib/reports/owner-filter.server';
 import { db } from '@/lib/db';
-import { FORECAST_MONTHS, getForecastParameterOptions, isMissingForecastRelation, monthLabel, normalizeText, sanitizeLike, toPositiveInt } from '@/lib/forecast';
+import { FORECAST_MONTHS, buildForecastYears, getForecastParameterOptions, isMissingForecastRelation, monthLabel, normalizeText, toPositiveInt } from '@/lib/forecast';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -21,10 +26,14 @@ function summarize<T extends string>(rows: any[], keyFn: (row: any) => T, valueF
 
 export async function GET(request: Request) {
   try {
-    await requireReportsAccessOrThrow();
+    const me = await requireReportsAccessOrThrow();
     const url = new URL(request.url);
-    const q = String(url.searchParams.get('q') ?? '').trim();
-    const owner = String(url.searchParams.get('owner') ?? '').trim();
+    const allowedDepartments = await getUserDepartments(me);
+    const ownerOptions = await loadOwnerOptions({ departments: allowedDepartments });
+    const filters = parseFilters(url.searchParams, forecastFilterConfig(ownerOptions), { allowedDepartments });
+    const q = filters.q ?? '';
+    const owner = resolveOwner(filters.owner, ownerOptions);
+    const departments = resolveDepartmentFilter(filters.department, allowedDepartments);
     const channel = String(url.searchParams.get('channel') ?? '').trim();
     const probability = toPositiveInt(url.searchParams.get('probability'), 0);
     const year = toPositiveInt(url.searchParams.get('year'), 0);
@@ -32,7 +41,15 @@ export async function GET(request: Request) {
 
     const params: any[] = [];
     const clauses = ['f.is_active = true'];
-    if (owner) { params.push(`%${sanitizeLike(owner)}%`); clauses.push(`f.owner_name ilike $${params.length}`); }
+    // Satıcı: kullanıcı id ile (owner_user_id); id'siz eski kayıtlar tam ad eşleşmesiyle.
+    if (owner?.id) {
+      params.push(owner.id, owner.name);
+      clauses.push(`(f.owner_user_id = $${params.length - 1} or (nullif(f.owner_user_id, '') is null and trim(f.owner_name) = $${params.length}))`);
+    } else if (owner) {
+      params.push(owner.name);
+      clauses.push(`trim(f.owner_name) = $${params.length}`);
+    }
+    if (departments) { params.push(departments); clauses.push(`m.is_kolu = any($${params.length}::text[])`); }
     if (channel) { params.push(channel); clauses.push(`f.sales_channel = $${params.length}`); }
     if (probability) { params.push(probability); clauses.push(`f.probability = $${params.length}`); }
     if (year) { params.push(year); clauses.push(`f.forecast_year = $${params.length}`); }
@@ -55,7 +72,7 @@ export async function GET(request: Request) {
     } catch (error) {
       if (isMissingForecastRelation(error)) {
         const forecastParams = await getForecastParameterOptions();
-        return NextResponse.json({ onboardingNeeded: true, message: 'forecast_module_not_setup', rows: [], ownerOptions: [], salesChannels: forecastParams.channels, probabilities: forecastParams.probabilities, months: FORECAST_MONTHS, years: [] });
+        return NextResponse.json({ onboardingNeeded: true, message: 'forecast_module_not_setup', rows: [], ownerOptions, allowedDepartments, salesChannels: forecastParams.channels, probabilities: forecastParams.probabilities, months: FORECAST_MONTHS, years: buildForecastYears() });
       }
       throw error;
     }
@@ -65,23 +82,9 @@ export async function GET(request: Request) {
       rows = rows.filter((row) => [row.musteri, row.sektor, row.sorumlu, row.entegrasyon_tipi, row.product_code_snapshot, row.product_name_snapshot, row.sales_channel, row.owner_name].some((value) => normalizeText(value).includes(needle)));
     }
 
-    const allOwners = await db.query(`
-      select owner_name from (
-        select distinct trim(owner_name) as owner_name
-        from public.crm_forecasts
-        where is_active = true and owner_name is not null and trim(owner_name) <> ''
-        union
-        select distinct trim(sorumlu) as owner_name
-        from public.musteriler
-        where sorumlu is not null and trim(sorumlu) <> ''
-        union
-        select distinct trim(full_name) as owner_name
-        from public.allowed_users
-        where is_active = true and full_name is not null and trim(full_name) <> ''
-      ) owners
-      where owner_name <> ''
-      order by owner_name asc
-    `).catch(() => ({ rows: [] as any[] }));
+    // Yıl listesi filtreden bağımsız: kayıtlı tüm yıllar + giriş ekranının yılları.
+    const yearRows = await db.query(`select distinct forecast_year from public.crm_forecasts where is_active = true`);
+    const years = Array.from(new Set([...yearRows.rows.map((row: any) => Number(row.forecast_year)), ...buildForecastYears()].filter(Boolean))).sort((a, b) => a - b);
     const forecastParams = await getForecastParameterOptions();
 
     const totalQuantity = rows.reduce((sum, row) => sum + Number(row.quantity ?? 0), 0);
@@ -97,12 +100,13 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       onboardingNeeded: false,
-      filters: { q, owner, channel, probability, year, month },
-      ownerOptions: allOwners.rows.map((row: any) => String(row.owner_name ?? '').trim()).filter(Boolean),
+      filters: { q, owner: owner?.value ?? '', department: filters.department ?? '', channel, probability, year, month },
+      ownerOptions,
+      allowedDepartments,
       salesChannels: forecastParams.channels,
       probabilities: forecastParams.probabilities,
       months: FORECAST_MONTHS,
-      years: Array.from(new Set(rows.map((row) => Number(row.forecast_year)).filter(Boolean))).sort((a, b) => a - b),
+      years,
       summary: {
         totalLines: rows.length,
         uniqueCustomers,

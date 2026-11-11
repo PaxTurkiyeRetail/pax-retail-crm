@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireReportsAccessOrThrow } from '@/lib/authz';
+import { getUserDepartments, requireReportsAccessOrThrow } from '@/lib/authz';
 import { createPgAdminClient } from '@/lib/pg/admin';
 import { generateWeeklyManagementPresentationPptx } from '@/lib/weekly-management-pptx';
 import { getSystemParameterBoolean } from '@/lib/system-parameters';
@@ -29,7 +29,7 @@ function contentDispositionAttachment(filename: string) {
 
 export async function GET(request: Request) {
   try {
-    await requireReportsAccessOrThrow();
+    const me = await requireReportsAccessOrThrow();
     const pptxEnabled = await getSystemParameterBoolean('system_pptx_download_enabled', true);
     if (!pptxEnabled) return NextResponse.json({ message: 'PPTX indirme sistem parametresinden kapalı.' }, { status: 403 });
     const admin = createPgAdminClient();
@@ -38,7 +38,7 @@ export async function GET(request: Request) {
     const to = String(url.searchParams.get('to') ?? '').trim();
     const owner = String(url.searchParams.get('owner') ?? '').trim();
     const segment = String(url.searchParams.get('segment') ?? '').trim();
-    const { buffer } = await generateWeeklyManagementPresentationPptx(admin, { from, to, owner, segment });
+    const { buffer } = await generateWeeklyManagementPresentationPptx(admin, { from, to, owner, segment, department: String(url.searchParams.get('department') ?? '').trim(), allowedDepartments: await getUserDepartments(me) });
     return new NextResponse(new Uint8Array(buffer), {
       status: 200,
       headers: {

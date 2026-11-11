@@ -4,7 +4,13 @@ import type { CSSProperties } from 'react';
 
 import Link from 'next/link';
 import { rentalPeriodLabel } from '@/lib/quotes/line-pricing';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { FilterBar, ScopeLabel } from '@/components/filters/FilterBar';
+import { useUrlFilters } from '@/lib/filters/use-url-filters';
+import { resolvePeriod } from '@/lib/filters/period';
+import type { FilterOption, PageFilterConfig } from '@/lib/filters/schema';
+import { DEPARTMENT_LABELS, type Department } from '@/lib/departments';
+import { resolveOwner } from '@/lib/reports/owner-filter';
 import { formatDate } from '@/lib/utils';
 import { useConfiguredPageSize } from '@/components/hooks/useConfiguredPageSize';
 import { PAGE_SIZE_OPTIONS } from '@/lib/ui-pagination';
@@ -82,13 +88,31 @@ function quoteState(row: QuoteRow): { key: 'sale' | 'waiting' | 'expired' | 'los
   return { key: 'waiting', label: 'Beklemede' };
 }
 
-export default function QuotePortfolioClient() {
+const STATUS_OPTIONS: FilterOption[] = [
+  { value: 'draft', label: 'Taslak' },
+  { value: 'sent', label: 'Gönderildi' },
+  { value: 'closed', label: 'Kapatıldı' },
+];
+
+export default function QuotePortfolioClient({ ownerOptions, allowedDepartments }: { ownerOptions: FilterOption[]; allowedDepartments: Department[] | null }) {
   const [rows, setRows] = useState<QuoteRow[]>([]);
   const [kpis, setKpis] = useState<Kpis | null>(null);
-  const [q, setQ] = useState('');
-  const [status, setStatus] = useState('');
-  const [owner, setOwner] = useState('');
-  const [ownerOptions, setOwnerOptions] = useState<string[]>([]);
+  // Filtreler URL'de. Dönem seçilmezse tüm teklifler (anlık portföy); seçilirse teklif tarihi aralığı.
+  const filterConfig = useMemo<PageFilterConfig>(() => ({
+    keys: ownerOptions.length ? ['period', 'from', 'to', 'department', 'owner', 'status', 'q'] : ['period', 'from', 'to', 'department', 'status', 'q'],
+    labels: { q: 'Ara' },
+    options: { owner: ownerOptions, status: STATUS_OPTIONS },
+  }), [ownerOptions]);
+  const { values: filters } = useUrlFilters(filterConfig, { allowedDepartments });
+  const period = filters.period ? resolvePeriod({ period: filters.period, from: filters.from, to: filters.to }) : null;
+  const selectedOwner = resolveOwner(filters.owner, ownerOptions);
+  const q = filters.q ?? '';
+  const status = filters.status ?? '';
+  const department = filters.department ?? '';
+  const ownerId = selectedOwner?.id ?? '';
+  const ownerName = selectedOwner?.name ?? '';
+  const periodFrom = period?.from ?? '';
+  const periodTo = period?.to ?? '';
   const [loading, setLoading] = useState(true);
   const [onboarding, setOnboarding] = useState(false);
   const [page, setPage] = useState(1);
@@ -105,7 +129,11 @@ export default function QuotePortfolioClient() {
       if (status) params.set('status', status);
       params.set('page', String(page));
       params.set('pageSize', String(pageSize));
-      if (owner) params.set('owner', owner);
+      if (ownerId) params.set('owner_id', ownerId);
+      if (ownerName) params.set('owner', ownerName);
+      if (department) params.set('department', department);
+      if (periodFrom) params.set('from', periodFrom);
+      if (periodTo) params.set('to', periodTo);
 
       try {
         const [listRes, statsRes] = await Promise.all([
@@ -120,7 +148,6 @@ export default function QuotePortfolioClient() {
         } else {
           setRows(listJson.rows ?? []);
           setTotal(Number(listJson.total ?? 0));
-          setOwnerOptions(Array.isArray(listJson.ownerOptions) ? listJson.ownerOptions : []);
           setOnboarding(Boolean(listJson.onboardingNeeded || statsJson.onboardingNeeded));
         }
         if (statsRes.ok) setKpis(statsJson.kpis ?? null);
@@ -129,11 +156,11 @@ export default function QuotePortfolioClient() {
       }
     };
     void load();
-  }, [q, status, owner, page, pageSize]);
+  }, [q, status, ownerId, ownerName, department, periodFrom, periodTo, page, pageSize]);
 
   useEffect(() => {
     setPage(1);
-  }, [q, status, owner, pageSize]);
+  }, [q, status, ownerId, ownerName, department, periodFrom, periodTo, pageSize]);
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const currentPage = Math.min(page, totalPages);
@@ -175,6 +202,12 @@ export default function QuotePortfolioClient() {
           </div>
         ) : null}
 
+        <ScopeLabel
+          mode={period ? 'period' : 'snapshot'}
+          period={period?.label}
+          department={department ? DEPARTMENT_LABELS[department] : undefined}
+          owner={selectedOwner?.name}
+        />
         <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))' }}>
           {cards.map((card) => (
             <div key={card.label} style={surfaceCard}>
@@ -187,29 +220,22 @@ export default function QuotePortfolioClient() {
       </section>
 
       <section style={surface}>
-        <div className="quote-filter-grid" style={{ display: 'grid', gap: 12, gridTemplateColumns: 'minmax(220px, 2fr) minmax(140px, 1fr) minmax(140px, 1fr) minmax(110px, auto) auto' }}>
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Müşteri, teklif no, model veya satışçı ara" style={inputStyle} />
-          <select value={status} onChange={(e) => setStatus(e.target.value)} style={inputStyle}>
-            <option value="">Tüm Durumlar</option>
-            <option value="draft">Taslak</option>
-            <option value="sent">Gönderildi</option>
-            <option value="closed">Kapatıldı</option>
-          </select>
-          <select value={owner} onChange={(e) => setOwner(e.target.value)} style={inputStyle}>
-            <option value="">Tüm Satışçılar</option>
-            {ownerOptions.map((item) => <option key={item} value={item}>{item}</option>)}
-          </select>
-          <select value={String(pageSize)} onChange={(e) => setPageSize(Number(e.target.value))} style={inputStyle}>
-            {PAGE_SIZE_OPTIONS.map((size) => <option key={size} value={size}>{size} / sayfa</option>)}
-          </select>
-          <button onClick={() => { setQ(''); setStatus(''); setOwner(''); setPage(1); }} style={ghostButton}>Temizle</button>
-        </div>
+        <FilterBar
+          config={filterConfig}
+          allowedDepartments={allowedDepartments}
+          showScope={false}
+          actions={(
+            <select aria-label="Sayfa boyutu" value={String(pageSize)} onChange={(e) => setPageSize(Number(e.target.value))} style={inputStyle}>
+              {PAGE_SIZE_OPTIONS.map((size) => <option key={size} value={size}>{size} / sayfa</option>)}
+            </select>
+          )}
+        />
       </section>
 
       <section style={surface}>
         {msg ? <div style={{ color: 'var(--chip-red-color)', marginBottom: 12 }}>{msg}</div> : null}
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
-          <div style={{ color: 'var(--text-3)', fontSize: 13 }}>Toplam {total} kayıt · Sayfa {currentPage}/{totalPages}</div>
+          <div style={{ color: 'var(--text-3)', fontSize: 13 }}>Toplam {total.toLocaleString('tr-TR')} kayıt · Sayfa {currentPage}/{totalPages}</div>
           <div style={{ display: 'flex', gap: 8 }}>
             <button type="button" style={ghostButton} disabled={currentPage <= 1 || loading} onClick={() => setPage((p) => Math.max(1, p - 1))}>Önceki</button>
             <button type="button" style={ghostButton} disabled={currentPage >= totalPages || loading} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>Sonraki</button>

@@ -6,6 +6,7 @@ import { isReportOnlyCustomer, reportOnlyCustomerKind } from '@/lib/report-only-
 import { buildJiraWeeklyTicketSummary, type JiraWeeklyTicketSummary } from '@/lib/jira-weekly-tickets';
 import { getSystemParameterBoolean } from '@/lib/system-parameters';
 import { db } from '@/lib/db';
+import { resolveDepartmentFilter, type Department } from '@/lib/departments';
 
 
 type WeeklyContactTargets = {
@@ -129,15 +130,6 @@ function summarizeMap(map: Map<string, number>) {
     .sort((a, b) => b.value - a.value || a.label.localeCompare(b.label, 'tr'));
 }
 
-function summarizeValues(values: Array<string | null | undefined>, fallback = '-') {
-  const map = new Map<string, number>();
-  for (const raw of values) {
-    const label = String(raw ?? '').replace(/\s+/g, ' ').trim() || fallback;
-    if (!label || label === '-') continue;
-    map.set(label, (map.get(label) ?? 0) + 1);
-  }
-  return summarizeMap(map);
-}
 
 function summarizeDashboardValues(values: Array<string | null | undefined>, fallback = '-') {
   const map = new Map<string, number>();
@@ -187,11 +179,6 @@ function cleanOptionalText(value: unknown): string | null {
 }
 
 
-function buildPhaseTitle(phaseNo: number | null | undefined, phaseName?: string | null) {
-  if (phaseNo == null) return 'Faz bilgisi yok';
-  const cleanName = String(phaseName ?? '').replace(/\s+/g, ' ').trim();
-  return cleanName ? `Faz ${phaseNo} - ${cleanName}` : `Faz ${phaseNo}`;
-}
 
 function normalizeDistributionLabel(value: unknown) {
   const text = String(value ?? '').replace(/\s+/g, ' ').trim();
@@ -526,13 +513,6 @@ function parseDateMs(value: unknown) {
   return Number.isFinite(parsed) ? parsed : NaN;
 }
 
-function isWithinDateRange(row: Pick<ActivityRow, 'created_at'>, from: string, to: string) {
-  const valueMs = parseDateMs(row.created_at);
-  const fromMs = Date.parse(`${from}T00:00:00`);
-  const toMs = Date.parse(`${to}T23:59:59.999`);
-  if (!Number.isFinite(valueMs) || !Number.isFinite(fromMs) || !Number.isFinite(toMs)) return false;
-  return valueMs >= fromMs && valueMs <= toMs;
-}
 
 function activityCustomerKey(row: ActivityRow) {
   return String(row.musteri_id || row.customer || '').trim();
@@ -548,15 +528,6 @@ function pickUniqueLatest(rows: ActivityRow[]) {
   return Array.from(map.values());
 }
 
-function pickUniqueEarliest(rows: ActivityRow[]) {
-  const sorted = rows.slice().sort((a, b) => parseDateMs(a.created_at) - parseDateMs(b.created_at));
-  const map = new Map<string, ActivityRow>();
-  for (const row of sorted) {
-    const key = activityCustomerKey(row);
-    if (key && !map.has(key)) map.set(key, row);
-  }
-  return Array.from(map.values());
-}
 
 function activityCustomerPhaseKey(row: ActivityRow) {
   const customerKey = activityCustomerKey(row);
@@ -792,12 +763,19 @@ function emptyJiraWeeklyTicketSummary(from: string, to: string): JiraWeeklyTicke
   };
 }
 
-export async function buildWeeklyManagementPresentation(admin: any, options?: { from?: string; to?: string; owner?: string; segment?: string; sellerMode?: boolean }) {
+export type WeeklyPresentationOptions = {
+  from?: string; to?: string; owner?: string; segment?: string; sellerMode?: boolean;
+  /** Departman (musteriler.is_kolu) süzgeci; allowedDepartments kullanıcının izinli departmanları. */
+  department?: string; allowedDepartments?: Department[] | null;
+};
+
+export async function buildWeeklyManagementPresentation(admin: any, options?: WeeklyPresentationOptions) {
   const from = String(options?.from ?? '').trim() || toDateInput(startOfWeek(new Date()));
   const to = String(options?.to ?? '').trim() || toDateInput(endOfWeek(new Date()));
   const selectedOwner = String(options?.owner ?? '').trim();
   const selectedSegment = String(options?.segment ?? '').trim();
   const sellerMode = Boolean(options?.sellerMode);
+  const departmentList = resolveDepartmentFilter(options?.department, options?.allowedDepartments ?? null);
 
   // Vertical iş kolu sektörleri etiketten değil parametre meta'sından okunur
   // (meta.business_line = 'vertical'); eski genel "Vertical" değeri de
@@ -828,7 +806,7 @@ export async function buildWeeklyManagementPresentation(admin: any, options?: { 
   });
   const customerPolicies = await fetchAllRows<any>((rangeFrom, rangeTo) => admin
     .from('musteriler')
-    .select('id,customer_type,integration_type_key')
+    .select('id,customer_type,integration_type_key,is_kolu')
     .order('id', { ascending: true })
     .range(rangeFrom, rangeTo));
   const customerPolicyMap = new Map((customerPolicies ?? []).map((row: any) => [String(row.id), row]));
@@ -864,7 +842,8 @@ export async function buildWeeklyManagementPresentation(admin: any, options?: { 
       customer_type: cleanText(policy?.customer_type, 'standard'),
       entegrasyon_tipi: cleanText(policy?.integration_type_key ?? row.entegrasyon_tipi),
     };
-  }).filter((row) => row.musteri_id);
+  }).filter((row) => row.musteri_id)
+    .filter((row) => !departmentList || departmentList.includes(String((customerPolicyMap.get(row.musteri_id) as any)?.is_kolu ?? '').trim() as Department));
 
   const reportOnlyCustomerIds = new Set(normalizedCustomers.filter((row) => isReportOnlyCustomer({ musteri: row.customer, sorumlu: row.owner, sektor: row.sector })).map((row) => row.musteri_id));
   // Yalnızca açıkça işaretlenmiş sentetik rapor satırları ayrıştırılır;
@@ -880,8 +859,7 @@ export async function buildWeeklyManagementPresentation(admin: any, options?: { 
       return admin
         .from('pipeline_eventleri')
         .select('id,musteri_id,faz_no,durum,event_type,aksiyon,owner,partner_owner,notlar,created_at,created_by,activity_scope,affects_phase,is_blocked,blocked_note,musteriler(musteri,sorumlu,sektor,entegrasyon_tipi,customer_type)')
-        .gte('created_at', `${from}T00:00:00`)
-        .lte('created_at', `${to}T23:59:59`)
+        .activityDateRange(from, to)
         .order('created_at', { ascending: false })
         .range(rangeFrom, rangeTo);
     }),
@@ -1100,6 +1078,8 @@ export async function buildWeeklyManagementPresentation(admin: any, options?: { 
     const kind = reportOnlyCustomerKind({ customer_type: fallbackCustomer?.customer_type ?? row?.musteriler?.customer_type });
     const isBusinessPartnerActivity = kind === 'business-partner';
     const isReportOnlyTechnical = reportOnlyCustomerIds.has(id) && isTechnicalChannelLike(parseActivityType(row.aksiyon, row.event_type));
+    // Departman seçiliyse yalnız o departmandaki müşterilerin aktiviteleri.
+    if (departmentList && !activityCustomerFallbackMap.has(id)) return false;
 
     if (sellerMode && selectedOwnerNorm) {
       // Satışçı sunumunda aktivitenin sahibi müşteri sorumlusu değil,

@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { ScopeLabel } from '@/components/filters/FilterBar';
+import { DEPARTMENTS, DEPARTMENT_LABELS, type Department } from '@/lib/departments';
 import '@/styles/reports-management.css';
 import '@/styles/reports-kasapos-summary.css';
 
@@ -57,6 +59,8 @@ type Payload = {
   kasaposOptions: string[];
   selectedKasapos: string;
   rows: ReportRow[];
+  allowedDepartments?: Department[] | null;
+  generatedAt?: string;
   totals: {
     totalCompanies: number;
     totalPos: number;
@@ -190,16 +194,18 @@ export default function KasaposSummaryReportPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [kasapos, setKasapos] = useState('');
   const [query, setQuery] = useState('');
+  const [department, setDepartment] = useState('');
   const [sortBy, setSortBy] = useState<'firma_adi' | 'faz_no' | 'kasapos_firmasi' | 'toplam_pos_adedi'>('firma_adi');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [selectedQuoteRow, setSelectedQuoteRow] = useState<ReportRow | null>(null);
 
-  const load = async (nextKasapos = kasapos) => {
+  const load = async (nextKasapos = kasapos, nextDepartment = department) => {
     setLoading(true);
     setMessage(null);
     try {
       const params = new URLSearchParams();
       if (nextKasapos) params.set('kasapos', nextKasapos);
+      if (nextDepartment) params.set('department', nextDepartment);
       const queryString = params.toString();
       const res = await fetch(`/api/reports/kasapos-summary${queryString ? `?${queryString}` : ''}`, { cache: 'no-store' });
       const data = await res.json().catch(() => ({}));
@@ -214,7 +220,7 @@ export default function KasaposSummaryReportPage() {
     }
   };
 
-  useEffect(() => { void load(''); }, []);
+  useEffect(() => { void load('', ''); }, []);
 
   const filteredRows = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase('tr');
@@ -287,7 +293,8 @@ export default function KasaposSummaryReportPage() {
   const clearFilters = async () => {
     setKasapos('');
     setQuery('');
-    await load('');
+    setDepartment('');
+    await load('', '');
   };
 
   const setSorting = (field: typeof sortBy) => {
@@ -316,6 +323,11 @@ export default function KasaposSummaryReportPage() {
           </div>
         </div>
 
+        <ScopeLabel
+          mode="snapshot"
+          department={department ? DEPARTMENT_LABELS[department as Department] : undefined}
+          owner={payload.generatedAt ? `Veri tarihi: ${new Date(payload.generatedAt).toLocaleString('tr-TR')}` : undefined}
+        />
         <section className="kasapos-kpi-grid">
           <div className="kasapos-kpi-card"><span>Toplam Firma</span><strong>{payload.totals.totalCompanies}</strong><small>Künyesi tamam müşteriler</small></div>
           <div className="kasapos-kpi-card"><span>Toplam POS</span><strong>{payload.totals.totalPos}</strong><small>Sayısal okunabilen kayıtlar</small></div>
@@ -327,8 +339,19 @@ export default function KasaposSummaryReportPage() {
         <section className="surface kasapos-filter-surface">
           <div className="filters-grid kasapos-filters-grid">
             <label className="field">
-              <span className="field-label">Arama</span>
+              <span className="field-label">Ara</span>
               <input className="input" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Firma, Kasapos, faz, durum, marka, teklif" />
+            </label>
+            <label className="field">
+              <span className="field-label">Departman</span>
+              <select className="input" value={department} onChange={async (e) => {
+                const value = e.target.value;
+                setDepartment(value);
+                await load(kasapos, value);
+              }}>
+                <option value="">Tüm departmanlar</option>
+                {DEPARTMENTS.filter((d) => !payload.allowedDepartments?.length || payload.allowedDepartments.includes(d)).map((d) => <option key={d} value={d}>{DEPARTMENT_LABELS[d]}</option>)}
+              </select>
             </label>
             <label className="field">
               <span className="field-label">Kasapos Firması</span>

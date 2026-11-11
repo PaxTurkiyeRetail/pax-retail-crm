@@ -1,4 +1,5 @@
 import { db } from '@/lib/db';
+import type { Department } from '@/lib/departments';
 import { buildLiveBoard } from '@/lib/reports/live-board';
 import { normalizeName } from '@/lib/reports/live-board-shared';
 import { loadHunterFarmerActivity } from '@/lib/reports/inactive-customers';
@@ -280,8 +281,22 @@ async function hunterCompareByOwner(sql: string, params: unknown[] = []) {
 // "Portföy Sağlığı" kartlarının tüm satışçılar için tek tabloda toplu görünümü (22.09).
 // Ayrı sorgu YOK: veri zaten buildLiveBoard() içinde owner bazlı hesaplı — burada sadece
 // ilgili alanlar seçilip düzleştiriliyor (altın kural 17: tek yerden okunur).
-export async function buildYilZiyaretPortfoyRaporu(): Promise<YilZiyaretPortfoyPayload> {
-  const [board, forecast, blocker, kunye, portfolioFirms, activeFirms, coveredNames] = await Promise.all([
+// Departman süzgeci satışçı bazındadır: portföyünde (musteriler.sorumlu) seçili departmandan
+// (musteriler.is_kolu) en az bir firma olan satışçılar listelenir; satır metrikleri değişmez.
+const Q_OWNER_DEPARTMENTS = `
+  select coalesce(nullif(trim(m.sorumlu), ''), '—') as owner
+  from public.musteriler m
+  where m.is_kolu = any($1::text[])
+  group by 1
+`;
+
+async function ownersInDepartments(departments: Department[]) {
+  const result = await db.query(Q_OWNER_DEPARTMENTS, [departments]);
+  return new Set((result.rows as Array<{ owner: string }>).map((r) => normalizeName(r.owner)));
+}
+
+export async function buildYilZiyaretPortfoyRaporu(opts: { departments?: Department[] | null } = {}): Promise<YilZiyaretPortfoyPayload> {
+  const [board, forecast, blocker, kunye, portfolioFirms, activeFirms, coveredNames, deptOwners] = await Promise.all([
     buildLiveBoard(),
     hunterCompareByOwner(Q_FORECAST_HUNTER),
     hunterCompareByOwner(Q_BLOCKER_HUNTER),
@@ -289,8 +304,10 @@ export async function buildYilZiyaretPortfoyRaporu(): Promise<YilZiyaretPortfoyP
     portfolioFirmsByOwner(),
     activeFirmNamesByOwner(),
     coveredCustomerNamesByOwner(),
+    opts.departments?.length ? ownersInDepartments(opts.departments) : null,
   ]);
-  const rows: YilZiyaretPortfoyRow[] = board.owners.map((o: { owner: string; initials: string; goals: { visitsYear: YilZiyaretPortfoyRow['visitsYear'] }; portfolio: YilZiyaretPortfoyRow['portfolio']; coverage: { covered: { actual: number }; contactsPer: YilZiyaretPortfoyRow['coverage']['contactsPer']; activitiesYear: number }; inactive: YilZiyaretPortfoyRow['inactive'] }) => ({
+  const owners = deptOwners ? board.owners.filter((o: { owner: string }) => deptOwners.has(normalizeName(o.owner))) : board.owners;
+  const rows: YilZiyaretPortfoyRow[] = owners.map((o: { owner: string; initials: string; goals: { visitsYear: YilZiyaretPortfoyRow['visitsYear'] }; portfolio: YilZiyaretPortfoyRow['portfolio']; coverage: { covered: { actual: number }; contactsPer: YilZiyaretPortfoyRow['coverage']['contactsPer']; activitiesYear: number }; inactive: YilZiyaretPortfoyRow['inactive'] }) => ({
     owner: o.owner,
     initials: o.initials,
     visitsYear: o.goals.visitsYear,

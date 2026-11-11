@@ -17,6 +17,11 @@ import {
   type CustomerListOwner,
   type CustomerListPayload,
 } from '@/lib/reports/customer-list-shared';
+import { FilterBar, ScopeLabel } from '@/components/filters/FilterBar';
+import { useUrlFilters } from '@/lib/filters/use-url-filters';
+import type { FilterOption, PageFilterConfig } from '@/lib/filters/schema';
+import { PSEUDO_OWNERS } from '@/lib/reports/live-board-shared';
+import { OWNER_GROUP_LABEL, ownerNameKey } from '@/lib/reports/owner-filter';
 import '@/styles/customer-list.css';
 
 // Müşteri Listesi (H/F/L/K) — Sinan, 09.09.2026.
@@ -30,13 +35,27 @@ import '@/styles/customer-list.css';
 //     Arama yalnız görünümü filtreler, sayaçlar filtresiz kalır.
 //   * API: GET/POST /api/crm/customer-list · PATCH/DELETE /api/crm/customer-list/:id.
 
-type CategoryFilter = 'all' | CustomerListCategory;
 type DropTarget = { owner: string; category: CustomerListCategory; beforeId: string | null };
 type ChipMenu = { id: string; x: number; y: number };
 type MoveDialog = { item: CustomerListItem; owner: string; category: CustomerListCategory };
 type EditState = { id: string; firma: string; note: string };
 
 const CATEGORY_TONE: Record<CustomerListCategory, string> = { H: 'indigo', F: 'green', L: 'gold', K: 'violet' };
+const CATEGORY_OPTIONS: FilterOption[] = CUSTOMER_LIST_CATEGORIES.map((cat) => ({ value: cat.key, label: `${cat.key} · ${cat.label}` }));
+
+/** Kolon sahibi → filtre değeri: hesabı olan kişi id, olmayan ad-anahtarı (n-…). */
+function ownerValue(owner: CustomerListOwner) {
+  return owner.id ?? ownerNameKey(owner.name);
+}
+
+/** Önce kişiler, sonra 'Havuz / Gruplar' (Havuz Account, Yemek Kartları…). */
+function buildListOwnerOptions(owners: CustomerListOwner[]): FilterOption[] {
+  const isPseudo = (name: string) => PSEUDO_OWNERS.some((p) => normalizeName(p) === normalizeName(name));
+  return [
+    ...owners.filter((o) => !isPseudo(o.name)).map((o) => ({ value: ownerValue(o), label: o.name })),
+    ...owners.filter((o) => isPseudo(o.name)).map((o) => ({ value: ownerValue(o), label: o.name, group: OWNER_GROUP_LABEL })),
+  ];
+}
 
 async function readError(res: Response, fallback: string) {
   const json = await res.json().catch(() => ({}));
@@ -54,9 +73,6 @@ export default function CustomerListClient() {
   const [payload, setPayload] = useState<CustomerListPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [query, setQuery] = useState('');
-  const [category, setCategory] = useState<CategoryFilter>('all');
-  const [ownerFilter, setOwnerFilter] = useState<string>('');
   const [dragId, setDragId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
   const [busy, setBusy] = useState<Set<string>>(new Set());
@@ -99,12 +115,23 @@ export default function CustomerListClient() {
   // Kolonlar sunucuda belirlenir: satış ekibi (OWNER_ORDER) ∪ listede firması olanlar ∪ Havuz Account ∪ Yemek Kartları.
   // Rolü account_manager olan başka hesaplar (ör. yönetim) kolon almaz (Sinan, 10.09).
   const owners = useMemo(() => payload?.owners ?? [], [payload]);
+  // Filtreler URL'de: Satıcı (kolon) · Kategori (H/F/L/K) · Ara. Sayaçlar filtresiz (anlık).
+  const filterConfig = useMemo<PageFilterConfig>(() => ({
+    keys: ['owner', 'status', 'q'],
+    labels: { status: 'Kategori', q: 'Ara' },
+    options: { owner: buildListOwnerOptions(owners), status: CATEGORY_OPTIONS },
+  }), [owners]);
+  const { values: filters, set: setFilters } = useUrlFilters(filterConfig);
+  const query = filters.q ?? '';
+  const category = (filters.status as CustomerListCategory | undefined) ?? 'all';
+  const setCategory = (next: CustomerListCategory | 'all') => setFilters({ status: next === 'all' ? undefined : next });
+  const ownerFilter = filters.owner ?? '';
   const canManage = Boolean(payload?.canManage);
   const totals = useMemo(() => countsByCategory(items), [items]);
   const perOwner = useMemo(() => countsByOwner(items), [items]);
   const visibleItems = useMemo(() => filterItems(items, query), [items, query]);
   const visibleOwners = useMemo(
-    () => (ownerFilter ? owners.filter((owner) => normalizeName(owner.name) === normalizeName(ownerFilter)) : owners),
+    () => (ownerFilter ? owners.filter((owner) => ownerValue(owner) === ownerFilter) : owners),
     [owners, ownerFilter],
   );
   const categories = useMemo(
@@ -301,21 +328,13 @@ export default function CustomerListClient() {
           </p>
         </div>
         <div className="cl-hero-actions">
-          <input
-            className="cl-search"
-            type="search"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Firma ara…"
-            aria-label="Firma ara"
-          />
-          <select className="cl-select" value={ownerFilter} onChange={(event) => setOwnerFilter(event.target.value)} aria-label="Kişi seçimi">
-            <option value="">Tüm kişiler</option>
-            {owners.map((owner) => <option key={owner.name} value={owner.name}>{owner.name}</option>)}
-          </select>
           <button type="button" className="cl-btn light" onClick={() => void load()} disabled={loading}>{loading ? 'Yükleniyor…' : 'Yenile'}</button>
         </div>
       </section>
+
+      <FilterBar config={filterConfig} showScope={false} />
+
+      <ScopeLabel mode="snapshot" owner={filterConfig.options?.owner?.find((o) => o.value === ownerFilter)?.label} />
 
       <section className="cl-kpis" aria-label="Özet">
         <div className="cl-kpi total">
@@ -328,7 +347,7 @@ export default function CustomerListClient() {
             type="button"
             key={cat.key}
             className={`cl-kpi tone-${CATEGORY_TONE[cat.key]} ${category === cat.key ? 'active' : ''}`}
-            onClick={() => setCategory((prev) => (prev === cat.key ? 'all' : cat.key))}
+            onClick={() => setCategory(category === cat.key ? 'all' : cat.key)}
             title={category === cat.key ? 'Tüm tabloları göster' : `Yalnız ${cat.label} tablosunu göster`}
           >
             <div className="cl-kpi-value"><span className={`cl-cat-badge ${CATEGORY_TONE[cat.key]}`}>{cat.key}</span>{totals[cat.key].toLocaleString('tr-TR')}</div>
@@ -338,15 +357,7 @@ export default function CustomerListClient() {
         ))}
       </section>
 
-      <div className="cl-tabs" role="tablist" aria-label="Kategori">
-        <button type="button" role="tab" aria-selected={category === 'all'} className={`cl-tab ${category === 'all' ? 'active' : ''}`} onClick={() => setCategory('all')}>Tümü · 4 tablo</button>
-        {CUSTOMER_LIST_CATEGORIES.map((cat) => (
-          <button type="button" role="tab" key={cat.key} aria-selected={category === cat.key} className={`cl-tab ${category === cat.key ? 'active' : ''}`} onClick={() => setCategory(cat.key)}>
-            <span className={`cl-cat-badge ${CATEGORY_TONE[cat.key]}`}>{cat.key}</span>{cat.label}
-          </button>
-        ))}
-        {query ? <span className="cl-filter-note">“{query}” için {visibleItems.length} firma</span> : null}
-      </div>
+      {query ? <div className="cl-filter-note">“{query}” için {visibleItems.length.toLocaleString('tr-TR')} firma</div> : null}
 
       {error ? <div className="cl-state error">{error}</div> : null}
       {!error && loading && !payload ? <div className="cl-state">Yükleniyor…</div> : null}
@@ -367,7 +378,7 @@ export default function CustomerListClient() {
               </div>
               <strong className="cl-table-count">{catTotal.toLocaleString('tr-TR')} firma{query && catItems.length !== catTotal ? ` · ${catItems.length} eşleşme` : ''}</strong>
             </header>
-            <div className="cl-grid" style={{ ['--cl-cols' as string]: String(Math.max(1, visibleOwners.length)) }}>
+            <div className="cl-grid">
               {visibleOwners.map((owner) => {
                 const cell = cellItems(catItems, owner.name, cat.key);
                 const fullCount = perOwner.get(normalizeName(owner.name))?.[cat.key] ?? 0;

@@ -2,7 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { formatDate } from '@/lib/utils';
-import { Button, DataTable, FilterGrid, Input, KpiStrip, Notice, Page, PageHeader, Select, StackField, Tabs, type Column } from '@/components/ui';
+import { Button, DataTable, KpiStrip, Notice, Page, PageHeader, Select, StackField, Tabs, type Column } from '@/components/ui';
+import { FilterBar, ScopeLabel } from '@/components/filters/FilterBar';
+import { useUrlFilters } from '@/lib/filters/use-url-filters';
+import { resolvePeriod } from '@/lib/filters/period';
+import type { FilterOption, PageFilterConfig } from '@/lib/filters/schema';
+import { DEPARTMENT_LABELS, type Department } from '@/lib/departments';
+import { resolveOwner } from '@/lib/reports/owner-filter';
 
 type Kpis = {
   totalActivities: number; activePeople: number; distinctCustomers: number;
@@ -12,11 +18,7 @@ type Kpis = {
   topPerformer: string; topCustomer: string;
 };
 
-type FilterBag = {
-  from: string; to: string;
-  ownerOptions: string[]; responsibleOptions: string[]; customerOptions: string[];
-  channelOptions: string[]; phaseOptions: string[]; waitingOptions: string[]; statusOptions: string[];
-};
+type FilterBag = { from: string; to: string; channelOptions: string[]; statusOptions: string[] };
 
 type Channels = { phone: number; face: number; online: number; technicalVisit: number; technicalOnline: number; pom: number; email: number; other: number };
 
@@ -44,7 +46,7 @@ type Payload = {
 };
 
 const EMPTY: Payload = {
-  filters: { from: '', to: '', ownerOptions: [], responsibleOptions: [], customerOptions: [], channelOptions: [], phaseOptions: [], waitingOptions: [], statusOptions: [] },
+  filters: { from: '', to: '', channelOptions: [], statusOptions: [] },
   kpis: { totalActivities: 0, activePeople: 0, distinctCustomers: 0, phone: 0, faceToFace: 0, online: 0, technicalVisit: 0, technicalOnline: 0, pom: 0, email: 0, other: 0, salesActivities: 0, technicalActivities: 0, topPerformer: '-', topCustomer: '-' },
   byPerson: [], byCustomer: [], byDay: [], list: [],
 };
@@ -58,19 +60,11 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: 'detail', label: 'Detay Liste' },
 ];
 
-function thisWeekRange() {
-  const now = new Date();
-  const day = now.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  const start = new Date(now);
-  start.setDate(now.getDate() + diff);
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(start);
-  end.setDate(start.getDate() + 6);
-  const fmt = (d: Date) =>
-    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  return { from: fmt(start), to: fmt(end) };
-}
+const ROLE_OPTIONS: FilterOption[] = [
+  { value: 'sales', label: 'Satış' },
+  { value: 'technical', label: 'Teknik' },
+];
+const PHASE_OPTIONS: FilterOption[] = Array.from({ length: 25 }, (_, i) => ({ value: String(i + 1), label: `Faz ${i + 1}` }));
 
 function channelCols<T extends Channels>(): Column<T>[] {
   return [
@@ -134,47 +128,51 @@ const detailCols: Column<DetailRow>[] = [
   { key: 'notes', label: 'Not', value: (r) => r.notes, cellClass: () => 'max-w-[360px] truncate' },
 ];
 
-export default function WeeklyActivitiesReportPage() {
-  const defaults = useMemo(() => thisWeekRange(), []);
+export default function WeeklyActivitiesReportPage({ ownerOptions, allowedDepartments }: { ownerOptions: FilterOption[]; allowedDepartments: Department[] | null }) {
   const [payload, setPayload] = useState<Payload>(EMPTY);
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [tab, setTab] = useState<TabKey>('person');
-  const [from, setFrom] = useState(defaults.from);
-  const [to, setTo] = useState(defaults.to);
-  const [owner, setOwner] = useState('');
-  const [responsible, setResponsible] = useState('');
-  const [customer, setCustomer] = useState('');
   const [channel, setChannel] = useState('');
-  const [phase, setPhase] = useState('');
-  const [waiting, setWaiting] = useState('');
-  const [status, setStatus] = useState('');
+  const [statusOptions, setStatusOptions] = useState<string[]>([]);
+  const [channelOptions, setChannelOptions] = useState<string[]>([]);
+
+  const filterConfig = useMemo<PageFilterConfig>(() => ({
+    keys: ['period', 'from', 'to', 'department', 'owner', 'role', 'phase', 'status', 'q'],
+    defaults: { period: 'this_week' },
+    labels: { role: 'Kanal grubu', q: 'Ara' },
+    options: { owner: ownerOptions, role: ROLE_OPTIONS, phase: PHASE_OPTIONS, status: statusOptions.map((v) => ({ value: v, label: v })) },
+  }), [ownerOptions, statusOptions]);
+  const { values: filters } = useUrlFilters(filterConfig, { allowedDepartments });
+  const period = useMemo(() => resolvePeriod({ period: filters.period, from: filters.from, to: filters.to }), [filters.period, filters.from, filters.to]);
+  const selectedOwner = resolveOwner(filters.owner, ownerOptions);
+  const { from, to } = period;
+  const ownerId = selectedOwner?.id ?? '';
+  const ownerName = selectedOwner?.name ?? '';
+  const { department = '', role = '', phase = '', status = '', q = '' } = filters;
 
   const load = useCallback(async () => {
     setLoading(true); setMsg(null);
     try {
       const params = new URLSearchParams({ from, to });
-      if (owner) params.set('owner', owner);
-      if (responsible) params.set('responsible', responsible);
-      if (customer) params.set('customer', customer);
+      if (ownerId) params.set('owner_id', ownerId);
+      if (ownerName) params.set('owner', ownerName);
+      if (department) params.set('department', department);
+      if (role) params.set('role', role);
       if (channel) params.set('channel', channel);
-      if (phase) params.set('phase', phase.replace('FAZ ', ''));
-      if (waiting) params.set('waiting', waiting);
+      if (phase) params.set('phase', phase);
       if (status) params.set('status', status);
+      if (q) params.set('q', q);
       const res = await fetch(`/api/reports/weekly-activities?${params.toString()}`, { cache: 'no-store' });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) { setMsg(json?.message || 'Rapor yüklenemedi.'); setPayload(EMPTY); return; }
       setPayload({ ...EMPTY, ...(json ?? {}) });
+      setStatusOptions(json?.filters?.statusOptions ?? []);
+      setChannelOptions(json?.filters?.channelOptions ?? []);
     } finally { setLoading(false); }
-  }, [from, to, owner, responsible, customer, channel, phase, waiting, status]);
+  }, [from, to, ownerId, ownerName, department, role, channel, phase, status, q]);
 
   useEffect(() => { void load(); }, [load]);
-
-  const clearFilters = () => {
-    setFrom(defaults.from); setTo(defaults.to);
-    setOwner(''); setResponsible(''); setCustomer('');
-    setChannel(''); setPhase(''); setWaiting(''); setStatus('');
-  };
 
   const k = payload.kpis;
   const kpis = [
@@ -191,37 +189,34 @@ export default function WeeklyActivitiesReportPage() {
     { label: 'En Yoğun Firma', value: k.topCustomer },
   ];
 
-  const f = payload.filters;
-  const sel = (label: string, v: string, set: (s: string) => void, list: string[]) => (
-    <StackField label={label}>
-      <Select value={v} onChange={(e) => set(e.target.value)}>
-        <option value="">Tümü</option>
-        {list.map((o) => <option key={o} value={o}>{o}</option>)}
-      </Select>
-    </StackField>
-  );
 
   return (
     <Page>
       <PageHeader
         title="Haftalık Aktiviteler"
-        meta={`${dt(from)} – ${dt(to)}`}
+        meta={`${dt(from)} – ${dt(to)} · ${payload.list.length.toLocaleString('tr-TR')} kayıt`}
         actions={<Button variant="secondary" size="sm" onClick={() => void load()} disabled={loading}>{loading ? 'Yükleniyor' : 'Yenile'}</Button>}
       />
       {msg && <Notice>{msg}</Notice>}
-      <FilterGrid
-        footer={<><span>{payload.list.length} kayıt</span><Button variant="ghost" size="sm" onClick={clearFilters}>Filtreleri temizle</Button></>}
-      >
-        <StackField label="Başlangıç"><Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></StackField>
-        <StackField label="Bitiş"><Input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></StackField>
-        {sel('Kişi', owner, setOwner, f.ownerOptions)}
-        {sel('Sorumlu', responsible, setResponsible, f.responsibleOptions)}
-        {sel('Firma', customer, setCustomer, f.customerOptions)}
-        {sel('Kanal', channel, setChannel, f.channelOptions)}
-        {sel('Faz', phase, setPhase, f.phaseOptions)}
-        {sel('Bekleyen', waiting, setWaiting, f.waitingOptions)}
-        {sel('Durum', status, setStatus, f.statusOptions)}
-      </FilterGrid>
+      <FilterBar
+        config={filterConfig}
+        allowedDepartments={allowedDepartments}
+        showScope={false}
+        actions={(
+          <StackField label="Kanal">
+            <Select value={channel} onChange={(e) => setChannel(e.target.value)}>
+              <option value="">Tümü</option>
+              {channelOptions.map((o) => <option key={o} value={o}>{o}</option>)}
+            </Select>
+          </StackField>
+        )}
+      />
+      <ScopeLabel
+        mode="period"
+        period={period.label}
+        department={department ? DEPARTMENT_LABELS[department] : undefined}
+        owner={selectedOwner?.name}
+      />
       <KpiStrip items={kpis} />
       <Tabs items={TABS} value={tab} onChange={setTab} />
       {tab === 'person' && <DataTable rows={payload.byPerson} columns={personCols} csvName="haftalik-kisi" loading={loading} />}
