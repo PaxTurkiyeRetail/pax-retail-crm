@@ -285,7 +285,19 @@ const CUSTOMER_PORTFOLIO: DatasetDef = {
         bool_or(s.sale_type in ('rental', 'mixed')) as has_rental,
         coalesce(sum(s.amount) filter (where s.currency = 'USD'), 0) as amount_usd
       from public.crm_sales s where s.customer_id = m.id and s.status = 'active'
-    ) sx on true`,
+    ) sx on true
+    left join lateral (
+      -- Kalem bazında kiralama / satın alma adetleri (Canlı Ekran model kırılımıyla aynı ayrım).
+      select
+        coalesce(sum(i.quantity) filter (where i.sale_type = 'rental'), 0)::int as rental_qty,
+        coalesce(sum(i.quantity) filter (where i.sale_type = 'rental' and ${DEVICE}), 0)::int as rental_device_qty,
+        coalesce(sum(i.quantity) filter (where i.sale_type = 'sale' and ${DEVICE}), 0)::int as sale_device_qty,
+        coalesce(sum(i.quantity * i.rental_monthly_price) filter (where i.sale_type = 'rental'), 0) as rental_monthly,
+        min(i.rental_start_date) filter (where i.sale_type = 'rental') as rental_start,
+        max(i.rental_end_date) filter (where i.sale_type = 'rental') as rental_end
+      from public.crm_sale_items i join public.crm_sales s2 on s2.id = i.sale_id
+      where s2.customer_id = m.id and s2.status = 'active'
+    ) ix on true`,
   baseWhere: [],
   defaultDateField: 'created_date',
   owner: { userId: 'm.owner_user_id::text', name: 'm.sorumlu' },
@@ -298,6 +310,7 @@ const CUSTOMER_PORTFOLIO: DatasetDef = {
     last_quote_status: { label: 'Son teklif durumu', sql: `case when lq.status is null then '—' when lq.status = 'closed' then 'closed/' || coalesce(lq.closed_reason, '—') else lq.status end`, type: 'string', group: 'Teklif', description: 'draft / sent / closed/won|lost|expired|no_interest.' },
     last_quote_date: { label: 'Son teklif tarihi', sql: 'lq.proposal_date', type: 'date', grains: ALL_GRAINS, group: 'Teklif', description: 'En son teklifin tarihi; teklif yoksa boş.' },
     poc_status: { label: 'POC durumu', sql: `case mp.aktif_faz_no when 11 then 'Konsinye' when 12 then 'Pilot / POC' when 13 then 'Uçtan Uca Test' else case when mp.aktif_faz_no > 13 then 'POC sonrası' else 'POC yok' end end`, type: 'string', group: 'POC', options: ['Konsinye', 'Pilot / POC', 'Uçtan Uca Test', 'POC sonrası', 'POC yok'], description: 'Faz 11 Konsinye, 12 Pilot / POC, 13 Uçtan Uca Test; daha ileri fazda "POC sonrası"; aksi halde "POC yok".' },
+    rental_period: { label: 'Kiralama dönemi', sql: `case when ix.rental_start is null then '—' else to_char(ix.rental_start, 'DD.MM.YYYY') || ' – ' || coalesce(to_char(ix.rental_end, 'DD.MM.YYYY'), '…') end`, type: 'string', group: 'Satış', description: 'Aktif kiralama kalemlerinin en erken başlangıcı – en geç bitişi.' },
     sale_kind: { label: 'Kiralama / Satış', sql: `case when coalesce(sx.has_sale, false) and coalesce(sx.has_rental, false) then 'Satış + Kiralama' when sx.has_rental then 'Kiralama' when sx.has_sale then 'Satış' else 'Yok' end`, type: 'string', group: 'Satış', options: ['Satış', 'Kiralama', 'Satış + Kiralama', 'Yok'], description: 'Aktif satış kayıtlarına göre; karma kayıt iki türü de sayar.' },
   },
   measures: {
@@ -306,6 +319,10 @@ const CUSTOMER_PORTFOLIO: DatasetDef = {
     last_quote_amount: { label: 'Son teklif tutarı', sql: 'coalesce(sum(lq.total_amount), 0)', format: 'money', description: 'Para birimi karışık olabilir.' },
     sale_count: { label: 'Aktif satış adedi', sql: 'coalesce(sum(sx.sale_count), 0)', format: 'number' },
     sale_amount_usd: { label: 'Satış cirosu (USD)', sql: 'coalesce(sum(sx.amount_usd), 0)', format: 'money' },
+    rental_quantity: { label: 'Kiralama adedi (tüm kalemler)', sql: 'coalesce(sum(ix.rental_qty), 0)', format: 'number' },
+    rental_device_quantity: { label: 'Kiralanan cihaz adedi', sql: 'coalesce(sum(ix.rental_device_qty), 0)', format: 'number' },
+    sale_device_quantity: { label: 'Satılan cihaz adedi', sql: 'coalesce(sum(ix.sale_device_qty), 0)', format: 'number' },
+    rental_monthly_amount: { label: 'Aylık kira toplamı', sql: 'coalesce(sum(ix.rental_monthly), 0)', format: 'money', description: 'adet × aylık birim kira; para birimi karışık olabilir.' },
   },
 };
 
