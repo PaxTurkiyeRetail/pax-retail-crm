@@ -30,10 +30,15 @@ function fmt(col: ColumnMeta, v: unknown, override?: NumberFormat): string {
 
 /** Sütun ayarlarını (etiket / gizle / format) uygular. */
 function visibleColumns(result: ReportResult, style?: Style) {
-  const settings = new Map((style?.columns ?? []).map((c) => [c.key, c]));
   return result.columns
-    .filter((c) => !settings.get(c.key)?.hidden)
-    .map((c) => ({ col: { ...c, label: settings.get(c.key)?.label || c.label }, format: settings.get(c.key)?.format ?? (c.role !== 'dimension' ? style?.numberFormat : undefined) }));
+    .filter((c) => !columnSetting(style, c)?.hidden)
+    .map((c) => { const s = columnSetting(style, c); return { col: { ...c, label: s?.label || c.label }, format: s?.format ?? (c.role !== 'dimension' ? style?.numberFormat : undefined), setting: s }; });
+}
+
+/** Sütun ayarı: sonuç anahtarı (SQL alias) veya kaynak alan adıyla eşleşir. */
+function columnSetting(style: Style | undefined, c: ColumnMeta) {
+  const list = style?.columns ?? [];
+  return list.find((s) => s.key === c.key) ?? (c.sourceField ? list.find((s) => s.key === c.sourceField) : undefined);
 }
 
 export function KpiStrip({ result, style, onDrill }: { result: ReportResult; style?: Style; onDrill?: RecordDrillHandler }) {
@@ -129,9 +134,9 @@ export function DataTableView({ result, style, onDrill }: { result: ReportResult
         <tbody>
           {rows.map((r, i) => (
             <tr key={i}>
-              {cols.map(({ col, format }) => {
+              {cols.map(({ col, format, setting }) => {
                 const matched=resolveConditionalRule(style?.conditional??[],col,r[col.key],result.columns,r);const rc=matched?.color;
-                const bar=style?.columns?.find(c=>c.key===col.key)?.dataBar?dataBarExtent(result.rows.map(row=>row[col.key]),r[col.key]):null;
+                const bar=setting?.dataBar?dataBarExtent(result.rows.map(row=>row[col.key]),r[col.key]):null;
                 const barColor=TOKEN_SOFT[rc??style?.accent??'primary'];
                 const backgroundImage=bar?`linear-gradient(to right, transparent ${bar.start*100}%, ${barColor} ${bar.start*100}%, ${barColor} ${(bar.start+bar.width)*100}%, transparent ${(bar.start+bar.width)*100}%)`:undefined;
                 return (
