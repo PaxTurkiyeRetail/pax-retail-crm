@@ -226,7 +226,9 @@ function drawTable(c: Ctx, headers: string[], rows: string[][], opts: { numeric:
 }
 
 function renderFlatTable(c: Ctx, w: DataWidget, result: ReportResult) {
-  const cols = visibleColumns(w, result);
+  // Hiç verisi olmayan boyut sütunları (tümü boş) PDF'te yer kaplamasın.
+  const empty = (v: unknown) => v === null || v === undefined || String(v).trim() === '' || String(v).trim() === '—';
+  const cols = visibleColumns(w, result).filter((col) => col.role !== 'dimension' || result.rows.length === 0 || !result.rows.every((r) => empty(r[col.key])));
   const rows = result.rows.map((r) => cols.map((col) => {const rule=resolveConditionalRule(w.style.conditional,col,r[col.key],result.columns,r);return formatCell(col,r[col.key])+(rule?.label?' · '+rule.label:'');}));
   drawTable(c, cols.map((col) => col.label), rows, {
     numeric: cols.map((col) => col.type === 'number'),
@@ -420,7 +422,7 @@ function renderPie(c: Ctx, w: DataWidget, result: ReportResult) {
   const pts = s.points.filter((p) => p.value > 0).slice(0, 12);
   const total = pts.reduce((a, p) => a + p.value, 0);
   if (!total) return note(c, 'Veri yok');
-  const H = Math.max(150, pts.length * 11 + 20);
+  const H = Math.max(130, pts.length * 11 + 20);
   ensure(c, H + 10);
   const r = Math.min(60, Math.max(30, width(c) / 6));
   const cx = c.box.left + r + 10;
@@ -474,7 +476,7 @@ function estimateHeight(w: DataWidget, d?: WidgetData): number {
   switch (w.type) {
     case 'kpi': case 'kpi_strip': return 58;
     case 'bar': case 'line': return 180;
-    case 'pie': return Math.max(150, Math.min(rows, 12) * 11 + 20) + 6;
+    case 'pie': return Math.max(130, Math.min(rows, 12) * 11 + 20) + 6;
     default: return (rows + 1) * 15 + 24;
   }
 }
