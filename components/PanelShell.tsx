@@ -766,16 +766,7 @@ export default function PanelShell({
         </div>
 
         <div className="shrink-0 border-0 border-t border-solid border-nav-border bg-transparent p-2" data-sidebar-footer>
-          <button
-            type="button"
-            className={cx(navItemCls, "w-full")}
-            onClick={() => setDark((v) => !v)}
-            title={dark ? "Açık temaya geç" : "Koyu temaya geç"}
-          >
-            <span className={cx(navIconWrap, "text-amber-300")}>{dark ? <IconSun /> : <IconMoon />}</span>
-            <span className={cx("truncate", hideLabel)}>{dark ? "Açık tema" : "Koyu tema"}</span>
-          </button>
-          <div className={cx("mt-1 flex items-center gap-2.5 px-2.5 py-1.5", collapsed && "lg:justify-center lg:px-0")}>
+          <div className={cx("flex items-center gap-2.5 px-2.5 py-1.5", collapsed && "lg:justify-center lg:px-0")}>
             <span className={avatarCls}>{initials || "U"}</span>
             <div className={cx("min-w-0", hideLabel)}>
               <div className="truncate text-[13px] font-semibold text-nav-text-strong">{displayName}</div>

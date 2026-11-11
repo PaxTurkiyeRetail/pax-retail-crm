@@ -79,7 +79,7 @@ export function DataTableView({ result, style, onDrill }: { result: ReportResult
             <tr key={i}>
               {cols.map(({ col, format }) => {
                 const matched=resolveConditionalRule(style?.conditional??[],col,r[col.key],result.columns,r);const rc=matched?.color;
-                const bar=style?.columns.find(c=>c.key===col.key)?.dataBar?dataBarExtent(result.rows.map(row=>row[col.key]),r[col.key]):null;
+                const bar=style?.columns?.find(c=>c.key===col.key)?.dataBar?dataBarExtent(result.rows.map(row=>row[col.key]),r[col.key]):null;
                 const barColor=TOKEN_SOFT[rc??style?.accent??'primary'];
                 const backgroundImage=bar?`linear-gradient(to right, transparent ${bar.start*100}%, ${barColor} ${bar.start*100}%, ${barColor} ${(bar.start+bar.width)*100}%, transparent ${(bar.start+bar.width)*100}%)`:undefined;
                 return (
