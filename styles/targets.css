@@ -71,6 +71,11 @@
 
 /* --- Kişi kartı ----------------------------------------------------------------- */
 .tg-shell .tg-people { display: grid; gap: 16px; }
+.tg-shell .tg-person-filter { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); }
+.tg-shell .tg-person-filter label { color: var(--text-2); font-size: 12px; font-weight: 800; white-space: nowrap; }
+.tg-shell .tg-person-filter input { width: min(360px, 100%); min-height: 36px; padding: 0 11px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); color: var(--text); font: inherit; font-size: 13px; }
+.tg-shell .tg-person-filter input:focus { outline: none; border-color: var(--accent-border); box-shadow: 0 0 0 3px var(--accent-soft); }
+.tg-shell .tg-person-filter span { margin-left: auto; color: var(--text-3); font-size: 12px; font-weight: 700; white-space: nowrap; }
 .tg-shell .tg-person { border: 1px solid var(--border); border-radius: 22px; background: var(--surface); overflow: hidden; }
 .tg-shell .tg-person.dirty { border-color: var(--accent-border); box-shadow: 0 0 0 3px var(--accent-soft); }
 .tg-shell .tg-person-head {

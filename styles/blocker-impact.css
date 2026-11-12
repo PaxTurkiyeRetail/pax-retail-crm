@@ -867,3 +867,19 @@
 }
 
 }
+
+/* Current layout: compact header, KPIs and rows. */
+.blocker-page .blocker-hero { min-height: 0; padding: 18px 22px; border-radius: 18px; }
+.blocker-page .blocker-hero h1 { margin: 0 0 4px; font-size: clamp(23px, 2.2vw, 29px); }
+.blocker-page .blocker-hero p { margin: 0; font-size: 13px; line-height: 1.4; }
+.blocker-page .blocker-hero-progress { margin-top: 10px; }
+.blocker-page .blocker-kpi { padding: 12px 14px; border-radius: 13px; }
+.blocker-page .blocker-kpi strong { font-size: 22px; }
+.blocker-page .blocker-kpi-icon { flex-basis: 32px; height: 32px; border-radius: 9px; }
+.blocker-page .blocker-table td, .blocker-page .blocker-table th { padding: 9px 12px; }
+.blocker-page .blocker-filter-card { padding: 12px 14px; }
+.blocker-page .blocker-filter-top h2 { margin: 0; font-size: 17px; }
+.blocker-quick-action { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--text-2); font-size: 12px; }
+.blocker-quick-action strong { color: var(--text); }
+.blocker-quick-action button { border: 0; background: transparent; color: var(--accent); font-size: 12px; font-weight: 800; cursor: pointer; }
+@media (max-width: 640px) { .blocker-quick-action { align-items: flex-start; flex-direction: column; } }

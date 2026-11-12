@@ -14,7 +14,6 @@ import {
   RefreshCw,
   Save,
   Search,
-  ShieldCheck,
   UserRoundCheck,
   Users,
   X,
@@ -521,7 +520,6 @@ export default function BlockerImpactClient() {
     <main className="blocker-page premium-workspace">
       <section className="blocker-hero">
         <div className="blocker-hero-copy">
-          <span className="blocker-eyebrow"><ShieldCheck size={15} /> Satış Risk Yönetimi</span>
           <h1>Engel &amp; Etki Takibi</h1>
           <p>{isAdmin ? 'Tüm satış ekibinin müşteri portföyündeki engelleri ve bütçe etkisini yönetin.' : 'Kendi müşteri portföyünüzdeki engelleri, çözüm sorumlusunu ve satış etkisini bildirin.'}</p>
           <div className="blocker-hero-progress">
@@ -538,13 +536,10 @@ export default function BlockerImpactClient() {
       {onboarding ? <section className="blocker-setup-alert"><AlertTriangle size={22} /><div><strong>Engel ve Etki SQL kurulumu bekleniyor.</strong><span><code>sql/forecast_blocker_impact_setup.sql</code> dosyasını PostgreSQL üzerinde çalıştırın.</span></div></section> : null}
       {message ? <section className="blocker-error"><CircleAlert size={19} /> {message}</section> : null}
 
-      {summary.pending > 0 && !onboarding ? (
-        <section className="blocker-action-banner">
-          <div className="blocker-action-icon"><ClipboardCheck size={23} /></div>
-          <div><strong>{isAdmin ? `${summary.pending} müşteri için ekip cevabı bekleniyor` : `${summary.pending} müşteriniz için kısa değerlendirme bekleniyor`}</strong><span>{isAdmin ? 'Kullanıcı Tamamlama sekmesinden eksikleri kişi bazında takip edebilirsiniz.' : 'Her müşteri için yalnızca üç soruyu cevaplamanız yeterli.'}</span></div>
-          <button type="button" onClick={() => { setView('customers'); setStatus('pending'); setPage(1); }}>Bekleyenleri Aç <ArrowRight size={16} /></button>
-        </section>
-      ) : null}
+      {summary.pending > 0 && !onboarding ? <div className="blocker-quick-action">
+        <span><strong>{numberFormat(summary.pending)}</strong> müşteri için değerlendirme bekleniyor</span>
+        <button type="button" onClick={() => { setView('customers'); setStatus('pending'); setPage(1); }}>Bekleyenleri göster <ArrowRight size={15} /></button>
+      </div> : null}
 
       <section className="blocker-kpi-grid">
         {kpis.map((item) => {
@@ -564,7 +559,7 @@ export default function BlockerImpactClient() {
       {view === 'customers' ? (
         <>
           <section className="blocker-filter-card">
-            <div className="blocker-filter-top"><div><span>Müşteri Portföyü</span><h2>{isAdmin ? 'Tüm ekibin müşteri engellerini yönetin' : 'Kendi müşterilerinizin değerlendirmesini tamamlayın'}</h2></div><button type="button" className="blocker-clear" onClick={() => { setQ(''); setStatus(''); setOwner(''); setCategory(''); setPage(1); }}>Filtreleri Temizle</button></div>
+            <div className="blocker-filter-top"><h2>Müşteriler</h2><button type="button" className="blocker-clear" onClick={() => { setQ(''); setStatus(''); setOwner(''); setCategory(''); setPage(1); }}>Filtreleri temizle</button></div>
             <div className="blocker-filters">
               <label className="blocker-search"><Search size={17} /><input value={q} onChange={(event) => { setQ(event.target.value); setPage(1); }} placeholder="Müşteri, sektör, engel veya sorumlu ara" /></label>
               {isAdmin ? <label><span>Account</span><select value={owner} onChange={(event) => { setOwner(event.target.value); setPage(1); }}><option value="">Tüm kullanıcılar</option>{ownerOptions.map((item) => <option key={item} value={item}>{item}</option>)}</select></label> : null}

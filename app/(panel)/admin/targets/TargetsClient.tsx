@@ -96,6 +96,7 @@ export default function TargetsClient() {
   const [savedAt, setSavedAt] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [personSearch, setPersonSearch] = useState('');
   // Ortak (şirket) hedefleri — 15.09: haftalık aktivite ve ortalama temas herkes için tek alandan.
   const [company, setCompany] = useState<Record<string, string>>({});
   const [companySaved, setCompanySaved] = useState<string | null>(null);
@@ -248,8 +249,13 @@ export default function TargetsClient() {
       {loading && !payload ? <div className="tg-empty">Hedefler yükleniyor…</div> : null}
       {payload && !payload.users.length ? <div className="tg-empty">Hedef girilebilecek aktif satışçı bulunamadı.</div> : null}
 
+      {payload && payload.users.length > 0 ? <div className="tg-person-filter">
+        <label htmlFor="target-person-search">Satışçı ara</label>
+        <input id="target-person-search" type="search" placeholder="İsim veya departman…" value={personSearch} onChange={(event) => setPersonSearch(event.target.value)} />
+        <span>{payload.users.filter((user) => `${user.name} ${user.departments.join(' ')}`.toLocaleLowerCase('tr-TR').includes(personSearch.trim().toLocaleLowerCase('tr-TR'))).length} / {payload.users.length} kişi</span>
+      </div> : null}
       <div className="tg-people">
-        {payload?.users.map((user) => {
+        {payload?.users.filter((user) => `${user.name} ${user.departments.join(' ')}`.toLocaleLowerCase('tr-TR').includes(personSearch.trim().toLocaleLowerCase('tr-TR'))).map((user) => {
           const draft = drafts[user.id] ?? toDraft(user);
           const dirty = !sameDraft(draft, toDraft(user));
           const busy = Boolean(saving[user.id]);
