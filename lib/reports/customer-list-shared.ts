@@ -10,7 +10,7 @@
  * Bu dosya `server-only` içermez: hem istemci bileşeni hem Canlı Ekran hem de
  * vitest buradan okur. DB erişimi `customer-list.ts`'te.
  */
-import { OWNER_ORDER, normalizeName, ownerOrderCompare } from './live-board-shared';
+import { OWNER_ORDER, SALES_TEAM, normalizeName, ownerOrderCompare } from './live-board-shared';
 
 export type CustomerListCategory = 'H' | 'F' | 'L' | 'K';
 
@@ -86,8 +86,9 @@ export const FIRM_NAME_MAX = 160;
  */
 export const CUSTOMER_LIST_FIXED_OWNERS: readonly string[] = ['Havuz Account', 'Yemek Kartları'];
 
+// SALES_TEAM: yalnız kişiler. "İş Ortakları" artık account değil; listede firması yoksa boş kolon açmaz.
 function isSalesTeamName(name: string) {
-  return OWNER_ORDER.some((known) => normalizeName(known) === normalizeName(name));
+  return SALES_TEAM.some((known) => normalizeName(known) === normalizeName(name));
 }
 
 /**
