@@ -285,17 +285,16 @@ export default function QuoteDetailClient({ quoteId }: { quoteId: string }) {
         <span className="pax-hero-eyebrow">Teklif Detayı</span>
         <h1 className="pax-hero-title">{quote.quote_no}</h1>
         <p className="pax-hero-description">{quote.opportunity_title || 'Teklif kaydı'} · {quote.customer?.musteri || '-'}</p>
-        <div className="pax-hero-stats">
-          <div className="pax-hero-stat"><div className="pax-hero-stat-label">Durum</div><div className="pax-hero-stat-value" style={{ fontSize: 16, paddingTop: 8 }}>{quote.status}</div></div>
-          <div className="pax-hero-stat"><div className="pax-hero-stat-label">Cihaz</div><div className="pax-hero-stat-value">{quote.total_device_count ?? 0}</div></div>
-          <div className="pax-hero-stat"><div className="pax-hero-stat-label">Olasılık</div><div className="pax-hero-stat-value">%{quote.probability ?? 0}</div></div>
-          <div className="pax-hero-stat"><div className="pax-hero-stat-label">Satır</div><div className="pax-hero-stat-value">{quote.items?.length ?? 0}</div></div>
+        <div style={{ position: 'relative', zIndex: 1, display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }}>
+          <span style={heroPill}>{quoteStatusLabel(quote.status, quote.closed_reason)}</span>
+          <span style={heroPill}>{quote.items?.length ?? 0} kalem</span>
+          {health === 'overdue' ? <span style={{ ...heroPill, background: 'rgba(239,68,68,0.28)', border: '1px solid rgba(252,165,165,0.55)' }}>Takip gecikti</span> : null}
         </div>
         <div style={{ position: 'relative', zIndex: 1, display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 14 }}>
           {/* Düz <a>: Link, API adresini ön yükleyip her açılışta PDF ürettiriyordu. */}
           <a href={`/api/quotes/${quote.id}/pdf`} target="_blank" rel="noopener" style={{ ...ghostLink, background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.2)', color: 'white' }}>PAX Teklif İndir</a>
           <button disabled={busy || quote.status === 'closed'} onClick={() => setEditMode((value) => !value)} style={{ ...ghostButton, background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.2)', color: 'white' }}>{editMode ? 'Düzenlemeyi Kapat' : 'Düzenle'}</button>
-          {quote.status === 'draft' ? <button disabled={busy} onClick={() => void updateStatus('sent')} style={{ ...primaryButton, background: 'white', color: '#1e3a8a', border: 'none' }}>{busy ? 'İşleniyor...' : 'Sent yap + aktivite aç'}</button> : null}
+          {quote.status === 'draft' ? <button disabled={busy} onClick={() => void updateStatus('sent')} title="Teklif gönderildi sayılır, takip aktivitesi de açılır" style={{ ...primaryButton, background: 'white', color: '#1e3a8a', border: 'none' }}>{busy ? 'İşleniyor...' : 'Gönderildi olarak işaretle'}</button> : null}
           {quote.status !== 'closed' ? (
             <>
               <button
@@ -491,76 +490,62 @@ export default function QuoteDetailClient({ quoteId }: { quoteId: string }) {
         </section>
       ) : null}
 
-      <section style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))' }}>
-        <div style={surfaceCard}><div style={miniTitle}>Durum</div><div style={{ ...bigValue, color: 'var(--text)' }}>{quote.status.toUpperCase()}</div><div style={{ marginTop: 8, color: 'var(--text-3)' }}>{quote.closed_reason || 'Açık'}</div></div>
-        <div style={surfaceCard}><div style={miniTitle}>Probability</div><div style={bigValue}>%{quote.probability}</div><div style={{ marginTop: 8, color: 'var(--text-3)' }}>Weighted pipeline için kullanılır</div></div>
-        <div style={surfaceCard}><div style={miniTitle}>Toplam Cihaz</div><div style={bigValue}>{quote.total_device_count}</div><div style={{ marginTop: 8, color: 'var(--text-3)' }}>Recurring hariç</div></div>
-        <div style={surfaceCard}><div style={miniTitle}>Toplam Tutar</div><div style={bigValue}>{quote.formatted_total_amount}</div><div style={{ marginTop: 8, color: 'var(--text-3)' }}>Donanım {quote.formatted_hardware_amount} · Aylık {quote.formatted_monthly_amount}</div></div>
-        <div style={surfaceCard}><div style={miniTitle}>Takip</div><div style={bigValue}>{formatDate(quote.follow_up_date)}</div><div style={{ marginTop: 8, color: health === 'overdue' ? 'var(--chip-red-color)' : 'var(--text-3)' }}>{health === 'overdue' ? 'Follow-up gecikti' : 'SLA aktif'}</div></div>
+      <section style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))' }}>
+        <div style={{ ...surfaceCard, boxShadow: 'inset 3px 0 0 #4f46e5, var(--shadow)' }}><div style={miniTitle}>Toplam Tutar</div><div style={bigValue}>{quote.formatted_total_amount}</div><div style={kpiHint}>Donanım {quote.formatted_hardware_amount} · Aylık {quote.formatted_monthly_amount}</div></div>
+        <div style={{ ...surfaceCard, boxShadow: 'inset 3px 0 0 #0ea5e9, var(--shadow)' }}><div style={miniTitle}>Toplam Cihaz</div><div style={bigValue}>{quote.total_device_count}</div><div style={kpiHint}>Aylık hizmet kalemleri hariç</div></div>
+        <div style={{ ...surfaceCard, boxShadow: 'inset 3px 0 0 #10b981, var(--shadow)' }}>
+          <div style={miniTitle}>Kazanma Olasılığı</div>
+          <div style={bigValue}>%{quote.probability}</div>
+          <div style={{ marginTop: 8, height: 6, borderRadius: 999, background: 'var(--surface-2)', overflow: 'hidden' }}>
+            <div style={{ width: `${Math.max(0, Math.min(100, Number(quote.probability ?? 0)))}%`, height: '100%', borderRadius: 999, background: Number(quote.probability ?? 0) >= 70 ? '#10b981' : Number(quote.probability ?? 0) >= 40 ? '#f59e0b' : '#94a3b8' }} />
+          </div>
+        </div>
+        <div style={{ ...surfaceCard, boxShadow: `inset 3px 0 0 ${health === 'overdue' ? '#ef4444' : '#f59e0b'}, var(--shadow)` }}><div style={miniTitle}>Takip Tarihi</div><div style={bigValue}>{formatDate(quote.follow_up_date)}</div><div style={{ ...kpiHint, color: health === 'overdue' ? 'var(--chip-red-color)' : 'var(--text-3)', fontWeight: health === 'overdue' ? 700 : 500 }}>{health === 'overdue' ? 'Takip gecikti' : 'Süresi içinde'}</div></div>
       </section>
 
-      <section className="quote-detail-meta-grid" style={{ display: 'grid', gap: 12, gridTemplateColumns: '1fr 1fr' }}>
+      <section className="quote-detail-meta-grid" style={{ display: 'grid', gap: 12, gridTemplateColumns: 'minmax(0,0.8fr) minmax(0,1.7fr)', alignItems: 'start' }}>
         <div style={surface}>
-          <div style={{ fontWeight: 900, fontSize: 18 }}>Müşteri ve teklif meta</div>
-          <div style={{ display: 'grid', gap: 10, marginTop: 14 }}>
-            <MetaRow label="Müşteri" value={quote.customer?.musteri || '-'} />
-            <MetaRow label="Sektör" value={quote.customer?.sektor || '-'} />
-            <MetaRow label="Sorumlu" value={quote.customer?.sorumlu || '-'} />
-            <MetaRow label="Entegrasyon" value={quote.customer?.entegrasyon_tipi || '-'} />
+          <div style={sectionTitle}>Müşteri ve teklif bilgileri</div>
+          <div style={{ display: 'grid', gap: 8, marginTop: 12 }}>
+            <MetaRow label="Müşteri" value={quote.customer?.musteri || '—'} />
+            <MetaRow label="Sektör" value={quote.customer?.sektor || '—'} />
+            <MetaRow label="Sorumlu" value={quote.customer?.sorumlu || '—'} />
+            <MetaRow label="Entegrasyon" value={quote.customer?.entegrasyon_tipi || '—'} />
             <MetaRow label="Teklif tarihi" value={formatDate(quote.proposal_date)} />
             <MetaRow label="Geçerlilik" value={formatDate(quote.valid_until)} />
-            <MetaRow label="Satışçı" value={quote.owner_name || '-'} />
-            <MetaRow label="İç not" value={quote.note || '-'} />
+            <MetaRow label="Satışçı" value={quote.owner_name || '—'} />
+            <MetaRow label="İç not" value={quote.note || '—'} />
           </div>
         </div>
         <div style={surface}>
-          <div style={{ fontWeight: 900, fontSize: 18 }}>Ürün özeti</div>
-          <div style={{ display: 'grid', gap: 10, marginTop: 14 }}>
-            {quote.items.map((item) => (
-              <div key={item.id} style={{ border: '1px solid var(--border)', borderRadius: 16, padding: 12 }}>
-                <div style={{ fontWeight: 800, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                  {item.product_name_snapshot}
-                  {item.sale_type === 'rental' ? <span style={rentalPill}>Kiralama</span> : null}
-                  {item.price_source === 'manual' ? <span style={{ ...rentalPill, background: '#fef3c7', color: '#92400e' }}>Özel fiyat{item.catalog_unit_price != null ? ` · katalog ${money(Number(item.catalog_unit_price))}` : ''}</span> : null}
-                </div>
-                {item.sale_type === 'rental' ? (
-                  <div style={{ marginTop: 4, color: 'var(--text-3)', fontSize: 13 }}>
-                    {item.quantity} adet · {item.formatted_unit_price} / ay / cihaz
-                    {rentalMonths(item.rental_start_date, item.rental_end_date) > 0
-                      ? ` · ${rentalPeriodLabel(item.rental_start_date, item.rental_end_date)} · sözleşme ${item.formatted_total_price}`
-                      : ` · aylık ${item.formatted_total_price}`}
-                  </div>
-                ) : (
-                  <div style={{ marginTop: 4, color: 'var(--text-3)', fontSize: 13 }}>{item.quantity} adet · {item.formatted_unit_price} / birim · {item.formatted_total_price}{item.is_recurring ? ' / ay' : ''}</div>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section style={surface}>
-        <div style={{ fontWeight: 900, fontSize: 18, marginBottom: 12 }}>Satır detayları</div>
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 900 }}>
-            <thead><tr>{['Ürün', 'Satış Tipi', 'Kategori', 'Adet', 'Birim', 'Toplam'].map((head) => <th key={head} style={tableHead}>{head}</th>)}</tr></thead>
+          <div style={{ ...sectionTitle, display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>Teklif kalemleri <span style={countBadge}>{quote.items.length}</span></div>
+          <div style={{ overflowX: 'auto', border: '1px solid var(--border)', borderRadius: 12 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 640 }}>
+            <thead><tr>{['Ürün', 'Satış Tipi', 'Kategori', 'Adet', 'Birim', 'Toplam'].map((head, index) => <th key={head} style={{ ...tableHead, textAlign: index >= 3 ? 'right' : 'left' }}>{head}</th>)}</tr></thead>
             <tbody>
               {quote.items.map((item) => (
                 <tr key={item.id} style={{ borderTop: '1px solid var(--border)' }}>
-                  <td style={tableCell}><div style={{ fontWeight: 800 }}>{item.product_name_snapshot}</div><div style={{ marginTop: 4, color: 'var(--text-3)', fontSize: 12 }}>{item.product_code_snapshot} · {item.product_type}</div></td>
+                  <td style={tableCell}>
+                    <div style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      {item.product_name_snapshot}
+                      {item.price_source === 'manual' ? <span style={{ ...rentalPill, background: '#fef3c7', color: '#92400e' }}>Özel fiyat{item.catalog_unit_price != null ? ` · katalog ${money(Number(item.catalog_unit_price))}` : ''}</span> : null}
+                    </div>
+                    <div style={{ marginTop: 2, color: 'var(--text-3)', fontSize: 12 }}>{item.product_code_snapshot}</div>
+                  </td>
                   <td style={tableCell}>
                     {item.sale_type === 'rental' ? (
                       <div><span style={rentalPill}>Kiralama</span>{rentalMonths(item.rental_start_date, item.rental_end_date) > 0 ? <div style={{ marginTop: 4, color: 'var(--text-3)', fontSize: 12 }}>{rentalPeriodLabel(item.rental_start_date, item.rental_end_date)}</div> : null}</div>
                     ) : (item.is_recurring ? 'Aylık hizmet' : 'Satış')}
                   </td>
                   <td style={tableCell}>{item.category}</td>
-                  <td style={tableCell}>{item.quantity}</td>
-                  <td style={tableCell}>{item.formatted_unit_price}{item.sale_type === 'rental' ? ' / ay' : ''}</td>
-                  <td style={tableCell}>{item.formatted_total_price}{(item.sale_type === 'rental' && rentalMonths(item.rental_start_date, item.rental_end_date) <= 0) || (item.sale_type !== 'rental' && item.is_recurring) ? ' / ay' : ''}</td>
+                  <td style={{ ...tableCell, ...numCell }}>{item.quantity}</td>
+                  <td style={{ ...tableCell, ...numCell }}>{item.formatted_unit_price}{item.sale_type === 'rental' ? ' / ay' : ''}</td>
+                  <td style={{ ...tableCell, ...numCell, fontWeight: 800 }}>{item.formatted_total_price}{(item.sale_type === 'rental' && rentalMonths(item.rental_start_date, item.rental_end_date) <= 0) || (item.sale_type !== 'rental' && item.is_recurring) ? ' / ay' : ''}</td>
                 </tr>
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       </section>
     </main>
@@ -569,8 +554,20 @@ export default function QuoteDetailClient({ quoteId }: { quoteId: string }) {
 
 const rentalPill: CSSProperties = { display: 'inline-flex', alignItems: 'center', minHeight: 22, padding: '0 8px', borderRadius: 999, fontSize: 11, fontWeight: 800, background: 'var(--chip-gold-bg)', color: 'var(--chip-gold-color)', border: '1px solid var(--chip-gold-bd)' };
 
+function quoteStatusLabel(status: string, closedReason: string | null) {
+  if (status === 'draft') return 'Taslak';
+  if (status === 'sent') return 'Gönderildi';
+  if (status === 'closed') {
+    if (closedReason === 'won') return 'Kapandı · Satışa döndü';
+    if (closedReason === 'expired') return 'Kapandı · Süresi doldu';
+    if (closedReason === 'no_interest') return 'Kapandı · İlgilenmiyor';
+    return 'Kapandı · Kaybedildi';
+  }
+  return status;
+}
+
 function MetaRow({ label, value }: { label: string; value: string }) {
-  return <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, paddingBottom: 10, borderBottom: '1px solid var(--border)' }}><span style={{ color: 'var(--text-3)' }}>{label}</span><strong style={{ color: 'var(--text)', textAlign: 'right' }}>{value}</strong></div>;
+  return <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, paddingBottom: 8, borderBottom: '1px solid var(--border)', fontSize: 13 }}><span style={{ color: 'var(--text-3)' }}>{label}</span><strong style={{ color: 'var(--text)', textAlign: 'right' }}>{value}</strong></div>;
 }
 
 function KpiCard({ label, value }: { label: string; value: string }) {
@@ -580,14 +577,19 @@ function KpiCard({ label, value }: { label: string; value: string }) {
 const surface: CSSProperties = { background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 22, padding: 16, boxShadow: 'var(--shadow)' };
 const modalBackdrop: CSSProperties = { position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', display: 'grid', placeItems: 'center', padding: 16, zIndex: 50 };
 const modalCard: CSSProperties = { background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 22, padding: 18, boxShadow: 'var(--shadow)', width: 'min(560px, 100%)', maxHeight: '90vh', overflowY: 'auto' };
-const surfaceCard: CSSProperties = { ...surface, padding: 18 };
-const miniTitle: CSSProperties = { fontSize: 12, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--text-3)' };
-const bigValue: CSSProperties = { marginTop: 10, fontSize: 28, fontWeight: 900, color: '#07055b' };
+const surfaceCard: CSSProperties = { ...surface, borderRadius: 16, padding: '12px 14px' };
+const kpiHint: CSSProperties = { marginTop: 4, color: 'var(--text-3)', fontSize: 12 };
+const sectionTitle: CSSProperties = { fontWeight: 800, fontSize: 18 };
+const countBadge: CSSProperties = { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 24, height: 22, padding: '0 8px', borderRadius: 999, background: 'var(--chip-indigo-bg, #eef2ff)', color: 'var(--chip-indigo-color, #4338ca)', fontSize: 12, fontWeight: 800 };
+const heroPill: CSSProperties = { display: 'inline-flex', alignItems: 'center', minHeight: 26, padding: '0 12px', borderRadius: 999, background: 'rgba(255,255,255,0.14)', border: '1px solid rgba(255,255,255,0.24)', color: 'white', fontSize: 12, fontWeight: 800 };
+const numCell: CSSProperties = { textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' };
+const miniTitle: CSSProperties = { fontSize: 11, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--text-3)' };
+const bigValue: CSSProperties = { marginTop: 6, fontSize: 22, fontWeight: 800, color: 'var(--text)', fontVariantNumeric: 'tabular-nums' };
 const primaryButton: CSSProperties = { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minHeight: 42, padding: '0 16px', borderRadius: 14, border: '1px solid #0e6fc7', background: '#0e6fc7', color: 'var(--surface)', fontWeight: 800, cursor: 'pointer' };
 const ghostButton: CSSProperties = { minHeight: 42, padding: '0 14px', borderRadius: 14, border: '1px solid #cbd5e1', background: 'var(--surface)', color: 'var(--text)', fontWeight: 700, cursor: 'pointer' };
 const ghostLink: CSSProperties = { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minHeight: 42, padding: '0 16px', borderRadius: 14, border: '1px solid #cbd5e1', background: 'var(--surface)', color: 'var(--text)', fontWeight: 800, textDecoration: 'none' };
 const inputStyle: CSSProperties = { minHeight: 42, borderRadius: 14, border: '1px solid #cbd5e1', padding: '0 12px', background: 'var(--surface)', color: 'var(--text)' };
 const labelStyle: CSSProperties = { display: 'block', marginBottom: 6, fontSize: 12, fontWeight: 800, color: 'var(--text-3)', letterSpacing: '.05em', textTransform: 'uppercase' };
 const readonlyBox: CSSProperties = { minHeight: 42, display: 'flex', alignItems: 'center', borderRadius: 14, border: '1px solid var(--border)', padding: '0 12px', background: 'var(--surface-2)', fontWeight: 800 };
-const tableHead: CSSProperties = { textAlign: 'left', padding: '0 12px 10px', color: 'var(--text-3)', fontWeight: 800, fontSize: 12, letterSpacing: '.06em', textTransform: 'uppercase' };
-const tableCell: CSSProperties = { padding: '14px 12px', verticalAlign: 'top', color: 'var(--text)' };
+const tableHead: CSSProperties = { textAlign: 'left', padding: '9px 12px', color: 'var(--text-3)', fontWeight: 700, fontSize: 11, letterSpacing: '.06em', textTransform: 'uppercase', background: 'var(--surface-2)', whiteSpace: 'nowrap' };
+const tableCell: CSSProperties = { padding: '9px 12px', verticalAlign: 'middle', color: 'var(--text)', fontSize: 13 };
