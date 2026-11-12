@@ -48,24 +48,6 @@ export default function CustomersHero({
         <h1 className="pax-hero-title">Müşteriler</h1>
         <p className="pax-hero-description">Portföy kalitesi, künye doluluk oranı, sektör dağılımı ve sahiplik özeti.</p>
         {scope}
-        <div className="pax-hero-stats">
-          <div className="pax-hero-stat">
-            <div className="pax-hero-stat-label">Toplam Müşteri</div>
-            <div className="pax-hero-stat-value">{stats.total.toLocaleString('tr-TR')}</div>
-          </div>
-          <div className="pax-hero-stat">
-            <div className="pax-hero-stat-label">Künye Tamam</div>
-            <div className="pax-hero-stat-value">{stats.kunyeVar.toLocaleString('tr-TR')}</div>
-          </div>
-          <div className="pax-hero-stat">
-            <div className="pax-hero-stat-label">Künye Oranı</div>
-            <div className="pax-hero-stat-value">%{completionRate}</div>
-          </div>
-          <div className="pax-hero-stat">
-            <div className="pax-hero-stat-label">Sektör</div>
-            <div className="pax-hero-stat-value">{stats.sectors.toLocaleString('tr-TR')}</div>
-          </div>
-        </div>
       </section>
 
       {/* ── Detay Kartları (beyaz arka plan) ── */}

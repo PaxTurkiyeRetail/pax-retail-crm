@@ -1075,7 +1075,7 @@ export default function CrmCustomersClient({ ownerOptions, allowedDepartments }:
 
         <div style={{ marginTop: 16 }}>
           <div className="section-note" style={{ marginBottom: 10 }}>
-            Faz kartları artık sadece görünüm değil; tıklandığında doğrudan o pipeline katmanına filtre uygular.
+            Bir faz kartına tıklayarak listeyi o aşamadaki müşterilere daraltabilirsiniz.
           </div>
           <div className="phase-strip">
             {phaseBuckets.map((item) => (

@@ -339,10 +339,9 @@ export default function ForecastClient() {
   }
 
   const cards = [
-    { label: scope === 'all' ? 'Tüm Portföy' : 'Benim Portföyüm', value: numberFormat(summary.totalCustomers), hint: scope === 'all' ? 'Admin görünümünde tüm müşteri havuzu' : (ownerName ? `${ownerName} portföyü` : 'Giriş yapan kullanıcı'), tone: 'slate' },
+    { label: scope === 'all' ? 'Tüm Portföy' : 'Benim Portföyüm', value: numberFormat(summary.totalCustomers), hint: scope === 'all' ? 'Tüm müşteri havuzu' : (ownerName ? `${ownerName} portföyü` : 'Giriş yapan kullanıcı'), tone: 'slate' },
     { label: 'Forecast Girilen', value: numberFormat(summary.enteredCustomers), hint: 'Kayıt tamamlanan müşteri', tone: 'green' },
     { label: 'Aksiyon Bekleyen', value: numberFormat(summary.missingCustomers), hint: 'Forecast girişi bekleyen müşteri', tone: 'red' },
-    { label: 'Tamamlanma', value: `%${summary.completionRate}`, hint: 'Portföy kapsama oranı', tone: 'violet' },
     { label: 'Toplam Adet', value: numberFormat(summary.totalQuantity), hint: 'Seçili filtre toplamı', tone: 'blue' },
   ];
 
@@ -350,13 +349,8 @@ export default function ForecastClient() {
     <main className="forecast-page premium-workspace">
       <section className="pax-hero forecast-hero">
         <span className="pax-hero-eyebrow">CRM Forecast</span>
-        <h1 className="pax-hero-title">Account Forecast Girişi</h1>
-        <p className="pax-hero-description">Account bazlı ürün forecast akışını tek ekranda yönetin. Admin ve Super Admin tüm portföyü görür; satış ekipleri kendi müşteri havuzunda ürün, adet, dönem, satış kanalı ve gerçekleşme oranını hızlıca işler.</p>
-        <div className="pax-hero-stats forecast-hero-stats">
-          <div className="pax-hero-stat"><div className="pax-hero-stat-label">Tamamlanma</div><div className="pax-hero-stat-value">%{summary.completionRate}</div></div>
-          <div className="pax-hero-stat"><div className="pax-hero-stat-label">Eksik</div><div className="pax-hero-stat-value">{summary.missingCustomers}</div></div>
-          <div className="pax-hero-stat"><div className="pax-hero-stat-label">Toplam Adet</div><div className="pax-hero-stat-value">{numberFormat(summary.totalQuantity)}</div></div>
-        </div>
+        <h1 className="pax-hero-title">Forecast</h1>
+        <p className="pax-hero-description">Müşteri bazında ürün, adet ve dönem tahminlerini girin ve takip edin.</p>
       </section>
 
       {onboarding ? (
@@ -391,7 +385,6 @@ export default function ForecastClient() {
           <label className="premium-field"><span>Forecast Durumu</span><select value={status} onChange={(event) => setStatus(event.target.value)}><option value="">Tümü</option><option value="entered">Forecast girilenler</option><option value="missing">Forecast eksikler</option></select></label>
           <label className="premium-field"><span>Ay</span><select value={month} onChange={(event) => setMonth(event.target.value)}><option value="">Tüm Aylar</option>{options.months.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
           <label className="premium-field"><span>Yıl</span><select value={year} onChange={(event) => setYear(event.target.value)}><option value="">Tüm Yıllar</option>{options.years.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
-          <label className="premium-field"><span>Sayfa</span><select value={String(pageSize)} onChange={(event) => setPageSize(Number(event.target.value))}>{PAGE_SIZE_OPTIONS.map((size) => <option key={size} value={size}>{size} / sayfa</option>)}</select></label>
         </div>
       </section>
 
@@ -446,9 +439,10 @@ export default function ForecastClient() {
         <div className="premium-section-head compact">
           <div>
             <span>Müşteri Listesi</span>
-            <h2>Toplam {total} müşteri · Sayfa {page}/{totalPages}</h2>
+            <h2>{numberFormat(total)} müşteri · Sayfa {page}/{totalPages}</h2>
           </div>
           <div className="premium-actions">
+            <select aria-label="Sayfa boyutu" value={String(pageSize)} onChange={(event) => setPageSize(Number(event.target.value))} style={{ minHeight: 38, borderRadius: 10, border: '1px solid var(--border)', padding: '0 10px', background: 'var(--surface)', color: 'var(--text)', fontWeight: 600, fontSize: 13 }}>{PAGE_SIZE_OPTIONS.map((size) => <option key={size} value={size}>{size} / sayfa</option>)}</select>
             <button type="button" className="premium-btn secondary" disabled={page <= 1 || loading} onClick={() => setPage((value) => Math.max(1, value - 1))}>Önceki</button>
             <button type="button" className="premium-btn secondary" disabled={page >= totalPages || loading} onClick={() => setPage((value) => Math.min(totalPages, value + 1))}>Sonraki</button>
           </div>
@@ -456,7 +450,7 @@ export default function ForecastClient() {
 
         <div className="forecast-completion-strip">
           <div className="forecast-completion-top">
-            <span>Forecast kapsama oranı</span>
+            <span>Forecast girilen müşteri oranı</span>
             <strong>%{summary.completionRate}</strong>
           </div>
           <div className="forecast-completion-track" aria-hidden="true">
