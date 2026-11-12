@@ -189,15 +189,10 @@ export default function TargetsClient() {
     <div className="tg-shell">
       <section className="tg-hero">
         <div className="tg-hero-copy">
-          <span className="tg-eyebrow">Yönetim · Hedefler</span>
           <h1>Hedefler · {year}</h1>
           <p>
-            Satış ekibinin kişi bazlı hedefleri. Canlı Ekran kişi slaytındaki donut&apos;lar buradan beslenir:
-            <b> haftalık aktivite</b>, <b>çeyrek ve yıl ziyaret</b>, <b>yıl ve çeyrek bütçe</b>,
-            <b> çeyrek ve yıl entegrasyon</b>, <b>Hunter → Farmer</b> ve <b>Lead → Hunter</b> çevirme,
-            <b> kazanılan teklif</b>, <b>kapsanan firma</b> ve <b>ortalama temas</b>.
-            Boş bırakılan alan &quot;hedef yok&quot; demektir. Yıllık hedef çeyreklere otomatik bölünür; bir çeyreği elle
-            değiştirirsen yıllık toplam ona göre güncellenir.
+            Satış ekibinin kişi bazlı hedefleri; Canlı Ekran buradan beslenir. Boş alan &quot;hedef yok&quot; demektir.
+            Yıllık hedef çeyreklere otomatik bölünür.
           </p>
         </div>
         <div className="tg-hero-actions">

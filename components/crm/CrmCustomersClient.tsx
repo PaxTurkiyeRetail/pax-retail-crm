@@ -424,45 +424,8 @@ export default function CrmCustomersClient({ ownerOptions, allowedDepartments }:
   const currentPage = Math.min(page, totalPages);
   const phaseBuckets = useMemo(() => buildPhaseBuckets(stats.byPhase), [stats.byPhase]);
   const maxPhaseBucket = Math.max(1, ...phaseBuckets.map((item) => item.value));
-  const topOwners = (stats.byOwner.length ? stats.byOwner : [{ label: 'Kayıt yok', value: 0 }]).slice(0, 6);
-  const topSectors = (stats.bySector.length ? stats.bySector : [{ label: 'Tanımsız', value: 0 }]).slice(0, 7);
-  const sectorMax = Math.max(1, ...topSectors.map((item) => item.value));
-  const fieldOwners = topOwners.filter((item) => item.label !== HAVUZ_ACCOUNT_NAME);
-  const visibleOwnerBars = fieldOwners.length ? fieldOwners : topOwners;
-  const fieldOwnerMax = Math.max(1, ...visibleOwnerBars.map((item) => item.value));
-  const completionRate = stats.total ? Math.round((stats.kunyeVar / Math.max(1, stats.total)) * 100) : 0;
-  const fieldAccountCount = Math.max(0, fieldOwners.length);
-  const kunyeDonutStyle = {
-    background: `conic-gradient(#22c55e 0% ${completionRate}%, #f59e0b ${completionRate}% ${Math.min(100, completionRate + (stats.total ? Math.round((stats.kunyeEksik / Math.max(1, stats.total)) * 100) : 0))}%, #64748b ${Math.min(100, completionRate + (stats.total ? Math.round((stats.kunyeEksik / Math.max(1, stats.total)) * 100) : 0))}% 100%)`,
-  } as React.CSSProperties;
-  const kasaMap = rows.reduce<Record<string, number>>((acc, row) => {
-    const key = (row.kasa_firmasi ?? '').trim() || 'Tanımsız';
-    acc[key] = (acc[key] ?? 0) + 1;
-    return acc;
-  }, {});
-  const kasaBreakdown = Object.entries(kasaMap)
-    .map(([label, value]) => ({ label, value }))
-    .sort((a, b) => b.value - a.value)
-    .slice(0, 4);
-  const kasaTotal = kasaBreakdown.reduce((sum, item) => sum + item.value, 0);
-  const kasaSegments = kasaBreakdown.length
-    ? (() => {
-        const colors = ['#5eead4', '#38bdf8', '#4cb8f5', '#cbd5e1'];
-        let start = 0;
-        const parts = kasaBreakdown.map((item, index) => {
-          const pct = Math.round((item.value / Math.max(1, kasaTotal)) * 100);
-          const end = Math.min(100, start + pct);
-          const part = `${colors[index % colors.length]} ${start}% ${end}%`;
-          start = end;
-          return part;
-        });
-        if (start < 100) parts.push(`#334155 ${start}% 100%`);
-        return parts.join(', ');
-      })()
-    : '#334155 0% 100%';
-  const kasaDonutStyle = {
-    background: `conic-gradient(${kasaSegments})`,
-  } as React.CSSProperties;
+  const accountCount = stats.byOwner.filter((item) => item.label !== HAVUZ_ACCOUNT_NAME).length;
+  const sektorEksik = stats.bySector.filter((item) => !item.label.trim() || item.label.trim() === '-').reduce((sum, item) => sum + item.value, 0);
 
   const resetForm = () => {
     setEditingId(null);
@@ -843,14 +806,20 @@ export default function CrmCustomersClient({ ownerOptions, allowedDepartments }:
           flex-direction: column;
           align-items: flex-start;
           justify-content: flex-start;
-          min-height: 120px;
-          padding: 16px;
+          min-height: 0;
+          gap: 8px;
+          padding: 10px 14px;
           border: 1px solid var(--border);
           background: var(--surface);
           text-align: left;
         }
         .phase-segment.active { outline: 2px solid var(--accent-soft); border-color: var(--accent-border); }
         .phase-segment-head {
+          width: 100%;
+          display: flex; align-items: center; justify-content: space-between; gap: 10px;
+          text-align: left;
+        }
+        .phase-segment-head > div:first-child { min-width: 0; text-align: left; }        .phase-segment-head {
           width: 100%;
           display: block;
           margin-bottom: 14px;
@@ -862,8 +831,8 @@ export default function CrmCustomersClient({ ownerOptions, allowedDepartments }:
           min-height: 20px;
           margin: 0;
           padding: 0;
-          font-size: 15px;
-          font-weight: 900;
+          font-size: 14px;
+          font-weight: 800;
           line-height: 20px;
           /* Kart zemini her temada açık pastel (inline gradient) → yazı sabit koyu;
              var(--text) koyu temada beyaza dönüp kartı okunmaz yapıyordu (08.09). */
@@ -882,8 +851,8 @@ export default function CrmCustomersClient({ ownerOptions, allowedDepartments }:
           color: #475569;
           text-align: left;
         }
-        .phase-segment-value { font-size: 28px; font-weight: 900; letter-spacing: -0.03em; color: #0f172a; line-height: 1; }
-        .phase-progress { margin-top: auto; width: 100%; height: 8px; border-radius: 999px; background: rgba(15, 23, 42, 0.14); overflow: hidden; }
+        .phase-segment-value { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -0.03em; color: #0f172a; line-height: 1; }
+        .phase-progress { width: 100%; height: 5px; border-radius: 999px; background: rgba(15, 23, 42, 0.14); overflow: hidden; }
         .phase-progress span {
           display: block; height: 100%; border-radius: inherit;
           background: linear-gradient(90deg, #4338ca, #6366f1);
@@ -942,8 +911,7 @@ export default function CrmCustomersClient({ ownerOptions, allowedDepartments }:
         td { padding: 9px 12px; border-bottom: 1px solid var(--border); font-size: 13px; vertical-align: middle; color: var(--text-2); }
         td.ct-cell { max-width: 180px; white-space: normal; overflow-wrap: anywhere; color: var(--text-2); font-weight: 600; line-height: 1.3; }
         tbody tr:nth-child(even) { background: color-mix(in srgb, var(--text) 4%, transparent); }
-        .name { color: var(--accent, #0e6fc7); font-size: 14px; font-weight: 800; text-decoration: none; }
-        .name:hover { text-decoration: underline; text-underline-offset: 3px; }
+        .name { color: var(--text); font-weight: 900; text-decoration: none; }
         .name-row { display: flex; align-items: center; gap: 6px 10px; flex-wrap: wrap; }
         .pill.seg-pill { min-height: 22px; padding: 0 9px; font-size: 11px; font-weight: 800; }
         .pill.phase-pill { min-height: 26px; padding: 0 10px; white-space: nowrap; }
@@ -1040,26 +1008,12 @@ export default function CrmCustomersClient({ ownerOptions, allowedDepartments }:
         }
       `}</style>
 
-      <CustomersHero
-        stats={stats}
-        completionRate={completionRate}
-        kunyeDonutStyle={kunyeDonutStyle}
-        kasaDonutStyle={kasaDonutStyle}
-        kasaBreakdown={kasaBreakdown}
-        topSectors={topSectors}
-        sectorMax={sectorMax}
-        visibleOwnerBars={visibleOwnerBars}
-        fieldOwnerMax={fieldOwnerMax}
-        fieldAccountCount={fieldAccountCount}
-      />
+      <CustomersHero total={stats.total} kunyeTamam={stats.kunyeVar} kunyeEksik={stats.kunyeEksik} sektorEksik={sektorEksik} accountCount={accountCount} />
 
             <section className="surface">
         <FilterBar config={filterConfig} allowedDepartments={allowedDepartments} showScope={false} />
 
-        <div style={{ marginTop: 16 }}>
-          <div className="section-note" style={{ marginBottom: 10 }}>
-            Bir faz kartına tıklayarak listeyi o aşamadaki müşterilere daraltabilirsiniz.
-          </div>
+        <div style={{ marginTop: 12 }}>
           <div className="phase-strip">
             {phaseBuckets.map((item) => (
               <button
@@ -1067,6 +1021,7 @@ export default function CrmCustomersClient({ ownerOptions, allowedDepartments }:
                 type="button"
                 className={`phase-segment ${fazFilter === item.filterValue ? 'active' : ''}`}
                 style={{ background: item.tone }}
+                title="Listeyi bu aşamadaki müşterilere daralt"
                 onClick={() => applyPhaseBucket(item.filterValue)}
               >
                 <div className="phase-segment-head">
@@ -1074,8 +1029,8 @@ export default function CrmCustomersClient({ ownerOptions, allowedDepartments }:
                     <div className="phase-segment-name">{item.label}</div>
                     <div className="phase-segment-range">{item.range}</div>
                   </div>
+                  <div className="phase-segment-value">{item.value}</div>
                 </div>
-                <div className="phase-segment-value">{item.value}</div>
                 <div className="phase-progress">
                   <span style={{ width: `${(item.value / maxPhaseBucket) * 100}%` }} />
                 </div>
@@ -1084,8 +1039,8 @@ export default function CrmCustomersClient({ ownerOptions, allowedDepartments }:
           </div>
         </div>
 
-        <div style={{ marginTop: 16 }}>
-          <button className="ghost" onClick={() => setShowAdvanced((prev) => !prev)}>
+        <div style={{ marginTop: 12 }}>
+          <button className="ghost row-btn" onClick={() => setShowAdvanced((prev) => !prev)}>
             <Filter size={16} strokeWidth={1.7} /> Gelişmiş filtreler
             <ChevronDown size={16} style={{ transform: showAdvanced ? 'rotate(180deg)' : 'none' }} />
           </button>
@@ -1173,7 +1128,7 @@ export default function CrmCustomersClient({ ownerOptions, allowedDepartments }:
                 <tr key={r.musteri_id}>
                   <td>
                     <div className="name-row">
-                      <Link className="name" href={`/crm/${r.musteri_id}`} title="Müşteri detayına git">
+                      <Link className="name" href={`/crm/${r.musteri_id}`} title="Müşteri detayına git" style={{ fontSize: 14, fontWeight: 800, color: 'var(--accent, #0e6fc7)', textDecoration: 'none' }}>
                         {r.musteri}
                       </Link>
                       {(() => {
@@ -1209,7 +1164,7 @@ export default function CrmCustomersClient({ ownerOptions, allowedDepartments }:
                     })()}
                   </td>
                   <td className="ct-cell" title={r.sektor ?? undefined}>{r.sektor ?? '—'}</td>
-                  <td className="ct-cell" title={r.sorumlu ?? undefined}>{r.sorumlu ?? '—'}</td>
+                  <td className="ct-cell" style={{ whiteSpace: 'nowrap' }} title={r.sorumlu ?? undefined}>{r.sorumlu ?? '—'}</td>
                   <td className="ct-cell" title={r.kasa_firmasi ?? undefined}>{r.kasa_firmasi ?? '—'}</td>
                   <td className="kunye-column">
                     {r.report_only ? (
