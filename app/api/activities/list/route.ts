@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getUserDepartments, requireActivityReadOrThrow, userHasPermission } from '@/lib/authz';
+import { requireActivityReadOrThrow } from '@/lib/authz';
 import { resolveDepartmentFilter } from '@/lib/departments';
 import { parsePhaseRange } from '@/lib/filters/sql';
 import { fetchAllRows } from '@/lib/reporting';
@@ -73,7 +73,9 @@ export async function GET(req: Request) {
 
     // Departman: müşterinin iş kolu (musteriler.is_kolu), kullanıcının departman kapsamıyla.
     let departmentCustomerIds: string[] | null = null;
-    const deptFilter = resolveDepartmentFilter(url.searchParams.get('department'), await getUserDepartments(me));
+    // Aktiviteler herkese açık: departman yalnız kullanıcı filtreden seçtiğinde daraltır,
+    // kullanıcının kendi departmanı listeyi kendiliğinden kısıtlamaz.
+    const deptFilter = resolveDepartmentFilter(url.searchParams.get('department'), null);
     if (deptFilter) {
       const { data: deptRows, error: deptError } = await admin.from('musteriler').select('id').in('is_kolu', deptFilter).limit(20000);
       if (deptError) return NextResponse.json({ message: deptError.message }, { status: 500 });
@@ -122,10 +124,6 @@ export async function GET(req: Request) {
         .from('pipeline_eventleri')
         .select(baseSelect, { count: withCount ? 'exact' : undefined })
         .order('created_at', { ascending: false });
-
-      if (!userHasPermission(me, 'activity.read.any')) {
-        query = query.or(`created_by_user_id.eq.${me.id},created_by_email.ilike.${escapeIlike(me.email)}`);
-      }
 
       if (fazRange) {
         query = fazRange.min === fazRange.max

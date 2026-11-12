@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireActivityReadOrThrow, userHasPermission } from '@/lib/authz';
+import { requireActivityReadOrThrow } from '@/lib/authz';
 import { createPgAdminClient } from '@/lib/pg/admin';
 import { presentDurum } from '@/lib/activities/presentation';
 import { BUSINESS_PARTNER_RESPONSIBLE } from '@/lib/report-only-customers';
@@ -17,7 +17,8 @@ export async function GET() {
     const me = await requireActivityReadOrThrow();
     const admin = createPgAdminClient();
 
-    const canReadAny = userHasPermission(me, 'activity.read.any');
+    // Aktivite listesi herkese açık (liste API'siyle aynı kapsam): filtre seçenekleri de daraltılmaz.
+    const canReadAny = true;
     let eventQuery = admin
       .from('pipeline_eventleri')
       .select('faz_no,durum,partner_owner,owner,created_by')

@@ -297,11 +297,10 @@ async function addProductVisualPage(args: {
     return;
   }
 
+  // Bilgi sayfası olmayan ürün (ör. yazılım/hizmet kalemi) teklifi düşürmez: o ürünün sayfası atlanır.
   if (!visualPath) {
-    const code = productVisualCode(args.item);
-    throw new Error(
-      `Urun bilgi sayfasi bulunamadi. public/templates/product-pages icine quote_products.code ile ayni isimde PDF/PNG/JPG ekleyin: ${code || 'URUN_KODU'}.pdf`
-    );
+    console.warn(`[quote-pdf] urun bilgi sayfasi yok, atlandi: ${productVisualCode(args.item) || 'URUN_KODU'}`);
+    return;
   }
 
   const ext = path.extname(visualPath).toLowerCase();
