@@ -178,23 +178,18 @@ export default function QuotePortfolioClient({ ownerOptions, allowedDepartments 
 
   return (
     <main style={{ display: 'grid', gap: 18 }}>
-      <div className="pax-hero">
-        <span className="pax-hero-eyebrow">Teklif Yönetimi</span>
-        <h1 className="pax-hero-title">Teklif Portföyü</h1>
-        <p className="pax-hero-description">Kimde hangi teklif var, kaç cihaz teklif edilmiş, hangi takip tarihi yaklaşıyor tek ekranda görün.</p>
-        <div className="pax-hero-stats">
-          <div className="pax-hero-stat"><div className="pax-hero-stat-label">Toplam Teklif</div><div className="pax-hero-stat-value">{kpis?.total_quotes ?? 0}</div></div>
-          <div className="pax-hero-stat"><div className="pax-hero-stat-label">Aktif Teklif</div><div className="pax-hero-stat-value">{kpis?.sent_quotes ?? 0}</div></div>
-          <div className="pax-hero-stat"><div className="pax-hero-stat-label">Satışa Dönen</div><div className="pax-hero-stat-value">{kpis?.sale_quotes ?? 0}</div></div>
-          <div className="pax-hero-stat"><div className="pax-hero-stat-label">Dönüşüm</div><div className="pax-hero-stat-value">{kpis?.conversion_pct == null ? '—' : `%${kpis.conversion_pct}`}</div></div>
+      <div className="pax-hero" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+        <div style={{ minWidth: 0 }}>
+          <span className="pax-hero-eyebrow">Teklif Yönetimi</span>
+          <h1 className="pax-hero-title">Teklif Portföyü</h1>
+          <p className="pax-hero-description">Kimde hangi teklif var, kaç cihaz teklif edilmiş, hangi takip tarihi yaklaşıyor tek ekranda görün.</p>
+        </div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <Link href="/crm/quotes/catalog" style={heroGhost}>Ürün ve fiyatlar</Link>
+          <Link href="/crm/quotes/new" style={heroPrimary}>+ Yeni teklif</Link>
         </div>
       </div>
-      <section style={{ display: 'grid', gap: 12 }}>
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-          <Link href="/crm/quotes/catalog" style={ghostButton}>Ürün & Fiyat Yönetimi</Link>
-          <Link href="/crm/quotes/new" style={primaryButton}>Yeni Teklif Oluştur</Link>
-        </div>
-
+      <section style={{ display: 'grid', gap: 10 }}>
         {onboarding ? (
           <div style={{ ...surface, borderStyle: 'dashed', borderColor: 'var(--chip-indigo-bd)', background: 'var(--chip-indigo-bg)' }}>
             <strong>Teklif modülü için veritabanı kurulumu bekleniyor.</strong>
@@ -208,12 +203,12 @@ export default function QuotePortfolioClient({ ownerOptions, allowedDepartments 
           department={department ? DEPARTMENT_LABELS[department] : undefined}
           owner={selectedOwner?.name}
         />
-        <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))' }}>
+        <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))' }}>
           {cards.map((card) => (
             <div key={card.label} style={surfaceCard}>
-              <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--text-3)' }}>{card.label}</div>
-              <div style={{ marginTop: 10, fontSize: 28, fontWeight: 900, color: 'var(--text)' }}>{card.value}</div>
-              <div style={{ marginTop: 8, color: 'var(--text-3)', fontSize: 13 }}>{card.hint}</div>
+              <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.07em', textTransform: 'uppercase', color: 'var(--text-3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{card.label}</div>
+              <div style={{ marginTop: 6, fontSize: 22, fontWeight: 800, letterSpacing: '-.02em', color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>{card.value}</div>
+              <div style={{ marginTop: 4, color: 'var(--text-3)', fontSize: 11.5, lineHeight: 1.35 }}>{card.hint}</div>
             </div>
           ))}
         </div>
@@ -224,58 +219,59 @@ export default function QuotePortfolioClient({ ownerOptions, allowedDepartments 
           config={filterConfig}
           allowedDepartments={allowedDepartments}
           showScope={false}
-          actions={(
-            <select aria-label="Sayfa boyutu" value={String(pageSize)} onChange={(e) => setPageSize(Number(e.target.value))} style={inputStyle}>
-              {PAGE_SIZE_OPTIONS.map((size) => <option key={size} value={size}>{size} / sayfa</option>)}
-            </select>
-          )}
         />
       </section>
 
       <section style={surface}>
         {msg ? <div style={{ color: 'var(--chip-red-color)', marginBottom: 12 }}>{msg}</div> : null}
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
-          <div style={{ color: 'var(--text-3)', fontSize: 13 }}>Toplam {total.toLocaleString('tr-TR')} kayıt · Sayfa {currentPage}/{totalPages}</div>
-          <div style={{ display: 'flex', gap: 8 }}>
+          <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 10, fontSize: 18, fontWeight: 800, letterSpacing: '-.02em', color: 'var(--text)' }}>
+            Teklifler <span style={countBadge}>{total.toLocaleString('tr-TR')}</span>
+          </h2>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <span style={{ color: 'var(--text-3)', fontSize: 12 }}>Sayfa {currentPage} / {totalPages}</span>
+            <select aria-label="Sayfa boyutu" value={String(pageSize)} onChange={(e) => setPageSize(Number(e.target.value))} style={inputStyle}>
+              {PAGE_SIZE_OPTIONS.map((size) => <option key={size} value={size}>{size} / sayfa</option>)}
+            </select>
             <button type="button" style={ghostButton} disabled={currentPage <= 1 || loading} onClick={() => setPage((p) => Math.max(1, p - 1))}>Önceki</button>
             <button type="button" style={ghostButton} disabled={currentPage >= totalPages || loading} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>Sonraki</button>
           </div>
         </div>
-        <div style={{ overflowX: 'auto' }}>
+        <div style={{ overflowX: 'auto', border: '1px solid var(--border)', borderRadius: 12 }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 980 }}>
             <thead>
               <tr>
-                {['Teklif', 'Müşteri', 'Satışçı', 'Olasılık', 'Cihaz / Tutar', 'Geçerlilik & Takip', 'Durum'].map((head) => (
+                {['Teklif', 'Müşteri', 'Satışçı', 'Olasılık', 'Cihaz / Tutar', 'Geçerlilik', 'Takip', 'Durum'].map((head) => (
                   <th key={head} style={tableHead}>{head}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {!loading && !rows.length ? (
-                <tr><td colSpan={7} style={{ padding: 20, color: 'var(--text-3)' }}>Kayıt bulunamadı.</td></tr>
+                <tr><td colSpan={8} style={{ padding: 20, color: 'var(--text-3)' }}>Kayıt bulunamadı.</td></tr>
               ) : null}
               {rows.map((row) => {
                 const state = quoteState(row);
                 return (
                 <tr key={row.id} style={{ borderTop: '1px solid var(--border)', background: quoteStateRow[state.key] ?? 'transparent' }}>
-                  <td style={{ ...tableCell, borderLeft: `4px solid ${quoteStateAccent[state.key] ?? 'transparent'}` }}>
+                  <td style={{ ...tableCell, boxShadow: `inset 3px 0 0 ${quoteStateAccent[state.key] ?? 'transparent'}` }}>
                     <Link href={`/crm/quotes/${row.id}`} style={{ color: 'var(--text)', fontWeight: 800, textDecoration: 'none' }}>{row.quote_no}</Link>
-                    <div style={{ marginTop: 4, color: 'var(--text-2)', fontSize: 13 }}>{row.opportunity_title || row.summary || 'Ticari teklif'}</div>
+                    <div style={subLine}>{row.opportunity_title || row.summary || 'Ticari teklif'}</div>
                   </td>
                   <td style={tableCell}>
-                    <div style={{ fontWeight: 700 }}>{row.customer?.musteri || '-'}</div>
-                    <div style={{ marginTop: 4, color: 'var(--text-2)', fontSize: 13 }}>{row.customer?.sektor || '-'}</div>
+                    <div style={{ fontWeight: 700 }}>{row.customer?.musteri || '—'}</div>
+                    {row.customer?.sektor ? <div style={subLine}>{row.customer.sektor}</div> : null}
                   </td>
-                  <td style={tableCell}>{row.owner_name || '-'}</td>
+                  <td style={tableCell}>{row.owner_name || '—'}</td>
                   <td style={tableCell}>
-                    <div style={{ display: 'grid', gap: 6 }}>
-                      <div style={{ height: 8, borderRadius: 999, background: 'var(--border)', overflow: 'hidden' }}><div style={{ width: `${row.probability}%`, height: '100%', background: 'var(--chip-indigo-color)' }} /></div>
-                      <div style={{ fontWeight: 800, color: 'var(--text)' }}>%{row.probability}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ flex: '0 0 54px', height: 6, borderRadius: 999, background: 'var(--border)', overflow: 'hidden' }}><div style={{ width: `${row.probability}%`, height: '100%', borderRadius: 999, background: row.probability >= 70 ? '#16a34a' : row.probability >= 40 ? '#d97706' : 'var(--chip-indigo-color)' }} /></div>
+                      <div style={{ fontWeight: 700, fontSize: 12, color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>%{row.probability}</div>
                     </div>
                   </td>
                   <td style={tableCell}>
-                    <div style={{ fontWeight: 800 }}>{row.total_device_count} cihaz</div>
-                    <div style={{ marginTop: 4, color: 'var(--text)' }}>{money(row.total_amount)}</div>
+                    <div style={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{money(row.total_amount)}</div>
+                    <div style={subLine}>{row.total_device_count.toLocaleString('tr-TR')} cihaz</div>
                     {row.rental ? (
                       <div style={{ marginTop: 6 }} title={`${row.rental.lines} kiralama satırı`}>
                         <span style={{ ...pillBase, minHeight: 22, fontSize: 11, background: 'var(--chip-gold-bg)', color: 'var(--chip-gold-color)', borderColor: 'var(--chip-gold-bd)' }}>{row.rental.all ? 'Kiralama' : 'Satış + Kiralama'}</span>
@@ -288,17 +284,17 @@ export default function QuotePortfolioClient({ ownerOptions, allowedDepartments 
                       </div>
                     ) : null}
                   </td>
-                  <td style={tableCell}>
-                    <div style={{ display: 'grid', gap: 4, fontSize: 13 }}>
-                      <div><span style={dateLabel}>geçerlilik</span> <b style={{ fontWeight: 800 }}>{formatDate(row.valid_until)}</b></div>
-                      <div><span style={dateLabel}>takip</span> <b style={{ fontWeight: 800 }}>{formatDate(row.follow_up_date)}</b></div>
-                      <span style={{ ...pillBase, ...(riskPill[row.health_state] ?? riskPill.on_track), marginTop: 2, justifySelf: 'start' }}>{healthLabel(row.health_state)}</span>
-                    </div>
+                  <td style={{ ...tableCell, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{formatDate(row.valid_until)}</td>
+                  <td style={{ ...tableCell, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                    {formatDate(row.follow_up_date)}
+                    {row.health_state !== 'on_track' ? (
+                      <div style={{ marginTop: 4 }}><span style={{ ...pillBase, minHeight: 20, fontSize: 10.5, ...(riskPill[row.health_state] ?? riskPill.on_track) }}>{healthLabel(row.health_state)}</span></div>
+                    ) : null}
                   </td>
                   <td style={tableCell}>
                     <span style={{ ...pillBase, ...(quoteStatePill[state.key] ?? quoteStatePill.draft) }}>{state.label}</span>
                     {state.key === 'sale' ? (
-                      <Link href="/crm/sales" style={{ display: 'block', marginTop: 6, fontSize: 12, fontWeight: 700, color: 'var(--chip-green-color)' }}>Satışlar ekranı →</Link>
+                      <Link href="/crm/sales" title="Satışlar ekranında aç" style={{ marginLeft: 8, fontSize: 12, fontWeight: 700, color: 'var(--chip-green-color)', textDecoration: 'none' }}>Satış →</Link>
                     ) : null}
                     {row.loss_reason_key && (state.key === 'lost' || state.key === 'expired') ? (
                       <div style={{ marginTop: 6, fontSize: 12, color: 'var(--text-3)', fontWeight: 700 }}>{lossLabel(row.loss_reason_key)}</div>
@@ -316,13 +312,16 @@ export default function QuotePortfolioClient({ ownerOptions, allowedDepartments 
 }
 
 const surface: CSSProperties = { background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 22, padding: 16, boxShadow: 'var(--shadow)' };
-const surfaceCard: CSSProperties = { ...surface, padding: 18 };
-const primaryButton: CSSProperties = { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minHeight: 42, padding: '0 16px', borderRadius: 14, background: '#4338ca', color: '#ffffff', textDecoration: 'none', fontWeight: 800 };
-const ghostButton: CSSProperties = { minHeight: 42, padding: '0 14px', borderRadius: 14, border: '1px solid #cbd5e1', background: 'var(--surface)', color: 'var(--text)', fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer' };
-const inputStyle: CSSProperties = { minHeight: 42, borderRadius: 14, border: '1px solid #cbd5e1', padding: '0 12px', background: 'var(--surface)', color: 'var(--text)', fontFamily: 'inherit', fontSize: 14 };
-const tableHead: CSSProperties = { textAlign: 'left', padding: '0 12px 10px', color: 'var(--text-2)', fontWeight: 800, fontSize: 12, letterSpacing: '.06em', textTransform: 'uppercase' };
-const tableCell: CSSProperties = { padding: '14px 12px', verticalAlign: 'top', color: 'var(--text)' };
-const pillBase: CSSProperties = { display: 'inline-flex', alignItems: 'center', minHeight: 28, padding: '0 10px', borderRadius: 999, fontWeight: 800, fontSize: 12, border: '1px solid transparent' };
+const surfaceCard: CSSProperties = { ...surface, padding: '12px 14px', borderRadius: 16 };
+const subLine: CSSProperties = { marginTop: 2, color: 'var(--text-3)', fontSize: 12 };
+const countBadge: CSSProperties = { fontSize: 12, fontWeight: 700, letterSpacing: 0, padding: '3px 9px', borderRadius: 999, background: 'var(--chip-indigo-bg)', color: 'var(--chip-indigo-color)' };
+const heroGhost: CSSProperties = { display: 'inline-flex', alignItems: 'center', height: 38, padding: '0 14px', borderRadius: 12, border: '1px solid rgba(255,255,255,.28)', background: 'rgba(255,255,255,.10)', color: '#fff', textDecoration: 'none', fontWeight: 600, fontSize: 13 };
+const heroPrimary: CSSProperties = { display: 'inline-flex', alignItems: 'center', height: 38, padding: '0 16px', borderRadius: 12, background: '#fff', color: '#0b2456', textDecoration: 'none', fontWeight: 700, fontSize: 13, boxShadow: '0 8px 18px rgba(0,0,0,.18)' };
+const ghostButton: CSSProperties = { minHeight: 34, padding: '0 12px', borderRadius: 10, fontSize: 13, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer' };
+const inputStyle: CSSProperties = { minHeight: 34, borderRadius: 10, border: '1px solid var(--border)', padding: '0 10px', background: 'var(--surface)', color: 'var(--text)', fontFamily: 'inherit', fontSize: 13 };
+const tableHead: CSSProperties = { textAlign: 'left', padding: '10px 12px', color: 'var(--text-2)', fontWeight: 700, fontSize: 11, letterSpacing: '.06em', textTransform: 'uppercase' };
+const tableCell: CSSProperties = { padding: '9px 12px', verticalAlign: 'middle', color: 'var(--text)', fontSize: 13 };
+const pillBase: CSSProperties = { display: 'inline-flex', alignItems: 'center', minHeight: 24, padding: '0 10px', borderRadius: 999, fontWeight: 700, fontSize: 11, whiteSpace: 'nowrap', border: '1px solid transparent' };
 const riskPill: Record<string, CSSProperties> = {
   on_track: { background: 'var(--chip-green-bg)', color: 'var(--chip-green-color)', borderColor: '#a7f3d0' },
   approaching: { background: '#fff7ed', color: '#c2410c', borderColor: '#fdba74' },
@@ -338,10 +337,9 @@ function lossLabel(key: string) {
   return map[key] ?? key;
 }
 
-const dateLabel: CSSProperties = { color: 'var(--text-2)', fontSize: 11, fontWeight: 800, letterSpacing: '.05em', textTransform: 'uppercase' };
 /** Satır zemini/aksanı: satışa döndü yeşil · beklemede turuncu · süresi doldu / kayıp kırmızı (07.09 isteği). */
 const quoteStateRow: Record<string, string> = {
-  sale: 'var(--chip-green-bg)', waiting: 'transparent', expired: 'var(--chip-red-bg)',
+  sale: 'color-mix(in srgb, var(--chip-green-bg) 45%, transparent)', waiting: 'transparent', expired: 'color-mix(in srgb, var(--chip-red-bg) 45%, transparent)',
   lost: 'transparent', cancelled: 'transparent', draft: 'transparent',
 };
 const quoteStateAccent: Record<string, string> = {

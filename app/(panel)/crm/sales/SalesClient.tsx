@@ -300,24 +300,25 @@ export default function SalesClient() {
   return (
     <div style={{ display: 'grid', gap: 16 }}>
       <div className="pax-hero">
-        <span className="pax-hero-eyebrow">Ticari Operasyon</span>
-        <h1 className="pax-hero-title">Satışlar</h1>
-        <p className="pax-hero-description">
-          Satışa dönüştürülen teklifler ve teklifsiz girilen satışlar burada tutulur. Cihaz adedi ve tutar burada
-          düzenlenir; teklif belgesi değişmez. Ciro raporları aktif satışları sayar.
-        </p>
+        <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+          <div style={{ minWidth: 0 }}>
+            <span className="pax-hero-eyebrow">Ticari Operasyon</span>
+            <h1 className="pax-hero-title">Satışlar</h1>
+            <p className="pax-hero-description">Tekliften dönen ve teklifsiz girilen satışlar. Cihaz adedi ve tutar burada düzenlenir; ciro raporları aktif satışları sayar.</p>
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <Link href="/crm/quotes" style={ghostLink}>Teklifler</Link>
+            <Link href="/crm/reports/quotes" style={ghostLink}>Teklif raporları</Link>
+            {/* Cihaz Satış Raporu (Excel) — dönem (ay/yıl) + satışçı seçilir (Sinan, 21.09). */}
+            <SalesReportDownload kind="cihaz" owners={owners} canSeeAll={canSeeAll} buttonStyle={ghostLink} />
+            {canCreate ? <button type="button" onClick={() => void openCreate()} style={heroPrimary}>+ Satış ekle</button> : null}
+          </div>
+        </div>
         <div className="pax-hero-stats">
           <div className="pax-hero-stat"><div className="pax-hero-stat-label">Satış · {periodLabel || 'Seçili dönem'}</div><div className="pax-hero-stat-value">{(summary?.sale_count ?? 0).toLocaleString('tr-TR')}</div></div>
           <div className="pax-hero-stat"><div className="pax-hero-stat-label">Ciro · Seçili dönem</div><div className="pax-hero-stat-value">{usd(summary?.amount ?? 0)}</div></div>
           <div className="pax-hero-stat"><div className="pax-hero-stat-label">Cihaz · Seçili dönem</div><div className="pax-hero-stat-value">{(summary?.devices ?? 0).toLocaleString('tr-TR')}</div></div>
           <div className="pax-hero-stat"><div className="pax-hero-stat-label">Bu sayfada</div><div className="pax-hero-stat-value">{activeRows.length.toLocaleString('tr-TR')} · {usd(listAmount)}</div></div>
-        </div>
-        <div style={{ position: 'relative', zIndex: 1, display: 'flex', gap: 10, marginTop: 14, flexWrap: 'wrap' }}>
-          {canCreate ? <button type="button" onClick={() => void openCreate()} style={{ ...ghostLink, border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 14 }}>+ Satış Ekle</button> : null}
-          <Link href="/crm/quotes" style={{ ...ghostLink }}>Teklifler</Link>
-          <Link href="/crm/reports/quotes" style={{ ...ghostLink }}>Teklif Raporları</Link>
-          {/* Cihaz Satış Raporu (Excel) — dönem (ay/yıl) + satışçı seçilir (Sinan, 21.09). */}
-          <SalesReportDownload kind="cihaz" owners={owners} canSeeAll={canSeeAll} buttonStyle={ghostLink} />
         </div>
       </div>
 
@@ -338,7 +339,12 @@ export default function SalesClient() {
       </section>
 
       <section style={surface}>
-        <div style={{ overflowX: 'auto' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
+          <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 10, fontSize: 18, fontWeight: 800, letterSpacing: '-.02em', color: 'var(--text)' }}>
+            Satış listesi <span style={countBadge}>{pageInfo.total.toLocaleString('tr-TR')}</span>
+          </h2>
+        </div>
+        <div style={{ overflowX: 'auto', border: '1px solid var(--border)', borderRadius: 12 }}>
           <table style={{ width: '100%', minWidth: 0, borderCollapse: 'separate', borderSpacing: 0 }}>
             <thead>
               <tr>
@@ -350,7 +356,7 @@ export default function SalesClient() {
                 <th style={tableHead}>Cihaz</th>
                 <th style={tableHead}>Tutar</th>
                 <th style={tableHead}>Durum</th>
-                <th style={tableHead}></th>
+                <th style={tableHead} aria-label="İşlem" />
               </tr>
             </thead>
             <tbody>
@@ -364,10 +370,10 @@ export default function SalesClient() {
                 const deviceDiff = row.device_count - row.quote_device_count;
                 const amountDiff = Math.round(row.amount) - Math.round(row.quote_amount);
                 return (
-                  <tr key={row.id} style={{ borderTop: '1px solid var(--border)' }}>
+                  <tr key={row.id} style={{ opacity: row.status === 'active' ? 1 : 0.62 }}>
                     <td style={tableCell}>
                       <Link href={`/crm/${row.customer_id}`} style={{ fontWeight: 800, color: 'var(--text)' }}>{row.musteri}</Link>
-                      {row.note ? <div style={{ color: 'var(--text-3)', fontSize: 12, marginTop: 4 }}>{row.note}</div> : null}
+                      {row.note ? <div style={{ color: 'var(--text-3)', fontSize: 12, marginTop: 2, maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={row.note}>{row.note}</div> : null}
                     </td>
                     <td style={tableCell}>
                       {row.quote_id
@@ -376,7 +382,7 @@ export default function SalesClient() {
                     </td>
                     <td style={tableCell}>{channelLabel(channels, row.sales_channel) || <span style={{ color: 'var(--text-3)' }}>—</span>}</td>
                     <td style={tableCell}>{row.owner_name || '—'}</td>
-                    <td style={tableCell}>{fmtDate(row.sale_date)}</td>
+                    <td style={{ ...tableCell, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{fmtDate(row.sale_date)}</td>
                     <td style={tableCell}>
                       <b>{Number(row.device_count ?? 0).toLocaleString('tr-TR')}</b>
                       {row.quote_id && deviceDiff !== 0 ? <div style={{ fontSize: 12, color: 'var(--text-3)' }}>teklif {Number(row.quote_device_count ?? 0).toLocaleString('tr-TR')} ({deviceDiff > 0 ? '+' : ''}{deviceDiff})</div> : null}
@@ -403,13 +409,25 @@ export default function SalesClient() {
                         </>
                       ) : null}
                     </td>
-                    <td style={{ ...tableCell, whiteSpace: 'nowrap' }}>
-                      {canEdit && row.status === 'active' ? <button onClick={() => openEdit(row)} style={ghostButton}>Düzenle</button> : null}
+                    <td style={{ ...tableCell, whiteSpace: 'nowrap', textAlign: 'right' }}>
+                      {canEdit && row.status === 'active' ? (
+                        <button type="button" onClick={() => openEdit(row)} style={iconButton} title="Düzenle" aria-label="Düzenle">
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
+                        </button>
+                      ) : null}
                       {canEdit ? (
                         <button
                           onClick={() => { setCancelling(row); setCancelReason(''); if (row.status === 'cancelled') void 0; }}
-                          style={{ ...ghostButton, marginLeft: 8 }}
-                        >{row.status === 'active' ? 'İptal' : 'Geri Al'}</button>
+                          style={{ ...iconButton, marginLeft: 6, ...(row.status === 'active' ? { color: 'var(--chip-red-color)' } : null) }}
+                          title={row.status === 'active' ? 'Satışı iptal et' : 'İptali geri al'}
+                          aria-label={row.status === 'active' ? 'Satışı iptal et' : 'İptali geri al'}
+                        >
+                          {row.status === 'active' ? (
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="m5.6 5.6 12.8 12.8" /></svg>
+                          ) : (
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 7v6h6" /><path d="M3 13a9 9 0 1 0 3-6.7" /></svg>
+                          )}
+                        </button>
                       ) : null}
                     </td>
                   </tr>
@@ -652,11 +670,14 @@ export default function SalesClient() {
 const surface: CSSProperties = { background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 22, padding: 16, boxShadow: 'var(--shadow)' };
 const primaryButton: CSSProperties = { minHeight: 42, padding: '0 16px', borderRadius: 14, background: '#0e6fc7', color: '#fff', border: 'none', fontWeight: 800, fontFamily: 'inherit', cursor: 'pointer' };
 const ghostButton: CSSProperties = { minHeight: 38, padding: '0 14px', borderRadius: 12, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer' };
-const ghostLink: CSSProperties = { display: 'inline-flex', alignItems: 'center', minHeight: 40, padding: '0 14px', borderRadius: 12, background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.2)', color: 'white', textDecoration: 'none', fontWeight: 700 };
+const ghostLink: CSSProperties = { display: 'inline-flex', alignItems: 'center', minHeight: 38, padding: '0 14px', borderRadius: 12, background: 'rgba(255,255,255,0.10)', border: '1px solid rgba(255,255,255,0.28)', color: 'white', textDecoration: 'none', fontWeight: 600, fontSize: 13, fontFamily: 'inherit', cursor: 'pointer' };
+const heroPrimary: CSSProperties = { display: 'inline-flex', alignItems: 'center', minHeight: 38, padding: '0 16px', borderRadius: 12, background: '#fff', color: '#0b2456', border: 'none', fontWeight: 700, fontSize: 13, fontFamily: 'inherit', cursor: 'pointer', boxShadow: '0 8px 18px rgba(0,0,0,.18)' };
+const countBadge: CSSProperties = { fontSize: 12, fontWeight: 700, letterSpacing: 0, padding: '3px 9px', borderRadius: 999, background: 'var(--chip-indigo-bg)', color: 'var(--chip-indigo-color)' };
+const iconButton: CSSProperties = { display: 'inline-grid', placeItems: 'center', width: 30, height: 30, padding: 0, borderRadius: 9, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-2)', cursor: 'pointer', verticalAlign: 'middle' };
 const inputStyle: CSSProperties = { minHeight: 42, borderRadius: 14, border: '1px solid var(--border)', padding: '0 12px', background: 'var(--surface)', color: 'var(--text)', fontFamily: 'inherit', fontSize: 14, width: '100%' };
-const tableHead: CSSProperties = { textAlign: 'left', padding: '0 12px 10px', color: 'var(--text-2)', fontWeight: 800, fontSize: 12, letterSpacing: '.06em', textTransform: 'uppercase' };
-const tableCell: CSSProperties = { padding: '14px 12px', verticalAlign: 'top', color: 'var(--text)' };
-const pillBase: CSSProperties = { display: 'inline-flex', alignItems: 'center', minHeight: 28, padding: '0 10px', borderRadius: 999, fontWeight: 800, fontSize: 12, border: '1px solid transparent' };
+const tableHead: CSSProperties = { textAlign: 'left', padding: '10px 12px', color: 'var(--text-2)', fontWeight: 700, fontSize: 11, letterSpacing: '.07em', textTransform: 'uppercase', background: 'var(--surface-2)', whiteSpace: 'nowrap' };
+const tableCell: CSSProperties = { padding: '9px 12px', verticalAlign: 'middle', color: 'var(--text)', fontSize: 13, borderTop: '1px solid var(--border)' };
+const pillBase: CSSProperties = { display: 'inline-flex', alignItems: 'center', minHeight: 24, padding: '0 10px', borderRadius: 999, fontWeight: 700, fontSize: 11, whiteSpace: 'nowrap', border: '1px solid transparent' };
 const pillOk: CSSProperties = { background: 'var(--chip-green-bg)', color: 'var(--chip-green-color)', borderColor: 'var(--chip-green-bd)' };
 const pillMuted: CSSProperties = { background: 'var(--surface-2)', color: 'var(--text-2)', borderColor: 'var(--border)' };
 const pillRental: CSSProperties = { background: 'var(--chip-gold-bg)', color: 'var(--chip-gold-color)', borderColor: 'var(--chip-gold-bd)' };
