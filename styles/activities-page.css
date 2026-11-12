@@ -400,3 +400,42 @@
   background: var(--accent); color: #fff; font-size: 13px; font-weight: 600; text-decoration: none;
 }
 :where(.crm-activities-page) .add-btn:hover { filter: brightness(1.08); }
+
+/* ── Balance: density kept, brand character restored ───────────────────────── */
+:where(.crm-activities-page) .command-toolbar { background: transparent !important; border: 0 !important; box-shadow: none !important; padding: 4px 6px 0; }
+:where(.crm-activities-page) .section-title { font-size: 18px; font-weight: 800; letter-spacing: -.02em; display: flex; align-items: center; gap: 10px; }
+:where(.crm-activities-page) .section-title .count { font-size: 12px; font-weight: 700; letter-spacing: 0; padding: 3px 9px; border-radius: 999px; background: var(--chip-indigo-bg); color: var(--chip-indigo-color); }
+:where(.crm-activities-page) .activity-table th,
+:where(.crm-activities-page) .activity-table td { padding: 10px 12px; }
+:where(.crm-activities-page) .activity-table thead th { background: linear-gradient(180deg, var(--surface-2), color-mix(in srgb, var(--surface-2) 60%, var(--surface))) !important; }
+:where(.crm-activities-page) .activity-table tbody tr { transition: box-shadow .12s; }
+:where(.crm-activities-page) .activity-table tbody tr:hover td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+:where(.crm-activities-page) .customer-cell { display: flex; align-items: center; gap: 10px; min-width: 0; }
+:where(.crm-activities-page) .customer-cell > div { min-width: 0; }
+:where(.crm-activities-page) .avatar {
+  flex: none; width: 32px; height: 32px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 800; letter-spacing: .02em; color: hsl(var(--h) 60% 34%); background: hsl(var(--h) 80% 93%); border: 1px solid hsl(var(--h) 70% 86%);
+}
+:where([data-theme="dark"]) :where(.crm-activities-page) .avatar { color: hsl(var(--h) 80% 80%); background: hsl(var(--h) 40% 20%); border-color: hsl(var(--h) 40% 28%); }
+:where(.crm-activities-page) .name { font-weight: 800; font-size: 13px; letter-spacing: -.005em; }
+:where(.crm-activities-page) .person-main { font-weight: 600; }
+:where(.crm-activities-page) .phase-pill { min-height: 24px; font-weight: 800 !important; }
+:where(.crm-activities-page) .activity-pill {
+  min-height: 24px; background: var(--chip-indigo-bg); border-color: var(--chip-indigo-bd) !important; color: var(--chip-indigo-color);
+}
+:where(.crm-activities-page) .status-text {
+  min-height: 24px; padding: 0 10px 0 8px; border-radius: 999px; font-size: 11px; font-weight: 700; white-space: nowrap;
+  background: var(--surface-2); color: var(--text-2, var(--text)); border: 1px solid var(--border);
+}
+:where(.crm-activities-page) .status-text[data-s="done"] { background: #ecfdf3; color: #047857; border-color: #a7f3d0; }
+:where(.crm-activities-page) .status-text[data-s="progress"] { background: #fffbeb; color: #b45309; border-color: #fde68a; }
+:where([data-theme="dark"]) :where(.crm-activities-page) .status-text[data-s="done"] { background: rgba(16,185,129,.14); color: #6ee7b7; border-color: rgba(16,185,129,.3); }
+:where([data-theme="dark"]) :where(.crm-activities-page) .status-text[data-s="progress"] { background: rgba(245,158,11,.14); color: #fcd34d; border-color: rgba(245,158,11,.3); }
+:where(.crm-activities-page) .sla-dot:empty { min-width: 12px; width: 12px; height: 12px; box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 0%, rgba(148,163,184,.18)); }
+:where(.crm-activities-page) .date-chip { font-weight: 600 !important; }
+:where(.crm-activities-page) .row-actions .icon-btn { opacity: .7; border: 1px solid transparent; }
+:where(.crm-activities-page) .row-actions .icon-btn:hover { border-color: var(--accent-border); }
+:where(.crm-activities-page) .add-btn {
+  height: 38px; padding: 0 16px; border-radius: 12px; font-weight: 700;
+  background: linear-gradient(135deg, #0b2456 0%, #1d4ed8 100%); box-shadow: 0 8px 18px rgba(29,78,216,.24);
+}

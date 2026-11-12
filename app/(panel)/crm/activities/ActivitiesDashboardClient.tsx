@@ -2,7 +2,7 @@
 import '@/styles/activities-page.css';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { getSlaPresentation, getSlaState } from '@/lib/sla';
 import { formatDate, toLocalDateInputValue } from '@/lib/utils';
 import ActivitiesDashboard from '@/components/activities/ActivitiesDashboard';
@@ -13,6 +13,18 @@ import { resolvePeriod } from '@/lib/filters/period';
 import type { FilterOption, PageFilterConfig } from '@/lib/filters/schema';
 import { DEPARTMENT_LABELS, type Department } from '@/lib/departments';
 import { resolveOwner } from '@/lib/reports/owner-filter';
+
+/** Two-letter avatar text and a stable hue derived from the company name. */
+function initialsOf(name: string) {
+  const words = name.replace(/[^\p{L}\p{N}\s]/gu, ' ').trim().split(/\s+/).filter(Boolean);
+  if (!words.length) return '—';
+  return (words.length > 1 ? words[0][0] + words[1][0] : words[0].slice(0, 2)).toLocaleUpperCase('tr-TR');
+}
+function hueOf(name: string) {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) % 360;
+  return h;
+}
 
 type ActivityRow = {
   id: string;
@@ -536,7 +548,7 @@ export default function ActivitiesPage({ ownerOptions, allowedDepartments }: { o
       <section className="surface">
         <div className="table-head">
           <div>
-            <h2 className="section-title">Aktivite listesi</h2>
+            <h2 className="section-title">Aktivite listesi <span className="count">{total.toLocaleString('tr-TR')}</span></h2>
           </div>
           <div className="table-actions">
             <Link href="/crm/activities/new" className="add-btn">
@@ -582,8 +594,13 @@ export default function ActivitiesPage({ ownerOptions, allowedDepartments }: { o
                   <tr key={row.id}>
                     <td>{formatDate(row.created_at)}</td>
                     <td>
-                      <div className="name">{row.musteriler?.musteri ?? '—'}</div>
-                      {row.musteriler?.sorumlu ? <div className="muted">{row.musteriler.sorumlu}</div> : null}
+                      <div className="customer-cell">
+                        <span className="avatar" aria-hidden style={{ '--h': hueOf(row.musteriler?.musteri ?? '') } as CSSProperties}>{initialsOf(row.musteriler?.musteri ?? '')}</span>
+                        <div>
+                          <div className="name">{row.musteriler?.musteri ?? '—'}</div>
+                          {row.musteriler?.sorumlu ? <div className="muted">{row.musteriler.sorumlu}</div> : null}
+                        </div>
+                      </div>
                     </td>
                     <td>
                       <div className="activity-cell">
