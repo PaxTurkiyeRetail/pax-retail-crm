@@ -77,7 +77,13 @@ export async function GET(req: Request) {
     if (deptFilter) {
       const { data: deptRows, error: deptError } = await admin.from('musteriler').select('id').in('is_kolu', deptFilter).limit(20000);
       if (deptError) return NextResponse.json({ message: deptError.message }, { status: 500 });
-      const ids = (deptRows ?? []).map((row: any) => String(row.id ?? '').trim()).filter(Boolean);
+      // Kullanıcının sorumlu olduğu firmalar iş kolundan bağımsız kapsamda: kendi müşterisine girdiği aktiviteyi görmeli.
+      const ownNeedles = [myName, me.email, String(me.email ?? '').split('@')[0]].map((v) => escapeIlike(String(v ?? ''))).filter((v) => v && !/[,()]/.test(v));
+      const { data: ownRows, error: ownError } = ownNeedles.length
+        ? await admin.from('musteriler').select('id').or(ownNeedles.map((v) => `sorumlu.ilike.${v}`).join(',')).limit(5000)
+        : { data: [] as any[], error: null };
+      if (ownError) return NextResponse.json({ message: ownError.message }, { status: 500 });
+      const ids = Array.from(new Set([...(deptRows ?? []), ...(ownRows ?? [])].map((row: any) => String(row.id ?? '').trim()).filter(Boolean)));
       if (!ids.length) return NextResponse.json({ rows: [], total: 0, page, pageSize, serverToday });
       departmentCustomerIds = ids;
     }
