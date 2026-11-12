@@ -92,3 +92,18 @@
           .bar-row { grid-template-columns: 64px 1fr 40px 28px; }
           .role-risk { grid-template-columns: 1fr; }
         }
+
+/* Compact detail cards */
+.detail-grid { gap: 12px; }
+.det-card { padding: 14px; gap: 10px; border-radius: 16px !important; align-content: start; }
+.det-big { font-size: 24px; font-weight: 800; }
+.det-sub { font-size: 11.5px; }
+.mom-box, .rr-box { padding: 8px 10px; border-radius: 12px !important; box-shadow: none !important; }
+.mom-box strong, .rr-val, .score { font-size: 17px; font-weight: 800; }
+.mom-box em { margin-top: 3px; }
+.trend-wrap { padding: 10px 12px; }
+.trend-bars { height: 62px; }
+.trail { height: 40px; }
+.leader-list { background: transparent !important; border: 0 !important; box-shadow: none !important; backdrop-filter: none; gap: 5px; }
+.leader-row { padding: 7px 10px; border-radius: 12px; }
+.bar-rows { gap: 6px; }
