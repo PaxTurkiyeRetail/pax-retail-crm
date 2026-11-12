@@ -148,3 +148,8 @@
 .rr-val.neg { color: #dc2626; }
 @media (max-width: 1180px) { .detail-grid { grid-template-columns: 1fr 1fr; } .detail-grid > .det-card:first-child { grid-column: 1 / -1; } }
 @media (max-width: 900px) { .detail-grid { grid-template-columns: 1fr; } .mom-split { grid-template-columns: 1fr; } .role-risk { grid-template-columns: 1fr 1fr !important; } }
+/* Fill the shared row height instead of leaving a gap under shorter cards */
+.detail-grid > .det-card:nth-child(-n+2) { align-content: stretch; grid-template-rows: auto 1fr; }
+.mom-grid { grid-auto-rows: 1fr; }
+.mom-box { display: grid; align-content: center; }
+.bar-rows { align-content: space-evenly; }
