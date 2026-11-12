@@ -225,6 +225,8 @@ export type TargetsAdminUser = {
    * ekranda girilmez, ortak değer yoksa yedek olarak okunur (Kullanıcı Yönetimi hâlâ yazabilir).
    */
   weeklyTotal: number;
+  /** Kullanıcının birimleri (allowed_users.departments); boş = birim kısıtı yok. */
+  departments: string[];
   yearly: Partial<Record<TargetCode, number | null>>;
   quarterly: Partial<Record<TargetCode, QuarterValues>>;
 };

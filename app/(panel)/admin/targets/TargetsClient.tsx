@@ -207,7 +207,7 @@ export default function TargetsClient() {
       </section>
 
       <section className="tg-kpis" aria-label="Özet">
-        <div className="tg-kpi"><span>Kişi</span><strong>{payload?.users.length ?? '—'}</strong><small>hedef girilebilen satışçı</small></div>
+        <div className="tg-kpi"><span>Kişi</span><strong>{payload?.users.length ?? '—'}</strong><small>girişi aktif account</small></div>
         <div className="tg-kpi"><span>Yıllık bütçe toplamı</span><strong>{payload ? `$${fmtNum(totals.budget)}` : '—'}</strong><small>kişi hedeflerinin toplamı</small></div>
         <div className="tg-kpi"><span>Yıllık ziyaret toplamı</span><strong>{payload ? fmtNum(totals.visits) : '—'}</strong><small>fiziki + online görüşme</small></div>
         <div className="tg-kpi"><span>Kazanılan teklif hedefi</span><strong>{payload ? fmtNum(totals.won) : '—'}</strong><small>adet · yıl</small></div>
@@ -257,7 +257,10 @@ export default function TargetsClient() {
             <section className={`tg-person ${dirty ? 'dirty' : ''}`} key={user.id} aria-label={`${user.name} hedefleri`}>
               <header className="tg-person-head">
                 <div>
-                  <h2>{user.name}</h2>
+                  <h2>
+                    {user.name}
+                    {user.departments.map((department) => <span className="tg-dept" key={department}>{department}</span>)}
+                  </h2>
                   <span>{user.email}</span>
                 </div>
                 <div className="tg-person-actions">

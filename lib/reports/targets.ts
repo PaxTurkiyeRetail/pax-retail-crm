@@ -3,6 +3,7 @@ import type { PoolClient } from 'pg';
 import { db } from '@/lib/db';
 import { recordAuditEvent } from '@/lib/audit';
 import { ApiError } from '@/lib/http/api-error';
+import { normalizeDepartments } from '@/lib/departments';
 import { ownerOrderCompare } from './live-board-shared';
 import {
   COMPANY_TARGET_DEFINITIONS,
@@ -31,12 +32,14 @@ import {
 
 type Actor = { id: string; email: string };
 
-// Hedef girilebilen kişiler: YALNIZ satış ekibi (Canlı Ekran OWNER_ORDER'da adı geçen aktif
-// hesaplar) — `isTargetOwnerName`. Sorgu rol üzerinden daraltır, son söz OWNER_ORDER'ındır:
-// ikincil rolü account_manager olan yönetici hesapları (genel müdür) listeye girmez.
+// Hedef girilebilen kişiler: girişi aktif, ANA rolü account_manager olan herkes (tüm birimler:
+// Retail / Bank / Vertical) ∪ Canlı Ekran OWNER_ORDER'ında adı geçenler (`isTargetOwnerName`).
+// Yalnız ikincil rolü account_manager olan yönetici hesapları (genel müdür) listeye girmez.
 const Q_USERS = `
   select u.id::text as id, coalesce(nullif(trim(u.full_name), ''), u.email) as name, u.email,
-         coalesce(u.weekly_target_total_activities, 0)::int as weekly_total
+         coalesce(u.weekly_target_total_activities, 0)::int as weekly_total,
+         (u.role = 'account_manager') as primary_account,
+         coalesce(u.departments, '{}'::text[]) as departments
   from public.allowed_users u
   where u.is_active = true
     and (u.role = 'account_manager' or 'account_manager' = any(coalesce(u.secondary_roles, '{}'::text[])))
@@ -72,11 +75,13 @@ export async function loadTargetsAdmin(year: number): Promise<TargetsAdminPayloa
   ]);
   const users = new Map<string, TargetsAdminUser>();
   for (const row of userResult.rows as any[]) {
+    if (!row.primary_account && !isTargetOwnerName(String(row.name))) continue;
     users.set(String(row.id), {
       id: String(row.id),
       name: String(row.name),
       email: String(row.email),
       weeklyTotal: Number(row.weekly_total ?? 0),
+      departments: normalizeDepartments(row.departments),
       yearly: {},
       quarterly: {},
     });
@@ -97,9 +102,7 @@ export async function loadTargetsAdmin(year: number): Promise<TargetsAdminPayloa
       user.quarterly[code] = values;
     }
   }
-  const list = Array.from(users.values())
-    .filter((user) => isTargetOwnerName(user.name))
-    .sort((a, b) => ownerOrderCompare(a.name, b.name));
+  const list = Array.from(users.values()).sort((a, b) => ownerOrderCompare(a.name, b.name));
   const company: TargetsAdminPayload['company'] = {};
   for (const row of companyResult.rows as any[]) {
     if (!isTargetCode(row.code)) continue;
@@ -244,11 +247,11 @@ export async function saveUserTargets(actor: Actor, input: SaveTargetsInput): Pr
 
 async function snapshot(client: PoolClient, year: number, userId: string): Promise<TargetsAdminUser> {
   const [userResult, valueResult] = await Promise.all([
-    client.query(`select id::text as id, coalesce(nullif(trim(full_name), ''), email) as name, email, coalesce(weekly_target_total_activities, 0)::int as weekly_total from public.allowed_users where id = $1`, [userId]),
+    client.query(`select id::text as id, coalesce(nullif(trim(full_name), ''), email) as name, email, coalesce(weekly_target_total_activities, 0)::int as weekly_total, coalesce(departments, '{}'::text[]) as departments from public.allowed_users where id = $1`, [userId]),
     client.query(`${Q_VALUES} and tv.scope_user_id = $2`, [year, userId]),
   ]);
   const row = userResult.rows[0] as any;
-  const user: TargetsAdminUser = { id: String(row.id), name: String(row.name), email: String(row.email), weeklyTotal: Number(row.weekly_total ?? 0), yearly: {}, quarterly: {} };
+  const user: TargetsAdminUser = { id: String(row.id), name: String(row.name), email: String(row.email), weeklyTotal: Number(row.weekly_total ?? 0), departments: normalizeDepartments(row.departments), yearly: {}, quarterly: {} };
   for (const value of valueResult.rows as any[]) {
     if (!isTargetCode(value.code)) continue;
     const code: TargetCode = value.code;
