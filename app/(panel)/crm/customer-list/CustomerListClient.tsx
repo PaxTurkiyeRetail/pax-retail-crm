@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent, type MouseEvent as ReactMouseEvent } from 'react';
+import { FilterBar } from '@/components/filters/FilterBar';
 import {
   CUSTOMER_LIST_CATEGORIES,
   categoryLabel,
@@ -17,7 +18,6 @@ import {
   type CustomerListOwner,
   type CustomerListPayload,
 } from '@/lib/reports/customer-list-shared';
-import { FilterBar, ScopeLabel } from '@/components/filters/FilterBar';
 import { useUrlFilters } from '@/lib/filters/use-url-filters';
 import type { FilterOption, PageFilterConfig } from '@/lib/filters/schema';
 import { PSEUDO_OWNERS } from '@/lib/reports/live-board-shared';
@@ -317,14 +317,13 @@ export default function CustomerListClient() {
     >
       <section className="cl-hero">
         <div className="cl-hero-copy">
-          <span className="cl-eyebrow">Operasyon · Account Atama</span>
-          <h1>Account Atama <small>H · F · L · K</small></h1>
+          <span className="cl-eyebrow">Operasyon</span>
+          <h1>Account Atama</h1>
           <p>
-            Satış yönetiminin kişi bazlı firma dağılımı — kolon kişi, tablo kategori.
-            <b> H</b> Hunter · <b>F</b> Farmer · <b>L</b> Lead · <b>K</b> Kasa Firması.
+            Firmaların satış ekibine ve kategorilere dağılımı.
             {canManage
-              ? ' Düzenleme açık: bir firmayı tutup başka kişiye ya da kategoriye bırakın; çip menüsünden taşı, yeniden adlandır, kaldır.'
-              : ' Salt okunur görünüm — düzenleme yetkisi Admin ve Super Admin rollerinde.'}
+              ? ' Bir firmayı sürükleyip başka kişiye ya da kategoriye bırakabilirsiniz.'
+              : ' Salt okunur görünüm; düzenleme yetkisi Admin rollerinde.'}
           </p>
         </div>
         <div className="cl-hero-actions">
@@ -334,13 +333,11 @@ export default function CustomerListClient() {
 
       <FilterBar config={filterConfig} showScope={false} />
 
-      <ScopeLabel mode="snapshot" owner={filterConfig.options?.owner?.find((o) => o.value === ownerFilter)?.label} />
-
       <section className="cl-kpis" aria-label="Özet">
         <div className="cl-kpi total">
           <div className="cl-kpi-value">{totals.total.toLocaleString('tr-TR')}</div>
           <div className="cl-kpi-label">Toplam firma</div>
-          <div className="cl-kpi-hint">{owners.length} kişi · {lastUpdate?.updatedAt ? `son değişiklik ${formatStamp(lastUpdate.updatedAt)}${lastUpdate.updatedBy ? ` · ${lastUpdate.updatedBy.replace(/^migration:.*/, 'ilk yükleme')}` : ''}` : 'henüz kayıt yok'}</div>
+          <div className="cl-kpi-hint">{owners.length} kolon · {lastUpdate?.updatedAt ? `son değişiklik ${formatStamp(lastUpdate.updatedAt)}` : 'henüz kayıt yok'}</div>
         </div>
         {CUSTOMER_LIST_CATEGORIES.map((cat) => (
           <button

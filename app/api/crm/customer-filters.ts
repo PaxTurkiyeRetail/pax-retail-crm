@@ -103,11 +103,22 @@ export async function resolveVisibleCustomerIds(me: any, admin: any, isKoluParam
     if (result.error) return { ids: null, error: result.error.message };
     ids = idList(result.data);
   }
-  const deptFilter = resolveDepartmentFilter(isKoluParam, await getUserDepartments(me));
+  const allowedDepartments = await getUserDepartments(me);
+  const deptFilter = resolveDepartmentFilter(isKoluParam, allowedDepartments);
   if (deptFilter) {
     const deptResult = await admin.from('musteriler').select('id').in('is_kolu', deptFilter).limit(20000);
     if (deptResult.error) return { ids: null, error: deptResult.error.message };
-    intersect(idList(deptResult.data));
+    let deptIds = idList(deptResult.data);
+    // Kullanıcının kendi departman kısıtı, sahibi olduğu müşteriyi gizlemez: iş kolu yanlış/eksik
+    // girilmiş müşteri account'unun listesinden düşmesin. Çok departmanlı kullanıcı bilerek tek
+    // departman seçtiyse filtre aynen uygulanır.
+    const explicitPick = Boolean(allowedDepartments && allowedDepartments.length > 1 && deptFilter.length === 1);
+    if (allowedDepartments?.length && !explicitPick && me?.id) {
+      const ownResult = await admin.from('musteriler').select('id').eq('owner_user_id', me.id).limit(10000);
+      if (ownResult.error) return { ids: null, error: ownResult.error.message };
+      deptIds = Array.from(new Set([...deptIds, ...idList(ownResult.data)]));
+    }
+    intersect(deptIds);
   }
   const ownerId = canReadAny ? String(filters.ownerId ?? '').trim() : '';
   const ownerName = canReadAny ? escapeIlike(String(filters.ownerName ?? '')) : '';

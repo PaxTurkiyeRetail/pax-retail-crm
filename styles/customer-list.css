@@ -28,10 +28,11 @@
   flex-wrap: wrap;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 24px;
-  padding: 30px 34px;
+  align-items: center;
+  gap: 20px;
+  padding: 20px 26px;
   border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 26px;
+  border-radius: 22px;
   color: #fff;
   background:
     radial-gradient(circle at 88% 12%, rgba(255, 255, 255, 0.14), transparent 30%),
@@ -41,14 +42,14 @@
 .cl-shell .cl-hero-copy { position: relative; z-index: 1; max-width: 760px; }
 .cl-shell .cl-eyebrow {
   display: inline-flex; align-items: center; gap: 7px;
-  padding: 7px 11px; border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 999px;
+  padding: 4px 10px; border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 999px;
   background: rgba(255, 255, 255, 0.1);
-  font-size: 12px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase;
+  font-size: 11px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase;
 }
-.cl-shell .cl-hero h1 { margin: 16px 0 8px; font-size: clamp(26px, 2.6vw, 38px); line-height: 1.1; letter-spacing: -0.03em; color: #fff; }
+.cl-shell .cl-hero h1 { margin: 10px 0 4px; font-size: clamp(24px, 2.2vw, 30px); line-height: 1.1; letter-spacing: -0.03em; color: #fff; }
 /* 17.09: sayfa adı 'Account Atama' (Sinan); H/F/L/K kısaltması başlığın yanında küçük rozet. */
 .cl-shell .cl-hero h1 small { display: inline-block; margin-left: 10px; padding: 3px 10px; border-radius: 999px; background: rgba(255, 255, 255, 0.16); font-size: 13px; font-weight: 900; letter-spacing: 0.08em; vertical-align: middle; }
-.cl-shell .cl-hero p { margin: 0; color: rgba(255, 255, 255, 0.86); font-size: 14px; line-height: 1.65; }
+.cl-shell .cl-hero p { margin: 0; color: rgba(255, 255, 255, 0.86); font-size: 13.5px; line-height: 1.5; }
 .cl-shell .cl-hero p b { color: #fff; }
 .cl-shell .cl-hero-actions { position: relative; z-index: 1; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 
@@ -68,10 +69,10 @@
 .cl-shell .cl-btn:disabled { opacity: 0.55; cursor: not-allowed; }
 
 /* --- KPI kartları ------------------------------------------------------------ */
-.cl-shell .cl-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; }
+.cl-shell .cl-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
 .cl-shell .cl-kpi {
   display: block; width: 100%; text-align: left;
-  padding: 18px 20px; border: 1px solid var(--border); border-radius: 20px;
+  padding: 12px 14px; border: 1px solid var(--border); border-radius: 16px;
   background: var(--surface); color: var(--text); box-shadow: var(--shadow-sm);
   font: inherit; cursor: default;
 }
@@ -80,12 +81,12 @@
 .cl-shell .cl-kpi.active { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
 .cl-shell .cl-kpi-value {
   display: flex; align-items: center; gap: 10px;
-  font-size: 32px; font-weight: 900; line-height: 1.05; letter-spacing: -0.03em;
+  font-size: 24px; font-weight: 800; line-height: 1.1; letter-spacing: -0.03em;
   font-variant-numeric: tabular-nums; color: var(--text);
 }
 .cl-shell .cl-kpi.total .cl-kpi-value { color: var(--cl-accent); }
-.cl-shell .cl-kpi-label { margin-top: 6px; font-size: 14px; font-weight: 800; color: var(--text-2); }
-.cl-shell .cl-kpi-hint { margin-top: 4px; font-size: 12px; line-height: 1.5; color: var(--text-3); }
+.cl-shell .cl-kpi-label { margin-top: 4px; font-size: 13px; font-weight: 800; color: var(--text-2); }
+.cl-shell .cl-kpi-hint { margin-top: 2px; font-size: 12px; line-height: 1.4; color: var(--text-3); }
 
 /* Kategori rozeti — chip token'ları (globals.css, iki temada tanımlı). */
 .cl-shell .cl-cat-badge {
