@@ -320,10 +320,9 @@ export default function QuoteBuilder({ showHero = false }: Props) {
   if (showHero) {
     return (
       <form className="pax-page-container" onSubmit={(e) => { e.preventDefault(); submit('sent'); }}>
-        <div className="pax-hero">
-          <span className="pax-hero-eyebrow">Yeni Teklif</span>
-          <h1 className="pax-hero-title">Quote Builder</h1>
-          <p className="pax-hero-description">Ürün + adet gir, sisteme fiyat barem seçsin.</p>
+        <div className="pax-hero" style={{ padding: '18px 20px', borderRadius: 18 }}>
+          <h1 className="pax-hero-title" style={{ fontSize: 28, marginBottom: 4 }}>Yeni Teklif</h1>
+          <p className="pax-hero-description">Ürün ve adet seçin; fiyat kademesi otomatik hesaplansın.</p>
         </div>
         {formContent}
       </form>

@@ -297,12 +297,11 @@ export default function SalesClient() {
 
   return (
     <div style={{ display: 'grid', gap: 16 }}>
-      <div className="pax-hero">
+      <div className="pax-hero" style={{ padding: '18px 20px', borderRadius: 18 }}>
         <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
           <div style={{ minWidth: 0 }}>
-            <span className="pax-hero-eyebrow">Ticari Operasyon</span>
-            <h1 className="pax-hero-title">Satışlar</h1>
-            <p className="pax-hero-description">Tekliften dönen ve teklifsiz girilen satışlar. Cihaz adedi ve tutar burada düzenlenir; ciro raporları aktif satışları sayar.</p>
+            <h1 className="pax-hero-title" style={{ fontSize: 28, marginBottom: 4 }}>Satışlar</h1>
+            <p className="pax-hero-description">Teklifli ve teklifsiz satışları, cihaz adetlerini ve tutarları yönetin.</p>
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <Link href="/crm/quotes" style={ghostLink}>Teklifler</Link>
@@ -312,10 +311,10 @@ export default function SalesClient() {
             {canCreate ? <button type="button" onClick={() => void openCreate()} style={heroPrimary}>+ Satış ekle</button> : null}
           </div>
         </div>
-        <div className="pax-hero-stats">
-          <div className="pax-hero-stat"><div className="pax-hero-stat-label">Satış · {periodLabel || 'Seçili dönem'}</div><div className="pax-hero-stat-value">{(summary?.sale_count ?? 0).toLocaleString('tr-TR')}</div></div>
-          <div className="pax-hero-stat"><div className="pax-hero-stat-label">Ciro · Seçili dönem</div><div className="pax-hero-stat-value">{usd(summary?.amount ?? 0)}</div></div>
-          <div className="pax-hero-stat"><div className="pax-hero-stat-label">Cihaz · Seçili dönem</div><div className="pax-hero-stat-value">{(summary?.devices ?? 0).toLocaleString('tr-TR')}</div></div>
+        <div className="pax-hero-stats" style={{ marginTop: 12, gap: 8 }}>
+          <div className="pax-hero-stat" style={heroStat}><div className="pax-hero-stat-label">Satış · {periodLabel || 'Seçili dönem'}</div><div className="pax-hero-stat-value">{(summary?.sale_count ?? 0).toLocaleString('tr-TR')}</div></div>
+          <div className="pax-hero-stat" style={heroStat}><div className="pax-hero-stat-label">Ciro · Seçili dönem</div><div className="pax-hero-stat-value">{usd(summary?.amount ?? 0)}</div></div>
+          <div className="pax-hero-stat" style={heroStat}><div className="pax-hero-stat-label">Cihaz · Seçili dönem</div><div className="pax-hero-stat-value">{(summary?.devices ?? 0).toLocaleString('tr-TR')}</div></div>
         </div>
       </div>
 
@@ -660,7 +659,8 @@ export default function SalesClient() {
   );
 }
 
-const surface: CSSProperties = { background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 22, padding: 16, boxShadow: 'var(--shadow)' };
+const surface: CSSProperties = { background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 14, padding: 14, boxShadow: 'var(--shadow)' };
+const heroStat: CSSProperties = { padding: '9px 12px', borderRadius: 12 };
 const primaryButton: CSSProperties = { minHeight: 42, padding: '0 16px', borderRadius: 14, background: '#0e6fc7', color: '#fff', border: 'none', fontWeight: 800, fontFamily: 'inherit', cursor: 'pointer' };
 const ghostButton: CSSProperties = { minHeight: 38, padding: '0 14px', borderRadius: 12, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer' };
 const ghostLink: CSSProperties = { display: 'inline-flex', alignItems: 'center', minHeight: 38, padding: '0 14px', borderRadius: 12, background: 'rgba(255,255,255,0.10)', border: '1px solid rgba(255,255,255,0.28)', color: 'white', textDecoration: 'none', fontWeight: 600, fontSize: 13, fontFamily: 'inherit', cursor: 'pointer' };

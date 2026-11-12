@@ -85,8 +85,8 @@ export default function ReportWizard({ datasets, letterheads, initial, onClose, 
 
   // CANLI önizleme: her değişiklikte 350 ms gecikmeyle çalışır; eski yanıtlar yok sayılır.
   useEffect(() => {
-    if (!def || step === 1 || !def.measures.length) { setResult(null); return; }
     const id = ++reqId.current;
+    if (!def || step === 1 || !def.measures.length) { setResult(null); setLoading(false); return; }
     const issue = definitionFilterIssue(def);
     if (issue) { setResult(null); setLoading(false); setError(issue); return; }
     setLoading(true);
@@ -95,7 +95,7 @@ export default function ReportWizard({ datasets, letterheads, initial, onClose, 
         .catch((e) => { if (id === reqId.current) { setResult(null); setError(friendlyError(e)); } })
         .finally(() => { if (id === reqId.current) setLoading(false); });
     }, 350);
-    return () => clearTimeout(t);
+    return () => { clearTimeout(t); if (reqId.current === id) reqId.current += 1; };
   }, [def, step]);
 
   const patch = (p: Partial<Def>) => setDef((d) => (d ? { ...d, ...p } : d));
@@ -153,7 +153,8 @@ export default function ReportWizard({ datasets, letterheads, initial, onClose, 
   const toggleGroup = (k: string) => {
     const meta = ds.dimensions.find((d) => d.key === k)!;
     const has = dims.some((d) => d.field === k);
-    const next = has ? dims.filter((d) => d.field !== k) : [...dims, { field: k, ...(meta.type === 'date' ? { grain: 'month' as const } : {}) }].slice(-3);
+    if (!has && dims.length >= 3) return;
+    const next = has ? dims.filter((d) => d.field !== k) : [...dims, { field: k, ...(meta.type === 'date' ? { grain: 'month' as const } : {}) }];
     const nv: VizType = next.length === 0 ? 'kpi' : viz === 'kpi' ? 'table' : viz;
     patch({ dimensions: next, visualization: { ...def.visualization, type: nv } });
   };
@@ -254,19 +255,25 @@ export default function ReportWizard({ datasets, letterheads, initial, onClose, 
             <fieldset className="space-y-2">
               <legend className="text-sm font-semibold">Rakamlar</legend>
               <div className="flex flex-wrap gap-2">
-                {ds.measures.map((m) => <Chip key={m.key} on={def.measures.includes(m.key)} onClick={() => toggleMeasure(m.key)} title={m.description ?? undefined}>{m.label}</Chip>)}
+                {ds.measures.map((m) => <Chip key={m.key} on={def.measures.includes(m.key)} disabled={!def.measures.includes(m.key) && def.measures.length >= 12} onClick={() => toggleMeasure(m.key)} title={m.description ?? undefined}>{m.label}</Chip>)}
               </div>
+              <Help>{def.measures.length}/12 rakam seçili. En az bir rakam gerekir.</Help>
             </fieldset>
 
             <fieldset className="space-y-2">
               <legend className="text-sm font-semibold">Neye göre grupla?</legend>
               <div className="flex flex-wrap gap-2">
-                {groupChips.map((g) => <Chip key={g.key} tone="accent" on={dims.some((d) => d.field === g.key)} onClick={() => toggleGroup(g.key)}>{g.type === 'date' ? `Zaman (${g.label})` : g.label}</Chip>)}
+                {groupChips.map((g) => <Chip key={g.key} tone="accent" on={dims.some((d) => d.field === g.key)} disabled={dims.length >= 3 && !dims.some((d) => d.field === g.key)} onClick={() => toggleGroup(g.key)}>{g.type === 'date' ? `Zaman (${g.label})` : g.label}</Chip>)}
                 <select aria-label="Diğer gruplama" className="pax-input rounded-full py-1 text-sm" value="" onChange={(e) => e.target.value && toggleGroup(e.target.value)}>
                   <option value="">Diğer…</option>
-                  {ds.dimensions.filter((d) => !groupChips.some((g) => g.key === d.key)).map((d) => <option key={d.key} value={d.key}>{d.group ? `${d.group} · ` : ''}{d.label}{dims.some((x) => x.field === d.key) ? ' ✓' : ''}</option>)}
+                  {ds.dimensions.filter((d) => !groupChips.some((g) => g.key === d.key)).map((d) => <option key={d.key} value={d.key} disabled={dims.length >= 3 && !dims.some((x) => x.field === d.key)}>{d.group ? `${d.group} · ` : ''}{d.label}{dims.some((x) => x.field === d.key) ? ' ✓' : ''}</option>)}
                 </select>
               </div>
+              <Help>{dims.length}/3 kırılım seçili. Yeni kırılım için önce bir seçimi kaldırabilirsin.</Help>
+              {dims.length > 0 && <div className="flex flex-wrap items-center gap-2" aria-label="Seçili kırılımlar">
+                <span className="text-xs text-[var(--muted)]">Gösterim sırası:</span>
+                {dims.map((d, index) => <button key={d.field} type="button" className="pax-btn inline-flex items-center gap-1 text-xs" onClick={() => toggleGroup(d.field)} aria-label={`${ds.dimensions.find((x) => x.key === d.field)?.label ?? d.field} kırılımını kaldır`}>{index + 1}. {ds.dimensions.find((x) => x.key === d.field)?.label ?? d.field}<X size={13} aria-hidden /></button>)}
+              </div>}
               {dims.filter((d) => ds.dimensions.find((x) => x.key === d.field)?.type === 'date').map((d) => (
                 <div key={d.field} className="flex flex-wrap items-center gap-1 text-sm">
                   <span className="text-xs text-[var(--muted)]">Zaman adımı:</span>

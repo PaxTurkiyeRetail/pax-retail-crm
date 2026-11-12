@@ -3,6 +3,8 @@ import { revalidatePath } from "next/cache";
 import { requirePermissionOrThrow, userHasPermission } from "@/lib/authz";
 import { tryRecordAuditEvent } from "@/lib/audit";
 import { createPgAdminClient } from "@/lib/pg/admin";
+import { customerNameKey } from '@/lib/customer-name';
+import { CustomerNameConflictError, withCustomerNameGuard } from '@/lib/customer-name-conflict';
 import { HAVUZ_ACCOUNT_NAME, LEGACY_INTEGRATION_ENUM_VALUES } from "@/lib/crm";
 import { resolveCustomerTypeForSector } from "@/lib/report-only-customers";
 import { assertActiveParameterValue } from "@/lib/system-parameters";
@@ -50,15 +52,7 @@ export async function POST(req: Request) {
     }
 
     const admin = createPgAdminClient();
-    const { data: existingCustomer, error: dupError } = await admin
-        .from('musteriler')
-        .select('id')
-        .ilike('musteri', musteri)
-        .maybeSingle();
-    if (dupError) return NextResponse.json({ message: dupError.message }, { status: 500 });
-    if (existingCustomer) {
-        return NextResponse.json({ message: 'Mevcut müşteri: bu isimde bir kayıt zaten var.' }, { status: 409 });
-    }
+    if (!customerNameKey(musteri)) return NextResponse.json({ message: 'Müşteri adı harf veya rakam içermelidir.' }, { status: 400 });
 
     const sektor =
         body.sektor != null && String(body.sektor).trim()
@@ -150,28 +144,19 @@ export async function POST(req: Request) {
         sorumlu = String(ownerUser.full_name ?? ownerUser.email ?? '').trim();
     }
 
-    const { data, error } = await admin
-        .from("musteriler")
-        .insert({
-            musteri,
-            sektor,
-            entegrasyon_tipi: entegrasyon_tipi && legacyIntegrationValues.has(entegrasyon_tipi) ? entegrasyon_tipi : null,
-            integration_type_key: entegrasyon_tipi,
-            satis_olasiligi,
-            sorumlu,
-            owner_user_id: ownerUserId,
-            customer_type: customerType,
-            pipeline_policy: pipelinePolicy,
-            is_kolu: isKolu,
-        })
-        .select("id")
-        .single();
-
-    if (error) {
-        return NextResponse.json(
-            { message: error.message },
-            { status: 400 }
-        );
+    let data: { id: string };
+    try {
+        data = await withCustomerNameGuard(musteri, null, async (client) => {
+            const result = await client.query<{ id: string }>(
+                `insert into public.musteriler (musteri, sektor, entegrasyon_tipi, integration_type_key, satis_olasiligi, sorumlu, owner_user_id, customer_type, pipeline_policy, is_kolu)
+                 values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) returning id`,
+                [musteri, sektor, entegrasyon_tipi && legacyIntegrationValues.has(entegrasyon_tipi) ? entegrasyon_tipi : null, entegrasyon_tipi, satis_olasiligi, sorumlu, ownerUserId, customerType, pipelinePolicy, isKolu],
+            );
+            return result.rows[0];
+        });
+    } catch (error: any) {
+        const duplicate = error instanceof CustomerNameConflictError || (error?.code === '23505' && error?.constraint === 'musteriler_name_key_guard');
+        return NextResponse.json({ message: duplicate ? 'Mevcut müşteri: bu isimde bir kayıt zaten var.' : error?.message || 'Müşteri kaydedilemedi.' }, { status: duplicate ? 409 : 400 });
     }
 
     // Hunter / Farmer etiketi künyede (musteri_kunye_v2.satici_etiketi) tutulur;

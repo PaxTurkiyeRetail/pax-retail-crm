@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
 import { assertOwnedResourceAccess, requireCrmAccessOrThrow, userHasPermission } from '@/lib/authz';
 import { createPgAdminClient } from '@/lib/pg/admin';
+import { customerNameKey } from '@/lib/customer-name';
+import { CustomerNameConflictError, withCustomerNameGuard } from '@/lib/customer-name-conflict';
 import { HAVUZ_ACCOUNT_NAME, LEGACY_INTEGRATION_ENUM_VALUES } from '@/lib/crm';
 import { resolveCustomerTypeForSector } from '@/lib/report-only-customers';
 import { tryRecordAuditEvent } from '@/lib/audit';
@@ -64,16 +66,7 @@ export async function POST(req: Request) {
   }
   const satis_olasiligi: string | null = satisOlasiligiProvided ? satisOlasiligiInput : (currentRow.satis_olasiligi ?? null);
 
-  if (musteri !== String(currentRow.musteri ?? '').trim().toLocaleUpperCase('tr-TR')) {
-    const { data: dupCustomer, error: dupError } = await admin
-      .from('musteriler')
-      .select('id')
-      .ilike('musteri', musteri)
-      .neq('id', musteriId)
-      .maybeSingle();
-    if (dupError) return NextResponse.json({ message: dupError.message }, { status: 500 });
-    if (dupCustomer) return NextResponse.json({ message: 'Mevcut müşteri: bu isimde bir kayıt zaten var.' }, { status: 409 });
-  }
+  if (!customerNameKey(musteri)) return NextResponse.json({ message: 'Müşteri adı harf veya rakam içermelidir.' }, { status: 400 });
 
   const currentIntegration = String(currentRow.integration_type_key ?? currentRow.entegrasyon_tipi ?? '').trim() || null;
   // İş Kolu: gönderilmediyse mevcut değer korunur (eski istemci uyumu); hiç yoksa Retail.
@@ -165,26 +158,21 @@ export async function POST(req: Request) {
   // (Entegrasyon/Donanim Firmasi) yetim kalmasin diye temizlenir.
   const isOrtagiTipi = customerType === 'business_partner' ? (currentRow.is_ortagi_tipi ?? null) : null;
 
-  const { error } = await admin
-    .from('musteriler')
-    .update({
-      musteri,
-      sektor,
-      entegrasyon_tipi: entegrasyon_tipi && legacyIntegrationValues.has(entegrasyon_tipi) ? entegrasyon_tipi : null,
-      integration_type_key: entegrasyon_tipi,
-      satis_olasiligi,
-      sorumlu: resolvedOwner,
-      owner_user_id: ownerUserId,
-      customer_type: customerType,
-      is_ortagi_tipi: isOrtagiTipi,
-      pipeline_policy: pipelinePolicy,
-      is_kolu: isKolu,
-      updated_by: actorName,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', musteriId);
-
-  if (error) return NextResponse.json({ message: error.message }, { status: 400 });
+  try {
+    await withCustomerNameGuard(musteri, musteriId, async (client) => {
+      const result = await client.query(
+        `update public.musteriler set musteri=$1, sektor=$2, entegrasyon_tipi=$3, integration_type_key=$4,
+         satis_olasiligi=$5, sorumlu=$6, owner_user_id=$7, customer_type=$8, is_ortagi_tipi=$9,
+         pipeline_policy=$10, is_kolu=$11, updated_by=$12, updated_at=$13 where id=$14`,
+        [musteri, sektor, entegrasyon_tipi && legacyIntegrationValues.has(entegrasyon_tipi) ? entegrasyon_tipi : null, entegrasyon_tipi,
+          satis_olasiligi, resolvedOwner, ownerUserId, customerType, isOrtagiTipi, pipelinePolicy, isKolu, actorName, new Date().toISOString(), musteriId],
+      );
+      if (result.rowCount !== 1) throw new Error('Müşteri bulunamadı.');
+    });
+  } catch (error: any) {
+    const duplicate = error instanceof CustomerNameConflictError || (error?.code === '23505' && error?.constraint === 'musteriler_name_key_guard');
+    return NextResponse.json({ message: duplicate ? 'Mevcut müşteri: bu isimde bir kayıt zaten var.' : error?.message || 'Müşteri güncellenemedi.' }, { status: duplicate ? 409 : 400 });
+  }
   await tryRecordAuditEvent({ actorId: me.id, actorEmail: me.email, action: 'customer.updated', resourceType: 'customer', resourceId: musteriId, before: currentRow, after: { musteri, sektor, entegrasyon_tipi, satis_olasiligi, sorumlu: resolvedOwner, owner_user_id: ownerUserId, customer_type: customerType, pipeline_policy: pipelinePolicy, is_kolu: isKolu } });
   revalidatePath('/crm/customers');
   return NextResponse.json({ ok: true, message: 'Müşteri kaydı güncellendi.' });

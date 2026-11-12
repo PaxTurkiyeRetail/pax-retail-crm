@@ -82,9 +82,9 @@ export default function PersonStats() {
   return (
     <main className="pax-page-container">
       <style jsx>{`
-        .card { background:var(--surface); border:1px solid var(--border); border-radius:20px; padding:20px; box-shadow:var(--shadow-sm); }
+        .card { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:14px; box-shadow:var(--shadow-sm); }
         .kicker { font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.06em; color:var(--text-3); margin-bottom:12px; }
-        .big { font-size:36px; font-weight:900; letter-spacing:-.04em; color:var(--text); }
+        .big { font-size:24px; font-weight:800; font-variant-numeric:tabular-nums; color:var(--text); }
         .sub { font-size:12px; color:var(--text-3); margin-top:4px; }
         .g4 { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
         .g2 { display:grid; grid-template-columns:1fr 1fr; gap:14px; }

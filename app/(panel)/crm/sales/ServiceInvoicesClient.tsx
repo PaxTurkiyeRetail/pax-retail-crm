@@ -283,18 +283,16 @@ export default function ServiceInvoicesClient() {
 
   return (
     <div style={{ display: 'grid', gap: 16 }}>
-      <div className="pax-hero">
-        <span className="pax-hero-eyebrow">Ticari Operasyon</span>
-        <h1 className="pax-hero-title">Hizmet Faturaları</h1>
+      <div className="pax-hero" style={{ padding: '18px 20px', borderRadius: 18 }}>
+        <h1 className="pax-hero-title" style={{ fontSize: 28, marginBottom: 4 }}>Hizmet Faturaları</h1>
         <p className="pax-hero-description">
-          KasaPOS entegrasyonu, TMS, Max Store, AirViewer gibi <b>aylık hizmetlerin</b> faturaları. Her firma için
-          her ay bir kayıt beklenir; geçmiş aya da girilebilir. TL ve USD ayrı toplanır — cihaz cirosuna karışmaz.
+          Aylık hizmet faturalarını takip edin; TL ve USD tutarları ayrı gösterilir.
         </p>
-        <div className="pax-hero-stats">
-          <div className="pax-hero-stat"><div className="pax-hero-stat-label">{allMonths ? `${period.slice(0, 4)} · TL` : `${periodLabel(`${period}-01`)} · TL`}</div><div className="pax-hero-stat-value">{summary ? fmtServiceMoney((allMonths ? summary.ytd : summary.period_totals).TRY.amount, 'TRY') : '—'}</div></div>
-          <div className="pax-hero-stat"><div className="pax-hero-stat-label">{allMonths ? `${period.slice(0, 4)} · USD` : `${periodLabel(`${period}-01`)} · USD`}</div><div className="pax-hero-stat-value">{summary ? fmtServiceMoney((allMonths ? summary.ytd : summary.period_totals).USD.amount, 'USD') : '—'}</div></div>
-          <div className="pax-hero-stat"><div className="pax-hero-stat-label">Bu Yıl Toplam</div><div className="pax-hero-stat-value" style={{ fontSize: 20 }}>{summary ? totalsText(summary.ytd) : '—'}</div></div>
-          <div className="pax-hero-stat"><div className="pax-hero-stat-label">Bu Ay Eksik Firma</div><div className="pax-hero-stat-value">{summary ? missing.length : '—'}</div></div>
+        <div className="pax-hero-stats" style={{ marginTop: 12, gap: 8 }}>
+          <div className="pax-hero-stat" style={heroStat}><div className="pax-hero-stat-label">{allMonths ? `${period.slice(0, 4)} · TL` : `${periodLabel(`${period}-01`)} · TL`}</div><div className="pax-hero-stat-value">{summary ? fmtServiceMoney((allMonths ? summary.ytd : summary.period_totals).TRY.amount, 'TRY') : '—'}</div></div>
+          <div className="pax-hero-stat" style={heroStat}><div className="pax-hero-stat-label">{allMonths ? `${period.slice(0, 4)} · USD` : `${periodLabel(`${period}-01`)} · USD`}</div><div className="pax-hero-stat-value">{summary ? fmtServiceMoney((allMonths ? summary.ytd : summary.period_totals).USD.amount, 'USD') : '—'}</div></div>
+          {!allMonths ? <div className="pax-hero-stat" style={heroStat}><div className="pax-hero-stat-label">Bu Yıl Toplam</div><div className="pax-hero-stat-value" style={{ fontSize: 20 }}>{summary ? totalsText(summary.ytd) : '—'}</div></div> : null}
+          {!allMonths ? <div className="pax-hero-stat" style={heroStat}><div className="pax-hero-stat-label">Bu Ay Eksik Firma</div><div className="pax-hero-stat-value">{summary ? missing.length : '—'}</div></div> : null}
         </div>
         <div style={{ position: 'relative', zIndex: 1, display: 'flex', gap: 10, marginTop: 14, flexWrap: 'wrap' }}>
           {canCreate ? <button type="button" onClick={() => void openCreate()} style={{ ...ghostLink, border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 14 }}>+ Hizmet Faturası</button> : null}
@@ -561,13 +559,14 @@ export default function ServiceInvoicesClient() {
   );
 }
 
-const surface: CSSProperties = { background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 22, padding: 16, boxShadow: 'var(--shadow)' };
+const surface: CSSProperties = { background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 14, padding: 14, boxShadow: 'var(--shadow)' };
+const heroStat: CSSProperties = { padding: '9px 12px', borderRadius: 12 };
 const primaryButton: CSSProperties = { minHeight: 42, padding: '0 16px', borderRadius: 14, background: '#0e6fc7', color: '#fff', border: 'none', fontWeight: 800, fontFamily: 'inherit', cursor: 'pointer' };
 const ghostButton: CSSProperties = { minHeight: 38, padding: '0 14px', borderRadius: 12, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer' };
 const ghostLink: CSSProperties = { display: 'inline-flex', alignItems: 'center', minHeight: 40, padding: '0 14px', borderRadius: 12, background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.2)', color: 'white', textDecoration: 'none', fontWeight: 700 };
 const inputStyle: CSSProperties = { minHeight: 42, borderRadius: 14, border: '1px solid var(--border)', padding: '0 12px', background: 'var(--surface)', color: 'var(--text)', fontFamily: 'inherit', fontSize: 14, width: '100%' };
-const tableHead: CSSProperties = { textAlign: 'left', padding: '0 12px 10px', color: 'var(--text-2)', fontWeight: 800, fontSize: 12, letterSpacing: '.06em', textTransform: 'uppercase' };
-const tableCell: CSSProperties = { padding: '14px 12px', verticalAlign: 'top', color: 'var(--text)' };
+const tableHead: CSSProperties = { textAlign: 'left', padding: '9px 12px', color: 'var(--text-2)', fontWeight: 700, fontSize: 11, letterSpacing: '.06em', textTransform: 'uppercase' };
+const tableCell: CSSProperties = { padding: '9px 12px', verticalAlign: 'middle', color: 'var(--text)', fontSize: 13 };
 const pillBase: CSSProperties = { display: 'inline-flex', alignItems: 'center', minHeight: 28, padding: '0 10px', borderRadius: 999, fontWeight: 800, fontSize: 12, border: '1px solid transparent' };
 const pillOk: CSSProperties = { background: 'var(--chip-green-bg)', color: 'var(--chip-green-color)', borderColor: 'var(--chip-green-bd)' };
 const pillMuted: CSSProperties = { background: 'var(--surface-2)', color: 'var(--text-2)', borderColor: 'var(--border)' };

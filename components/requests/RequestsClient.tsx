@@ -81,8 +81,8 @@ export default function RequestsClient({ userRole, userId, canManage, onNewReque
   return (
     <main className="pax-page-container">
       <style jsx>{`
-        .filters { background:var(--surface); border:1px solid var(--border); border-radius:20px; padding:14px 16px; display:grid; gap:10px; }
-        .filter-row { display:grid; grid-template-columns:1fr auto auto auto auto auto; gap:8px; align-items:end; }
+        .filters { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:12px 14px; display:grid; gap:10px; }
+        .filter-row { display:grid; grid-template-columns:minmax(180px,1fr) repeat(4,minmax(105px,auto)); gap:8px; align-items:end; }
         .ffield { display:grid; gap:4px; min-width:0; }
         .flabel { font-size:11px; font-weight:700; color:var(--text-3); }
         .sel { padding:10px 12px; border:1px solid var(--border); border-radius:12px; font-size:12px; background:var(--surface); color:var(--text); outline:none; cursor:pointer; }
@@ -92,11 +92,11 @@ export default function RequestsClient({ userRole, userId, canManage, onNewReque
         .new-btn { display:inline-flex; align-items:center; gap:5px; padding:10px 16px; background:linear-gradient(135deg,#1d4ed8,#2563eb); color:#fff; border-radius:12px; font-size:13px; font-weight:700; text-decoration:none; white-space:nowrap; }
 
         /* Card list (mobile-first) */
-        .req-list { display:grid; gap:8px; }
-        .req-card { background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:14px 16px; display:grid; gap:8px; text-decoration:none; transition:box-shadow .15s; }
+        .req-list { display:grid; gap:6px; }
+        .req-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:10px 14px; display:grid; grid-template-columns:minmax(180px,1.6fr) minmax(180px,1.2fr) minmax(160px,1fr); align-items:center; gap:12px; text-decoration:none; transition:box-shadow .15s; }
         .req-card:hover { box-shadow:var(--shadow-md); border-color:var(--accent-border); }
-        .req-card-top { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
-        .req-title { font-size:14px; font-weight:700; color:var(--text); line-height:1.4; min-width:0; }
+        .req-card-top { display:flex; justify-content:space-between; align-items:center; gap:10px; }
+        .req-title { font-size:13px; font-weight:800; color:var(--text); line-height:1.35; min-width:0; overflow-wrap:anywhere; }
         .req-meta  { display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
         .req-footer { display:flex; justify-content:space-between; align-items:center; gap:8px; }
         .req-who   { font-size:12px; color:var(--text-2); font-weight:600; }
@@ -107,6 +107,7 @@ export default function RequestsClient({ userRole, userId, canManage, onNewReque
         .pager-btn.active { background:linear-gradient(135deg,#1d4ed8,#2563eb); color:#fff; border-color:transparent; }
         .pager-btn:disabled { opacity:.4; cursor:default; }
 
+        @media (max-width:900px) { .req-card { grid-template-columns:1fr; gap:6px; } .filter-row { grid-template-columns:repeat(2,minmax(0,1fr)); } }
         @media (max-width:640px) {
           .filter-row { grid-template-columns:1fr; }
           .filter-extras { display:block; width:100%; }
@@ -155,7 +156,6 @@ export default function RequestsClient({ userRole, userId, canManage, onNewReque
               </select>
             </label>
           )}
-          <button onClick={() => onNewRequest?.()} className="new-btn" style={{ border:'none', cursor:'pointer' }}>+ Yeni</button>
         </div>
         {!isAdmin && (
           <label style={{ display:'flex', alignItems:'center', gap:8, fontSize:13, color:'var(--text-2)', cursor:'pointer' }}>
@@ -168,7 +168,6 @@ export default function RequestsClient({ userRole, userId, canManage, onNewReque
       {/* List header */}
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'2px 4px' }}>
         <span style={{ fontSize:12, color:'var(--text-3)', fontWeight:600 }}>{total.toLocaleString('tr-TR')} kayıt · sayfa {page}/{totalPages}</span>
-        {isAdmin && <Link href="/requests/dashboard" style={{ fontSize:12, color:'var(--accent)', fontWeight:700, textDecoration:'none' }}>Dashboard →</Link>}
       </div>
 
       {/* Cards */}
@@ -176,7 +175,7 @@ export default function RequestsClient({ userRole, userId, canManage, onNewReque
         <div style={{ padding:40, textAlign:'center', color:'var(--text-3)', fontSize:13 }}>Yükleniyor...</div>
       ) : rows.length === 0 ? (
         <div style={{ padding:40, textAlign:'center', color:'var(--text-3)', fontSize:13, background:'var(--surface)', border:'1px solid var(--border)', borderRadius:20 }}>
-          Talep bulunamadı. <Link href="/requests/new" style={{ color:'var(--accent)', fontWeight:700 }}>Yeni talep oluştur →</Link>
+          Talep bulunamadı. {onNewRequest ? <button type="button" onClick={onNewRequest} style={{ border:0, background:'none', color:'var(--accent)', fontWeight:700, cursor:'pointer' }}>Yeni talep oluştur →</button> : <Link href="/requests/new" style={{ color:'var(--accent)', fontWeight:700 }}>Yeni talep oluştur →</Link>}
         </div>
       ) : (
         <div className="req-list">

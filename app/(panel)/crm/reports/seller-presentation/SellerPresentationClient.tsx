@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import '@/styles/reports-weekly-management-presentation.css';
 import { appToast } from '@/lib/app-toast';
-import { ScopeLabel } from '@/components/filters/FilterBar';
 import { DEPARTMENTS } from '@/lib/departments';
 
 type Customer = {
@@ -100,12 +99,6 @@ function numberFormat(value: number) {
 
 function moneyFormat(value: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value || 0);
-}
-
-function formatDate(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value || '-';
-  return new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(date);
 }
 
 function buildMarkdown(payload: Payload) {
@@ -214,7 +207,6 @@ export default function SellerPresentationPage() {
 
   const printDeck = () => window.print();
   const departmentOptions = DEPARTMENTS.filter((d) => !payload.allowedDepartments?.length || payload.allowedDepartments.includes(d));
-  const scopeDepartment = department || (departmentOptions.length === 1 ? departmentOptions[0] : 'Tüm departmanlar');
   const combinedWeeklyItems = useMemo(() => buildCombinedWeeklyItems(payload), [payload]);
   const sellerSelected = Boolean(owner);
   const canDownloadPptx = sellerSelected && Boolean(payload.customers.length) && !loading && !downloadingPptx;
@@ -227,11 +219,10 @@ export default function SellerPresentationPage() {
   return (
     <main className="wmp-page pax-page-container">
       <section className="wmp-hero">
-        <span className="wmp-eyebrow">Rapor Merkezi · Satışçı Sunumu</span>
-        <h1>Satışçı Sunumu</h1>
-        <p>
-          Seçilen satışçıya/accounta bağlı müşterileri ve sadece o accountun aktivitelerini PPTX şablonuna basan özel sunum ekranı. Toplu indirme yoktur; her satışçı ayrı filtrelenip ayrı indirilir.
-        </p>
+        <div className="wmp-hero-copy">
+          <h1>Satışçı Sunumu</h1>
+          <p>Seçilen satışçının müşterileri ve aktiviteleri; her satışçı ayrı PPTX olarak iner.</p>
+        </div>
         <div className="wmp-actions">
           <button onClick={() => void load()} disabled={loading}>{loading ? 'Yükleniyor...' : '↻ Yenile'}</button>
           <button
@@ -272,15 +263,9 @@ export default function SellerPresentationPage() {
             </select>
           </label>
         </div>
-        {!sellerSelected ? (
-          <div className="wmp-selection-warning">
-            <strong>Satışçı seçimi zorunlu.</strong> PPTX indirmek için önce yukarıdan bir Satışçı / Account seçmelisin. Seçim yapılana kadar indirme butonu kapalıdır.
-          </div>
-        ) : null}
         {message ? <div className="wmp-message">{message}</div> : null}
       </section>
 
-      <ScopeLabel period={`${formatDate(from)} – ${formatDate(to)}`} department={scopeDepartment} owner={owner || 'Tüm portföy'} />
       <section className="wmp-kpi-grid">
         {[
           ['Toplam Firma', numberFormat(payload.summary.totalAccounts)],
@@ -295,7 +280,7 @@ export default function SellerPresentationPage() {
           ['Teklif Tutarı', moneyFormat(payload.summary.quoteAmount)],
           ['Künye Tamamlama', `%${payload.summary.kunyeCoveragePct}`],
         ].map(([label, value]) => (
-          <div className={`wmp-kpi-card${label === 'Teklif Tutarı' ? ' offer-amount' : ''}`} key={label}><span>{label}</span><strong>{value}</strong><ScopeLabel mode={PERIOD_KPIS.has(label) ? 'period' : 'snapshot'} /></div>
+          <div className={`wmp-kpi-card${label === 'Teklif Tutarı' ? ' offer-amount' : ''}${PERIOD_KPIS.has(label) ? ' period' : ''}`} key={label}><span>{label}</span><strong>{value}</strong><small>{PERIOD_KPIS.has(label) ? 'Seçili dönem' : 'Anlık'}</small></div>
         ))}
       </section>
 

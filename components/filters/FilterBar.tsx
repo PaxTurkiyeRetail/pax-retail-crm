@@ -29,6 +29,8 @@ type CommonProps = {
   extraFields?: ReactNode;
   /** false → kapsam satırı gizli. */
   showScope?: boolean;
+  /** Place search on its own first row for search-led lists. */
+  prominentSearch?: boolean;
 };
 
 type Api = {
@@ -48,9 +50,9 @@ export function FilterBar(props: CommonProps & ({ mode?: 'auto' } | { mode: 'for
   return <AutoFilterBar {...props} />;
 }
 
-function AutoFilterBar({ config, allowedDepartments, actions, extraFields, showScope = true }: CommonProps) {
+function AutoFilterBar({ config, allowedDepartments, actions, extraFields, showScope = true, prominentSearch = false }: CommonProps) {
   const api = useUrlFilters(config, { allowedDepartments });
-  return <FilterBody api={api} config={config} allowedDepartments={allowedDepartments} actions={actions} extraFields={extraFields} showScope={showScope} auto />;
+  return <FilterBody api={api} config={config} allowedDepartments={allowedDepartments} actions={actions} extraFields={extraFields} showScope={showScope} prominentSearch={prominentSearch} auto />;
 }
 
 /** Sayfaya özel select için standart görünümlü alan. */
@@ -62,7 +64,7 @@ export function FilterSelectField({ label, value, onChange, children }: { label:
   );
 }
 
-function FormFilterBar({ config, allowedDepartments, actions, extraFields, showScope = true, values, action }: CommonProps & { values: FilterValues; action?: string }) {
+function FormFilterBar({ config, allowedDepartments, actions, extraFields, showScope = true, prominentSearch = false, values, action }: CommonProps & { values: FilterValues; action?: string }) {
   const [draft, setDraft] = useState<FilterValues>(values);
   useEffect(() => setDraft(values), [values]);
   const api: Api = {
@@ -83,7 +85,7 @@ function FormFilterBar({ config, allowedDepartments, actions, extraFields, showS
         const v = draft[k];
         return v && config.defaults?.[k] !== v ? <input key={k} type="hidden" name={k} value={v} /> : null;
       })}
-      <FilterBody api={api} config={config} allowedDepartments={allowedDepartments} actions={actions} extraFields={extraFields} showScope={showScope} auto={false} />
+      <FilterBody api={api} config={config} allowedDepartments={allowedDepartments} actions={actions} extraFields={extraFields} showScope={showScope} prominentSearch={prominentSearch} auto={false} />
     </form>
   );
 }
@@ -132,8 +134,8 @@ function SearchInput({ value, onChange, auto, label }: { value: string; onChange
   );
 }
 
-function FilterBody({ api, config, allowedDepartments, actions, extraFields, showScope, auto }: {
-  api: Api; config: PageFilterConfig; allowedDepartments?: Department[] | null; actions?: ReactNode; extraFields?: ReactNode; showScope: boolean; auto: boolean;
+function FilterBody({ api, config, allowedDepartments, actions, extraFields, showScope, prominentSearch, auto }: {
+  api: Api; config: PageFilterConfig; allowedDepartments?: Department[] | null; actions?: ReactNode; extraFields?: ReactNode; showScope: boolean; prominentSearch: boolean; auto: boolean;
 }) {
   const { values, set, remove, reset, activeCount } = api;
   const has = (k: FilterKey) => config.keys.includes(k);
@@ -181,11 +183,12 @@ function FilterBody({ api, config, allowedDepartments, actions, extraFields, sho
   if (has('role')) fields.push(selectFor('role', config.options?.role ?? []));
   if (has('status')) fields.push(selectFor('status', config.options?.status ?? []));
   if (has('q')) {
-    fields.push(
-      <StackField key="q" label={label('q')}>
+    const searchField = <div key="q" className={prominentSearch ? 'col-span-full rounded-xl border border-accent/25 bg-accent-soft/30 p-2' : ''}>
+      <StackField label={label('q')}>
         <SearchInput value={values.q ?? ''} label={label('q')} auto={auto} onChange={(v) => set({ q: v || undefined })} />
-      </StackField>,
-    );
+      </StackField>
+    </div>;
+    if (prominentSearch) fields.unshift(searchField); else fields.push(searchField);
   }
   if (isCustom && (has('from') || has('to'))) {
     if (has('from')) fields.push(

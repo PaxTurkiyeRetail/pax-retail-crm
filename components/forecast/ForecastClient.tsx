@@ -340,7 +340,7 @@ export default function ForecastClient() {
 
   const cards = [
     { label: scope === 'all' ? 'Tüm Portföy' : 'Benim Portföyüm', value: numberFormat(summary.totalCustomers), hint: scope === 'all' ? 'Tüm müşteri havuzu' : (ownerName ? `${ownerName} portföyü` : 'Giriş yapan kullanıcı'), tone: 'slate' },
-    { label: 'Forecast Girilen', value: numberFormat(summary.enteredCustomers), hint: 'Kayıt tamamlanan müşteri', tone: 'green' },
+    { label: 'Forecast Girilen', value: numberFormat(summary.enteredCustomers), hint: `Portföyün %${summary.completionRate}’si`, tone: 'green' },
     { label: 'Aksiyon Bekleyen', value: numberFormat(summary.missingCustomers), hint: 'Forecast girişi bekleyen müşteri', tone: 'red' },
     { label: 'Toplam Adet', value: numberFormat(summary.totalQuantity), hint: 'Seçili filtre toplamı', tone: 'blue' },
   ];
@@ -348,7 +348,6 @@ export default function ForecastClient() {
   return (
     <main className="forecast-page premium-workspace">
       <section className="pax-hero forecast-hero">
-        <span className="pax-hero-eyebrow">CRM Forecast</span>
         <h1 className="pax-hero-title">Forecast</h1>
         <p className="pax-hero-description">Müşteri bazında ürün, adet ve dönem tahminlerini girin ve takip edin.</p>
       </section>
@@ -372,19 +371,13 @@ export default function ForecastClient() {
         ))}
       </section>
 
-      <section className="premium-filter-card">
-        <div className="premium-section-head compact">
-          <div>
-            <span>Filtreler</span>
-            <h2>Portföy görünümünü daralt</h2>
-          </div>
-          <button type="button" className="premium-btn secondary" onClick={() => { setQ(''); setStatus(''); setYear(''); setMonth(''); setPage(1); }}>Temizle</button>
-        </div>
+      <section className="premium-filter-card forecast-filter-card" aria-label="Forecast filtreleri">
         <div className="premium-filter-grid forecast-filter-grid">
           <label className="premium-field"><span>Arama</span><input value={q} onChange={(event) => setQ(event.target.value)} placeholder="Müşteri, sektör veya account ara" /></label>
           <label className="premium-field"><span>Forecast Durumu</span><select value={status} onChange={(event) => setStatus(event.target.value)}><option value="">Tümü</option><option value="entered">Forecast girilenler</option><option value="missing">Forecast eksikler</option></select></label>
           <label className="premium-field"><span>Ay</span><select value={month} onChange={(event) => setMonth(event.target.value)}><option value="">Tüm Aylar</option>{options.months.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
           <label className="premium-field"><span>Yıl</span><select value={year} onChange={(event) => setYear(event.target.value)}><option value="">Tüm Yıllar</option>{options.years.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
+          <button type="button" className="premium-btn secondary forecast-filter-clear" onClick={() => { setQ(''); setStatus(''); setYear(''); setMonth(''); setPage(1); }}>Temizle</button>
         </div>
       </section>
 
@@ -438,23 +431,13 @@ export default function ForecastClient() {
       <section className="premium-table-card forecast-table-card">
         <div className="premium-section-head compact">
           <div>
-            <span>Müşteri Listesi</span>
-            <h2>{numberFormat(total)} müşteri · Sayfa {page}/{totalPages}</h2>
+            <h2>Müşteri Listesi <span className="forecast-count">{numberFormat(total)}</span></h2>
+            <p>Sayfa {page}/{totalPages}</p>
           </div>
           <div className="premium-actions">
             <select aria-label="Sayfa boyutu" value={String(pageSize)} onChange={(event) => setPageSize(Number(event.target.value))} style={{ minHeight: 38, borderRadius: 10, border: '1px solid var(--border)', padding: '0 10px', background: 'var(--surface)', color: 'var(--text)', fontWeight: 600, fontSize: 13 }}>{PAGE_SIZE_OPTIONS.map((size) => <option key={size} value={size}>{size} / sayfa</option>)}</select>
             <button type="button" className="premium-btn secondary" disabled={page <= 1 || loading} onClick={() => setPage((value) => Math.max(1, value - 1))}>Önceki</button>
             <button type="button" className="premium-btn secondary" disabled={page >= totalPages || loading} onClick={() => setPage((value) => Math.min(totalPages, value + 1))}>Sonraki</button>
-          </div>
-        </div>
-
-        <div className="forecast-completion-strip">
-          <div className="forecast-completion-top">
-            <span>Forecast girilen müşteri oranı</span>
-            <strong>%{summary.completionRate}</strong>
-          </div>
-          <div className="forecast-completion-track" aria-hidden="true">
-            <i style={{ width: `${Math.max(0, Math.min(100, summary.completionRate))}%` }} />
           </div>
         </div>
 
@@ -472,11 +455,11 @@ export default function ForecastClient() {
             <article key={row.musteri_id} className={`forecast-list-row ${row.hasForecast ? 'entered' : 'missing'}`}>
               <div className="forecast-list-col customer">
                 <strong>{row.musteri}</strong>
-                <small>{row.sektor || '-'} {row.entegrasyon_tipi ? `· ${row.entegrasyon_tipi}` : ''}</small>
+                <small>{row.sektor || '—'} {row.entegrasyon_tipi ? `· ${row.entegrasyon_tipi}` : ''}</small>
               </div>
               <div className="forecast-list-col account">
                 <span className="forecast-col-label">Account</span>
-                <strong>{row.sorumlu || '-'}</strong>
+                <strong>{row.sorumlu || '—'}</strong>
               </div>
               <div className="forecast-list-col details">
                 <span className="forecast-col-label">Mevcut Forecast</span>

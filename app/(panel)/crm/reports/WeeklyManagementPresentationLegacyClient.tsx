@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import '@/styles/reports-weekly-management-presentation.css';
 import { appToast } from '@/lib/app-toast';
-import { ScopeLabel } from '@/components/filters/FilterBar';
 import { DEPARTMENTS } from '@/lib/departments';
 
 type Customer = {
@@ -100,12 +99,6 @@ function numberFormat(value: number) {
 
 function moneyFormat(value: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value || 0);
-}
-
-function formatDate(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value || '-';
-  return new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(date);
 }
 
 function buildMarkdown(payload: Payload) {
@@ -213,17 +206,15 @@ export default function WeeklyManagementPresentationPage() {
 
   const printDeck = () => window.print();
   const departmentOptions = DEPARTMENTS.filter((d) => !payload.allowedDepartments?.length || payload.allowedDepartments.includes(d));
-  const scopeDepartment = department || (departmentOptions.length === 1 ? departmentOptions[0] : 'Tüm departmanlar');
   const combinedWeeklyItems = useMemo(() => buildCombinedWeeklyItems(payload), [payload]);
 
   return (
     <main className="wmp-page pax-page-container">
       <section className="wmp-hero">
-        <span className="wmp-eyebrow">Rapor Merkezi · Haftalık Yönetim Sunumu</span>
-        <h1>{payload.narrative.title || 'Haftalık Yönetim Sunumu'}</h1>
-        <p>
-          CRM verilerini doğrudan haftalık yönetim sunumu şablonuna bağlayan ekran. Buradaki filtrelerle aynı sunum yapısında PPTX dışa aktarımı alınır; KPI, faz kırılımı, haftalık ilerlemeler, riskler ve segment slaytları hazır dosyaya basılır.
-        </p>
+        <div className="wmp-hero-copy">
+          <h1>{payload.narrative.title || 'Haftalık Yönetim Sunumu'}</h1>
+          <p>Seçili haftanın KPI, faz, risk ve segment slaytları; aynı filtrelerle PPTX olarak iner.</p>
+        </div>
         <div className="wmp-actions">
           <button onClick={() => void load()} disabled={loading}>{loading ? 'Yükleniyor...' : '↻ Yenile'}</button>
           <button className="secondary" onClick={() => void downloadPptx()} disabled={!payload.customers.length || loading || downloadingPptx}>{downloadingPptx ? 'PPTX hazırlanıyor...' : 'PPTX İndir'}</button>
@@ -260,7 +251,6 @@ export default function WeeklyManagementPresentationPage() {
         {message ? <div className="wmp-message">{message}</div> : null}
       </section>
 
-      <ScopeLabel period={`${formatDate(from)} – ${formatDate(to)}`} department={scopeDepartment} owner={owner || 'Tüm satıcılar'} />
       <section className="wmp-kpi-grid">
         {[
           ['Toplam Firma', numberFormat(payload.summary.totalAccounts)],
@@ -275,7 +265,7 @@ export default function WeeklyManagementPresentationPage() {
           ['Teklif Tutarı', moneyFormat(payload.summary.quoteAmount)],
           ['Künye Tamamlama', `%${payload.summary.kunyeCoveragePct}`],
         ].map(([label, value]) => (
-          <div className={`wmp-kpi-card${label === 'Teklif Tutarı' ? ' offer-amount' : ''}`} key={label}><span>{label}</span><strong>{value}</strong><ScopeLabel mode={PERIOD_KPIS.has(label) ? 'period' : 'snapshot'} /></div>
+          <div className={`wmp-kpi-card${label === 'Teklif Tutarı' ? ' offer-amount' : ''}${PERIOD_KPIS.has(label) ? ' period' : ''}`} key={label}><span>{label}</span><strong>{value}</strong><small>{PERIOD_KPIS.has(label) ? 'Seçili dönem' : 'Anlık'}</small></div>
         ))}
       </section>
 

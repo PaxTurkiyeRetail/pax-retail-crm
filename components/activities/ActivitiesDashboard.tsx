@@ -1,46 +1,55 @@
 'use client';
 import '@/styles/activities-dashboard.css';
 
-// Aktiviteler sayfası — Hero + detay dashboard bölümü
-// Hero: kompakt, tüm sayfalarla aynı yükseklikte
-// Detay kartları: hero altında ayrı bölüm
+import Link from 'next/link';
 
-type PhaseBucket = { key: string; title: string; count: number; pct: number };
+// Aktiviteler sayfası — kompakt hero + tek satırlık analitik bandı.
+// Her sayı tek yerde: toplam aktivite listenin başlık rozetinde, burada yalnız
+// dönemin firma / tamamlanma / gecikme / blokaj özeti ve dağılımlar durur.
+
+type PhaseBucket = { key: string; title: string; range?: string; count: number; pct: number };
 type PersonRow = { title: string; totalCount: number; firms: number };
 
 type DashboardMetrics = {
-  momentumPct: number;
-  currentWeekCount: number;
-  previousWeekCount: number;
   atRiskFirmCount: number;
-  newFirmsThisWeek: number;
-  trend: Array<{ key: string; label: string; count: number }>;
-  trendTotal: number;
+  trend: Array<{ key: string; label: string; count: number; today?: boolean }>;
   trendMax: number;
-  blockedCount?: number;
-  blockedFirmCount?: number;
+  trendTitle: string;
+  blockedCount: number;
+  blockedFirmCount: number;
 };
 
 type DueDateAnalysis = {
   overdue: number;
   dueToday: number;
-  onTime: number;
-  overduePct: number;
 };
 
 type Props = {
-  slaHealthPct: number;
+  activityTotal: number;
+  completedTotal: number;
+  completedPct: number;
   dashboardMetrics: DashboardMetrics;
   companyPhase: { totalFirms: number; list: PhaseBucket[] };
   leaderboard: PersonRow[];
-  riskByPhase?: { title: string } | null;
   salesTotal: number;
   rsTotal: number;
   dueDateAnalysis: DueDateAnalysis;
 };
 
+const PHASE_COLORS: Record<string, string> = {
+  lead: '#6366f1',
+  first: '#0ea5e9',
+  business: '#8b5cf6',
+  ops: '#f59e0b',
+  rollout: '#10b981',
+};
+
+const fmt = (value: number) => value.toLocaleString('tr-TR');
+
 export default function ActivitiesDashboard({
-  slaHealthPct,
+  activityTotal,
+  completedTotal,
+  completedPct,
   dashboardMetrics,
   companyPhase,
   leaderboard,
@@ -48,142 +57,108 @@ export default function ActivitiesDashboard({
   rsTotal,
   dueDateAnalysis,
 }: Props) {
-  const momentumPositive = dashboardMetrics.momentumPct > 0;
-  const momentumNegative = dashboardMetrics.momentumPct < 0;
+  const perFirm = companyPhase.totalFirms ? activityTotal / companyPhase.totalFirms : 0;
+  const roleTotal = salesTotal + rsTotal;
+  const salesPct = roleTotal ? Math.round((salesTotal / roleTotal) * 100) : 0;
+  const trend = dashboardMetrics.trend;
+  const dense = trend.length > 10;
+  const labelStep = trend.length > 16 ? 5 : trend.length > 10 ? 2 : 1;
 
   return (
     <>
+      <section className="pax-hero act-hero">
+        <div className="act-hero-text">
+          <h1 className="pax-hero-title">Aktiviteler</h1>
+          <p className="pax-hero-description">Seçili dönemin temasları; faz, SLA ve blokaj durumuyla.</p>
+        </div>
+        <Link href="/crm/activities/new" className="act-hero-btn">
+          <svg aria-hidden viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
+          Aktivite ekle
+        </Link>
+      </section>
 
-      {/* ── KOMPAKT HERO — tüm sayfalarla aynı yükseklik ── */}
-      <div className="pax-hero">
-        <span className="pax-hero-eyebrow">Aktivite Merkezi</span>
-        <h1 className="pax-hero-title">Aktivite Dashboard</h1>
-        <p className="pax-hero-description">
-          SLA sağlığı, haftalık tempo, faz dağılımı ve ekip performansı tek bakışta.
-        </p>
-        <div className="pax-hero-stats">
-          <div className="pax-hero-stat">
-            <div className="pax-hero-stat-label">SLA Sağlığı</div>
-            <div className="pax-hero-stat-value">%{slaHealthPct}</div>
+      <div className="act-band">
+        <div className="act-kpis">
+          <div className="act-kpi" style={{ boxShadow: 'inset 3px 0 0 #4f46e5' }}>
+            <span className="act-kpi-label">Temas edilen firma</span>
+            <div className="act-kpi-row">
+              <strong className="act-kpi-value">{fmt(companyPhase.totalFirms)}</strong>
+              <span className="act-kpi-hint">{companyPhase.totalFirms ? `firma başı ${perFirm.toLocaleString('tr-TR', { maximumFractionDigits: 1 })}` : '—'}</span>
+            </div>
           </div>
-          <div className="pax-hero-stat">
-            <div className="pax-hero-stat-label">Bu Hafta</div>
-            <div className="pax-hero-stat-value">{dashboardMetrics.currentWeekCount}</div>
+          <div className="act-kpi" style={{ boxShadow: 'inset 3px 0 0 #16a34a' }}>
+            <span className="act-kpi-label">Tamamlanan</span>
+            <div className="act-kpi-row">
+              <strong className="act-kpi-value">{fmt(completedTotal)} <small>%{completedPct}</small></strong>
+            </div>
+            <span className="act-kpi-bar"><span style={{ width: `${completedPct}%`, background: '#16a34a' }} /></span>
           </div>
-          <div className="pax-hero-stat">
-            <div className="pax-hero-stat-label">Riskli Firma</div>
-            <div className="pax-hero-stat-value">{dashboardMetrics.atRiskFirmCount}</div>
+          <div className="act-kpi" style={{ boxShadow: 'inset 3px 0 0 #e11d48' }}>
+            <span className="act-kpi-label">Geciken</span>
+            <div className="act-kpi-row">
+              <strong className={`act-kpi-value${dueDateAnalysis.overdue > 0 ? ' neg' : ''}`}>{fmt(dueDateAnalysis.overdue)}</strong>
+              <span className="act-kpi-hint">{dashboardMetrics.atRiskFirmCount} firma · bugün {dueDateAnalysis.dueToday}</span>
+            </div>
           </div>
-          <div className="pax-hero-stat">
-            <div className="pax-hero-stat-label">Toplam Firma</div>
-            <div className="pax-hero-stat-value">{companyPhase.totalFirms}</div>
+          <div className="act-kpi" style={{ boxShadow: 'inset 3px 0 0 #f59e0b' }}>
+            <span className="act-kpi-label">Blokajlı</span>
+            <div className="act-kpi-row">
+              <strong className="act-kpi-value">{fmt(dashboardMetrics.blockedCount)}</strong>
+              <span className="act-kpi-hint">{dashboardMetrics.blockedFirmCount} firma</span>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* ── DETAY KARTLARI (hero altında, beyaz kart stilinde) ── */}
-      <div className="detail-grid">
-
-        {/* Kart 1: Momentum */}
-        <div className="det-card">
-          <div className="det-head">
-            <div className="det-kicker">Momentum</div>
-          </div>
-
-          <div className="mom-split">
-          <div className="mom-grid">
-            <div className="mom-box">
-              <span>Son 7 gün</span>
-              <strong>{dashboardMetrics.currentWeekCount} <small>aktivite</small></strong>
-              <em className={momentumPositive ? 'pos' : momentumNegative ? 'neg' : 'neu'}>
-                {dashboardMetrics.previousWeekCount > 0
-                  ? `Önceki 7 gün ${dashboardMetrics.previousWeekCount} · ${dashboardMetrics.momentumPct > 0 ? '+' : ''}${dashboardMetrics.momentumPct}%`
-                  : 'Önceki 7 günde aktivite yok'}
-              </em>
-            </div>
-            <div className="mom-box">
-              <span>Riskli Firma</span>
-              <strong>{dashboardMetrics.atRiskFirmCount}</strong>
-              <em className="neg">Geciken aksiyon</em>
-            </div>
-            <div className="mom-box">
-              <span>Yeni Firma</span>
-              <strong>{dashboardMetrics.newFirmsThisWeek}</strong>
-              <em className="pos">Son 7 günde</em>
-            </div>
-          </div>
-
-          <div className="trend-wrap">
-            <div className="trend-head">
-              <div>
-                <div className="trend-lbl">Haftalık trend</div>
+        <div className="act-panel">
+          <div className="act-panel-title">{dashboardMetrics.trendTitle}</div>
+          <div className={`act-trend${dense ? ' dense' : ''}`}>
+            {trend.map((item, index) => (
+              <div key={item.key} className={`act-tcol${item.today ? ' today' : ''}`} title={`${item.label}: ${item.count}`}>
+                {!dense ? <span className="act-tval">{item.count || ''}</span> : null}
+                <span className="act-tbar" style={{ height: `${Math.max(3, Math.round((item.count / dashboardMetrics.trendMax) * 52))}px`, opacity: item.count ? 1 : 0.28 }} />
+                <span className="act-tlabel">{index % labelStep === 0 ? item.label : ' '}</span>
               </div>
-            </div>
-            <div className="trend-bars">
-              {dashboardMetrics.trend.map((item) => (
-                <div key={item.key} className="tcol">
-                  <div className="tval">{item.count}</div>
-                  <div className="trail">
-                    <div className="tbar" style={{ height: `${Math.max(4, Math.round((item.count / dashboardMetrics.trendMax) * 44))}px` }} />
-                  </div>
-                  <div className="tlabel">{item.label}</div>
-                </div>
-              ))}
-            </div>
-          </div>
+            ))}
           </div>
         </div>
 
-        {/* Kart 2: Faz Dağılımı */}
-        <div className="det-card">
-          <div className="det-head">
-            <div className="det-kicker" title="Her firma son aktivitesinin fazına göre sayılır">Faz dağılımı</div>
-          </div>
-          <div className="bar-rows">
+        <div className="act-panel">
+          <div className="act-panel-title" title="Her firma son aktivitesinin fazına göre sayılır">Faz dağılımı <span>firma</span></div>
+          <div className="act-bars">
             {companyPhase.list.map((p) => (
-              <div key={p.key} className="bar-row">
-                <span>{p.title}</span>
-                <div className="bar"><div className="bar-fill" style={{ width: `${p.pct}%` }} /></div>
-                <em>{p.count}</em>
-                <strong>%{p.pct}</strong>
+              <div key={p.key} className="act-bar-row" title={p.range}>
+                <span className="act-bar-name">{p.title}</span>
+                <span className="act-bar"><span style={{ width: `${p.pct}%`, background: PHASE_COLORS[p.key] ?? 'var(--accent)' }} /></span>
+                <strong>{p.count}</strong>
+                <em>%{p.pct}</em>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Kart 3: Ekip & Risk */}
-        <div className="det-card">
-          <div className="det-head">
-            <div className="det-kicker">Ekip ve risk</div>
-          </div>
-
-          <div className="leader-list">
-            {leaderboard.map((p, i) => (
-              <div key={p.title} className="leader-row">
-                <span className="rank">{i + 1}</span>
-                <div className="leader-name">{p.title}</div>
-                <div className="leader-sub">{p.firms} firma</div>
-                <div className="score">{p.totalCount}</div>
+        <div className="act-panel">
+          <div className="act-panel-title">En aktif ekip <span>aktivite</span></div>
+          <div className="act-leaders">
+            {leaderboard.length ? leaderboard.map((p, i) => (
+              <div key={p.title} className="act-leader">
+                <span className="act-rank">{i + 1}</span>
+                <span className="act-leader-name" title={p.title}>{p.title}</span>
+                <span className="act-leader-sub">{p.firms} firma</span>
+                <strong>{p.totalCount}</strong>
               </div>
-            ))}
+            )) : <div className="act-empty">Bu dönemde aktivite yok.</div>}
           </div>
-
-          <div className="role-risk">
-            <div className="rr-box">
-              <div className="rr-lbl">Sales</div>
-              <div className="rr-val">{salesTotal}</div>
-            </div>
-            <div className="rr-box">
-              <div className="rr-lbl">Retail Support</div>
-              <div className="rr-val">{rsTotal}</div>
-            </div>
-            <div className="rr-box" title={`Geciken %${dueDateAnalysis.overduePct} · Bugün ${dueDateAnalysis.dueToday} · Zamanında ${dueDateAnalysis.onTime}`}>
-              <div className="rr-lbl">Geciken</div>
-              <div className={`rr-val${dueDateAnalysis.overdue > 0 ? ' neg' : ''}`}>{dueDateAnalysis.overdue}</div>
-            </div>
+          <div className="act-split" title={`Sales ${salesTotal} · Retail Support ${rsTotal}`}>
+            <span className="act-split-bar">
+              <span style={{ width: `${roleTotal ? salesPct : 0}%`, background: '#4f46e5' }} />
+              <span style={{ width: `${roleTotal ? 100 - salesPct : 0}%`, background: '#0ea5e9' }} />
+            </span>
+            <span className="act-split-legend">
+              <span><i style={{ background: '#4f46e5' }} />Sales <b>{salesTotal}</b></span>
+              <span><i style={{ background: '#0ea5e9' }} />Retail Support <b>{rsTotal}</b></span>
+            </span>
           </div>
         </div>
-
       </div>
     </>
   );

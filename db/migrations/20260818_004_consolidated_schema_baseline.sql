@@ -3482,3 +3482,78 @@ begin
   if not phase_exists then raise exception 'Seçilen faz aktivite kapsamına ait değil' using errcode='23514'; end if;
   return new;
 end $fn$;
+-- CRM_APPEND_MIGRATION: 20261112_050_customer_name_guard.sql
+-- Existing rows are retained, including already ambiguous names. New collisions
+-- are rejected under the same transaction lock used by the CRM API.
+create or replace function public.crm_customer_name_key(p_name text)
+returns text language sql immutable parallel safe as $fn$
+  select regexp_replace(
+    upper(translate(normalize(coalesce(p_name, ''), NFC), 'iıİşŞğĞüÜöÖçÇ', 'IIIsSgGuUoOcC') collate "C"),
+    '[^A-Z0-9]', '', 'g'
+  )
+$fn$;
+
+create or replace function public.crm_guard_customer_name() returns trigger
+language plpgsql as $fn$
+declare v_key text;
+begin
+  if tg_op = 'UPDATE' and public.crm_customer_name_key(new.musteri) = public.crm_customer_name_key(old.musteri) then
+    return new;
+  end if;
+  v_key := public.crm_customer_name_key(new.musteri);
+  if v_key = '' then
+    raise exception 'Müşteri adı harf veya rakam içermelidir.' using errcode = '23514';
+  end if;
+  perform pg_advisory_xact_lock(4411981, 1); -- 0x43524d: CRM customer names
+  if exists (select 1 from public.musteriler m where public.crm_customer_name_key(m.musteri) = v_key and m.id is distinct from new.id) then
+    raise exception 'Mevcut müşteri: bu isimde bir kayıt zaten var.'
+      using errcode = '23505', constraint = 'musteriler_name_key_guard';
+  end if;
+  return new;
+end $fn$;
+
+do $fn$
+begin
+  if not exists (select 1 from pg_trigger where tgrelid = 'public.musteriler'::regclass and tgname = 'trg_crm_guard_customer_name' and not tgisinternal) then
+    create trigger trg_crm_guard_customer_name before insert or update of musteri on public.musteriler
+      for each row execute function public.crm_guard_customer_name();
+  end if;
+end $fn$;
+
+-- Account assignment must never create another customer for an ambiguous name.
+create or replace function public.crm_liste_to_kunye() returns trigger
+language plpgsql as $fn$
+declare v_id uuid; v_count integer;
+begin
+  if pg_trigger_depth() > 1 then return null; end if;
+  if not new.is_active then return null; end if;
+
+  v_id := new.musteri_id;
+  if v_id is null then
+    perform pg_advisory_xact_lock(4411981, 1);
+    select count(*), (array_agg(m.id order by m.id))[1] into v_count, v_id
+    from public.musteriler m
+    where public.crm_customer_name_key(m.musteri) = public.crm_customer_name_key(new.firma);
+
+    if v_count > 1 then
+      raise exception 'Bu firma için birden fazla müşteri kaydı var. Önce kayıtlar birleştirilmelidir.' using errcode = '23505';
+    elsif v_count = 0 then
+      insert into public.musteriler (musteri, sorumlu, owner_user_id, updated_by, updated_at)
+      values (new.firma, nullif(new.satici, 'Havuz Account'), new.owner_user_id, 'sync-liste', now())
+      returning id into v_id;
+    end if;
+    update public.crm_musteri_listesi set musteri_id = v_id where id = new.id;
+  end if;
+
+  update public.musteriler
+  set sorumlu = nullif(new.satici, 'Havuz Account'), owner_user_id = new.owner_user_id,
+      updated_by = 'sync-liste', updated_at = now()
+  where id = v_id
+    and (coalesce(sorumlu, 'Havuz Account') is distinct from coalesce(new.satici, 'Havuz Account')
+         or owner_user_id is distinct from new.owner_user_id);
+
+  insert into public.musteri_kunye_v2 (musteri_id, satici_etiketi)
+  values (v_id, public.crm_kategori_to_etiket(new.kategori))
+  on conflict (musteri_id) do update set satici_etiketi = excluded.satici_etiketi;
+  return null;
+end $fn$;

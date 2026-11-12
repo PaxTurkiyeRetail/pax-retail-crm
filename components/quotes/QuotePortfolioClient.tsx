@@ -174,12 +174,11 @@ export default function QuotePortfolioClient({ ownerOptions, allowedDepartments 
   ];
 
   return (
-    <main style={{ display: 'grid', gap: 18 }}>
-      <div className="pax-hero" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+    <main style={{ display: 'grid', gap: 14 }}>
+      <div className="pax-hero" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', padding: '18px 20px', borderRadius: 18 }}>
         <div style={{ minWidth: 0 }}>
-          <span className="pax-hero-eyebrow">Teklif Yönetimi</span>
-          <h1 className="pax-hero-title">Teklif Portföyü</h1>
-          <p className="pax-hero-description">Kimde hangi teklif var, kaç cihaz teklif edilmiş, hangi takip tarihi yaklaşıyor tek ekranda görün.</p>
+          <h1 className="pax-hero-title" style={{ fontSize: 28, marginBottom: 4 }}>Teklif Portföyü</h1>
+          <p className="pax-hero-description">Teklifleri, cihaz adetlerini ve takip tarihlerini izleyin.</p>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <Link href="/crm/quotes/catalog" style={heroGhost}>Ürün ve fiyatlar</Link>
@@ -201,8 +200,8 @@ export default function QuotePortfolioClient({ ownerOptions, allowedDepartments 
           owner={selectedOwner?.name}
         />
         <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))' }}>
-          {cards.map((card) => (
-            <div key={card.label} style={surfaceCard}>
+          {cards.map((card, index) => (
+            <div key={card.label} style={{ ...surfaceCard, boxShadow: `inset 3px 0 0 ${['#4f46e5', '#dc2626', '#d97706', '#0891b2', '#16a34a'][index]}` }}>
               <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.07em', textTransform: 'uppercase', color: 'var(--text-3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{card.label}</div>
               <div style={{ marginTop: 6, fontSize: 22, fontWeight: 800, letterSpacing: '-.02em', color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>{card.value}</div>
               <div style={{ marginTop: 4, color: 'var(--text-3)', fontSize: 11.5, lineHeight: 1.35 }}>{card.hint}</div>
@@ -322,8 +321,8 @@ export default function QuotePortfolioClient({ ownerOptions, allowedDepartments 
   );
 }
 
-const surface: CSSProperties = { background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 22, padding: 16, boxShadow: 'var(--shadow)' };
-const surfaceCard: CSSProperties = { ...surface, padding: '12px 14px', borderRadius: 16 };
+const surface: CSSProperties = { background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 14, padding: 14, boxShadow: 'var(--shadow)' };
+const surfaceCard: CSSProperties = { ...surface, padding: '12px 14px', borderRadius: 14 };
 const iconButton: CSSProperties = { display: 'inline-grid', placeItems: 'center', width: 30, height: 30, borderRadius: 9, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-2)', verticalAlign: 'middle' };
 const subLine: CSSProperties = { marginTop: 2, color: 'var(--text-3)', fontSize: 12 };
 const countBadge: CSSProperties = { fontSize: 12, fontWeight: 700, letterSpacing: 0, padding: '3px 9px', borderRadius: 999, background: 'var(--chip-indigo-bg)', color: 'var(--chip-indigo-color)' };

@@ -358,3 +358,71 @@
   background: #e3f2fd;
   color: var(--brand-navy);
 }
+
+/* --- Kompakt yoğunluk katmanı (Müşteriler / Hedefler diliyle aynı) -----------------
+   Hero tek satır başlık + sağda aksiyonlar; KPI kartları sol renk şeridiyle sıkı;
+   kart ve mini tablolar dar. Renkler tema token'larından (koyu tema dahil). */
+main.wmp-page { gap: 14px; }
+main.wmp-page .wmp-hero {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 20px;
+  padding: 16px 22px; border-radius: 20px !important;
+}
+main.wmp-page .wmp-hero-copy { flex: 1 1 380px; min-width: 0; }
+main.wmp-page .wmp-hero h1 { margin: 0; font-size: clamp(22px, 2vw, 28px); font-weight: 800 !important; line-height: 1.15; }
+main.wmp-page .wmp-hero p { margin: 4px 0 0; max-width: none; font-size: 13px; line-height: 1.45; }
+main.wmp-page .wmp-actions { margin-top: 0; gap: 8px; }
+main.wmp-page .wmp-actions button {
+  min-height: 36px; padding: 0 14px; border-radius: 10px; font-size: 13px; font-weight: 800;
+  background: #fff; color: #0f172a; border: 1px solid transparent;
+}
+main.wmp-page .wmp-actions button.secondary { background: rgba(255, 255, 255, .14); color: #fff; border-color: rgba(255, 255, 255, .26); }
+main.wmp-page .wmp-actions button.secondary:hover:not(:disabled) { background: rgba(255, 255, 255, .22); }
+main.wmp-page .wmp-actions button.seller-pptx-button:disabled { background: transparent; color: rgba(255, 255, 255, .7); border: 1px dashed rgba(255, 255, 255, .4); }
+
+main.wmp-page .wmp-filter-card { padding: 12px 14px; border-radius: 14px !important; }
+main.wmp-page .wmp-filter-grid { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
+main.wmp-page .wmp-filter-grid label { gap: 4px; }
+main.wmp-page .wmp-filter-grid span { font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--text-3); }
+main.wmp-page .wmp-filter-grid input,
+main.wmp-page .wmp-filter-grid select { padding: 6px 10px; border-color: var(--border); background: var(--surface); color: var(--text); font-size: 13px; }
+main.wmp-page .wmp-required-filter { padding: 0; border: 0; background: none; border-radius: 0; }
+main.wmp-page .wmp-required-filter.missing { box-shadow: none; }
+main.wmp-page .wmp-required-filter.missing select { border-color: #f97316; box-shadow: 0 0 0 3px rgba(249, 115, 22, .14); }
+main.wmp-page .wmp-required-filter span { color: var(--text-3); }
+main.wmp-page .wmp-required-filter em { margin-left: 6px; padding: 1px 6px; font-size: 10px; letter-spacing: 0; text-transform: none; }
+main.wmp-page .wmp-message { margin-top: 8px; font-size: 13px; }
+
+main.wmp-page .wmp-kpi-grid { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+main.wmp-page .wmp-kpi-card {
+  padding: 12px 14px; gap: 2px; align-content: start; border-radius: 14px !important;
+  background: var(--surface) !important; border: 1px solid var(--border) !important;
+  box-shadow: inset 3px 0 0 #64748b !important; backdrop-filter: none;
+}
+main.wmp-page .wmp-kpi-card.period { box-shadow: inset 3px 0 0 #4f46e5 !important; }
+main.wmp-page .wmp-kpi-card.offer-amount { box-shadow: inset 3px 0 0 #16a34a !important; }
+main.wmp-page .wmp-kpi-card.warn { box-shadow: inset 3px 0 0 #f59e0b !important; }
+main.wmp-page .wmp-kpi-card span { font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--text-3); }
+main.wmp-page .wmp-kpi-card strong,
+main.wmp-page .wmp-kpi-card.offer-amount strong { font-size: 22px; font-weight: 800; line-height: 1.15; letter-spacing: -.02em; color: var(--text); font-variant-numeric: tabular-nums; }
+main.wmp-page .wmp-kpi-card small { font-size: 11px; font-weight: 600; color: var(--text-3); }
+main.wmp-page .wmp-kpi-card.period small { color: #4f46e5; font-weight: 700; }
+[data-theme="dark"] main.wmp-page .wmp-kpi-card.period small { color: #a5b4fc; }
+
+main.wmp-page .wmp-slide-grid,
+main.wmp-page .wmp-two-col { gap: 12px; }
+main.wmp-page .wmp-slide-card,
+main.wmp-page .wmp-segment-card { padding: 14px 16px; border-radius: 14px !important; backdrop-filter: none; }
+main.wmp-page .wmp-slide-card h2,
+main.wmp-page .wmp-segment-card h2 { margin: 0 0 8px; font-size: 16px; font-weight: 800; color: var(--text); }
+main.wmp-page .wmp-slide-card ul,
+main.wmp-page .wmp-segment-card ul { gap: 5px; font-size: 13px; line-height: 1.45; color: var(--text-2); }
+main.wmp-page .wmp-segment-head p { margin: 0 0 8px; font-size: 12px; font-weight: 600; color: var(--text-3); font-variant-numeric: tabular-nums; }
+main.wmp-page .wmp-segment-head h2 { margin-bottom: 2px; }
+main.wmp-page .wmp-mini-table { gap: 0; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+main.wmp-page .wmp-mini-table .head { padding: 7px 12px; font-size: 11px; font-weight: 700; letter-spacing: .05em; color: var(--text-3); background: var(--surface-2); }
+main.wmp-page .wmp-mini-table .row {
+  padding: 7px 12px; border: 0; border-top: 1px solid var(--border); border-radius: 0;
+  background: transparent; color: var(--text); font-size: 13px; font-variant-numeric: tabular-nums;
+}
+main.wmp-page .wmp-slide-card textarea { min-height: 200px; padding: 8px 10px; font-size: 12.5px; border-color: var(--border); background: var(--surface-2); color: var(--text-2); }
+main.wmp-page .wmp-empty { font-size: 13px; line-height: 1.45; color: var(--text-3); }

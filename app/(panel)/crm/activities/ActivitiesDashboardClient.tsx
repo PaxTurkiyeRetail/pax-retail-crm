@@ -498,15 +498,17 @@ export default function ActivitiesPage({ ownerOptions, allowedDepartments }: { o
       />
 
       <ActivitiesDashboard
-        slaHealthPct={slaHealthPct}
+        activityTotal={analyticsSlimRows.length}
+        completedTotal={completedTotal}
+        completedPct={slaHealthPct}
         dashboardMetrics={{
           ...dashboardMetrics,
+          trendTitle: 'Bu hafta · seçili dönem',
           blockedCount: analyticsSlimRows.filter((row) => Boolean(row.is_blocked)).length,
           blockedFirmCount: new Set(analyticsSlimRows.filter((row) => Boolean(row.is_blocked)).map((row) => (row.musteriler?.musteri ?? '').trim() || 'Tanımsız Firma')).size,
         }}
         companyPhase={companyPhase}
         leaderboard={leaderboard}
-        riskByPhase={riskByPhase}
         salesTotal={salesTotal}
         rsTotal={rsTotal}
         dueDateAnalysis={dueDateAnalysis}

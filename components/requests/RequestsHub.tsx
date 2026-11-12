@@ -34,7 +34,10 @@ export default function RequestsHub({ userRole, userId, canManage }: { userRole:
   return (
     <div className="req-hub">
       <style jsx>{`
-        .req-hub { display: grid; gap: 16px; }
+        .req-hub { display: grid; gap: 12px; }
+        .req-hub-hero { padding: 18px 20px !important; border-radius: 18px; }
+        .req-hub-hero h1 { font-size: 28px; line-height: 1.15; }
+        .req-hub-hero p { font-size: 13px; line-height: 1.4; margin-top: 4px; }
 
         /* ── Tab bar ── */
         .tab-bar {
@@ -109,8 +112,7 @@ export default function RequestsHub({ userRole, userId, canManage }: { userRole:
       `}</style>
 
       {/* Hero */}
-      <div className="pax-hero">
-        <span className="pax-hero-eyebrow">Request Intelligence</span>
+      <div className="pax-hero req-hub-hero">
         <h1 className="pax-hero-title">Talepler</h1>
         <p className="pax-hero-description">Kim kimden ne istedi, ne zaman, hangi durumda — tek ekranda.</p>
       </div>

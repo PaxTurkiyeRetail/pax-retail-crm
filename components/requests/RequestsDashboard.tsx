@@ -64,7 +64,7 @@ export default function RequestsDashboard() {
       <style jsx>{`
         .g4 { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
         .g2 { display:grid; grid-template-columns:1fr 200px; gap:14px; }
-        .card { background:var(--surface); border:1px solid var(--border); border-radius:20px; padding:20px; box-shadow:var(--shadow-sm); }
+        .card { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:14px; box-shadow:var(--shadow-sm); }
         .kicker { font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.06em; color:var(--text-3); }
         .arow { display:grid; grid-template-columns:1fr 48px 48px 56px; gap:12px; align-items:center; padding:10px 14px; border-radius:12px; border:1px solid var(--border); background:var(--surface-2); }
         .arow-extra {}
@@ -85,9 +85,9 @@ export default function RequestsDashboard() {
           { label:'Riskli SLA',value:kpis.atRisk,    color:'#d97706' },
           { label:'Ort. Çözüm',value: kpis.avgResolutionHr !== null ? `${kpis.avgResolutionHr}s` : '—', color:'#11a1f2' },
         ].map(k => (
-          <div key={k.label} className="card">
+          <div key={k.label} className="card" style={{ boxShadow:`inset 3px 0 0 ${k.color}` }}>
             <div className="kicker">{k.label}</div>
-            <div style={{ fontSize:32, fontWeight:900, color:k.color, marginTop:6, letterSpacing:'-.04em' }}>{loading ? '…' : k.value}</div>
+            <div style={{ fontSize:22, fontWeight:800, color:k.color, marginTop:4, fontVariantNumeric:'tabular-nums' }}>{loading ? '…' : k.value}</div>
           </div>
         ))}
       </div>

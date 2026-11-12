@@ -11,8 +11,8 @@
 
 .sfu-page {
   display: grid;
-  gap: 18px;
-  padding-bottom: 36px;
+  gap: 12px;
+  padding-bottom: 28px;
 }
 
 /* --- Hero ------------------------------------------------------------- */
@@ -23,17 +23,17 @@
   overflow: hidden;
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 24px;
-  padding: 30px 34px;
+  gap: 14px;
+  padding: 16px 20px;
   border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 26px;
+  border-radius: 16px;
   color: #fff;
   background:
     radial-gradient(circle at 88% 12%, rgba(255, 255, 255, 0.14), transparent 30%),
     linear-gradient(122deg, #0f172a 0%, #1e3a8a 55%, #1d4ed8 100%);
-  box-shadow: 0 22px 50px rgba(30, 58, 138, 0.24);
+  box-shadow: 0 10px 26px rgba(30, 58, 138, 0.18);
 }
 .sfu-hero-copy { position: relative; z-index: 1; max-width: 720px; }
 .sfu-eyebrow {
@@ -50,25 +50,26 @@
   text-transform: uppercase;
 }
 .sfu-hero h1 {
-  margin: 16px 0 8px;
-  font-size: clamp(26px, 2.6vw, 38px);
-  line-height: 1.1;
-  letter-spacing: -0.03em;
+  margin: 0 0 4px;
+  font-size: clamp(20px, 1.9vw, 26px);
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
 }
-.sfu-hero p { margin: 0; color: rgba(255, 255, 255, 0.82); font-size: 14px; line-height: 1.65; }
-.sfu-hero-actions { position: relative; z-index: 1; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.sfu-hero p { margin: 0; color: rgba(255, 255, 255, 0.82); font-size: 13px; line-height: 1.45; }
+.sfu-hero-actions { position: relative; z-index: 1; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 
 .sfu-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  min-height: 42px;
-  padding: 0 16px;
-  border-radius: 12px;
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 10px;
   border: 1px solid transparent;
   font-weight: 800;
-  font-size: 14px;
+  font-size: 13px;
   cursor: pointer;
 }
 .sfu-btn.light {
@@ -82,14 +83,14 @@
 /* Hero içindeki seçim kutusu: koyu zemin üstünde durduğu için premium
    katmanın genel input kuralını bilinçli olarak eziyoruz. */
 .sfu-hero .sfu-select {
-  min-height: 42px;
-  padding: 0 12px;
-  border-radius: 12px;
+  min-height: 36px;
+  padding: 0 10px;
+  border-radius: 10px;
   border: 1px solid rgba(255, 255, 255, 0.26) !important;
   background: rgba(255, 255, 255, 0.14) !important;
   color: #fff !important;
   font-weight: 700;
-  font-size: 14px;
+  font-size: 13px;
 }
 /* Açılan liste tarayıcı penceresinde çizilir: her temada okunur kalması için
    zemin/yazı sabitlenir. */
@@ -98,27 +99,33 @@
 /* --- KPI kartları ----------------------------------------------------- */
 .sfu-kpis {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
 }
 .sfu-kpi {
-  padding: 20px 22px;
+  display: grid;
+  gap: 3px;
+  align-content: start;
+  min-width: 0;
+  padding: 12px 14px;
   border: 1px solid var(--border);
-  border-radius: 20px;
+  border-radius: 14px;
   background: var(--surface);
   color: var(--text);
-  box-shadow: var(--shadow-sm);
+  box-shadow: inset 3px 0 0 var(--text-3);
 }
 .sfu-kpi-value {
-  font-size: 34px;
-  font-weight: 900;
-  line-height: 1.05;
-  letter-spacing: -0.03em;
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
   color: var(--text);
 }
-.sfu-kpi-label { margin-top: 6px; font-size: 14px; font-weight: 800; color: var(--text-2); }
-.sfu-kpi-hint { margin-top: 4px; font-size: 12px; line-height: 1.5; color: var(--text-3); }
+.sfu-kpi-label { font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-3); }
+.sfu-kpi-hint { font-size: 12px; line-height: 1.4; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sfu-kpi.accent { box-shadow: inset 3px 0 0 var(--sfu-accent); }
+.sfu-kpi.warn { box-shadow: inset 3px 0 0 var(--sfu-warn); }
 .sfu-kpi.accent .sfu-kpi-value { color: var(--sfu-accent); }
 .sfu-kpi.warn .sfu-kpi-value { color: var(--sfu-warn); }
 
@@ -134,16 +141,16 @@
 }
 
 /* --- Sekmeler --------------------------------------------------------- */
-.sfu-tabs { display: flex; flex-wrap: wrap; gap: 8px; }
+.sfu-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
 .sfu-tab {
-  min-height: 40px;
-  padding: 0 16px;
+  min-height: 34px;
+  padding: 0 14px;
   border-radius: 999px;
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--text-2);
   font-weight: 800;
-  font-size: 14px;
+  font-size: 13px;
   cursor: pointer;
 }
 .sfu-tab:hover { border-color: var(--accent-border); color: var(--text); }
@@ -152,7 +159,7 @@
 /* --- Panel + tablo ---------------------------------------------------- */
 .sfu-panel {
   border: 1px solid var(--border);
-  border-radius: 20px;
+  border-radius: 12px;
   background: var(--surface);
   color: var(--text);
   overflow: hidden;
@@ -160,25 +167,26 @@
 .sfu-panel-head {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 18px 20px;
+  padding: 10px 14px;
   border-bottom: 1px solid var(--border);
 }
-.sfu-panel-head h2 { margin: 0; font-size: 17px; font-weight: 900; letter-spacing: -0.01em; color: var(--text); }
+.sfu-panel-head h2 { margin: 0; font-size: 18px; font-weight: 800; letter-spacing: -0.01em; color: var(--text); }
 .sfu-panel-head span { font-size: 13px; color: var(--text-3); }
 .sfu-panel-head input {
-  min-height: 36px;
-  padding: 0 10px;
-  border-radius: 10px;
+  min-height: 32px;
+  padding: 0 8px;
+  border-radius: 8px;
   border: 1px solid var(--border);
   background: var(--surface-2);
   color: var(--text);
+  font-size: 13px;
 }
 
 .sfu-table-wrap { overflow-x: auto; }
-.sfu-table { width: 100%; border-collapse: collapse; font-size: 14px; table-layout: auto; }
+.sfu-table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: auto; }
 /* Kolon oranları: Takip Konusu geniş kalır, tarih kolonu kesilmez */
 .sfu-table th:nth-child(1), .sfu-table td:nth-child(1) { min-width: 160px; }
 .sfu-table th:nth-child(2), .sfu-table td:nth-child(2) { min-width: 130px; }
@@ -187,7 +195,7 @@
 .sfu-table th:nth-child(5), .sfu-table td:nth-child(5) { min-width: 120px; }
 .sfu-table th,
 .sfu-table td {
-  padding: 12px 14px;
+  padding: 9px 12px;
   text-align: left;
   border-bottom: 1px solid var(--border);
   vertical-align: top;
@@ -202,8 +210,8 @@
   top: 0;
   background: #1e3a8a !important;
   color: #fff !important;
-  font-size: 12px !important;
-  font-weight: 800 !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
   letter-spacing: 0.03em !important;
   text-transform: uppercase;
   white-space: nowrap;
@@ -217,7 +225,7 @@
 .sfu-table td.nowrap { white-space: nowrap; }
 .sfu-customer { font-weight: 800; color: var(--text); }
 .sfu-sector { display: block; margin-top: 2px; font-size: 12px; color: var(--text-3); }
-.sfu-note { display: block; margin-top: 4px; font-size: 12px; color: var(--text-3); line-height: 1.5; }
+.sfu-note { display: block; margin-top: 2px; font-size: 12px; color: var(--text-3); line-height: 1.4; }
 
 /* Durum etiketleri: globals.css'teki chip token'ları (her temada tanımlı). */
 .sfu-pill {
@@ -235,7 +243,7 @@
 .sfu-pill.overdue { border-color: var(--chip-red-bd); background: var(--chip-red-bg); color: var(--chip-red-color); }
 .sfu-pill.near { border-color: var(--chip-gold-bd); background: var(--chip-gold-bg); color: var(--chip-gold-color); }
 
-.sfu-empty { padding: 26px 20px; font-size: 14px; color: var(--text-3); }
+.sfu-empty { padding: 18px 14px; font-size: 13px; color: var(--text-3); }
 
 /* --- Sayfalama (10 firma / sayfa) ------------------------------------- */
 .sfu-pager {
@@ -244,18 +252,19 @@
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 14px 20px;
+  padding: 8px 14px;
   border-top: 1px solid var(--border);
 }
-.sfu-pager-info { font-size: 13px; color: var(--text-3); }
+.sfu-pager-info { font-size: 12px; color: var(--text-3); font-variant-numeric: tabular-nums; }
 .sfu-pager-buttons { display: flex; gap: 8px; }
 .sfu-pager-buttons button {
-  min-height: 36px;
-  padding: 0 14px;
-  border-radius: 10px;
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: 8px;
   border: 1px solid var(--border);
   background: var(--surface-2);
   color: var(--text-2);
+  font-size: 13px;
   font-weight: 700;
   cursor: pointer;
 }
@@ -272,7 +281,7 @@
 [data-theme="dark"] .sfu-page { --sfu-ok: #4ade80; }
 
 .sfu-table tfoot td {
-  padding: 12px 14px;
+  padding: 9px 12px;
   border-top: 2px solid var(--border);
   background: color-mix(in srgb, var(--text) 6%, transparent);
   color: var(--text);
@@ -280,7 +289,5 @@
 }
 
 @media (max-width: 720px) {
-  .sfu-hero { padding: 24px 20px; }
-  .sfu-kpi { padding: 16px 18px; }
-  .sfu-kpi-value { font-size: 28px; }
+  .sfu-hero { padding: 14px 16px; }
 }

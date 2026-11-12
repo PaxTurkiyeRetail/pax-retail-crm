@@ -281,16 +281,27 @@ export default function SellerFollowupClient({ tvScreens }: { tvScreens?: TabKey
 
   return (
     <main className="sfu-page pax-page-container">
-      {/* Faz sekmesinde takip listesi başlığı/satıcı seçimi/KPI'ları gizlenir: Faz raporunun kendi Satıcı filtresi ve KPI'ları var. */}
-      {showFollowupData && tab !== 'faz' && (<>
+      {allowedTabs.length > 1 && <div className="sfu-tabs">
+        {allowedTabs.includes('followup') && <button type="button" className={`sfu-tab ${tab === 'followup' ? 'active' : ''}`} onClick={() => switchTab('followup')}>
+          Takip Listesi
+        </button>}
+        {allowedTabs.includes('activity') && <button type="button" className={`sfu-tab ${tab === 'activity' ? 'active' : ''}`} onClick={() => switchTab('activity')}>
+          Kişi Bazlı Aktivite
+        </button>}
+        {allowedTabs.includes('faz') && <button type="button" className={`sfu-tab ${tab === 'faz' ? 'active' : ''}`} onClick={() => switchTab('faz')} title="Firmaların faz dağılımı">
+          Faz
+        </button>}
+        {allowedTabs.includes('live') && <button type="button" className={`sfu-tab ${tab === 'live' ? 'active' : ''}`} onClick={() => switchTab('live')} title="Kendi kendine dönen yönetici panosu">
+          ● Canlı Ekran
+        </button>}
+      </div>}
+
+      {/* Takip başlığı/satıcı seçimi/KPI'ları yalnızca Takip Listesi sekmesinde: diğer sekmelerin kendi filtre ve KPI'ları var. */}
+      {showFollowupData && tab === 'followup' && (<>
       <section className="sfu-hero">
         <div className="sfu-hero-copy">
-          <span className="sfu-eyebrow">Rapor Merkezi · Dashboard</span>
           <h1>{heroTitle}</h1>
-          <p>
-            Engel &amp; Etki ekranındaki <strong>açık engeller</strong> takip listesine dönüştürülür: konu kimde, hangi modelden kaç adet
-            beklemede, takip konusu ve planlanan çözüm tarihi. Çözülmüş engeller listeye girmez.
-          </p>
+          <p>Engel &amp; Etki ekranındaki açık engeller: konu kimde, bekleyen model/adet ve planlanan çözüm tarihi.</p>
         </div>
         <div className="sfu-hero-actions">
           <select className="sfu-select" value={owner} onChange={(event) => setOwner(event.target.value)} aria-label="Satıcı seçimi">
@@ -314,37 +325,22 @@ export default function SellerFollowupClient({ tvScreens }: { tvScreens?: TabKey
 
       <section className="sfu-kpis">
         <div className="sfu-kpi accent">
-          <div className="sfu-kpi-value">{formatNumber(payload.summary.openFollowupCount)}</div>
           <div className="sfu-kpi-label">Açık Takip</div>
-          <div className="sfu-kpi-hint">{owner ? `${owner} portföyünde` : 'Tüm portföyde'} durumu açık engel</div>
+          <div className="sfu-kpi-value">{formatNumber(payload.summary.openFollowupCount)}</div>
+          <div className="sfu-kpi-hint">Durumu açık engel</div>
         </div>
         <div className="sfu-kpi">
-          <div className="sfu-kpi-value">{formatNumber(payload.summary.totalQuantity)}</div>
           <div className="sfu-kpi-label">Toplam Adet</div>
-          <div className="sfu-kpi-hint">Takip listesindeki hesapların forecast adetleri</div>
+          <div className="sfu-kpi-value">{formatNumber(payload.summary.totalQuantity)}</div>
+          <div className="sfu-kpi-hint">Listedeki hesapların forecast adedi</div>
         </div>
         <div className="sfu-kpi warn">
-          <div className="sfu-kpi-value">{formatNumber(payload.summary.nearTermQuantity)}</div>
           <div className="sfu-kpi-label">Yakın Vadeli Takip</div>
-          <div className="sfu-kpi-hint">{nearTermHint}</div>
+          <div className="sfu-kpi-value">{formatNumber(payload.summary.nearTermQuantity)}</div>
+          <div className="sfu-kpi-hint" title={nearTermHint}>{nearTermHint}</div>
         </div>
       </section>
       </>)}
-
-      {allowedTabs.length > 1 && <div className="sfu-tabs">
-        {allowedTabs.includes('followup') && <button type="button" className={`sfu-tab ${tab === 'followup' ? 'active' : ''}`} onClick={() => switchTab('followup')}>
-          Takip Listesi
-        </button>}
-        {allowedTabs.includes('activity') && <button type="button" className={`sfu-tab ${tab === 'activity' ? 'active' : ''}`} onClick={() => switchTab('activity')}>
-          Kişi Bazlı Aktivite
-        </button>}
-        {allowedTabs.includes('faz') && <button type="button" className={`sfu-tab ${tab === 'faz' ? 'active' : ''}`} onClick={() => switchTab('faz')} title="Firmaların faz dağılımı">
-          Faz
-        </button>}
-        {allowedTabs.includes('live') && <button type="button" className={`sfu-tab ${tab === 'live' ? 'active' : ''}`} onClick={() => switchTab('live')} title="Kendi kendine dönen yönetici panosu">
-          ● Canlı Ekran
-        </button>}
-      </div>}
 
       {/* Canlı Ekran her zaman bağlı kalır (sekme dışındayken zamanlayıcıları durur);
           böylece sekmeye dönüşte veri anında hazır. */}
@@ -356,11 +352,6 @@ export default function SellerFollowupClient({ tvScreens }: { tvScreens?: TabKey
 
       {tab === 'live' || tab === 'faz' ? null : tab === 'followup' ? (
         <section className="sfu-panel">
-          <div className="sfu-panel-head">
-            <h2>Takip Listesi</h2>
-            <span>{formatNumber(payload.rows.length)} kayıt · sayfa {currentPage}/{totalPages}</span>
-          </div>
-
           {error ? <div className="sfu-empty">{error}</div> : null}
 
           {!error && !loading && !payload.rows.length ? (
@@ -413,7 +404,7 @@ export default function SellerFollowupClient({ tvScreens }: { tvScreens?: TabKey
               </div>
               <div className="sfu-pager">
                 <span className="sfu-pager-info">
-                  Sayfa başına 10 firma · {formatNumber(payload.rows.length)} kaydın {formatNumber(visibleRows.length)} tanesi görünüyor
+                  Sayfa {currentPage}/{totalPages} · {formatNumber(payload.rows.length)} kayıt
                 </span>
                 <div className="sfu-pager-buttons">
                   <button type="button" onClick={() => setPage((value) => Math.max(1, value - 1))} disabled={currentPage <= 1}>
@@ -430,7 +421,7 @@ export default function SellerFollowupClient({ tvScreens }: { tvScreens?: TabKey
       ) : (
         <section className="sfu-panel">
           <div className="sfu-panel-head">
-            <h2>Temas Edilen Müşteriler — Kişi Bazlı Özet</h2>
+            <h2>Kişi Bazlı Aktivite</h2>
             <span>
               <input type="date" value={from} onChange={(event) => setFrom(event.target.value)} aria-label="Başlangıç tarihi" />
               {' — '}

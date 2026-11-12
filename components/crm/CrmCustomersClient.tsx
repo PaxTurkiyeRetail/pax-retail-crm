@@ -11,7 +11,7 @@ function ChevronDown({ size = 16, strokeWidth = 1.75, style }: IconProps) { retu
 function Filter({ size = 16, strokeWidth = 1.75, style }: IconProps) { return <svg width={size} height={size} viewBox="0 0 24 24" {..._svg} strokeWidth={strokeWidth} style={style}><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>; }
 function Plus({ size = 16, strokeWidth = 1.75, style }: IconProps) { return <svg width={size} height={size} viewBox="0 0 24 24" {..._svg} strokeWidth={strokeWidth} style={style}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>; }
 import { uniqueOptions, sumPhaseRange } from '@/lib/utils';
-import { FilterBar } from '@/components/filters/FilterBar';
+import { FilterBar, FilterSelectField } from '@/components/filters/FilterBar';
 import { useUrlFilters } from '@/lib/filters/use-url-filters';
 import type { FilterOption, PageFilterConfig } from '@/lib/filters/schema';
 import { DEPARTMENT_LABELS, type Department } from '@/lib/departments';
@@ -239,7 +239,7 @@ export default function CrmCustomersClient({ ownerOptions, allowedDepartments }:
   // Filtreler URL'de (FilterBar). Dashboard'daki "Aksiyon Gerekli" bağlantıları ?q=<firma> ile açar.
   const filterConfig = useMemo<PageFilterConfig>(() => ({
     keys: ownerOptions.length ? ['department', 'owner', 'phase', 'status', 'q'] : ['department', 'phase', 'status', 'q'],
-    labels: { status: 'Künye', q: 'Ara' },
+    labels: { status: 'Künye', q: 'Müşteri ara' },
     options: { owner: ownerOptions, phase: PHASE_BUCKET_OPTIONS, status: KUNYE_OPTIONS },
   }), [ownerOptions]);
   const { values: filters, set: setFilters } = useUrlFilters(filterConfig, { allowedDepartments });
@@ -859,7 +859,9 @@ export default function CrmCustomersClient({ ownerOptions, allowedDepartments }:
         }
         .phase-segment.active { outline: 2px solid #4338ca; border-color: #4338ca; }
 
-        .advanced-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+        .customer-filter-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .customer-filter-actions .row-btn { min-height: 36px; }
+        .customer-filter-tokens { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
         .result-bar {
           display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
           padding: 14px 16px; border-radius: 18px; background: var(--surface-2);
@@ -1011,7 +1013,26 @@ export default function CrmCustomersClient({ ownerOptions, allowedDepartments }:
       <CustomersHero total={stats.total} kunyeTamam={stats.kunyeVar} kunyeEksik={stats.kunyeEksik} sektorEksik={sektorEksik} accountCount={accountCount} />
 
             <section className="surface">
-        <FilterBar config={filterConfig} allowedDepartments={allowedDepartments} showScope={false} />
+        <FilterBar config={filterConfig} allowedDepartments={allowedDepartments} showScope={false} prominentSearch
+          actions={<button type="button" className="ghost row-btn" aria-expanded={showAdvanced} onClick={() => setShowAdvanced((prev) => !prev)}>
+            <Filter size={15} /> Firma özellikleri{[sectorFilter, integrationFilter, kasaFilter].filter(Boolean).length ? ` (${[sectorFilter, integrationFilter, kasaFilter].filter(Boolean).length})` : ''}
+            <ChevronDown size={15} style={{ transform: showAdvanced ? 'rotate(180deg)' : undefined }} />
+          </button>}
+          extraFields={showAdvanced ? <>
+            <FilterSelectField label="Sektör" value={sectorFilter} onChange={(value) => setExtraFilter('sector', value)}>
+              <option value="">Tüm sektörler</option>{sectorOptions.map((name) => <option key={name} value={name}>{name}</option>)}
+            </FilterSelectField>
+            <FilterSelectField label="Entegrasyon" value={integrationFilter} onChange={(value) => setExtraFilter('integration', value)}>
+              <option value="">Tüm entegrasyonlar</option>{integrationOptions.map((name) => <option key={name} value={name}>{name}</option>)}
+            </FilterSelectField>
+            <FilterSelectField label="Kasa firması" value={kasaFilter} onChange={(value) => setExtraFilter('kasa', value)}>
+              <option value="">Tüm kasa firmaları</option>{kasaOptions.map((name) => <option key={name} value={name}>{name}</option>)}
+            </FilterSelectField>
+          </> : undefined} />
+        {[sectorFilter, integrationFilter, kasaFilter].some(Boolean) ? <div className="customer-filter-tokens">
+          {([['sector', 'Sektör', sectorFilter], ['integration', 'Entegrasyon', integrationFilter], ['kasa', 'Kasa', kasaFilter]] as const).filter((item) => item[2]).map(([key, label, value]) =>
+            <button key={key} type="button" className="token" onClick={() => setExtraFilter(key, '')} aria-label={`${label}: ${value} filtresini kaldır`}>{label}: {value} ×</button>)}
+        </div> : null}
 
         <div style={{ marginTop: 12 }}>
           <div className="phase-strip">
@@ -1039,62 +1060,6 @@ export default function CrmCustomersClient({ ownerOptions, allowedDepartments }:
           </div>
         </div>
 
-        <div style={{ marginTop: 12 }}>
-          <button className="ghost row-btn" onClick={() => setShowAdvanced((prev) => !prev)}>
-            <Filter size={16} strokeWidth={1.7} /> Gelişmiş filtreler
-            <ChevronDown size={16} style={{ transform: showAdvanced ? 'rotate(180deg)' : 'none' }} />
-          </button>
-        </div>
-
-        {showAdvanced ? (
-          <div className="advanced-grid" style={{ marginTop: 14 }}>
-            <label className="field">
-              <span className="field-label">Sektör</span>
-              <select className="select" value={sectorFilter} onChange={(e) => setExtraFilter('sector', e.target.value)}>
-                <option value="">Tüm sektörler</option>
-                {sectorOptions.map((name) => (
-                  <option key={name} value={name}>{name}</option>
-                ))}
-              </select>
-            </label>
-
-            <label className="field">
-              <span className="field-label">Entegrasyon yapısı</span>
-              <select className="select" value={integrationFilter} onChange={(e) => setExtraFilter('integration', e.target.value)}>
-                <option value="">Tüm entegrasyonlar</option>
-                {integrationOptions.map((name) => (
-                  <option key={name} value={name}>{name}</option>
-                ))}
-              </select>
-            </label>
-
-            <label className="field">
-              <span className="field-label">Kasa firması</span>
-              <select className="select" value={kasaFilter} onChange={(e) => setExtraFilter('kasa', e.target.value)}>
-                <option value="">Tüm kasa firmaları</option>
-                {kasaOptions.map((name) => (
-                  <option key={name} value={name}>{name}</option>
-                ))}
-              </select>
-            </label>
-
-            <label className="field">
-              <span className="field-label">Sayfa boyutu</span>
-              <select className="select" value={String(pageSize)} onChange={(e) => setPageSize(Number(e.target.value))}>
-                {PAGE_SIZE_OPTIONS.map((size) => (
-                  <option key={size} value={size}>{size} / sayfa</option>
-                ))}
-              </select>
-            </label>
-
-            <div className="field">
-              <span className="field-label">Görünüm özeti</span>
-              <div className="select" style={{ display: 'flex', alignItems: 'center', fontWeight: 800 }}>
-                {visibleTotal} görünen · Toplam {total} · Sayfa {currentPage}/{totalPages}
-              </div>
-            </div>
-          </div>
-        ) : null}
       </section>
 
       {msg ? <div className="message">{msg}</div> : null}
@@ -1196,6 +1161,7 @@ export default function CrmCustomersClient({ ownerOptions, allowedDepartments }:
         <div className="pager">
           <div className="section-note">Görünen {visibleTotal} müşteri · Toplam havuz {total} · Sayfa {currentPage} / {totalPages}</div>
           <div className="pager-buttons">
+            <label className="field" style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span className="field-label">Satır</span><select className="select" value={String(pageSize)} onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }} aria-label="Sayfa başına müşteri sayısı">{PAGE_SIZE_OPTIONS.map((size) => <option key={size} value={size}>{size}</option>)}</select></label>
             <button className="ghost" disabled={currentPage <= 1 || loading} onClick={() => setPage((p) => Math.max(1, p - 1))}>Önceki</button>
             <button className="ghost" disabled={currentPage >= totalPages || loading} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>Sonraki</button>
           </div>
