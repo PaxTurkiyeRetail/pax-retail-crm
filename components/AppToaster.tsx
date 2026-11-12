@@ -135,6 +135,8 @@ function headerValue(headers: RequestInit['headers'], key: string) {
 
 function isDownloadLike(url: string, init?: RequestInit) {
   const lower = url.toLowerCase();
+  // Next.js link ön yüklemesi (RSC isteği) kullanıcı indirmesi değildir.
+  if (lower.includes('_rsc=') || headerValue(init?.headers, 'rsc') || headerValue(init?.headers, 'next-router-prefetch')) return false;
   const accept = headerValue(init?.headers, 'accept').toLowerCase();
   return DOWNLOAD_WORDS.some((word) => lower.includes(word) || accept.includes(word));
 }

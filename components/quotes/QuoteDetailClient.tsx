@@ -292,7 +292,8 @@ export default function QuoteDetailClient({ quoteId }: { quoteId: string }) {
           <div className="pax-hero-stat"><div className="pax-hero-stat-label">Satır</div><div className="pax-hero-stat-value">{quote.items?.length ?? 0}</div></div>
         </div>
         <div style={{ position: 'relative', zIndex: 1, display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 14 }}>
-          <Link href={`/api/quotes/${quote.id}/pdf`} target="_blank" style={{ ...ghostLink, background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.2)', color: 'white' }}>PAX Teklif İndir</Link>
+          {/* Düz <a>: Link, API adresini ön yükleyip her açılışta PDF ürettiriyordu. */}
+          <a href={`/api/quotes/${quote.id}/pdf`} target="_blank" rel="noopener" style={{ ...ghostLink, background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.2)', color: 'white' }}>PAX Teklif İndir</a>
           <button disabled={busy || quote.status === 'closed'} onClick={() => setEditMode((value) => !value)} style={{ ...ghostButton, background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.2)', color: 'white' }}>{editMode ? 'Düzenlemeyi Kapat' : 'Düzenle'}</button>
           {quote.status === 'draft' ? <button disabled={busy} onClick={() => void updateStatus('sent')} style={{ ...primaryButton, background: 'white', color: '#1e3a8a', border: 'none' }}>{busy ? 'İşleniyor...' : 'Sent yap + aktivite aç'}</button> : null}
           {quote.status !== 'closed' ? (

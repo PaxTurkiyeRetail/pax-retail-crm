@@ -11,14 +11,15 @@ export default async function QuotePdfDownloadPage({ params }: { params: Promise
       <main style={{ display: 'grid', gap: 18 }}>
         <section className="pax-hero">
           <span className="pax-hero-eyebrow">Teklif PDF</span>
-          <h1 className="pax-hero-title">PDF Indirme</h1>
+          <h1 className="pax-hero-title">PDF İndirme</h1>
           <p className="pax-hero-description">
-            Bu ekrandan PAX teklif sablonuna gore hazirlanmis PDF ciktisini acabilir veya indirebilirsin.
+            Bu ekrandan PAX teklif şablonuna göre hazırlanmış PDF çıktısını açabilir veya indirebilirsin.
           </p>
           <div style={{ position: 'relative', zIndex: 1, display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 14 }}>
-            <Link
+            <a
               href={`/api/quotes/${quoteId}/pdf`}
               target="_blank"
+              rel="noopener"
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -32,8 +33,8 @@ export default async function QuotePdfDownloadPage({ params }: { params: Promise
                 textDecoration: 'none',
               }}
             >
-              PAX Teklif Indir
-            </Link>
+              PAX Teklif İndir
+            </a>
             <Link
               href={`/crm/quotes/${quoteId}`}
               style={{
@@ -50,7 +51,7 @@ export default async function QuotePdfDownloadPage({ params }: { params: Promise
                 textDecoration: 'none',
               }}
             >
-              Teklif Detayina Don
+              Teklif Detayına Dön
             </Link>
           </div>
         </section>
