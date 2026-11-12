@@ -522,9 +522,10 @@ export default function ActivitiesPage({ ownerOptions, allowedDepartments }: { o
         />
         <div className="command-toolbar">
           <div className="command-meta-left">
-            <span className="status-chip">{total.toLocaleString('tr-TR')} toplam sonuç</span>
-            <span className="status-chip">{rows.length.toLocaleString('tr-TR')} görünür kayıt</span>
-            <span className="status-chip">{pageSize} / sayfa</span>
+            <span className="text-[12px] text-[var(--muted)]">
+              <strong className="font-semibold text-[var(--text)]">{total.toLocaleString('tr-TR')}</strong> aktivite
+              {total > rows.length && rows.length > 0 ? <> · {((page - 1) * pageSize + 1).toLocaleString('tr-TR')}–{((page - 1) * pageSize + rows.length).toLocaleString('tr-TR')} arası gösteriliyor</> : null}
+            </span>
             {activeFilterCount > 0 ? <span className="chip active">{activeFilterCount} aktif filtre</span> : null}
           </div>
         </div>
