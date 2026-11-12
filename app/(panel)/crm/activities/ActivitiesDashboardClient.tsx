@@ -539,25 +539,9 @@ export default function ActivitiesPage({ ownerOptions, allowedDepartments }: { o
             <h2 className="section-title">Aktivite listesi</h2>
           </div>
           <div className="table-actions">
-            <Link
-              href="/crm/activities/new"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                minHeight: 40,
-                padding: '0 16px',
-                borderRadius: 12,
-                border: '1px solid #0b2456',
-                background: 'linear-gradient(135deg,#0b2456 0%, #1d4ed8 100%)',
-                color: '#ffffff',
-                fontSize: 12,
-                fontWeight: 800,
-                textDecoration: 'none',
-                boxShadow: '0 10px 18px rgba(29,78,216,.22)',
-              }}
-            >
-              Aktivite Ekle
+            <Link href="/crm/activities/new" className="add-btn">
+              <svg aria-hidden viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
+              Aktivite ekle
             </Link>
           </div>
         </div>
@@ -587,7 +571,7 @@ export default function ActivitiesPage({ ownerOptions, allowedDepartments }: { o
                 <th>Durum</th>
                 <th>Hedef Tarih</th>
                 <th>SLA</th>
-                <th>İşlem</th>
+                <th aria-label="İşlem" />
               </tr>
             </thead>
             <tbody>
@@ -598,40 +582,40 @@ export default function ActivitiesPage({ ownerOptions, allowedDepartments }: { o
                   <tr key={row.id}>
                     <td>{formatDate(row.created_at)}</td>
                     <td>
-                      <div className="name">{row.musteriler?.musteri ?? '-'}</div>
-                      <div className="muted">Sorumlu: {row.musteriler?.sorumlu ?? '-'}</div>
+                      <div className="name">{row.musteriler?.musteri ?? '—'}</div>
+                      {row.musteriler?.sorumlu ? <div className="muted">{row.musteriler.sorumlu}</div> : null}
                     </td>
                     <td>
                       <div className="activity-cell">
                         {row.faz_no != null ? (
                           <span className="phase-pill" title={phaseTitle}>{`FAZ ${row.faz_no}`}</span>
                         ) : (
-                          <span className="muted empty-cell">-</span>
+                          <span className="empty-cell">—</span>
                         )}
                       </div>
                     </td>
                     <td>
                       <div className="person-stack">
-                        <span className="person-main">{row.owner ?? '-'}</span>
+                        <span className="person-main">{row.owner ?? '—'}</span>
                         <span className="person-sub">{role === 'rs' ? 'Retail Support' : 'Sales'}</span>
                       </div>
                     </td>
                     <td>
                       <div className="person-stack">
-                        <span className="person-main">{row.partner_owner ?? '-'}</span>
+                        {row.partner_owner ? <span className="person-main">{row.partner_owner}</span> : <span className="empty-cell">—</span>}
                       </div>
                     </td>
                     <td>
                       <div className="activity-cell">
-                        <span className="activity-pill activity-pill-fixed" title={row.notlar || row.activity_label || '-'}>{row.activity_label ?? '-'}</span>
+                        {row.activity_label ? <span className="activity-pill activity-pill-fixed" title={row.notlar || row.activity_label}>{row.activity_label}</span> : <span className="empty-cell">—</span>}
                       </div>
                     </td>
                     <td>
-                      <div className="person-stack">
-                        <span className="person-main">{row.activity_status ?? '-'}</span>
-                      </div>
+                      {row.activity_status ? (
+                        <span className="status-text" data-s={/tamam/i.test(row.activity_status) ? 'done' : /devam/i.test(row.activity_status) ? 'progress' : 'idle'}>{row.activity_status}</span>
+                      ) : <span className="empty-cell">—</span>}
                     </td>
-                    <td><span className="date-chip">{formatDate(row.due_date)}</span></td>
+                    <td>{row.due_date ? <span className="date-chip">{formatDate(row.due_date)}</span> : <span className="empty-cell">—</span>}</td>
                     <td>
                       <span className="sla-inline">
                         <span
@@ -644,33 +628,26 @@ export default function ActivitiesPage({ ownerOptions, allowedDepartments }: { o
                         >
                           {row.sla.dotText || ''}
                         </span>
-                        <span className="sla-text">{row.sla.dayText || '-'}</span>
+                        {row.sla.dayText && row.sla.dayText !== '-' ? <span className="sla-text">{row.sla.dayText}</span> : null}
                       </span>
                     </td>
                     <td>
-                      <div className="action-stack">
-                        <Link className="link-btn" href={`/crm/activities/new?edit=${row.id}`}>Düzenle</Link>
-                        {row.is_blocked ? (
-                          <button
-                            type="button"
-                            className={`link-btn secondary danger`}
-                            onClick={() => void toggleBlock(row)}
-                            disabled={blockingRowId === row.id}
-                            title={`Blokaj Notu: ${row.blocked_note || 'Blokaj notu girilmedi'}\nEkleyen: ${row.blocked_by || '-'}\nTarih: ${formatDate(row.blocked_at)}`}
-                            aria-label={row.blocked_note || 'Blokaj notu girilmedi'}
-                          >
-                            {blockingRowId === row.id ? 'Kaydediliyor...' : 'Blokajı Kaldır'}
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            className="link-btn secondary"
-                            onClick={() => void toggleBlock(row)}
-                            disabled={blockingRowId === row.id}
-                          >
-                            {blockingRowId === row.id ? 'Kaydediliyor...' : 'Blokaj Ekle'}
-                          </button>
-                        )}
+                      <div className="row-actions">
+                        <Link className="icon-btn" href={`/crm/activities/new?edit=${row.id}`} title="Düzenle" aria-label="Düzenle">
+                          <svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
+                        </Link>
+                        <button
+                          type="button"
+                          className={`icon-btn${row.is_blocked ? ' danger' : ''}`}
+                          onClick={() => void toggleBlock(row)}
+                          disabled={blockingRowId === row.id}
+                          title={row.is_blocked
+                            ? `Blokajı kaldır\nNot: ${row.blocked_note || 'Blokaj notu girilmedi'}\nEkleyen: ${row.blocked_by || '—'}\nTarih: ${formatDate(row.blocked_at)}`
+                            : 'Blokaj ekle'}
+                          aria-label={row.is_blocked ? 'Blokajı kaldır' : 'Blokaj ekle'}
+                        >
+                          <svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="m5.6 5.6 12.8 12.8" /></svg>
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -683,7 +660,7 @@ export default function ActivitiesPage({ ownerOptions, allowedDepartments }: { o
         </div>
 
         <div className="pager">
-          <div className="inline"><span style={{ color: 'var(--text-3)', fontSize: 13 }}>Toplam {total} kayıt · Sayfa {page} / {totalPages}</span></div>
+          <div className="inline"><span style={{ color: 'var(--text-3)', fontSize: 12 }}>Sayfa {page} / {totalPages}</span></div>
           <div className="pager-buttons">
             <button className="btn-ghost" disabled={page <= 1 || loading} onClick={() => setPage((p) => Math.max(1, p - 1))}>Önceki</button>
             <button className="btn-ghost" disabled={page >= totalPages || loading} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>Sonraki</button>

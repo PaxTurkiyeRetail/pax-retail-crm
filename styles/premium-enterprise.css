@@ -470,3 +470,32 @@
     background: #fff !important;
   }
 }
+
+/* ── Refinement layer ────────────────────────────────────────────────────────
+   Calmer type scale: weight carries hierarchy only where it matters (titles,
+   key figures). Table headers, buttons, badges and labels drop to medium/semibold. */
+.pax-main-inner table th {
+  font-weight: 600 !important;
+  letter-spacing: .05em !important;
+  font-size: 10.5px !important;
+}
+.pax-main-inner :is(.pax-btn,.premium-btn,.wa-btn-clear,.pager-btn,.weekly-target-button,.link-btn,.new-btn,.seg-save,.seg-cancel,button) {
+  font-weight: 600;
+  border-radius: 10px;
+}
+.pax-main-inner :is(.badge,.pill,.chip,.status-chip,.phase-pill,.kunye-pill,.forecast-soft-chip,.kd-badge,.td-faz-badge,.date-chip,.sla-inline,.settings-type-badge,.parameters-status,.wa-pill,.activity-pill,.activity-pill-fixed) {
+  font-weight: 600 !important;
+  box-shadow: none;
+}
+.pax-main-inner :is(.field-label,.pax-label,.wa-field-label,.ph-field span,.parameters-kicker,.kicker,.eyebrow,.section-kicker,.panel-kicker,.det-kicker,.kd-eyebrow,.forecast-eyebrow,.seller-eyebrow,.wmp-eyebrow) {
+  font-weight: 600 !important;
+  letter-spacing: .06em !important;
+}
+.pax-main-inner :is(input, select, textarea, .pax-input, .wa-input, .ph-input, .ph-select, .seller-select, .command-search, .command-select) {
+  min-height: 36px;
+  border-radius: 10px !important;
+  box-shadow: none;
+}
+.pax-main-inner :is(.pax-btn,.premium-btn,button):hover:not(:disabled) {
+  transform: none;
+}

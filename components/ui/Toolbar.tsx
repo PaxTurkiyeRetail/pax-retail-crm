@@ -19,7 +19,7 @@ export function Field({ label, children }: { label: string; children: ReactNode 
 export function FilterGrid({ children, footer }: { children: ReactNode; footer?: ReactNode }) {
   return (
     <div className="rounded-xl border border-solid border-border bg-surface px-3 py-3 shadow-ds sm:px-4">
-      <div className="grid grid-cols-1 gap-x-3 gap-y-2.5 min-[480px]:grid-cols-2 md:grid-cols-4 2xl:grid-cols-6">{children}</div>
+      <div className="grid grid-cols-1 gap-x-3 gap-y-2.5 min-[480px]:grid-cols-2 md:grid-cols-4 xl:grid-cols-[repeat(auto-fill,minmax(160px,1fr))]">{children}</div>
       {footer && <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-text-3">{footer}</div>}
     </div>
   );

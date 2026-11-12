@@ -346,3 +346,57 @@
   :where(.crm-activities-page) .action-stack .link-btn,
   :where(.crm-activities-page) .action-stack .link-btn.secondary { min-height: 40px; font-size: 12px; }
 }
+
+/* ── Compact list (refinement) ─────────────────────────────────────────────── */
+:where(.crm-activities-page) .command-toolbar { background: transparent; border: 0; box-shadow: none; padding: 2px 4px 0; }
+:where(.crm-activities-page) .section-title { font-size: 15px; font-weight: 600; letter-spacing: -.01em; }
+:where(.crm-activities-page) .table-head { align-items: center; margin-bottom: 12px; }
+:where(.crm-activities-page) .table-wrap { border-radius: 12px !important; }
+:where(.crm-activities-page) .activity-table th,
+:where(.crm-activities-page) .activity-table td { padding: 8px 10px; }
+:where(.crm-activities-page) .activity-table td { font-variant-numeric: tabular-nums; }
+:where(.crm-activities-page) .activity-table col.col-date { width: 8%; }
+:where(.crm-activities-page) .activity-table col.col-customer { width: 19%; }
+:where(.crm-activities-page) .activity-table col.col-phase { width: 7%; }
+:where(.crm-activities-page) .activity-table col.col-owner { width: 12%; }
+:where(.crm-activities-page) .activity-table col.col-partner { width: 10%; }
+:where(.crm-activities-page) .activity-table col.col-activity { width: 12%; }
+:where(.crm-activities-page) .activity-table col.col-next { width: 11%; }
+:where(.crm-activities-page) .activity-table col.col-due { width: 8%; }
+:where(.crm-activities-page) .activity-table col.col-sla { width: 6%; }
+:where(.crm-activities-page) .activity-table col.col-action { width: 7%; }
+:where(.crm-activities-page) .name { font-weight: 600; font-size: 13px; }
+:where(.crm-activities-page) .muted { margin-top: 2px; }
+:where(.crm-activities-page) .person-stack { gap: 1px; }
+:where(.crm-activities-page) .person-main { font-weight: 500; }
+:where(.crm-activities-page) .empty-cell { color: var(--text-3); opacity: .6; margin: 0; }
+:where(.crm-activities-page) .phase-pill,
+:where(.crm-activities-page) .activity-pill { min-height: 22px; padding: 0 8px; font-size: 11px; }
+:where(.crm-activities-page) .activity-pill {
+  background: var(--surface-2); border-color: var(--border) !important; color: var(--text-2, var(--text));
+}
+:where(.crm-activities-page) .activity-pill-fixed { width: auto; }
+:where(.crm-activities-page) .date-chip { border: 0 !important; background: transparent; padding: 0; font-weight: 500 !important; font-size: 12px; }
+:where(.crm-activities-page) .sla-inline { border: 0 !important; min-height: 0; flex-wrap: nowrap; }
+:where(.crm-activities-page) .sla-dot { min-width: 22px; height: 22px; }
+:where(.crm-activities-page) .sla-dot:empty { min-width: 10px; width: 10px; height: 10px; padding: 0; }
+:where(.crm-activities-page) .status-text { display: inline-flex; align-items: center; gap: 6px; font-weight: 500; }
+:where(.crm-activities-page) .status-text::before { content: ''; width: 6px; height: 6px; border-radius: 999px; background: var(--text-3); flex: none; }
+:where(.crm-activities-page) .status-text[data-s="done"]::before { background: #16a34a; }
+:where(.crm-activities-page) .status-text[data-s="progress"]::before { background: #d97706; }
+:where(.crm-activities-page) .row-actions { display: flex; justify-content: flex-end; gap: 2px; }
+:where(.crm-activities-page) .row-actions .icon-btn {
+  display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; min-height: 30px; padding: 0;
+  border: 0; border-radius: 8px; background: transparent; color: var(--text-3); cursor: pointer; opacity: .55; transition: opacity .12s, background .12s, color .12s;
+}
+:where(.crm-activities-page) tr:hover .row-actions .icon-btn { opacity: 1; }
+:where(.crm-activities-page) .row-actions .icon-btn:hover { background: var(--accent-soft); color: var(--accent); }
+:where(.crm-activities-page) .row-actions .icon-btn.danger { opacity: 1; color: var(--chip-red-color); background: var(--chip-red-bg); }
+:where(.crm-activities-page) .row-actions .icon-btn:disabled { opacity: .4; cursor: wait; }
+:where(.crm-activities-page) .row-actions svg { width: 15px; height: 15px; }
+:where(.crm-activities-page) .activity-table th:last-child { text-align: right; }
+:where(.crm-activities-page) .add-btn {
+  display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 14px; border-radius: 10px;
+  background: var(--accent); color: #fff; font-size: 13px; font-weight: 600; text-decoration: none;
+}
+:where(.crm-activities-page) .add-btn:hover { filter: brightness(1.08); }
