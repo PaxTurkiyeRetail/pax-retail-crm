@@ -378,7 +378,7 @@ function renderBarLine(c: Ctx, w: DataWidget, result: ReportResult) {
   const measures = visibleColumns(w, result).filter((col) => col.role !== 'dimension').slice(0, 4);
   const rows = result.rows.slice(0, 40);
   if (!measures.length || !rows.length) return note(c, 'Veri yok');
-  const H = 170;
+  const H = 145;
   ensure(c, H + 10);
   const top = c.y;
   const palette = measures.map((_, i) => i === 0 ? (w.style.accent ? TOKEN_RGB[w.style.accent] : c.accent) : TOKEN_RGB[PIE_TOKENS[(i + 1) % PIE_TOKENS.length]]);
@@ -488,7 +488,7 @@ function renderText(c: Ctx, w: Extract<PageWidget, { type: 'text' }>) {
   const font = w.variant === 'heading' ? c.bold : c.regular;
   const lines = wrap(font, w.text || w.title, size, width(c));
   // Bölüm başlığı sayfa dibinde yalnız kalmasın.
-  if (w.variant === 'heading') ensure(c, size + 200);
+  if (w.variant === 'heading') ensure(c, size + 170);
   for (const line of lines) {
     ensure(c, size + 4);
     c.page.drawText(line, { x: c.box.left, y: c.y - size, size, font, color: w.variant === 'note' ? MUTED : TEXT });
@@ -502,7 +502,7 @@ function estimateHeight(w: DataWidget, d?: WidgetData): number {
   const rows = d?.result?.rows.length ?? 0;
   switch (w.type) {
     case 'kpi': case 'kpi_strip': return 58;
-    case 'bar': case 'line': return 180;
+    case 'bar': case 'line': return 155;
     case 'pie': return Math.max(130, Math.min(rows, 12) * 11 + 20) + 6;
     default: return (rows + 1) * 15 + 24;
   }
