@@ -678,6 +678,12 @@ export const DEFAULT_SALES_OPTIONS: Record<string, ParameterOption[]> = {
     { label: "KasaPOS Entegrasyonu", value: "KasaPOS Entegrasyonu", sortOrder: 20 },
     { label: "Max Store Kullanım", value: "Max Store Kullanim", sortOrder: 30 },
     { label: "AirViewer Kullanım", value: "AirViewer Kullanim", sortOrder: 40 },
+    { label: "PAX Uzaktan Yükleme Bedeli", value: "PAX Uzaktan Yükleme Bedeli", sortOrder: 50 },
+    { label: "Yazılım Geliştirme", value: "Yazılım Geliştirme", sortOrder: 60 },
+    { label: "Yazılım Test Bedeli", value: "Yazılım Test Bedeli", sortOrder: 70 },
+    { label: "POM Bedeli", value: "POM Bedeli", sortOrder: 80 },
+    { label: "BKM TechPOS", value: "BKM TechPOS", sortOrder: 90 },
+    { label: "Yazılım Bakım", value: "Yazılım Bakım", sortOrder: 100 },
   ],
 };
 
