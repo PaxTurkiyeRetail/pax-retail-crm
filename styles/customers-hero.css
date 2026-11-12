@@ -103,7 +103,7 @@
 .ch-bars { display: grid; gap: 8px; }
 .ch-bar-row {
   display: grid;
-  grid-template-columns: 80px 1fr 36px;
+  grid-template-columns: 124px 1fr 36px;
   align-items: center;
   gap: 8px;
 }
@@ -113,7 +113,6 @@
 .ch-bar-value { font-size: 12px; font-weight: 800; color: var(--text); text-align: right; }
 
 /* Account layout */
-.ch-owner-layout { display: grid; grid-template-columns: 1fr auto; gap: 16px; align-items: start; }
 
 /* Responsive */
 @media (max-width: 900px) { .ch-detail-grid { grid-template-columns: 1fr; } }

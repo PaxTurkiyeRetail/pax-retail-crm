@@ -1,6 +1,6 @@
 'use client';
 
-import type { CSSProperties, ReactNode } from 'react';
+import type { CSSProperties } from 'react';
 import '@/styles/customers-hero.css';
 
 type SummaryItem = { label: string; value: number };
@@ -16,15 +16,12 @@ type Props = {
   completionRate: number;
   kunyeDonutStyle: CSSProperties;
   kasaDonutStyle: CSSProperties;
-  accountDonutStyle: CSSProperties;
   kasaBreakdown: BarItem[];
   topSectors: BarItem[];
   sectorMax: number;
   visibleOwnerBars: BarItem[];
   fieldOwnerMax: number;
   fieldAccountCount: number;
-  /** KPI kapsam rozeti (Anlık · Departman · Satıcı). */
-  scope?: ReactNode;
 };
 
 const _svg = { fill: 'none', stroke: 'currentColor', strokeWidth: '1.75', strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
@@ -34,12 +31,10 @@ function Users({ size = 16 }: { size?: number }) { return <svg width={size} heig
 
 export default function CustomersHero({
   stats, completionRate,
-  kunyeDonutStyle, kasaDonutStyle, accountDonutStyle,
+  kunyeDonutStyle, kasaDonutStyle,
   kasaBreakdown, topSectors, sectorMax,
-  visibleOwnerBars, fieldOwnerMax, fieldAccountCount, scope,
+  visibleOwnerBars, fieldOwnerMax, fieldAccountCount,
 }: Props) {
-  const havuzOwner = visibleOwnerBars.find(b => b.label === 'Havuz Account');
-
   return (
     <>
       {/* ── Kompakt Hero ── */}
@@ -47,7 +42,6 @@ export default function CustomersHero({
         <span className="pax-hero-eyebrow">Müşteri Portföyü</span>
         <h1 className="pax-hero-title">Müşteriler</h1>
         <p className="pax-hero-description">Portföy kalitesi, künye doluluk oranı, sektör dağılımı ve sahiplik özeti.</p>
-        {scope}
       </section>
 
       {/* ── Detay Kartları (beyaz arka plan) ── */}
@@ -120,7 +114,7 @@ export default function CustomersHero({
           <div className="ch-bars">
             {topSectors.map((item) => (
               <div key={item.label} className="ch-bar-row">
-                <span className="ch-bar-label">{item.label}</span>
+                <span className="ch-bar-label" title={item.label}>{item.label.trim() === '-' || !item.label.trim() ? 'Sektör girilmemiş' : item.label}</span>
                 <div className="ch-bar-track">
                   <span style={{ width: `${sectorMax ? (item.value / sectorMax) * 100 : 0}%` }} />
                 </div>
@@ -136,30 +130,20 @@ export default function CustomersHero({
             <div>
               <div className="ch-kicker">Account Yapısı</div>
               <div className="ch-big">{fieldAccountCount}</div>
-              <div className="ch-sub">Dağılım, yük ve öne çıkan account yapısı.</div>
+              <div className="ch-sub">Account başına müşteri sayısı (Havuz hariç).</div>
             </div>
             <Users size={18} />
           </div>
-          <div className="ch-owner-layout">
-            <div className="ch-bars">
-              {visibleOwnerBars.map((item) => (
-                <div key={item.label} className="ch-bar-row">
-                  <span className="ch-bar-label">{item.label}</span>
-                  <div className="ch-bar-track">
-                    <span style={{ width: `${fieldOwnerMax ? (item.value / fieldOwnerMax) * 100 : 0}%` }} />
-                  </div>
-                  <span className="ch-bar-value">{item.value}</span>
+          <div className="ch-bars">
+            {visibleOwnerBars.map((item) => (
+              <div key={item.label} className="ch-bar-row">
+                <span className="ch-bar-label">{item.label}</span>
+                <div className="ch-bar-track">
+                  <span style={{ width: `${fieldOwnerMax ? (item.value / fieldOwnerMax) * 100 : 0}%` }} />
                 </div>
-              ))}
-            </div>
-            <div className="ch-donut-wrap">
-              <div className="ch-donut" style={accountDonutStyle}>
-                <div className="ch-donut-center">
-                  <strong>{havuzOwner?.value ?? 0}</strong>
-                  <span>{havuzOwner ? 'Havuz' : 'Merkez'}</span>
-                </div>
+                <span className="ch-bar-value">{item.value}</span>
               </div>
-            </div>
+            ))}
           </div>
         </div>
 

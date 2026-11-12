@@ -11,7 +11,7 @@ function ChevronDown({ size = 16, strokeWidth = 1.75, style }: IconProps) { retu
 function Filter({ size = 16, strokeWidth = 1.75, style }: IconProps) { return <svg width={size} height={size} viewBox="0 0 24 24" {..._svg} strokeWidth={strokeWidth} style={style}><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>; }
 function Plus({ size = 16, strokeWidth = 1.75, style }: IconProps) { return <svg width={size} height={size} viewBox="0 0 24 24" {..._svg} strokeWidth={strokeWidth} style={style}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>; }
 import { uniqueOptions, sumPhaseRange } from '@/lib/utils';
-import { FilterBar, ScopeLabel } from '@/components/filters/FilterBar';
+import { FilterBar } from '@/components/filters/FilterBar';
 import { useUrlFilters } from '@/lib/filters/use-url-filters';
 import type { FilterOption, PageFilterConfig } from '@/lib/filters/schema';
 import { DEPARTMENT_LABELS, type Department } from '@/lib/departments';
@@ -435,25 +435,6 @@ export default function CrmCustomersClient({ ownerOptions, allowedDepartments }:
   const kunyeDonutStyle = {
     background: `conic-gradient(#22c55e 0% ${completionRate}%, #f59e0b ${completionRate}% ${Math.min(100, completionRate + (stats.total ? Math.round((stats.kunyeEksik / Math.max(1, stats.total)) * 100) : 0))}%, #64748b ${Math.min(100, completionRate + (stats.total ? Math.round((stats.kunyeEksik / Math.max(1, stats.total)) * 100) : 0))}% 100%)`,
   } as React.CSSProperties;
-  const accountSegments = visibleOwnerBars.length
-    ? (() => {
-        const totalFieldOwners = visibleOwnerBars.reduce((sum, item) => sum + item.value, 0);
-        const colors = ['#93c5fd', '#60a5fa', '#2563eb', '#1d4ed8', '#bfdbfe'];
-        let start = 0;
-        const parts = visibleOwnerBars.map((item, index) => {
-          const pct = Math.round((item.value / Math.max(1, totalFieldOwners)) * 100);
-          const end = Math.min(100, start + pct);
-          const part = `${colors[index % colors.length]} ${start}% ${end}%`;
-          start = end;
-          return part;
-        });
-        if (start < 100) parts.push(`#cbd5e1 ${start}% 100%`);
-        return parts.join(', ');
-      })()
-    : '#cbd5e1 0% 100%';
-  const accountDonutStyle = {
-    background: `conic-gradient(${accountSegments})`,
-  } as React.CSSProperties;
   const kasaMap = rows.reduce<Record<string, number>>((acc, row) => {
     const key = (row.kasa_firmasi ?? '').trim() || 'Tanımsız';
     acc[key] = (acc[key] ?? 0) + 1;
@@ -805,13 +786,15 @@ export default function CrmCustomersClient({ ownerOptions, allowedDepartments }:
         .surface-tight { padding: 14px; }
         .section-head {
           display: flex; align-items: flex-start; justify-content: space-between;
-          gap: 12px; margin-bottom: 16px;
+          gap: 12px; margin-bottom: 12px; align-items: center;
         }
         .section-kicker {
           font-size: 12px; font-weight: 900; letter-spacing: .03em; text-transform: uppercase;
           color: var(--cc-accent); margin-bottom: 6px;
         }
-        .section-title { font-size: 20px; font-weight: 900; letter-spacing: -0.02em; }
+        .section-title { display: flex; align-items: center; gap: 8px; font-size: 18px; font-weight: 800; letter-spacing: -0.02em; }
+        .count-badge { padding: 2px 9px; border-radius: 999px; background: color-mix(in srgb, #4f46e5 12%, transparent); color: #4f46e5; font-size: 12px; font-weight: 800; font-variant-numeric: tabular-nums; }
+        .ghost.row-btn { min-height: 32px; padding: 0 12px; border-radius: 10px; font-size: 12.5px; }
         .section-note { margin-top: 4px; color: var(--text-3); font-size: 13px; line-height: 1.5; }
 
         .primary, .secondary, .ghost, .phase-segment, .action-card {
@@ -948,34 +931,36 @@ export default function CrmCustomersClient({ ownerOptions, allowedDepartments }:
         }
         .sector-value { font-size: 12px; font-weight: 900; color: var(--cc-accent); }
 
-        .table-wrap { overflow: auto; border: 1px solid var(--border); border-radius: 18px; }
+        .table-wrap { overflow: auto; border: 1px solid var(--border); border-radius: 12px; }
         /* Tablo kaba sığar: sabit 980px taban genişliği kaldırıldı, uzun hücreler satır kırar
            (yakınlaştırılmış tarayıcıda 'İşlem' kolonu kesiliyordu). overflow:auto yalnız yedek. */
         table { width: 100%; min-width: 0; border-collapse: collapse; background: var(--surface); table-layout: auto; }
         th {
-          text-align: left; padding: 12px 10px; font-size: 11px; letter-spacing: .04em;
+          text-align: left; padding: 9px 12px; font-size: 11px; font-weight: 700; letter-spacing: .04em;
           text-transform: uppercase; color: var(--text-3); background: var(--surface-2); border-bottom: 1px solid var(--border);
         }
-        td { padding: 12px 10px; border-bottom: 1px solid var(--border); font-size: 13px; vertical-align: middle; color: var(--text-2); }
+        td { padding: 9px 12px; border-bottom: 1px solid var(--border); font-size: 13px; vertical-align: middle; color: var(--text-2); }
         td.ct-cell { max-width: 180px; white-space: normal; overflow-wrap: anywhere; color: var(--text-2); font-weight: 600; line-height: 1.3; }
         tbody tr:nth-child(even) { background: color-mix(in srgb, var(--text) 4%, transparent); }
-        .name { color: var(--text); font-weight: 900; text-decoration: none; }
-        .name-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-        .pill.phase-pill { min-height: 28px; padding: 5px 10px; white-space: normal; text-align: center; line-height: 1.2; max-width: 100%; }
+        .name { color: var(--accent, #0e6fc7); font-size: 14px; font-weight: 800; text-decoration: none; }
+        .name:hover { text-decoration: underline; text-underline-offset: 3px; }
+        .name-row { display: flex; align-items: center; gap: 6px 10px; flex-wrap: wrap; }
+        .pill.seg-pill { min-height: 22px; padding: 0 9px; font-size: 11px; font-weight: 800; }
+        .pill.phase-pill { min-height: 26px; padding: 0 10px; white-space: nowrap; }
         .muted { color: var(--text-3); font-size: 12px; margin-top: 6px; }
         .pill {
           display: inline-flex; align-items: center; justify-content: center; min-height: 30px;
           padding: 0 12px; border-radius: 999px; font-size: 12px; font-weight: 900; white-space: nowrap;
         }
-        .phase-column, .kunye-column { width: 140px; text-align: center; }
-        .phase-pill, .kunye-pill { min-width: 108px; min-height: 32px; justify-content: center; }
+        .phase-column { width: 210px; }
+        .kunye-column { width: 110px; text-align: center; }
+        .kunye-pill { min-width: 76px; min-height: 26px; justify-content: center; }
         .actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
         .link-btn {
           display: inline-flex; align-items: center; justify-content: center; min-height: 34px; padding: 0 12px;
           border-radius: 12px; border: 1px solid var(--border); background: var(--surface); color: var(--text);
           font-size: 12px; font-weight: 900; text-decoration: none; cursor: pointer;
         }
-        .phase-column { text-align: center; }
         .pager {
           display: flex; align-items: center; justify-content: space-between; gap: 12px;
           flex-wrap: wrap; margin-top: 14px;
@@ -1060,14 +1045,12 @@ export default function CrmCustomersClient({ ownerOptions, allowedDepartments }:
         completionRate={completionRate}
         kunyeDonutStyle={kunyeDonutStyle}
         kasaDonutStyle={kasaDonutStyle}
-        accountDonutStyle={accountDonutStyle}
         kasaBreakdown={kasaBreakdown}
         topSectors={topSectors}
         sectorMax={sectorMax}
         visibleOwnerBars={visibleOwnerBars}
         fieldOwnerMax={fieldOwnerMax}
         fieldAccountCount={fieldAccountCount}
-        scope={<ScopeLabel mode="snapshot" department={departmentFilter ? DEPARTMENT_LABELS[departmentFilter] : undefined} owner={selectedOwner?.name} />}
       />
 
             <section className="surface">
@@ -1164,8 +1147,7 @@ export default function CrmCustomersClient({ ownerOptions, allowedDepartments }:
       <section className="surface">
         <div className="section-head">
           <div>
-            <div className="section-kicker">Execution Layer</div>
-            <div className="section-title">Müşteri listesi</div>
+            <div className="section-title">Müşteri listesi <span className="count-badge">{total.toLocaleString('tr-TR')}</span></div>
           </div>
           {canCreateCustomers ? <button className="primary" onClick={openCreate}>
             <Plus size={16} strokeWidth={1.7} /> Müşteri ekle
@@ -1183,27 +1165,15 @@ export default function CrmCustomersClient({ ownerOptions, allowedDepartments }:
                 <th>Kasa Firması</th>
                 <th className="kunye-column">Künye</th>
                 <th>Entegrasyon</th>
-                <th style={{ width: 120 }}>İşlem</th>
+                <th style={{ width: 96 }}>İşlem</th>
               </tr>
             </thead>
             <tbody>
               {visibleRows.map((r) => (
                 <tr key={r.musteri_id}>
                   <td>
-                    <div style={{ display: 'grid', gap: 8 }}>
-                      <Link
-                        className="name"
-                        href={`/crm/${r.musteri_id}`}
-                        title="Müşteri detayına git"
-                        style={{
-                          fontSize: 15,
-                          fontWeight: 800,
-                          color: "var(--accent, #0e6fc7)",
-                          textDecoration: "underline",
-                          textDecorationColor: "color-mix(in srgb, currentColor 35%, transparent)",
-                          textUnderlineOffset: 3,
-                        }}
-                      >
+                    <div className="name-row">
+                      <Link className="name" href={`/crm/${r.musteri_id}`} title="Müşteri detayına git">
                         {r.musteri}
                       </Link>
                       {(() => {
@@ -1211,11 +1181,11 @@ export default function CrmCustomersClient({ ownerOptions, allowedDepartments }:
                         const firmaTone = customerStatusTone(segmentation.firmaDurumu);
                         const yonetimTone = managementTypeTone(segmentation.yonetimTipi);
                         return (
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                            <span className="pill" style={{ background: firmaTone.bg, color: firmaTone.color, border: `1px solid ${firmaTone.border}` }}>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                            <span className="pill seg-pill" style={{ background: firmaTone.bg, color: firmaTone.color, border: `1px solid ${firmaTone.border}` }}>
                               {segmentation.firmaDurumu}
                             </span>
-                            <span className="pill" style={{ background: yonetimTone.bg, color: yonetimTone.color, border: `1px solid ${yonetimTone.border}` }}>
+                            <span className="pill seg-pill" style={{ background: yonetimTone.bg, color: yonetimTone.color, border: `1px solid ${yonetimTone.border}` }}>
                               {segmentation.yonetimTipi}
                             </span>
                           </div>
@@ -1238,9 +1208,9 @@ export default function CrmCustomersClient({ ownerOptions, allowedDepartments }:
                       );
                     })()}
                   </td>
-                  <td className="ct-cell" title={r.sektor ?? undefined}>{r.sektor ?? '-'}</td>
-                  <td className="ct-cell" title={r.sorumlu ?? undefined}>{r.sorumlu ?? '-'}</td>
-                  <td className="ct-cell" title={r.kasa_firmasi ?? undefined}>{r.kasa_firmasi ?? '-'}</td>
+                  <td className="ct-cell" title={r.sektor ?? undefined}>{r.sektor ?? '—'}</td>
+                  <td className="ct-cell" title={r.sorumlu ?? undefined}>{r.sorumlu ?? '—'}</td>
+                  <td className="ct-cell" title={r.kasa_firmasi ?? undefined}>{r.kasa_firmasi ?? '—'}</td>
                   <td className="kunye-column">
                     {r.report_only ? (
                       <span className="pill kunye-pill" style={{ background: 'var(--chip-gray-bg)', color: 'var(--chip-gray-color)', border: '1px solid var(--chip-gray-bd)' }}>
@@ -1252,9 +1222,9 @@ export default function CrmCustomersClient({ ownerOptions, allowedDepartments }:
                       </span>
                     )}
                   </td>
-                  <td className="ct-cell">{r.entegrasyon_tipi ?? '-'}</td>
+                  <td className="ct-cell">{r.entegrasyon_tipi ?? '—'}</td>
                   <td>
-                    {canEditCustomer(r) ? <button type="button" className="ghost" onClick={() => openEdit(r)}>Düzenle</button> : null}
+                    {canEditCustomer(r) ? <button type="button" className="ghost row-btn" onClick={() => openEdit(r)}>Düzenle</button> : null}
                   </td>
                 </tr>
               ))}
