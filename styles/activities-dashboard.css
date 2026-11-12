@@ -153,3 +153,12 @@
 .mom-grid { grid-auto-rows: 1fr; }
 .mom-box { display: grid; align-content: center; }
 .bar-rows { align-content: space-evenly; }
+
+/* Three momentum boxes stacked beside the trend; three role/risk boxes */
+.mom-grid { grid-template-columns: 1fr; }
+.mom-box { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: 'l v' 'e v'; column-gap: 10px; align-items: center; }
+.mom-box span { grid-area: l; }
+.mom-box em { grid-area: e; margin-top: 1px; }
+.mom-box strong { grid-area: v; margin-top: 0; font-size: 20px; }
+.mom-box strong small { font-size: 11px; font-weight: 600; color: var(--text-3); }
+.role-risk { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }

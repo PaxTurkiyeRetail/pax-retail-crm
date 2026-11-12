@@ -11,9 +11,9 @@ type PersonRow = { title: string; totalCount: number; firms: number };
 type DashboardMetrics = {
   momentumPct: number;
   currentWeekCount: number;
+  previousWeekCount: number;
   atRiskFirmCount: number;
   newFirmsThisWeek: number;
-  avgPerFirm: string;
   trend: Array<{ key: string; label: string; count: number }>;
   trendTotal: number;
   trendMax: number;
@@ -44,7 +44,6 @@ export default function ActivitiesDashboard({
   dashboardMetrics,
   companyPhase,
   leaderboard,
-  riskByPhase,
   salesTotal,
   rsTotal,
   dueDateAnalysis,
@@ -89,16 +88,17 @@ export default function ActivitiesDashboard({
         <div className="det-card">
           <div className="det-head">
             <div className="det-kicker">Momentum</div>
-            <span className="det-chip" title="SLA sağlığı">SLA %{slaHealthPct}</span>
           </div>
 
           <div className="mom-split">
           <div className="mom-grid">
             <div className="mom-box">
-              <span>Aktivite Momentum</span>
-              <strong>{dashboardMetrics.momentumPct > 0 ? '+' : ''}{dashboardMetrics.momentumPct}%</strong>
+              <span>Son 7 gün</span>
+              <strong>{dashboardMetrics.currentWeekCount} <small>aktivite</small></strong>
               <em className={momentumPositive ? 'pos' : momentumNegative ? 'neg' : 'neu'}>
-                Önceki 7 güne göre
+                {dashboardMetrics.previousWeekCount > 0
+                  ? `Önceki 7 gün ${dashboardMetrics.previousWeekCount} · ${dashboardMetrics.momentumPct > 0 ? '+' : ''}${dashboardMetrics.momentumPct}%`
+                  : 'Önceki 7 günde aktivite yok'}
               </em>
             </div>
             <div className="mom-box">
@@ -111,11 +111,6 @@ export default function ActivitiesDashboard({
               <strong>{dashboardMetrics.newFirmsThisWeek}</strong>
               <em className="pos">Son 7 günde</em>
             </div>
-            <div className="mom-box">
-              <span>Firma Başı</span>
-              <strong>{dashboardMetrics.avgPerFirm}</strong>
-              <em className="neu">Ort. aktivite</em>
-            </div>
           </div>
 
           <div className="trend-wrap">
@@ -123,7 +118,6 @@ export default function ActivitiesDashboard({
               <div>
                 <div className="trend-lbl">Haftalık trend</div>
               </div>
-              <div className="trend-total">{dashboardMetrics.trendTotal}</div>
             </div>
             <div className="trend-bars">
               {dashboardMetrics.trend.map((item) => (
@@ -144,7 +138,6 @@ export default function ActivitiesDashboard({
         <div className="det-card">
           <div className="det-head">
             <div className="det-kicker" title="Her firma son aktivitesinin fazına göre sayılır">Faz dağılımı</div>
-            <span className="det-chip">{companyPhase.totalFirms} firma</span>
           </div>
           <div className="bar-rows">
             {companyPhase.list.map((p) => (
@@ -183,10 +176,6 @@ export default function ActivitiesDashboard({
             <div className="rr-box">
               <div className="rr-lbl">Retail Support</div>
               <div className="rr-val">{rsTotal}</div>
-            </div>
-            <div className="rr-box">
-              <div className="rr-lbl">En Yoğun Faz</div>
-              <div className="rr-val">{riskByPhase?.title ?? '—'}</div>
             </div>
             <div className="rr-box" title={`Geciken %${dueDateAnalysis.overduePct} · Bugün ${dueDateAnalysis.dueToday} · Zamanında ${dueDateAnalysis.onTime}`}>
               <div className="rr-lbl">Geciken</div>

@@ -293,9 +293,7 @@ export default function SalesClient() {
 
   const shown = useMemo(() => rows, [rows]);
   const activeRows = shown.filter((row) => row.status === 'active');
-  const listAmount = activeRows.reduce((sum, row) => sum + Number(row.amount ?? 0), 0);
   const listDevices = activeRows.reduce((sum, row) => sum + Number(row.device_count ?? 0), 0);
-  const editedCount = activeRows.filter((row) => row.device_count !== row.quote_device_count || Math.round(row.amount) !== Math.round(row.quote_amount)).length;
 
   return (
     <div style={{ display: 'grid', gap: 16 }}>
@@ -318,7 +316,6 @@ export default function SalesClient() {
           <div className="pax-hero-stat"><div className="pax-hero-stat-label">Satış · {periodLabel || 'Seçili dönem'}</div><div className="pax-hero-stat-value">{(summary?.sale_count ?? 0).toLocaleString('tr-TR')}</div></div>
           <div className="pax-hero-stat"><div className="pax-hero-stat-label">Ciro · Seçili dönem</div><div className="pax-hero-stat-value">{usd(summary?.amount ?? 0)}</div></div>
           <div className="pax-hero-stat"><div className="pax-hero-stat-label">Cihaz · Seçili dönem</div><div className="pax-hero-stat-value">{(summary?.devices ?? 0).toLocaleString('tr-TR')}</div></div>
-          <div className="pax-hero-stat"><div className="pax-hero-stat-label">Bu sayfada</div><div className="pax-hero-stat-value">{activeRows.length.toLocaleString('tr-TR')} · {usd(listAmount)}</div></div>
         </div>
       </div>
 
@@ -330,7 +327,6 @@ export default function SalesClient() {
           allowedDepartments={allowedDepartments}
           actions={(
             <>
-              {editedCount ? <span style={{ color: 'var(--text-3)', fontWeight: 700, fontSize: 13 }}>{editedCount.toLocaleString('tr-TR')} satış tekliften farklı</span> : null}
               <button onClick={() => void load()} style={ghostButton} disabled={loading}>{loading ? 'Yükleniyor…' : 'Yenile'}</button>
             </>
           )}
@@ -389,10 +385,7 @@ export default function SalesClient() {
                     </td>
                     <td style={tableCell}>
                       <b>{usd(row.amount)}</b>
-                      <div style={{ fontSize: 12, color: 'var(--text-3)' }}>
-                        {row.price_source === 'manual' ? 'anlaşma fiyatı' : 'katalog'}
-                        {row.quote_id && amountDiff !== 0 ? ` · teklif ${usd(row.quote_amount)}` : ''}
-                      </div>
+                      {row.quote_id && amountDiff !== 0 ? <div style={{ fontSize: 12, color: 'var(--text-3)' }}>teklif {usd(row.quote_amount)}</div> : null}
                     </td>
                     <td style={tableCell}>
                       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>

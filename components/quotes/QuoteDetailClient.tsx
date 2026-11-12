@@ -109,6 +109,13 @@ export default function QuoteDetailClient({ quoteId }: { quoteId: string }) {
   const [saleInfo, setSaleInfo] = useState<{ saleId: string | null; phaseMoved: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
   const [editMode, setEditMode] = useState(false);
+  // Listeden "Düzenle" ile gelindiyse (?edit=1) düzenleme formu açık başlar.
+  const quoteLoadedId = quote?.id;
+  const quoteClosed = quote?.status === 'closed';
+  useEffect(() => {
+    if (!quoteLoadedId || quoteClosed) return;
+    if (new URLSearchParams(window.location.search).get('edit') === '1') setEditMode(true);
+  }, [quoteLoadedId, quoteClosed]);
   const [products, setProducts] = useState<Product[]>([]);
   const [rules, setRules] = useState<Rule[]>([]);
   const [probabilities, setProbabilities] = useState<number[]>([10, 30, 60, 90]);

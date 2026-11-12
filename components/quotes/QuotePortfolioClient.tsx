@@ -166,13 +166,10 @@ export default function QuotePortfolioClient({ ownerOptions, allowedDepartments 
   const currentPage = Math.min(page, totalPages);
 
   const cards = [
-    { label: 'Toplam Teklif', value: kpis?.total_quotes ?? 0, hint: 'Portföydeki tüm kayıtlar' },
     { label: 'Aktif Teklif', value: kpis?.sent_quotes ?? 0, hint: 'Müşteriyle paylaşılmış açık kayıt' },
     { label: 'Riskli Takip', value: kpis?.overdue_followups ?? 0, hint: 'Takip tarihi geçmiş' },
     { label: 'Yaklaşan Bitiş', value: kpis?.expiring_soon ?? 0, hint: '3 gün içinde süresi dolacak' },
-    { label: 'Toplam Cihaz', value: kpis?.total_devices ?? 0, hint: 'Tekrarlayan ürünler hariç adet' },
-    { label: 'Ağırlıklı Potansiyel', value: money(kpis?.weighted_amount ?? 0), hint: 'Olasılığa göre ağırlıklandırılmış' },
-    { label: 'Satış Cirosu', value: money(kpis?.sale_amount ?? 0), hint: `${kpis?.sale_devices ?? 0} cihaz · aktif satış kayıtları` },
+    { label: 'Ağırlıklı Potansiyel', value: money(kpis?.weighted_amount ?? 0), hint: `${(kpis?.total_devices ?? 0).toLocaleString('tr-TR')} cihaz teklif edildi · olasılığa göre` },
     { label: 'Teklif → Satış', value: kpis?.conversion_pct == null ? '—' : `%${kpis.conversion_pct}`, hint: kpis?.cancelled_sales ? `${kpis.cancelled_sales} satış iptal edildi` : 'Kapanan tekliflerin dönüşüm oranı' },
   ];
 
@@ -244,11 +241,12 @@ export default function QuotePortfolioClient({ ownerOptions, allowedDepartments 
                 {['Teklif', 'Müşteri', 'Satışçı', 'Olasılık', 'Cihaz / Tutar', 'Geçerlilik', 'Takip', 'Durum'].map((head) => (
                   <th key={head} style={tableHead}>{head}</th>
                 ))}
+                <th style={tableHead} aria-label="İşlem" />
               </tr>
             </thead>
             <tbody>
               {!loading && !rows.length ? (
-                <tr><td colSpan={8} style={{ padding: 20, color: 'var(--text-3)' }}>Kayıt bulunamadı.</td></tr>
+                <tr><td colSpan={9} style={{ padding: 20, color: 'var(--text-3)' }}>Kayıt bulunamadı.</td></tr>
               ) : null}
               {rows.map((row) => {
                 const state = quoteState(row);
@@ -300,6 +298,19 @@ export default function QuotePortfolioClient({ ownerOptions, allowedDepartments 
                       <div style={{ marginTop: 6, fontSize: 12, color: 'var(--text-3)', fontWeight: 700 }}>{lossLabel(row.loss_reason_key)}</div>
                     ) : null}
                   </td>
+                  <td style={{ ...tableCell, whiteSpace: 'nowrap', textAlign: 'right' }}>
+                    <Link href={`/crm/quotes/${row.id}`} style={iconButton} title="Teklifi aç" aria-label="Teklifi aç">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z" /><circle cx="12" cy="12" r="3" /></svg>
+                    </Link>
+                    {row.status !== 'closed' ? (
+                      <Link href={`/crm/quotes/${row.id}?edit=1`} style={{ ...iconButton, marginLeft: 6 }} title="Düzenle" aria-label="Düzenle">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
+                      </Link>
+                    ) : null}
+                    <Link href={`/crm/quotes/${row.id}/print`} target="_blank" style={{ ...iconButton, marginLeft: 6 }} title="Yazdır / PDF" aria-label="Yazdır / PDF">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 9V3h12v6" /><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" /><path d="M6 14h12v7H6z" /></svg>
+                    </Link>
+                  </td>
                 </tr>
                 );
               })}
@@ -313,6 +324,7 @@ export default function QuotePortfolioClient({ ownerOptions, allowedDepartments 
 
 const surface: CSSProperties = { background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 22, padding: 16, boxShadow: 'var(--shadow)' };
 const surfaceCard: CSSProperties = { ...surface, padding: '12px 14px', borderRadius: 16 };
+const iconButton: CSSProperties = { display: 'inline-grid', placeItems: 'center', width: 30, height: 30, borderRadius: 9, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-2)', verticalAlign: 'middle' };
 const subLine: CSSProperties = { marginTop: 2, color: 'var(--text-3)', fontSize: 12 };
 const countBadge: CSSProperties = { fontSize: 12, fontWeight: 700, letterSpacing: 0, padding: '3px 9px', borderRadius: 999, background: 'var(--chip-indigo-bg)', color: 'var(--chip-indigo-color)' };
 const heroGhost: CSSProperties = { display: 'inline-flex', alignItems: 'center', height: 38, padding: '0 14px', borderRadius: 12, border: '1px solid rgba(255,255,255,.28)', background: 'rgba(255,255,255,.10)', color: '#fff', textDecoration: 'none', fontWeight: 600, fontSize: 13 };

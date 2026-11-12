@@ -418,7 +418,6 @@ export default function ActivitiesPage({ ownerOptions, allowedDepartments }: { o
       previousWeekCount,
       newFirmsThisWeek: firmsThisWeek.size,
       atRiskFirmCount,
-      avgPerFirm: avgPerFirm.toFixed(1),
       trend: weekdayBucket,
       trendTotal: workWeekCount,
       trendMax: Math.max(1, ...weekdayBucket.map((item) => item.count)),
