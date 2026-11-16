@@ -72,10 +72,22 @@ export function KpiStrip({ result, style, onDrill }: { result: ReportResult; sty
   );
 }
 
+function groupRows<T extends Record<string, unknown>>(rows: T[], key: string) {
+  const map = new Map<string, T[]>();
+  for (const r of rows) { const k = String(r[key] ?? '').trim(); (map.get(k) ?? map.set(k, []).get(k)!).push(r); }
+  return [...map].sort(([a], [b]) => groupRank(a) - groupRank(b) || a.localeCompare(b, 'tr')).map(([k, rs]) => ({ key: k, rows: rs }));
+}
+
 const TOOL_BTN = 'inline-flex! h-7! min-h-7! items-center! gap-1 rounded-md! border! border-[var(--border)]! bg-[var(--surface)]! px-2.5! py-0! text-[12px]! font-medium! leading-none! shadow-none! hover:translate-y-0! hover:bg-[var(--surface-2)]!';
 
-export function DataTableView({ result, style, onDrill }: { result: ReportResult; style?: Style; onDrill?: RecordDrillHandler }) {
-  const cols = visibleColumns(result, style);
+/** Grup sırası: bilinen segmentler önce (Hunter → Farmer → Lead → Bank), diğerleri alfabetik. */
+const GROUP_ORDER = ['Hunter', 'Farmer', 'Lead', 'Bank', 'Kasa Firması'];
+const groupRank = (k: string) => { const i = GROUP_ORDER.indexOf(k); return i < 0 ? GROUP_ORDER.length : i; };
+
+export function DataTableView({ result, style, onDrill, groupBy }: { result: ReportResult; style?: Style; onDrill?: RecordDrillHandler; groupBy?: string }) {
+  const allCols = visibleColumns(result, style);
+  const groupCol = groupBy ? result.columns.find((c) => c.key === groupBy || (c as { sourceField?: string }).sourceField === groupBy) : undefined;
+  const cols = groupCol ? allCols.filter(({ col }) => col.key !== groupCol.key) : allCols;
   const pad = DENSITY_PAD[style?.density ?? 'normal'];
   const [fit, setFit] = useState(true);
   const [widths, setWidths] = useState<Record<string, number>>({});
@@ -132,8 +144,16 @@ export function DataTableView({ result, style, onDrill }: { result: ReportResult
           })}</tr>
         </thead>
         <tbody>
-          {rows.map((r, i) => (
-            <tr key={i}>
+          {(groupCol ? groupRows(rows, groupCol.key) : [{ key: '', rows }]).flatMap((g) => [
+            ...(groupCol ? [
+              <tr key={`g-${g.key}`} className="bg-[var(--surface-2)]">
+                <th scope="colgroup" colSpan={cols.length} className={`${pad} text-left text-[13px] font-bold text-[var(--text)] shadow-[inset_3px_0_0_var(--accent)]`}>
+                  {g.key || '—'} <span className="ml-1 text-[11px] font-medium text-[var(--muted)]">{g.rows.length.toLocaleString('tr-TR')} kayıt</span>
+                </th>
+              </tr>,
+            ] : []),
+            ...g.rows.map((r, i) => (
+            <tr key={`${g.key}-${i}`}>
               {cols.map(({ col, format, setting }) => {
                 const matched=resolveConditionalRule(style?.conditional??[],col,r[col.key],result.columns,r);const rc=matched?.color;
                 const bar=setting?.dataBar?dataBarExtent(result.rows.map(row=>row[col.key]),r[col.key]):null;
@@ -146,7 +166,8 @@ export function DataTableView({ result, style, onDrill }: { result: ReportResult
                 );
               })}
             </tr>
-          ))}
+          )),
+          ])}
         </tbody>
       </table>
       </div>
@@ -260,7 +281,7 @@ export function DataWidgetBody({ widget, data, onDrill }: { widget: Extract<Page
     case 'pie': return <PieChart result={r} title={widget.title} onDrill={chartDrill} />;
     case 'pivot': return <PivotView result={r} pivotColumn={widget.query.visualization.pivotColumn} style={widget.style} onDrill={onDrill} />;
     case 'heatmap': return <PivotView result={r} forecast={data.forecast} pivotColumn={widget.query.visualization.pivotColumn} heat style={widget.style} onDrill={onDrill} />;
-    default: return <DataTableView result={r} style={widget.style} onDrill={onDrill} />;
+    default: return <DataTableView result={r} style={widget.style} onDrill={onDrill} groupBy={widget.pdf?.groupBy} />;
   }
 }
 
