@@ -632,7 +632,7 @@ export default function PanelShell({
   const pageMeta = useMemo(() => routeMeta(pathname), [pathname]);
   const showParameterManagement = allowed('admin.parameters.manage') && allowed('screen.admin.parameters.view');
   const showReports = Boolean(
-    reportsGroup && (reportsOpen || reportsActive || collapsed),
+    reportsGroup && !collapsed && (reportsOpen || reportsActive),
   );
   // Tasarım sistemine (components/ui) geçmiş ekranlar eski .pax-main/.pax-main-inner
   // global kurallarından (tablo, buton, input !important) yalıtılır.
@@ -649,7 +649,7 @@ export default function PanelShell({
         onClick={item.hardNavigate ? (event) => { if (!event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) { event.preventDefault(); window.location.assign(item.href); } } : undefined}
         onMouseEnter={() => prefetchRoute(item.href)}
         onFocus={() => prefetchRoute(item.href)}
-        className={cx(navItemCls, sub && !collapsed && "pl-8", active && navActiveCls)}
+        className={cx(navItemCls, sub && !collapsed && "pl-8", collapsed && "lg:justify-center lg:px-0", active && navActiveCls)}
         title={collapsed ? item.label : undefined}
         aria-current={active ? "page" : undefined}
       >
@@ -662,7 +662,7 @@ export default function PanelShell({
           <i className={cx("inline-block size-1.5 shrink-0 rounded-full", active ? "bg-nav-active-bar shadow-[0_0_0_3px_rgba(17,161,242,.25)]" : "bg-nav-label")} aria-hidden="true" />
         )}
         {sub && collapsed && <span className="hidden size-4 shrink-0 items-center justify-center text-[10px] lg:flex">•</span>}
-        <span className={cx("truncate", sub && collapsed && "lg:hidden")}>{item.label}</span>
+        <span className={cx("truncate", collapsed && "lg:hidden")}>{item.label}</span>
       </Link>
     );
   };
@@ -733,7 +733,7 @@ export default function PanelShell({
           </button>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-2 pb-3">
+        <div className={cx("min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-2 pb-3", collapsed && "lg:px-1.5 lg:pt-2 lg:[scrollbar-width:none] lg:[&::-webkit-scrollbar]:hidden")}>
           {groups.filter((g) => !g.tail).map((group) => (
             <div key={group.title}>
               {sectionLabel(group.title)}
@@ -745,8 +745,8 @@ export default function PanelShell({
             <div className="mt-3">
               <button
                 type="button"
-                className={cx(navItemCls, "w-full", reportsActive && "font-semibold text-nav-text-strong")}
-                onClick={() => setReportsOpen((value) => !value)}
+                className={cx(navItemCls, "w-full", collapsed && "lg:justify-center lg:px-0", reportsActive && (collapsed ? navActiveCls : "font-semibold text-nav-text-strong"))}
+                onClick={() => { if (collapsed) toggleCollapse(); setReportsOpen((value) => !value); }}
                 aria-expanded={showReports}
                 title={collapsed ? reportsGroup.title : undefined}
               >
