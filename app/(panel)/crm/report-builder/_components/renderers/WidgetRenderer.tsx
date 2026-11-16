@@ -88,7 +88,13 @@ const TOOL_BTN = 'inline-flex! h-7! min-h-7! items-center! gap-1 rounded-md! bor
 const GROUP_ORDER = ['Hunter', 'Farmer', 'Lead', 'Bank', 'Kasa Firması'];
 /** Segment renkleri: sekme, blok başlığı ve ara toplamda aynı renk. */
 const GROUP_COLOR: Record<string, string> = { Hunter: '#2563eb', Farmer: '#16a34a', Lead: '#d97706', Bank: '#7c3aed', 'Kasa Firması': '#0891b2' };
-const groupColor = (k: string) => GROUP_COLOR[k] ?? '#64748b';
+const EXTRA_COLORS = ['#2563eb', '#16a34a', '#d97706', '#7c3aed', '#0891b2', '#db2777', '#65a30d', '#dc2626', '#0d9488', '#9333ea'];
+const groupColor = (k: string) => {
+  if (GROUP_COLOR[k]) return GROUP_COLOR[k];
+  if (!k) return '#64748b';
+  let h = 0; for (const ch of k) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return EXTRA_COLORS[h % EXTRA_COLORS.length];
+};
 const groupRank = (k: string) => { const i = GROUP_ORDER.indexOf(k); return i < 0 ? GROUP_ORDER.length : i; };
 
 export function DataTableView({ result, style, onDrill, groupBy }: { result: ReportResult; style?: Style; onDrill?: RecordDrillHandler; groupBy?: string }) {
@@ -127,7 +133,7 @@ export function DataTableView({ result, style, onDrill, groupBy }: { result: Rep
   if (!result.rows.length) return <p className="pax-empty text-sm">Kayıt yok</p>;
   const customWidth = Object.keys(widths).length > 0;
   // Ara toplam yalnız toplanabilir ölçülerde (oran/ortalama/yüzde ve önceki dönem kolonları hariç).
-  const sumCols = groupCol ? cols.filter(({ col }) => col.role !== 'dimension' && !col.key.endsWith(PREV_SUFFIX) && !/avg|ratio|rate|pct|oran|ortalama|%/i.test(col.key + ' ' + col.label) && result.rows.some((r) => typeof r[col.key] === 'number')).map(({ col }) => col.key) : [];
+  const sumCols = groupCol ? cols.filter(({ col }) => col.role !== 'dimension' && !col.key.endsWith(PREV_SUFFIX) && !/avg|ratio|rate|pct|oran|ortalama|%|customer_count|distinct/i.test(col.key + ' ' + col.label) && result.rows.some((r) => typeof r[col.key] === 'number')).map(({ col }) => col.key) : [];
   return (
     <div className="flex h-full min-h-0 flex-col gap-2">
       {segTabs.length > 1 && (
@@ -143,7 +149,7 @@ export function DataTableView({ result, style, onDrill, groupBy }: { result: Rep
           })}
         </div>
       )}
-      {sumCols.length > 1 && (() => {
+      {sumCols.length > 1 && groupCol?.key === 'portfolio_segment' && (() => {
         const accent = seg ? groupColor(seg) : 'var(--accent)';
         const stages = [{ label: 'Firma', value: rows.length }, ...sumCols.map((k) => { const c = cols.find((x) => x.col.key === k)!; return { label: c.col.label, value: sumOf(rows, k), col: c.col, format: c.format }; })];
         return (
@@ -183,7 +189,7 @@ export function DataTableView({ result, style, onDrill, groupBy }: { result: Rep
           <tr>{cols.map(({ col }) => {
             const active = sort?.key === col.key;
             return (
-              <th key={col.key} scope="col" aria-sort={active ? (sort!.dir === 1 ? 'ascending' : 'descending') : 'none'} style={{ whiteSpace: 'normal', overflowWrap: 'anywhere', lineHeight: 1.25, verticalAlign: 'bottom', ...(widths[col.key] ? { width: widths[col.key] } : {}) }}
+              <th key={col.key} scope="col" aria-sort={active ? (sort!.dir === 1 ? 'ascending' : 'descending') : 'none'} style={{ whiteSpace: 'normal', overflowWrap: 'anywhere', lineHeight: 1.25, verticalAlign: 'bottom', textAlign: col.role !== 'dimension' ? 'right' : 'left', ...(widths[col.key] ? { width: widths[col.key] } : {}) }}
                 className={`${pad} relative cursor-pointer select-none whitespace-normal break-words ${col.role !== 'dimension' ? 'text-right' : 'text-left'}`}
                 onClick={() => setSort((s) => (s?.key === col.key ? (s.dir === 1 ? { key: col.key, dir: -1 } : null) : { key: col.key, dir: 1 }))}>
                 {col.label}<span aria-hidden className="ml-1 text-[10px] opacity-60">{active ? (sort!.dir === 1 ? '▲' : '▼') : ''}</span>

@@ -28,3 +28,4 @@
 .block:hover .resizeX::after,.block:hover .resizeY::after,.selectedBlock .resizeX::after,.selectedBlock .resizeY::after{opacity:.85}
 .studio .palette button{font-size:11px;line-height:1.2;white-space:nowrap}.studio .palette button span{overflow:hidden;text-overflow:ellipsis}
 .studio .palette button[draggable=true]{cursor:grab}
+.studio .palette button>svg:last-child{display:none}.studio .palette button{padding:9px 8px}
