@@ -55,3 +55,8 @@
 .studio .reportTabs{display:inline-flex;gap:4px;padding:4px;border:1px solid var(--border,#dce6f1);border-radius:999px;background:var(--surface,#fff)}
 .studio .reportTabs button{font-size:12.5px;font-weight:650;padding:7px 16px;border-radius:999px;color:var(--muted,#63768e)}
 .studio .reportTabs button[aria-selected=true]{background:#0d2548;color:#fff;border-color:#0d2548}
+
+/* Tablo kartı: üst araçlar sabit, yalnız tablo gövdesi kayar */
+.studio .blockBody:has(table){display:flex;flex-direction:column;overflow:hidden}
+.studio .blockBody:has(table)>*{flex:1 1 auto;min-height:0;overflow:auto}
+.studio .blockBody:has(table)>:global(.flex-col){overflow:hidden}
