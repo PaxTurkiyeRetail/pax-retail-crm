@@ -310,7 +310,12 @@ const CUSTOMER_PORTFOLIO: DatasetDef = {
       select l.kategori from public.crm_musteri_listesi l
       where l.is_active and (l.musteri_id = m.id or lower(trim(l.firma)) = lower(trim(m.musteri)))
       order by (l.musteri_id = m.id) desc nulls last, position(l.kategori in 'FHLK') limit 1
-    ) ml on true`,
+    ) ml on true
+    left join lateral (
+      -- Künye "Satıcı Etiketi" (Hunter / Farmer / Lead / Kasa): segmentin asıl kaynağı.
+      select nullif(trim(k.satici_etiketi), '') as etiket from public.musteri_kunye_v2 k
+      where k.musteri_id = m.id order by k.updated_at desc nulls last limit 1
+    ) ke on true`,
   baseWhere: [],
   defaultDateField: 'created_date',
   owner: { userId: 'm.owner_user_id::text', name: 'm.sorumlu' },
@@ -325,7 +330,7 @@ const CUSTOMER_PORTFOLIO: DatasetDef = {
     poc_status: { label: 'POC durumu', sql: `case mp.aktif_faz_no when 11 then 'Konsinye' when 12 then 'Pilot / POC' when 13 then 'Uçtan Uca Test' else case when mp.aktif_faz_no > 13 then 'POC sonrası' else 'POC yok' end end`, type: 'string', group: 'POC', options: ['Konsinye', 'Pilot / POC', 'Uçtan Uca Test', 'POC sonrası', 'POC yok'], description: 'Faz 11 Konsinye, 12 Pilot / POC, 13 Uçtan Uca Test; daha ileri fazda "POC sonrası"; aksi halde "POC yok".' },
     owner_department: { label: 'Satıcı departmanı', sql: `coalesce(od.owner_departments, 'Atanmamış')`, type: 'string', group: 'Müşteri', description: 'Admin › Kullanıcılar ekranında satıcıya atanan departman(lar). Birden fazlaysa virgülle; Retail satıcıları için "içerir: Retail" filtresi kullanın.' },
     rental_period: { label: 'Kiralama dönemi', sql: `case when ix.rental_start is null then '—' else to_char(ix.rental_start, 'DD.MM.YYYY') || ' – ' || coalesce(to_char(ix.rental_end, 'DD.MM.YYYY'), '…') end`, type: 'string', group: 'Satış', description: 'Aktif kiralama kalemlerinin en erken başlangıcı – en geç bitişi.' },
-    portfolio_segment: { label: 'Portföy segmenti', sql: `case when lower(trim(coalesce(m.is_kolu, ''))) = 'bank' then 'Bank' else case ml.kategori when 'H' then 'Hunter' when 'F' then 'Farmer' when 'L' then 'Lead' when 'K' then 'Kasa Firması' else 'Listede yok' end end`, type: 'string', group: 'Müşteri', options: ['Hunter', 'Farmer', 'Lead', 'Bank', 'Kasa Firması', 'Listede yok'], description: 'Departmanı Bank olan firma "Bank"; diğerleri Müşteri Listesi kategorisi (Hunter / Farmer / Lead / Kasa Firması).' },
+    portfolio_segment: { label: 'Portföy segmenti', sql: `case when lower(trim(coalesce(m.is_kolu, ''))) = 'bank' then 'Bank' when lower(ke.etiket) = 'hunter' then 'Hunter' when lower(ke.etiket) = 'farmer' then 'Farmer' when lower(ke.etiket) = 'lead' then 'Lead' when lower(ke.etiket) like 'kasa%' then 'Kasa Firması' else case ml.kategori when 'H' then 'Hunter' when 'F' then 'Farmer' when 'L' then 'Lead' when 'K' then 'Kasa Firması' else 'Etiketsiz' end end`, type: 'string', group: 'Müşteri', options: ['Hunter', 'Farmer', 'Lead', 'Bank', 'Kasa Firması', 'Etiketsiz'], description: 'Departmanı Bank olan firma "Bank"; diğerleri künyedeki Satıcı Etiketi (Hunter / Farmer / Lead / Kasa). Künye boşsa Müşteri Listesi kategorisi.' },
     sale_kind: { label: 'Kiralama / Satış', sql: `case when coalesce(sx.has_sale, false) and coalesce(sx.has_rental, false) then 'Satış + Kiralama' when sx.has_rental then 'Kiralama' when sx.has_sale then 'Satış' else 'Yok' end`, type: 'string', group: 'Satış', options: ['Satış', 'Kiralama', 'Satış + Kiralama', 'Yok'], description: 'Aktif satış kayıtlarına göre; karma kayıt iki türü de sayar.' },
   },
   measures: {

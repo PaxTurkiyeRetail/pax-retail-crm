@@ -174,9 +174,10 @@ export function DataTableView({ result, style, onDrill, groupBy }: { result: Rep
                 const matched=resolveConditionalRule(style?.conditional??[],col,r[col.key],result.columns,r);const rc=matched?.color;
                 const bar=setting?.dataBar?dataBarExtent(result.rows.map(row=>row[col.key]),r[col.key]):null;
                 const barColor=TOKEN_SOFT[rc??style?.accent??'primary'];
-                const backgroundImage=bar?`linear-gradient(to right, transparent ${bar.start*100}%, ${barColor} ${bar.start*100}%, ${barColor} ${(bar.start+bar.width)*100}%, transparent ${(bar.start+bar.width)*100}%)`:undefined;
+                // Bar sağdan başlar (sayılar sağa yaslı), hücre içinde ince ve dikey ortalı; satır ızgarasını bozmaz.
+                const barStyle=bar?{backgroundImage:`linear-gradient(to left, transparent ${bar.start*100}%, ${barColor} ${bar.start*100}%, ${barColor} ${(bar.start+bar.width)*100}%, transparent ${(bar.start+bar.width)*100}%)`,backgroundRepeat:'no-repeat',backgroundSize:'calc(100% - 12px) 70%',backgroundPosition:'center',backgroundClip:'padding-box'}:{};
                 return (
-                  <td key={col.key} className={`${pad} ${fit || customWidth ? 'break-words whitespace-normal' : 'whitespace-nowrap'} ${col.role !== 'dimension' ? 'text-right tabular-nums' : ''}`} style={{...(rc?{backgroundColor:TOKEN_SOFT[rc],color:TOKEN_CSS[rc],fontWeight:600}:{}),backgroundImage}}>
+                  <td key={col.key} className={`${pad} ${fit || customWidth ? 'break-words whitespace-normal' : 'whitespace-nowrap'} ${col.role !== 'dimension' ? 'text-right tabular-nums' : ''}`} style={{...(rc?{backgroundColor:TOKEN_SOFT[rc],color:TOKEN_CSS[rc],fontWeight:600}:{}),...barStyle}}>
                     {onDrill && col.role !== 'dimension' && !col.key.endsWith(PREV_SUFFIX) ? <button type="button" className={DRILL_BTN} title="Katkıda bulunan kayıtlar" onClick={() => onDrill(r, col)}>{fmt(col, r[col.key], format)}</button> : fmt(col, r[col.key], format)}{matched?.label&&<span className="ml-2 inline-block text-[10px] font-medium">{matched.label}</span>}
                   </td>
                 );
