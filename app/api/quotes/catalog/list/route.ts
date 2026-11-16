@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 import { NextResponse } from 'next/server';
-import { requireQuoteCatalogAccessOrThrow } from '@/lib/authz';
+import { requireQuoteCatalogReadOrThrow } from '@/lib/authz';
 import { createPgAdminClient } from '@/lib/pg/admin';
 import { isMissingRelationError } from '@/lib/quotes/service';
 import { normalizeQuoteProduct } from '@/lib/quotes/catalog';
@@ -10,7 +10,7 @@ import { getSystemParameterValue } from '@/lib/system-parameters';
 
 export async function GET() {
   try {
-    await requireQuoteCatalogAccessOrThrow();
+    await requireQuoteCatalogReadOrThrow();
     const admin = createPgAdminClient();
     const [{ data: products, error: productErr }, { data: rules, error: ruleErr }] = await Promise.all([
       admin.from('quote_products').select('*').order('sort_order', { ascending: true }).order('name', { ascending: true }),

@@ -93,9 +93,12 @@ export function DataTableView({ result, style, onDrill, groupBy }: { result: Rep
   const [widths, setWidths] = useState<Record<string, number>>({});
   const [sort, setSort] = useState<{ key: string; dir: 1 | -1 } | null>(null);
   const [q, setQ] = useState('');
+  const [seg, setSeg] = useState<string | null>(null);
+  const segTabs = useMemo(() => (groupCol ? groupRows(result.rows, groupCol.key).map((g) => ({ key: g.key, count: g.rows.length })) : []), [result.rows, groupCol]);
   const rows = useMemo(() => {
     const needle = q.trim().toLocaleLowerCase('tr');
-    let out = needle ? result.rows.filter((r) => cols.some(({ col }) => String(r[col.key] ?? '').toLocaleLowerCase('tr').includes(needle))) : result.rows;
+    const base = groupCol && seg != null ? result.rows.filter((r) => String(r[groupCol.key] ?? '').trim() === seg) : result.rows;
+    let out = needle ? base.filter((r) => cols.some(({ col }) => String(r[col.key] ?? '').toLocaleLowerCase('tr').includes(needle))) : base;
     if (sort) {
       const { key, dir } = sort;
       out = [...out].sort((a, b) => {
@@ -105,7 +108,7 @@ export function DataTableView({ result, style, onDrill, groupBy }: { result: Rep
       });
     }
     return out;
-  }, [result.rows, q, sort, cols]);
+  }, [result.rows, q, sort, cols, groupCol, seg]);
   const startResize = (key: string, e: React.PointerEvent) => {
     e.preventDefault(); e.stopPropagation();
     const th = (e.currentTarget as HTMLElement).parentElement as HTMLElement;
@@ -118,6 +121,19 @@ export function DataTableView({ result, style, onDrill, groupBy }: { result: Rep
   const customWidth = Object.keys(widths).length > 0;
   return (
     <div className="flex h-full min-h-0 flex-col gap-2">
+      {segTabs.length > 1 && (
+        <div role="tablist" aria-label="Segment" className="flex flex-wrap gap-1.5">
+          {[{ key: null as string | null, label: 'Tümü', count: result.rows.length }, ...segTabs.map((t) => ({ key: t.key as string | null, label: t.key || '—', count: t.count }))].map((t) => {
+            const on = seg === t.key;
+            return (
+              <button key={t.label} type="button" role="tab" aria-selected={on} onClick={() => setSeg(t.key)}
+                className={`rounded-lg border px-3 py-1.5 text-[12.5px] font-semibold transition-colors ${on ? 'border-[var(--accent)] bg-[var(--accent)] text-white' : 'border-[var(--border)] bg-[var(--surface)] text-[var(--text)] hover:bg-[var(--surface-2)]'}`}>
+                {t.label} <span className={`ml-1 tabular-nums ${on ? 'text-white/80' : 'text-[var(--muted)]'}`}>{t.count.toLocaleString('tr-TR')}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
       <div className="flex flex-wrap items-center gap-2 text-[12px] text-[var(--muted)]">
         <span className="font-medium tabular-nums">{rows.length.toLocaleString('tr-TR')}{rows.length !== result.rows.length ? ` / ${result.rows.length.toLocaleString('tr-TR')}` : ''} satır</span>
         <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Tabloda ara…" aria-label="Tabloda ara" className="h-7! min-h-7! w-48 rounded-md! border border-[var(--border)] bg-[var(--surface)] px-2.5! text-[12px]! text-[var(--text)]" />
@@ -144,8 +160,8 @@ export function DataTableView({ result, style, onDrill, groupBy }: { result: Rep
           })}</tr>
         </thead>
         <tbody>
-          {(groupCol ? groupRows(rows, groupCol.key) : [{ key: '', rows }]).flatMap((g) => [
-            ...(groupCol ? [
+          {(groupCol && seg == null ? groupRows(rows, groupCol.key) : [{ key: '', rows }]).flatMap((g) => [
+            ...(groupCol && seg == null ? [
               <tr key={`g-${g.key}`} className="bg-[var(--surface-2)]">
                 <th scope="colgroup" colSpan={cols.length} className={`${pad} text-left text-[13px] font-bold text-[var(--text)] shadow-[inset_3px_0_0_var(--accent)]`}>
                   {g.key || '—'} <span className="ml-1 text-[11px] font-medium text-[var(--muted)]">{g.rows.length.toLocaleString('tr-TR')} kayıt</span>

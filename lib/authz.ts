@@ -196,6 +196,11 @@ export async function requireQuoteCatalogAccessOrThrow() {
   return requirePermissionOrThrow('quote.catalog.manage');
 }
 
+/** Katalog görüntüleme: teklif okuyabilen herkes (account dahil); düzenleme yine quote.catalog.manage. */
+export async function requireQuoteCatalogReadOrThrow() {
+  return requireAnyPermissionOrThrow(['quote.catalog.manage', 'quote.read']);
+}
+
 export async function requireActivityReadOrThrow() {
   return requirePermissionOrThrow('activity.read');
 }

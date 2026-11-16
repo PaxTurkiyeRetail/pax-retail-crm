@@ -518,7 +518,7 @@ export default function PanelShell({
         iconKey: "quotes",
       });
     // Ürün Kataloğu: Satış/Teklif/Forecast ortak ürün, satış baremi ve kiralama koşulları.
-    if (allowed('quote.catalog.manage') && allowed('screen.crm.quotes.view'))
+    if ((allowed('quote.catalog.manage') || allowed('quote.read')) && allowed('screen.crm.quotes.view'))
       operations.push({
         href: "/crm/quotes/catalog",
         label: "Ürün Kataloğu",

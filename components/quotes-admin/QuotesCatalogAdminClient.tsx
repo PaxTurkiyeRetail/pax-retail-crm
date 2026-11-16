@@ -84,7 +84,7 @@ function normalizeSpecsText(input: unknown) {
   return '';
 }
 
-export default function QuotesCatalogAdminClient() {
+export default function QuotesCatalogAdminClient({ canManage = false }: { canManage?: boolean }) {
   const [products, setProducts] = useState<Product[]>([]);
   const [rules, setRules] = useState<Rule[]>([]);
   /** Yürürlükteki fiyat listesi tarihi (Liste Yönetimleri → Teklif). */
@@ -308,7 +308,7 @@ export default function QuotesCatalogAdminClient() {
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <button type="button" onClick={startNew} style={primaryButton}>+ Yeni Ürün</button>
+          {canManage ? <button type="button" onClick={startNew} style={primaryButton}>+ Yeni Ürün</button> : <span style={{ ...pill, ...passivePill }}>Salt okunur</span>}
         </div>
       </header>
 
@@ -387,6 +387,7 @@ export default function QuotesCatalogAdminClient() {
               </div>
             </div>
 
+            <fieldset disabled={!canManage} style={{ border: 0, padding: 0, margin: 0, minWidth: 0, display: 'grid', gap: 16 }}>
             <fieldset style={fieldset}>
               <legend style={legend}>1 · Kullanım tipi</legend>
               <div role="radiogroup" className="quote-catalog-usage mobile-grid-stack" style={{ display: 'grid', gap: 8, gridTemplateColumns: 'repeat(3,minmax(0,1fr))' }}>
@@ -463,15 +464,16 @@ export default function QuotesCatalogAdminClient() {
                 </div>
               )}
             </fieldset>
+            </fieldset>
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', borderTop: '1px solid var(--border)', paddingTop: 12 }}>
+            {canManage ? <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', borderTop: '1px solid var(--border)', paddingTop: 12 }}>
               <span style={{ fontSize: 12.5, fontWeight: 700, color: formError ? 'var(--chip-red-color)' : 'var(--text-3)' }}>
                 {formError ?? (productForm.id ? 'Değişiklik yeni kayıtlara uygulanır; mevcut teklif ve satışlar değişmez.' : 'Kaydedince Satış, Teklif ve Forecast listelerinde görünür.')}
               </span>
               <button type="button" onClick={saveProduct} disabled={savingProduct || Boolean(formError)} style={{ ...primaryButton, opacity: savingProduct || formError ? 0.6 : 1 }}>
                 {savingProduct ? 'Kaydediliyor…' : productForm.id ? 'Değişiklikleri kaydet' : 'Ürünü ekle'}
               </button>
-            </div>
+            </div> : null}
           </div>
 
           <div style={{ ...surface, display: 'grid', gap: 12, boxShadow: `inset 3px 0 0 ${USAGE_COLOR.sale}` }}>
@@ -480,7 +482,7 @@ export default function QuotesCatalogAdminClient() {
               {selectedProduct ? <span style={{ color: 'var(--text-3)', fontSize: 12, fontWeight: 700 }}>{selectedProduct.code}</span> : null}
             </div>
             {!selectedProduct || !productForm.id ? (
-              <div style={emptyText}>Barem eklemek için önce ürünü kaydedin ya da listeden seçin.</div>
+              <div style={emptyText}>{canManage ? 'Barem eklemek için önce ürünü kaydedin ya da listeden seçin.' : 'Baremleri görmek için listeden ürün seçin.'}</div>
             ) : !saleAllowed ? (
               <div style={{ ...emptyText, color: 'var(--chip-gold-color)' }}>Sadece Kiralama ürünü: satış baremi kullanılmaz, fiyat kiralama koşullarından gelir.</div>
             ) : (
@@ -500,18 +502,18 @@ export default function QuotesCatalogAdminClient() {
                         <tr key={rule.id} style={{ borderTop: '1px solid var(--border)' }}>
                           <td style={tableCell}>{rule.min_qty} – {rule.max_qty ?? '∞'} adet</td>
                           <td style={{ ...tableCell, fontWeight: 800, fontVariantNumeric: 'tabular-nums', textAlign: 'right' }}>{money(rule.unit_price)}</td>
-                          <td style={{ ...tableCell, textAlign: 'right' }}><button type="button" onClick={() => void deleteRule(rule.id)} style={dangerButton}>Sil</button></td>
+                          <td style={{ ...tableCell, textAlign: 'right' }}>{canManage ? <button type="button" onClick={() => void deleteRule(rule.id)} style={dangerButton}>Sil</button> : null}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
-                <div className="quote-catalog-rule-grid mobile-grid-stack" style={{ display: 'grid', gap: 8, gridTemplateColumns: 'repeat(3,minmax(0,1fr)) auto', alignItems: 'end' }}>
+                {canManage ? <div className="quote-catalog-rule-grid mobile-grid-stack" style={{ display: 'grid', gap: 8, gridTemplateColumns: 'repeat(3,minmax(0,1fr)) auto', alignItems: 'end' }}>
                   <label style={field}><span style={label}>Min adet</span><input type="number" min={1} value={ruleForm.min_qty} onChange={(e) => setRuleForm((prev) => ({ ...prev, min_qty: Number(e.target.value || 1) }))} style={input} /></label>
                   <label style={field}><span style={label}>Max adet</span><input type="number" min={1} value={ruleForm.max_qty} onChange={(e) => setRuleForm((prev) => ({ ...prev, max_qty: e.target.value }))} style={input} placeholder="Boş = sınırsız" /></label>
                   <label style={field}><span style={label}>Birim fiyat (USD)</span><input type="number" min={0} step="0.01" value={ruleForm.unit_price} onChange={(e) => setRuleForm((prev) => ({ ...prev, unit_price: e.target.value }))} style={input} placeholder="örn. 199" /></label>
                   <button type="button" onClick={saveRule} disabled={savingRule} style={primaryButton}>{savingRule ? '…' : 'Barem ekle'}</button>
-                </div>
+                </div> : null}
               </>
             )}
           </div>
