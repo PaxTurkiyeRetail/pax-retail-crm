@@ -11,6 +11,7 @@ const state = vi.hoisted(() => ({
 vi.mock('@/lib/authz', () => ({
   requireActivityReadOrThrow: async () => ({ id: 'u1' }),
   assertOwnedResourceAccess: vi.fn(),
+  userHasPermission: () => false,
 }));
 
 vi.mock('@/lib/pg/admin', () => ({
