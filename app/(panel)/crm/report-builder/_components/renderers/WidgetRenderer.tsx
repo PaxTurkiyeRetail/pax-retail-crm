@@ -149,13 +149,19 @@ export function DataTableView({ result, style, onDrill, groupBy }: { result: Rep
         return (
           <div aria-label="Dönüşüm hunisi" className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${stages.length}, minmax(0,1fr))` }}>
             {stages.map((st, i) => {
-              const prev = i > 0 ? stages[i - 1].value : 0;
-              const pct = i > 0 && prev > 0 ? Math.round((st.value / prev) * 100) : null;
+              // Aşama = bu ölçüsü > 0 olan firma sayısı; oran tüm firmalara göre.
+              const hit = i > 0 && 'col' in st && st.col ? rows.filter((r) => typeof r[st.col!.key] === 'number' && (r[st.col!.key] as number) > 0).length : 0;
+              const pct = rows.length ? Math.round((hit / rows.length) * 100) : 0;
               return (
                 <div key={st.label} className="min-w-0 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-2" style={{ boxShadow: `inset 0 3px 0 ${accent}` }}>
                   <div className="truncate text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]" title={st.label}>{st.label}</div>
                   <div className="text-[18px] font-extrabold tabular-nums text-[var(--text)]">{'col' in st && st.col ? fmt(st.col, st.value, st.format) : st.value.toLocaleString('tr-TR')}</div>
-                  <div className="text-[11px] tabular-nums text-[var(--muted)]">{i === 0 ? `${seg ?? 'Tüm segmentler'}` : pct != null && pct <= 100 ? `→ %${pct} dönüşüm` : `firma başı ${(st.value / Math.max(1, rows.length)).toLocaleString('tr-TR', { maximumFractionDigits: 1 })}`}</div>
+                  {i === 0 ? <div className="text-[11px] text-[var(--muted)]">{seg ?? 'Tüm segmentler'}</div> : (
+                    <div title={`${hit} / ${rows.length} firmada var`}>
+                      <div className="text-[11px] tabular-nums text-[var(--muted)]">{hit.toLocaleString('tr-TR')} firmada · %{pct}</div>
+                      <div className="mt-1 h-1 overflow-hidden rounded-full bg-[var(--surface-2)]"><div className="h-full rounded-full" style={{ width: `${pct}%`, background: accent }} /></div>
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -172,12 +178,12 @@ export function DataTableView({ result, style, onDrill, groupBy }: { result: Rep
         </div>
       </div>
       <div className="min-h-0 flex-1 overflow-auto rounded-lg border border-[var(--border)] [scrollbar-color:var(--muted)_transparent] [scrollbar-gutter:stable] [scrollbar-width:auto]">
-      <table className="pax-table" style={{ width: fit && !customWidth ? '100%' : 'max-content', minWidth: fit && !customWidth ? `max(100%, ${cols.length * 110}px)` : '100%', tableLayout: fit || customWidth ? 'fixed' : 'auto' }}>
+      <table className="pax-table" style={{ width: fit && !customWidth ? '100%' : 'max-content', minWidth: fit && !customWidth ? `max(100%, ${cols.length * 120}px)` : '100%', tableLayout: fit || customWidth ? 'fixed' : 'auto' }}>
         <thead className="sticky top-0 z-[1] shadow-[0_1px_0_var(--border)]" style={{ background: 'var(--surface)' }}>
           <tr>{cols.map(({ col }) => {
             const active = sort?.key === col.key;
             return (
-              <th key={col.key} scope="col" aria-sort={active ? (sort!.dir === 1 ? 'ascending' : 'descending') : 'none'} style={widths[col.key] ? { width: widths[col.key] } : undefined}
+              <th key={col.key} scope="col" aria-sort={active ? (sort!.dir === 1 ? 'ascending' : 'descending') : 'none'} style={{ whiteSpace: 'normal', overflowWrap: 'anywhere', lineHeight: 1.25, verticalAlign: 'bottom', ...(widths[col.key] ? { width: widths[col.key] } : {}) }}
                 className={`${pad} relative cursor-pointer select-none whitespace-normal break-words ${col.role !== 'dimension' ? 'text-right' : 'text-left'}`}
                 onClick={() => setSort((s) => (s?.key === col.key ? (s.dir === 1 ? { key: col.key, dir: -1 } : null) : { key: col.key, dir: 1 }))}>
                 {col.label}<span aria-hidden className="ml-1 text-[10px] opacity-60">{active ? (sort!.dir === 1 ? '▲' : '▼') : ''}</span>
