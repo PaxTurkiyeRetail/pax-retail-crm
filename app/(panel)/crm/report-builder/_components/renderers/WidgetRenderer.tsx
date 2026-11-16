@@ -144,7 +144,7 @@ export function DataTableView({ result, style, onDrill, groupBy }: { result: Rep
         </div>
       </div>
       <div className="min-h-0 flex-1 overflow-auto rounded-lg border border-[var(--border)] [scrollbar-color:var(--muted)_transparent] [scrollbar-gutter:stable] [scrollbar-width:auto]">
-      <table className="pax-table" style={{ width: fit && !customWidth ? '100%' : 'max-content', minWidth: '100%', tableLayout: fit || customWidth ? 'fixed' : 'auto' }}>
+      <table className="pax-table" style={{ width: fit && !customWidth ? '100%' : 'max-content', minWidth: fit && !customWidth ? `max(100%, ${cols.length * 110}px)` : '100%', tableLayout: fit || customWidth ? 'fixed' : 'auto' }}>
         <thead className="sticky top-0 z-[1] shadow-[0_1px_0_var(--border)]" style={{ background: 'var(--surface)' }}>
           <tr>{cols.map(({ col }) => {
             const active = sort?.key === col.key;
