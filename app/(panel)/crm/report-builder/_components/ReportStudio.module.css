@@ -60,3 +60,5 @@
 .studio .blockBody:has(table){display:flex;flex-direction:column;overflow:hidden}
 .studio .blockBody:has(table)>*{flex:1 1 auto;min-height:0;overflow:auto}
 .studio .blockBody:has(table)>:global(.flex-col){overflow:hidden}
+.studio .blockBody thead{position:sticky;top:0;z-index:5}
+.studio .blockBody thead th{background:linear-gradient(var(--surface-2,#edf3fa),var(--surface-2,#edf3fa)),var(--surface,#fff)!important}
