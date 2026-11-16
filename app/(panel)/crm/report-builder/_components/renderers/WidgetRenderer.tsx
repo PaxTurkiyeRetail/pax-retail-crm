@@ -131,6 +131,13 @@ export function DataTableView({ result, style, onDrill, groupBy }: { result: Rep
     window.addEventListener('pointermove', move); window.addEventListener('pointerup', up);
   };
   if (!result.rows.length) return <p className="pax-empty text-sm">Kayıt yok</p>;
+  const downloadCsv = () => {
+    const all = groupCol ? [{ col: groupCol }, ...cols] : cols;
+    const esc = (v: unknown) => { const t = v == null ? '' : String(v); return /[";\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t; };
+    const lines = [all.map(({ col }) => esc(col.label)).join(';'), ...rows.map((r) => all.map(({ col }) => esc(r[col.key])).join(';'))];
+    const url = URL.createObjectURL(new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' }));
+    const a = document.createElement('a'); a.href = url; a.download = 'rapor.csv'; a.click(); URL.revokeObjectURL(url);
+  };
   const customWidth = Object.keys(widths).length > 0;
   // Ara toplam yalnız toplanabilir ölçülerde (oran/ortalama/yüzde ve önceki dönem kolonları hariç).
   const sumCols = groupCol ? cols.filter(({ col }) => col.role !== 'dimension' && !col.key.endsWith(PREV_SUFFIX) && !/avg|ratio|rate|pct|oran|ortalama|%|customer_count|distinct/i.test(col.key + ' ' + col.label) && result.rows.some((r) => typeof r[col.key] === 'number')).map(({ col }) => col.key) : [];
@@ -174,12 +181,15 @@ export function DataTableView({ result, style, onDrill, groupBy }: { result: Rep
           </div>
         );
       })()}
-      <div className="flex flex-wrap items-center gap-2 text-[12px] text-[var(--muted)]">
-        <span className="font-medium tabular-nums">{rows.length.toLocaleString('tr-TR')}{rows.length !== result.rows.length ? ` / ${result.rows.length.toLocaleString('tr-TR')}` : ''} satır</span>
-        <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Tabloda ara…" aria-label="Tabloda ara" className="h-7! min-h-7! w-48 rounded-md! border border-[var(--border)] bg-[var(--surface)] px-2.5! text-[12px]! text-[var(--text)]" />
+      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-[var(--border)] bg-[linear-gradient(180deg,var(--surface),var(--surface-2))] px-2.5 py-2 text-[12px] text-[var(--muted)]">
+        <label className="relative flex items-center">
+          <svg aria-hidden viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="pointer-events-none absolute left-2.5 text-[var(--muted)]"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+          <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Tabloda ara…" aria-label="Tabloda ara" className="h-8! min-h-8! w-60 rounded-lg! border border-[var(--border)] bg-[var(--surface)] pr-2.5! pl-8! text-[12.5px]! text-[var(--text)]" />
+        </label>
+        <span className="font-semibold tabular-nums text-[var(--text)]">{rows.length.toLocaleString('tr-TR')}{rows.length !== result.rows.length ? ` / ${result.rows.length.toLocaleString('tr-TR')}` : ''} kayıt</span>
         <div className="ml-auto flex items-center gap-1.5">
-          <button type="button" className={TOOL_BTN} aria-pressed={fit} onClick={() => { setFit(true); setWidths({}); }} title="Tüm sütunları ekran genişliğine sığdır (metin kayar)">⇔ Tam sığdır</button>
-          <button type="button" className={TOOL_BTN} aria-pressed={!fit} onClick={() => setFit(false)} title="Sütunlar içeriği kadar genişler; yatay kaydırma">↔ Doğal genişlik</button>
+          <button type="button" className={TOOL_BTN} onClick={downloadCsv} title="Görünen satırları CSV olarak indir">⤓ CSV indir</button>
+          <button type="button" className={TOOL_BTN} aria-pressed={!fit} onClick={() => { setFit((v) => !v); setWidths({}); }} title={fit ? 'Sütunlar içeriği kadar genişlesin' : 'Ekrana sığdır'}>{fit ? '↔ Geniş' : '⇔ Sığdır'}</button>
           {(customWidth || sort) && <button type="button" className={TOOL_BTN} onClick={() => { setWidths({}); setSort(null); }}>Sıfırla</button>}
         </div>
       </div>
@@ -192,7 +202,7 @@ export function DataTableView({ result, style, onDrill, groupBy }: { result: Rep
               <th key={col.key} scope="col" aria-sort={active ? (sort!.dir === 1 ? 'ascending' : 'descending') : 'none'} style={{ whiteSpace: 'normal', overflowWrap: 'anywhere', lineHeight: 1.25, verticalAlign: 'bottom', textAlign: col.role !== 'dimension' ? 'right' : 'left', ...(widths[col.key] ? { width: widths[col.key] } : {}) }}
                 className={`${pad} relative cursor-pointer select-none whitespace-normal break-words ${col.role !== 'dimension' ? 'text-right' : 'text-left'}`}
                 onClick={() => setSort((s) => (s?.key === col.key ? (s.dir === 1 ? { key: col.key, dir: -1 } : null) : { key: col.key, dir: 1 }))}>
-                {col.label}<span aria-hidden className="ml-1 text-[10px] opacity-60">{active ? (sort!.dir === 1 ? '▲' : '▼') : ''}</span>
+                {col.label}<span aria-hidden className="ml-1 text-[10px] opacity-60">{active ? (sort!.dir === 1 ? '▲' : '▼') : '↕'}</span>
                 <span role="separator" aria-orientation="vertical" aria-label={`${col.label} genişliğini ayarla`} onPointerDown={(e) => startResize(col.key, e)} onClick={(e) => e.stopPropagation()} onDoubleClick={(e) => { e.stopPropagation(); setWidths((w) => { const n = { ...w }; delete n[col.key]; return n; }); }}
                   className="absolute top-0 right-0 h-full w-2 cursor-col-resize border-r-2 border-transparent hover:border-[var(--accent)]" />
               </th>
