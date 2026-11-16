@@ -29,3 +29,24 @@
 .studio .palette button{font-size:11px;line-height:1.2;white-space:nowrap}.studio .palette button span{overflow:hidden;text-overflow:ellipsis}
 .studio .palette button[draggable=true]{cursor:grab}
 .studio .palette button>svg:last-child{display:none}.studio .palette button{padding:9px 8px}
+
+/* ---- Rapor görünümü: hazır raporlarla (retail-operasyon) aynı dil ---- */
+.studio{--rp-ink:#172943;--rp-muted:#63768e;--rp-line:#dce6f1}
+.studio .block h3{font-size:14px;font-weight:750;letter-spacing:-.1px;color:var(--text,#172943);margin:14px 16px 0}
+.studio .block{border-color:var(--rp-line);border-radius:10px}
+.studio .blockBody{padding:12px 16px 14px}
+.studio .blockBody table{font-size:12px;border-collapse:collapse}
+.studio .blockBody thead th{background:var(--surface-2,#edf3fa)!important;color:var(--muted,#51657e)!important;font-size:10px!important;text-transform:uppercase;letter-spacing:.04em;font-weight:700!important;padding:8px 9px!important;border-bottom:1px solid var(--rp-line)!important}
+.studio .blockBody tbody td{padding:7px 9px!important;border-bottom:1px solid #edf1f6!important;font-size:12px}
+.studio .blockBody tbody tr:hover{background:var(--surface-2,#f6faff)}
+.studio .textBlock .blockBody{padding:14px 2px 2px}
+.studio .textBlock .blockBody h2,.studio .textBlock .blockBody h3{font-size:19px!important;font-weight:750!important;letter-spacing:-.3px;color:var(--text,#172943)}
+.previewWorkspace .canvasArea{padding:0 22px 30px}
+.previewWorkspace .canvasToolbar{display:none}
+.previewWorkspace .paper{background:transparent;border:0;box-shadow:none;padding:4px 0 0;max-width:none!important;min-height:0}
+.previewWorkspace .paperHeading{border-bottom:0;padding:0;margin:0 0 6px}
+.previewWorkspace .paperHeading h2{display:none}
+.previewWorkspace .paperHeading p{font-size:12px;color:var(--rp-muted)}
+.previewWorkspace .canvas{gap:10px}
+.previewWorkspace .block{box-shadow:none}
+.previewWorkspace .textBlock{background:transparent}

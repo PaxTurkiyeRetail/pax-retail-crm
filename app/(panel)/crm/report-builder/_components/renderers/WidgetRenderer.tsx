@@ -16,7 +16,7 @@ type Style = Extract<PageWidget, { query: unknown }>['style'];
 type NumberFormat = NonNullable<Style['numberFormat']>;
 
 /** Drill-down değeri: global/stüdyo button stillerini (kenarlık, padding, min-height, kalın font) sıfırlar; metin gibi görünür. */
-const DRILL_BTN = 'inline! min-h-0! cursor-pointer rounded-none! border-0! bg-transparent! p-0! font-[inherit]! text-inherit! shadow-none! underline decoration-dotted decoration-[var(--muted)] underline-offset-4 hover:text-[var(--accent)]! hover:translate-y-0!';
+const DRILL_BTN = 'inline! min-h-0! cursor-pointer rounded-none! border-0! bg-transparent! p-0! font-[inherit]! text-inherit! shadow-none! underline-offset-4 hover:underline hover:text-[var(--accent)]! hover:translate-y-0!';
 
 const compact = new Intl.NumberFormat('tr-TR', { notation: 'compact', maximumFractionDigits: 1 });
 
@@ -46,7 +46,7 @@ export function KpiStrip({ result, style, onDrill }: { result: ReportResult; sty
   const measures = visibleColumns(result, style).filter((c) => c.col.role !== 'dimension' && !c.col.key.endsWith(PREV_SUFFIX));
   if (!measures.length) return <p className="pax-empty text-sm">Ölçü yok</p>;
   return (
-    <div className="grid h-full gap-2" style={{ gridTemplateColumns: `repeat(auto-fit, minmax(140px, 1fr))` }}>
+    <div className="grid h-full gap-[9px]" style={{ gridTemplateColumns: `repeat(auto-fit, minmax(170px, 1fr))` }}>
       {measures.map(({ col, format }) => {
         const v = row[col.key];
         const prev = row[col.key + PREV_SUFFIX];
@@ -54,9 +54,9 @@ export function KpiStrip({ result, style, onDrill }: { result: ReportResult; sty
         const rc=matched?.color;
         const delta = typeof v === 'number' && typeof prev === 'number' && prev !== 0 ? ((v - prev) / Math.abs(prev)) * 100 : null;
         return (
-          <div key={col.key} className="rounded-lg border p-3" style={{ borderColor: 'var(--border)', borderTop: `3px solid ${TOKEN_CSS[rc ?? style?.accent ?? 'primary']}` }}>
-            <div className="text-xs text-[var(--muted)]">{col.label}</div>
-            <div className="mt-1 text-xl font-semibold tabular-nums">{onDrill ? <button type="button" className={DRILL_BTN} title="Katkıda bulunan kayıtlar" onClick={() => onDrill(row, col)}>{fmt(col, v, format)}</button> : fmt(col, v, format)}</div>
+          <div key={col.key} className="min-h-[82px] rounded-[9px] border bg-[var(--surface)] px-[14px] py-3 tabular-nums" style={{ borderColor: 'var(--border)', ...(rc ? { boxShadow: `inset 3px 0 0 ${TOKEN_CSS[rc]}` } : {}) }}>
+            <div className="mb-1.5 text-[11px] text-[var(--muted)]">{col.label}</div>
+            <div className="text-[23px] leading-[1.2] font-extrabold tracking-[-0.6px] text-[var(--text)]">{onDrill ? <button type="button" className={DRILL_BTN} title="Katkıda bulunan kayıtlar" onClick={() => onDrill(row, col)}>{fmt(col, v, format)}</button> : fmt(col, v, format)}</div>
             {matched?.label&&<div className="mt-1 text-xs font-medium">{matched.label}</div>}
             {delta !== null && (
               <div className="mt-0.5 text-xs tabular-nums" style={{ color: TOKEN_CSS[delta >= 0 ? 'success' : 'danger'] }}>
