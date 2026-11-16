@@ -181,7 +181,6 @@ export default function QuotePortfolioClient({ ownerOptions, allowedDepartments 
           <p className="pax-hero-description">Teklifleri, cihaz adetlerini ve takip tarihlerini izleyin.</p>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <Link href="/crm/quotes/catalog" style={heroGhost}>Ürün ve fiyatlar</Link>
           <Link href="/crm/quotes/new" style={heroPrimary}>+ Yeni teklif</Link>
         </div>
       </div>
@@ -326,7 +325,6 @@ const surfaceCard: CSSProperties = { ...surface, padding: '12px 14px', borderRad
 const iconButton: CSSProperties = { display: 'inline-grid', placeItems: 'center', width: 30, height: 30, borderRadius: 9, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-2)', verticalAlign: 'middle' };
 const subLine: CSSProperties = { marginTop: 2, color: 'var(--text-3)', fontSize: 12 };
 const countBadge: CSSProperties = { fontSize: 12, fontWeight: 700, letterSpacing: 0, padding: '3px 9px', borderRadius: 999, background: 'var(--chip-indigo-bg)', color: 'var(--chip-indigo-color)' };
-const heroGhost: CSSProperties = { display: 'inline-flex', alignItems: 'center', height: 38, padding: '0 14px', borderRadius: 12, border: '1px solid rgba(255,255,255,.28)', background: 'rgba(255,255,255,.10)', color: '#fff', textDecoration: 'none', fontWeight: 600, fontSize: 13 };
 const heroPrimary: CSSProperties = { display: 'inline-flex', alignItems: 'center', height: 38, padding: '0 16px', borderRadius: 12, background: '#fff', color: '#0b2456', textDecoration: 'none', fontWeight: 700, fontSize: 13, boxShadow: '0 8px 18px rgba(0,0,0,.18)' };
 const ghostButton: CSSProperties = { minHeight: 34, padding: '0 12px', borderRadius: 10, fontSize: 13, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer' };
 const inputStyle: CSSProperties = { minHeight: 34, borderRadius: 10, border: '1px solid var(--border)', padding: '0 10px', background: 'var(--surface)', color: 'var(--text)', fontFamily: 'inherit', fontSize: 13 };

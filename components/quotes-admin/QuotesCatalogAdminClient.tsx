@@ -1,7 +1,6 @@
 'use client';
 
 import type { CSSProperties } from 'react';
-import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { PRODUCT_USAGE_LABELS, normalizeUsageType, type ProductUsageType } from '@/lib/quotes/catalog';
 
@@ -99,6 +98,7 @@ export default function QuotesCatalogAdminClient() {
   const [savingRule, setSavingRule] = useState(false);
   const [search, setSearch] = useState('');
   const [listFilter, setListFilter] = useState<ListFilter>('all');
+  const [editorTab, setEditorTab] = useState<'general' | 'pricing'>('general');
 
   async function load(preferredProductId?: string) {
     setLoading(true);
@@ -308,7 +308,6 @@ export default function QuotesCatalogAdminClient() {
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <Link href="/crm/quotes" style={ghostButton}>Teklifler</Link>
           <button type="button" onClick={startNew} style={primaryButton}>+ Yeni Ürün</button>
         </div>
       </header>
@@ -352,21 +351,18 @@ export default function QuotesCatalogAdminClient() {
               const showsRent = usage !== 'sale' && !product.is_recurring && product.rental_monthly_price;
               return (
                 <button key={product.id} type="button" onClick={() => setSelectedProductId(product.id)} style={{ ...productRow, ...(selectedProductId === product.id ? selectedRow : null), opacity: product.is_active ? 1 : 0.6 }}>
-                  <div style={{ minWidth: 0, display: 'grid', gap: 3 }}>
+                  <span aria-hidden style={{ ...iconTile, background: `${USAGE_COLOR[usage]}18`, color: USAGE_COLOR[usage] }}>{initials(product.name)}</span>
+                  <div style={{ minWidth: 0, flex: 1, display: 'grid', gap: 3 }}>
                     <div style={{ fontWeight: 800, fontSize: 13.5, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{product.name}</div>
-                    <div style={{ color: 'var(--text-3)', fontSize: 12 }}>{product.code} · {product.category}</div>
-                    <div style={{ display: 'flex', gap: 10, fontSize: 12, color: 'var(--text-2)', fontWeight: 700 }}>
-                      {showsSale ? <span>Satış: {product.is_recurring ? 'aylık hizmet' : ruleCount ? `${ruleCount} barem` : '—'}</span> : null}
-                      {showsRent ? (
-                        <span style={{ color: 'var(--chip-gold-color)' }}>
-                          Kira: ${Number(product.rental_monthly_price).toLocaleString('tr-TR')}/ay{product.rental_min_months ? ` · ${product.rental_min_months} ay` : ''}
-                        </span>
-                      ) : null}
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center', color: 'var(--text-3)', fontSize: 11.5, minWidth: 0 }}>
+                      <span style={{ ...pill, ...usagePill[usage], minHeight: 18, fontSize: 10.5 }}>{USAGE_SHORT[usage]}</span>
+                      {!product.is_active ? <span style={{ ...pill, ...passivePill, minHeight: 18, fontSize: 10.5 }}>Pasif</span> : null}
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{product.code}</span>
                     </div>
                   </div>
-                  <div style={{ display: 'flex', gap: 4, flexDirection: 'column', alignItems: 'flex-end' }}>
-                    <span style={{ ...pill, ...usagePill[usage] }}>{USAGE_SHORT[usage]}</span>
-                    {!product.is_active ? <span style={{ ...pill, ...passivePill }}>Pasif</span> : null}
+                  <div style={{ display: 'grid', gap: 2, justifyItems: 'end', fontSize: 12, fontWeight: 800, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                    {showsRent ? <span style={{ color: USAGE_COLOR.rental }}>${Number(product.rental_monthly_price).toLocaleString('tr-TR')}<span style={{ fontWeight: 600, opacity: 0.75 }}>/ay</span></span> : null}
+                    {showsSale ? <span style={{ color: 'var(--text-3)', fontWeight: 700 }}>{product.is_recurring ? 'hizmet' : ruleCount ? `${ruleCount} barem` : 'barem yok'}</span> : null}
                   </div>
                 </button>
               );
@@ -376,11 +372,30 @@ export default function QuotesCatalogAdminClient() {
 
         <div style={{ display: 'grid', gap: 14 }}>
           <div style={{ ...surface, display: 'grid', gap: 16 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-              <h2 style={sectionTitle}>{productForm.id ? productForm.name || 'Ürün' : 'Yeni ürün'}</h2>
-              {productForm.id ? <span style={{ color: 'var(--text-3)', fontSize: 12, fontWeight: 700 }}>{productForm.code}</span> : null}
+            <div style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap' }}>
+              <span aria-hidden style={{ ...iconTile, width: 52, height: 52, fontSize: 17, borderRadius: 14, background: `${USAGE_COLOR[formUsage]}18`, color: USAGE_COLOR[formUsage] }}>{initials(productForm.name || 'Yeni')}</span>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <h2 style={{ ...sectionTitle, fontSize: 20 }}>{productForm.id ? productForm.name || 'Ürün' : 'Yeni ürün'}</h2>
+                <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                  <span style={{ ...pill, ...usagePill[formUsage] }}>{USAGE_LABEL[formUsage]}</span>
+                  <span style={{ ...pill, ...(productForm.is_active ? { background: 'var(--chip-green-bg)', color: 'var(--chip-green-color)', borderColor: 'var(--chip-green-bd)' } : passivePill) }}>{productForm.is_active ? 'Aktif' : 'Pasif'}</span>
+                  {productForm.code ? <span style={{ color: 'var(--text-3)', fontSize: 12, fontWeight: 700 }}>{productForm.code} · {productForm.category}</span> : null}
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {rentalAllowed ? <MiniStat label="Aylık kira" value={rentNumber > 0 ? money(rentNumber) : '—'} color={USAGE_COLOR.rental} /> : null}
+                {rentalAllowed ? <MiniStat label="Taahhüt" value={monthsNumber > 0 && !monthsInvalid ? `${monthsNumber} ay` : '—'} color={USAGE_COLOR.rental} /> : null}
+                {saleAllowed && !productForm.is_recurring ? <MiniStat label="Satış başlangıç" value={selectedProductRules.length && productForm.id ? money(Math.min(...selectedProductRules.map((r) => r.unit_price))) : '—'} color={USAGE_COLOR.sale} /> : null}
+              </div>
             </div>
 
+            <div role="tablist" aria-label="Ürün bölümleri" style={{ ...segment, alignSelf: 'start', justifySelf: 'start' }}>
+              {([['general', 'Genel bilgi'], ['pricing', 'Fiyatlandırma']] as const).map(([key, text]) => (
+                <button key={key} type="button" role="tab" aria-selected={editorTab === key} onClick={() => setEditorTab(key)} style={{ ...segmentButton, minHeight: 32, padding: '0 14px', fontSize: 13, ...(editorTab === key ? segmentActive : null) }}>{text}</button>
+              ))}
+            </div>
+
+            {editorTab === 'general' ? <>
             <fieldset style={fieldset}>
               <legend style={legend}>1 · Kullanım tipi</legend>
               <div role="radiogroup" className="quote-catalog-usage mobile-grid-stack" style={{ display: 'grid', gap: 8, gridTemplateColumns: 'repeat(3,minmax(0,1fr))' }}>
@@ -426,6 +441,9 @@ export default function QuotesCatalogAdminClient() {
               </div>
             </fieldset>
 
+            </> : null}
+
+            {editorTab === 'pricing' ? (
             <fieldset style={{ ...fieldset, ...rentalPanel, ...(rentalAllowed ? null : { opacity: 0.6 }) }}>
               <legend style={{ ...legend, color: 'var(--chip-gold-color)' }}>3 · Kiralama koşulları</legend>
               {rentalAllowed ? (
@@ -457,6 +475,7 @@ export default function QuotesCatalogAdminClient() {
                 </div>
               )}
             </fieldset>
+            ) : null}
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', borderTop: '1px solid var(--border)', paddingTop: 12 }}>
               <span style={{ fontSize: 12.5, fontWeight: 700, color: formError ? 'var(--chip-red-color)' : 'var(--text-3)' }}>
@@ -468,6 +487,7 @@ export default function QuotesCatalogAdminClient() {
             </div>
           </div>
 
+          {editorTab === 'pricing' ? (
           <div style={{ ...surface, display: 'grid', gap: 12, boxShadow: `inset 3px 0 0 ${USAGE_COLOR.sale}` }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
               <h2 style={sectionTitle}>Satış fiyat baremleri {selectedProduct && saleAllowed && !productForm.is_recurring ? <span style={countBadge}>{selectedProductRules.length}</span> : null}</h2>
@@ -508,6 +528,7 @@ export default function QuotesCatalogAdminClient() {
               </>
             )}
           </div>
+          ) : null}
         </div>
       </section>
     </main>
@@ -515,6 +536,22 @@ export default function QuotesCatalogAdminClient() {
 }
 
 type ListFilter = 'all' | ProductUsageType | 'passive';
+
+function initials(name: string) {
+  const parts = name.replace(/[^\p{L}\p{N} ]/gu, ' ').trim().split(/\s+/).filter(Boolean);
+  return ((parts[0]?.[0] ?? '?') + (parts[1]?.[0] ?? parts[0]?.[1] ?? '')).toLocaleUpperCase('tr-TR');
+}
+
+function MiniStat({ label: text, value, color }: { label: string; value: string; color: string }) {
+  return (
+    <div style={{ display: 'grid', gap: 2, padding: '8px 12px', minWidth: 92, borderRadius: 10, border: '1px solid var(--border)', background: 'var(--surface-2)', boxShadow: `inset 3px 0 0 ${color}` }}>
+      <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.05em', textTransform: 'uppercase', color: 'var(--text-3)' }}>{text}</span>
+      <span style={{ fontSize: 15, fontWeight: 800, color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>{value}</span>
+    </div>
+  );
+}
+
+const iconTile: CSSProperties = { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, width: 38, height: 38, borderRadius: 10, fontSize: 13, fontWeight: 800, letterSpacing: '.02em' };
 const USAGE_LABEL = PRODUCT_USAGE_LABELS;
 const USAGE_SHORT: Record<ProductUsageType, string> = { both: 'Satış + Kira', sale: 'Sadece Satış', rental: 'Sadece Kira' };
 const USAGE_HINT: Record<ProductUsageType, string> = {
@@ -540,7 +577,6 @@ const rentalPanel: CSSProperties = { padding: '12px 14px', borderRadius: 12, bor
 const legend: CSSProperties = { padding: 0, marginBottom: 8, fontSize: 11, fontWeight: 700, letterSpacing: '.05em', textTransform: 'uppercase', color: 'var(--text-3)', float: 'left', width: '100%' };
 const emptyText: CSSProperties = { padding: '14px 4px', color: 'var(--text-3)', fontSize: 13 };
 const primaryButton: CSSProperties = { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minHeight: 38, padding: '0 16px', borderRadius: 10, border: 'none', background: '#0e6fc7', color: '#fff', fontWeight: 800, fontSize: 13.5, cursor: 'pointer', textDecoration: 'none', fontFamily: 'inherit', whiteSpace: 'nowrap' };
-const ghostButton: CSSProperties = { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minHeight: 38, padding: '0 14px', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontWeight: 700, fontSize: 13.5, cursor: 'pointer', textDecoration: 'none' };
 const dangerButton: CSSProperties = { minHeight: 30, padding: '0 10px', borderRadius: 8, border: '1px solid var(--chip-red-bd)', background: 'var(--chip-red-bg)', color: 'var(--chip-red-color)', fontWeight: 700, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' };
 const grid2: CSSProperties = { display: 'grid', gap: 10, gridTemplateColumns: 'repeat(2,minmax(0,1fr))' };
 const field: CSSProperties = { display: 'grid', gap: 5, minWidth: 0 };
