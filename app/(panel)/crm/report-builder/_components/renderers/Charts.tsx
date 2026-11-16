@@ -89,13 +89,17 @@ export function PieChart({ result, title, onDrill }: { result: ReportResult; tit
           a0 = a1;
           return <path key={i} d={d} fill={TOKEN_CSS[SERIES[i % SERIES.length]]} stroke="var(--surface)" strokeWidth={1.5} className={onDrill ? 'cursor-pointer hover:opacity-80' : undefined} onClick={onDrill ? () => onDrill(p.raw, p.label) : undefined}><title>{`${p.label}: ${s.fmt(p.value)}`}</title></path>;
         })}
+        <circle r={R * 0.58} fill="var(--surface)" />
+        <text y={-4} textAnchor="middle" fontSize={22} fontWeight={750} fill="var(--text)">{s.fmt(total)}</text>
+        <text y={16} textAnchor="middle" fontSize={10} fill="var(--muted)">toplam</text>
       </svg>
-      <ul className="min-w-0 flex-1 space-y-1 text-xs">
+      <ul className="min-w-[200px] flex-1 divide-y divide-[var(--border)] text-xs">
         {pts.map((p, i) => (
-          <li key={i} className="flex items-center gap-2">
-            <span aria-hidden className="inline-block h-2.5 w-2.5 shrink-0 rounded-sm" style={{ background: TOKEN_CSS[SERIES[i % SERIES.length]] }} />
-            <span className="truncate">{p.label}</span>
-            <span className="ml-auto tabular-nums text-[var(--muted)]">{s.fmt(p.value)} · %{((p.value / total) * 100).toFixed(1)}</span>
+          <li key={i} className="flex items-center gap-2 py-1.5">
+            <span aria-hidden className="inline-block h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: TOKEN_CSS[SERIES[i % SERIES.length]] }} />
+            <span className="min-w-0 flex-1 truncate font-medium text-[var(--text)]" title={p.label}>{p.label}</span>
+            <span className="shrink-0 whitespace-nowrap tabular-nums font-semibold text-[var(--text)]">{s.fmt(p.value)}</span>
+            <span className="w-12 shrink-0 whitespace-nowrap text-right tabular-nums text-[var(--muted)]">%{((p.value / total) * 100).toFixed(1)}</span>
           </li>
         ))}
       </ul>

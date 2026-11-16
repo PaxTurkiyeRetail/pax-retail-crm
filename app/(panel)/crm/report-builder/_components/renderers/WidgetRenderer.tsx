@@ -72,6 +72,10 @@ export function KpiStrip({ result, style, onDrill }: { result: ReportResult; sty
   );
 }
 
+function sumOf(rows: Record<string, unknown>[], key: string) {
+  return rows.reduce((a, r) => a + (typeof r[key] === 'number' ? (r[key] as number) : 0), 0);
+}
+
 function groupRows<T extends Record<string, unknown>>(rows: T[], key: string) {
   const map = new Map<string, T[]>();
   for (const r of rows) { const k = String(r[key] ?? '').trim(); (map.get(k) ?? map.set(k, []).get(k)!).push(r); }
@@ -82,6 +86,9 @@ const TOOL_BTN = 'inline-flex! h-7! min-h-7! items-center! gap-1 rounded-md! bor
 
 /** Grup sırası: bilinen segmentler önce (Hunter → Farmer → Lead → Bank), diğerleri alfabetik. */
 const GROUP_ORDER = ['Hunter', 'Farmer', 'Lead', 'Bank', 'Kasa Firması'];
+/** Segment renkleri: sekme, blok başlığı ve ara toplamda aynı renk. */
+const GROUP_COLOR: Record<string, string> = { Hunter: '#2563eb', Farmer: '#16a34a', Lead: '#d97706', Bank: '#7c3aed', 'Kasa Firması': '#0891b2' };
+const groupColor = (k: string) => GROUP_COLOR[k] ?? '#64748b';
 const groupRank = (k: string) => { const i = GROUP_ORDER.indexOf(k); return i < 0 ? GROUP_ORDER.length : i; };
 
 export function DataTableView({ result, style, onDrill, groupBy }: { result: ReportResult; style?: Style; onDrill?: RecordDrillHandler; groupBy?: string }) {
@@ -119,6 +126,8 @@ export function DataTableView({ result, style, onDrill, groupBy }: { result: Rep
   };
   if (!result.rows.length) return <p className="pax-empty text-sm">Kayıt yok</p>;
   const customWidth = Object.keys(widths).length > 0;
+  // Ara toplam yalnız toplanabilir ölçülerde (oran/ortalama/yüzde ve önceki dönem kolonları hariç).
+  const sumCols = groupCol ? cols.filter(({ col }) => col.role !== 'dimension' && !col.key.endsWith(PREV_SUFFIX) && !/avg|ratio|rate|pct|oran|ortalama|%/i.test(col.key + ' ' + col.label) && result.rows.some((r) => typeof r[col.key] === 'number')).map(({ col }) => col.key) : [];
   return (
     <div className="flex h-full min-h-0 flex-col gap-2">
       {segTabs.length > 1 && (
@@ -127,13 +136,32 @@ export function DataTableView({ result, style, onDrill, groupBy }: { result: Rep
             const on = seg === t.key;
             return (
               <button key={t.label} type="button" role="tab" aria-selected={on} onClick={() => setSeg(t.key)}
-                className={`rounded-lg border px-3 py-1.5 text-[12.5px] font-semibold transition-colors ${on ? 'border-[var(--accent)] bg-[var(--accent)] text-white' : 'border-[var(--border)] bg-[var(--surface)] text-[var(--text)] hover:bg-[var(--surface-2)]'}`}>
+                style={on && t.key ? { background: groupColor(t.key), borderColor: groupColor(t.key) } : undefined} className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[12.5px] font-semibold transition-colors ${on ? 'border-[var(--accent)] bg-[var(--accent)] text-white shadow-sm' : 'border-[var(--border)] bg-[var(--surface)] text-[var(--text)] hover:bg-[var(--surface-2)]'}`}>{t.key ? <span aria-hidden className="inline-block h-2 w-2 rounded-full" style={{ background: on ? '#fff' : groupColor(t.key) }} /> : null}
                 {t.label} <span className={`ml-1 tabular-nums ${on ? 'text-white/80' : 'text-[var(--muted)]'}`}>{t.count.toLocaleString('tr-TR')}</span>
               </button>
             );
           })}
         </div>
       )}
+      {sumCols.length > 1 && (() => {
+        const accent = seg ? groupColor(seg) : 'var(--accent)';
+        const stages = [{ label: 'Firma', value: rows.length }, ...sumCols.map((k) => { const c = cols.find((x) => x.col.key === k)!; return { label: c.col.label, value: sumOf(rows, k), col: c.col, format: c.format }; })];
+        return (
+          <div aria-label="Dönüşüm hunisi" className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${stages.length}, minmax(0,1fr))` }}>
+            {stages.map((st, i) => {
+              const prev = i > 0 ? stages[i - 1].value : 0;
+              const pct = i > 0 && prev > 0 ? Math.round((st.value / prev) * 100) : null;
+              return (
+                <div key={st.label} className="min-w-0 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-2" style={{ boxShadow: `inset 0 3px 0 ${accent}` }}>
+                  <div className="truncate text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]" title={st.label}>{st.label}</div>
+                  <div className="text-[18px] font-extrabold tabular-nums text-[var(--text)]">{'col' in st && st.col ? fmt(st.col, st.value, st.format) : st.value.toLocaleString('tr-TR')}</div>
+                  <div className="text-[11px] tabular-nums text-[var(--muted)]">{pct == null ? 'başlangıç' : `→ %${pct} dönüşüm`}</div>
+                </div>
+              );
+            })}
+          </div>
+        );
+      })()}
       <div className="flex flex-wrap items-center gap-2 text-[12px] text-[var(--muted)]">
         <span className="font-medium tabular-nums">{rows.length.toLocaleString('tr-TR')}{rows.length !== result.rows.length ? ` / ${result.rows.length.toLocaleString('tr-TR')}` : ''} satır</span>
         <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Tabloda ara…" aria-label="Tabloda ara" className="h-7! min-h-7! w-48 rounded-md! border border-[var(--border)] bg-[var(--surface)] px-2.5! text-[12px]! text-[var(--text)]" />
@@ -162,8 +190,8 @@ export function DataTableView({ result, style, onDrill, groupBy }: { result: Rep
         <tbody>
           {(groupCol && seg == null ? groupRows(rows, groupCol.key) : [{ key: '', rows }]).flatMap((g) => [
             ...(groupCol && seg == null ? [
-              <tr key={`g-${g.key}`} className="bg-[var(--surface-2)]">
-                <th scope="colgroup" colSpan={cols.length} className={`${pad} text-left text-[13px] font-bold text-[var(--text)] shadow-[inset_3px_0_0_var(--accent)]`}>
+              <tr key={`g-${g.key}`} style={{ background: `${groupColor(g.key)}12` }}>
+                <th scope="colgroup" colSpan={cols.length} style={{ boxShadow: `inset 4px 0 0 ${groupColor(g.key)}`, color: groupColor(g.key) }} className={`${pad} text-left text-[13px] font-bold`}>
                   {g.key || '—'} <span className="ml-1 text-[11px] font-medium text-[var(--muted)]">{g.rows.length.toLocaleString('tr-TR')} kayıt</span>
                 </th>
               </tr>,
@@ -184,7 +212,25 @@ export function DataTableView({ result, style, onDrill, groupBy }: { result: Rep
               })}
             </tr>
           )),
+            ...(groupCol && seg == null && sumCols.length ? [
+              <tr key={`s-${g.key}`} className="border-b-2 border-[var(--border)]">
+                {cols.map(({ col, format }, ci) => (
+                  <td key={col.key} className={`${pad} text-[12px] font-bold ${col.role !== 'dimension' ? 'text-right tabular-nums' : 'text-left'}`} style={{ color: groupColor(g.key) }}>
+                    {ci === 0 ? `${g.key || '—'} toplamı` : sumCols.includes(col.key) ? fmt(col, sumOf(g.rows, col.key), format) : ''}
+                  </td>
+                ))}
+              </tr>,
+            ] : []),
           ])}
+          {groupCol && sumCols.length && rows.length ? (
+            <tr className="bg-[var(--surface-2)]">
+              {cols.map(({ col, format }, ci) => (
+                <td key={col.key} className={`${pad} text-[12.5px] font-extrabold text-[var(--text)] ${col.role !== 'dimension' ? 'text-right tabular-nums' : 'text-left'}`}>
+                  {ci === 0 ? (seg == null ? 'Genel toplam' : `${seg || '—'} toplamı`) : sumCols.includes(col.key) ? fmt(col, sumOf(rows, col.key), format) : ''}
+                </td>
+              ))}
+            </tr>
+          ) : null}
         </tbody>
       </table>
       </div>
