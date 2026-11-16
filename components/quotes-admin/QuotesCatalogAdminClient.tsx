@@ -22,6 +22,8 @@ type Product = {
   /** Kiralama tarifesi (USD/ay, KDV hariç); null = kiralanamaz. 08.09: A80 15 · A910S 15 · A6650 20. */
   rental_monthly_price?: number | null;
   usage_type?: ProductUsageType;
+  rental_min_months?: number | null;
+  rental_setup_fee?: number | null;
 };
 
 type Rule = {
@@ -49,6 +51,8 @@ type FormProduct = {
   /** Boş = kiralanamaz. */
   rental_monthly_price: string;
   usage_type: ProductUsageType;
+  rental_min_months: string;
+  rental_setup_fee: string;
 };
 
 const emptyProduct: FormProduct = {
@@ -66,6 +70,8 @@ const emptyProduct: FormProduct = {
   is_active: true,
   rental_monthly_price: '',
   usage_type: 'both',
+  rental_min_months: '',
+  rental_setup_fee: '',
 };
 
 function money(value: number) {
@@ -91,6 +97,8 @@ export default function QuotesCatalogAdminClient() {
   const [loading, setLoading] = useState(true);
   const [savingProduct, setSavingProduct] = useState(false);
   const [savingRule, setSavingRule] = useState(false);
+  const [search, setSearch] = useState('');
+  const [listFilter, setListFilter] = useState<ListFilter>('all');
 
   async function load(preferredProductId?: string) {
     setLoading(true);
@@ -142,6 +150,8 @@ export default function QuotesCatalogAdminClient() {
       is_active: selectedProduct.is_active,
       rental_monthly_price: selectedProduct.rental_monthly_price == null ? '' : String(selectedProduct.rental_monthly_price),
       usage_type: normalizeUsageType(selectedProduct.usage_type),
+      rental_min_months: selectedProduct.rental_min_months == null ? '' : String(selectedProduct.rental_min_months),
+      rental_setup_fee: selectedProduct.rental_setup_fee == null ? '' : String(selectedProduct.rental_setup_fee),
     });
   }, [selectedProduct]);
 
@@ -227,160 +237,323 @@ export default function QuotesCatalogAdminClient() {
     await load(selectedProductId);
   }
 
+  const usageCounts = useMemo(() => {
+    const counts = { both: 0, sale: 0, rental: 0, passive: 0 };
+    for (const product of products) {
+      if (!product.is_active) { counts.passive += 1; continue; }
+      counts[normalizeUsageType(product.usage_type)] += 1;
+    }
+    return counts;
+  }, [products]);
+
+  const ruleCountByProduct = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const rule of rules) map.set(rule.product_id, (map.get(rule.product_id) ?? 0) + 1);
+    return map;
+  }, [rules]);
+
+  const categories = useMemo(
+    () => Array.from(new Set(products.map((p) => p.category).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'tr')),
+    [products],
+  );
+
+  const visibleProducts = useMemo(() => {
+    const q = search.trim().toLocaleLowerCase('tr-TR');
+    return products.filter((product) => {
+      const usage = normalizeUsageType(product.usage_type);
+      if (listFilter === 'passive' && product.is_active) return false;
+      if (listFilter !== 'all' && listFilter !== 'passive' && (!product.is_active || usage !== listFilter)) return false;
+      if (!q) return true;
+      return `${product.code} ${product.name} ${product.category}`.toLocaleLowerCase('tr-TR').includes(q);
+    });
+  }, [products, search, listFilter]);
+
+  const formUsage = productForm.usage_type;
+  const rentalAllowed = formUsage !== 'sale' && !productForm.is_recurring;
+  const saleAllowed = formUsage !== 'rental';
+  const rentNumber = Number(productForm.rental_monthly_price);
+  const monthsNumber = Number(productForm.rental_min_months);
+  const setupNumber = Number(productForm.rental_setup_fee || 0);
+  const rentalMissing = formUsage === 'rental' && productForm.rental_monthly_price.trim() === '';
+  const monthsInvalid = productForm.rental_min_months.trim() !== '' && (!Number.isInteger(monthsNumber) || monthsNumber < 1 || monthsNumber > 120);
+  const formError = !productForm.code.trim() || !productForm.name.trim()
+    ? 'Kod ve ürün adı zorunlu.'
+    : rentalMissing
+      ? 'Sadece Kiralama ürününde aylık kira zorunlu.'
+      : monthsInvalid
+        ? 'Taahhüt süresi 1-120 ay arası olmalı.'
+        : null;
+  const rentalTotal = rentalAllowed && rentNumber > 0 && monthsNumber > 0 && !monthsInvalid
+    ? rentNumber * monthsNumber + (Number.isFinite(setupNumber) ? setupNumber : 0)
+    : null;
+
+  const setUsage = (next: ProductUsageType) => setProductForm((prev) => ({
+    ...prev,
+    usage_type: next,
+    // Sadece Kiralama'da abonelik olamaz.
+    is_recurring: next === 'rental' ? false : prev.is_recurring,
+    billing_period: next === 'rental' ? 'one_time' : prev.billing_period,
+  }));
+
+  const startNew = () => { setSelectedProductId(''); setProductForm(emptyProduct); setMsg(null); };
+  const okMsg = Boolean(msg && /kaydedildi|silindi/.test(msg));
+
   return (
-    <main style={{ display: 'grid', gap: 18 }}>
-      <div className="pax-hero">
-        <span className="pax-hero-eyebrow">Teklif Kataloğu Yönetimi</span>
-        <h1 className="pax-hero-title">Ürün ve Fiyat Yönetimi</h1>
-        <p className="pax-hero-description">Yeni ürün ekleme, mevcut ürün güncelleme ve adet baremine göre fiyat tanımlama ekranı.</p>
-        <div className="pax-hero-stats">
-          <div className="pax-hero-stat"><div className="pax-hero-stat-label">Ürün Sayısı</div><div className="pax-hero-stat-value">{products.length}</div></div>
-          <div className="pax-hero-stat"><div className="pax-hero-stat-label">Fiyat Kuralı</div><div className="pax-hero-stat-value">{rules.length}</div></div>
-          <div className="pax-hero-stat"><div className="pax-hero-stat-label">Kategori</div><div className="pax-hero-stat-value">{new Set(products.map((p: any) => p.category).filter(Boolean)).size}</div></div>
-          <div className="pax-hero-stat"><div className="pax-hero-stat-label">Kural / Ürün</div><div className="pax-hero-stat-value">{products.length ? (rules.length / products.length).toFixed(1) : 0}</div></div>
-          <div className="pax-hero-stat"><div className="pax-hero-stat-label">Fiyat Listesi</div><div className="pax-hero-stat-value">{priceListVersion || '—'}</div></div>
+    <main style={{ display: 'grid', gap: 14 }}>
+      <header style={{ ...surface, padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+        <div style={{ minWidth: 0 }}>
+          <h1 style={{ margin: 0, fontSize: 26, fontWeight: 800, letterSpacing: '-.01em', color: 'var(--text)' }}>Ürün Kataloğu</h1>
+          <p style={{ margin: '4px 0 0', color: 'var(--text-3)', fontSize: 13.5 }}>
+            Satış, Teklif ve Forecast ekranlarının ortak ürün ve fiyat kaynağı{priceListVersion ? ` · Fiyat listesi ${priceListVersion}` : ''}
+          </p>
         </div>
-        <div style={{ position: 'relative', zIndex: 1, display: 'flex', gap: 10, marginTop: 14, flexWrap: 'wrap' }}>
-          <Link href="/crm/quotes" style={{ ...ghostButton, background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.2)', color: 'white' }}>Teklif Portföyü</Link>
-          <button onClick={() => { setSelectedProductId(''); setProductForm(emptyProduct); setMsg(null); }} style={{ ...primaryButton, background: 'white', color: '#1e3a8a', border: 'none' }}>+ Yeni Ürün</button>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <Link href="/crm/quotes" style={ghostButton}>Teklifler</Link>
+          <button type="button" onClick={startNew} style={primaryButton}>+ Yeni Ürün</button>
         </div>
-      </div>
+      </header>
 
-      {msg ? <div style={{ ...surface, padding: 14, color: '#4338ca', background: 'var(--chip-indigo-bg)', borderColor: 'var(--chip-indigo-bd)' }}>{msg}</div> : null}
-
-      <section className="quote-catalog-layout" style={{ display: 'grid', gap: 16, gridTemplateColumns: '0.95fr 1.05fr' }}>
-        <div style={{ ...surface, display: 'grid', gap: 12, alignContent: 'start' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
-            <div style={{ fontSize: 18, fontWeight: 900 }}>Ürün Listesi</div>
-            <div style={{ color: 'var(--text-3)', fontSize: 13 }}>{products.length} aktif/pasif kayıt</div>
-          </div>
-          <div style={{ display: 'grid', gap: 10, maxHeight: 70 * 8, overflowY: 'auto', paddingRight: 4 }}>
-            {!loading && !products.length ? <div style={{ color: 'var(--text-3)' }}>Katalog boş.</div> : null}
-            {products.map((product) => (
-              <button key={product.id} onClick={() => setSelectedProductId(product.id)} style={{ ...productCard, ...(selectedProductId === product.id ? selectedCard : null) }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-                  <div>
-                    <div style={{ fontWeight: 900, color: 'var(--text)' }}>{product.name}</div>
-                    <div style={{ marginTop: 4, color: 'var(--text-3)', fontSize: 13 }}>{product.code} · {product.category}</div>
-                  </div>
-                  <div style={{ display: 'grid', gap: 6, justifyItems: 'end' }}>
-                    <span style={{ ...pill, ...(product.is_active ? activePill : passivePill) }}>{product.is_active ? 'Aktif' : 'Pasif'}</span>
-                    {normalizeUsageType(product.usage_type) !== 'both' ? (
-                      <span style={{ ...pill, background: 'var(--chip-indigo-bg)', color: '#4338ca', borderColor: 'var(--chip-indigo-bd)' }}>{PRODUCT_USAGE_LABELS[normalizeUsageType(product.usage_type)]}</span>
-                    ) : null}
-                    {product.rental_monthly_price ? (
-                      <span style={{ ...pill, background: 'var(--chip-gold-bg)', color: 'var(--chip-gold-color)', borderColor: 'var(--chip-gold-bd)' }} title="Kiralama tarifesi (KDV hariç)">
-                        Kira ${Number(product.rental_monthly_price).toLocaleString('tr-TR')} / ay
-                      </span>
-                    ) : null}
-                  </div>
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div style={{ ...surface, display: 'grid', gap: 12 }}>
-          <div style={{ fontSize: 18, fontWeight: 900 }}>{productForm.id ? 'Ürün Güncelle' : 'Yeni Ürün Ekle'}</div>
-          <div className="mobile-grid-stack" style={grid2}>
-            <label style={field}><span style={label}>Kod</span><input value={productForm.code} onChange={(e) => setProductForm((prev) => ({ ...prev, code: e.target.value.toUpperCase() }))} style={input} placeholder="A6650" /></label>
-            <label style={field}><span style={label}>Ürün Adı</span><input value={productForm.name} onChange={(e) => setProductForm((prev) => ({ ...prev, name: e.target.value }))} style={input} placeholder="PAX A6650" /></label>
-            <label style={field}><span style={label}>Kategori</span><input value={productForm.category} onChange={(e) => setProductForm((prev) => ({ ...prev, category: e.target.value }))} style={input} placeholder="EFT POS / ELYS / Service" /></label>
-            <label style={field}><span style={label}>Ürün Tipi</span><select value={productForm.product_type} onChange={(e) => setProductForm((prev) => ({ ...prev, product_type: e.target.value as Product['product_type'] }))} style={input}><option value="device">device</option><option value="bundle">bundle</option><option value="recurring">recurring</option><option value="peripheral">peripheral</option></select></label>
-            <label style={field}><span style={label}>Birim</span><input value={productForm.unit_label} onChange={(e) => setProductForm((prev) => ({ ...prev, unit_label: e.target.value }))} style={input} /></label>
-            <label style={field}><span style={label}>Para Birimi</span><input value={productForm.currency} onChange={(e) => setProductForm((prev) => ({ ...prev, currency: e.target.value.toUpperCase() }))} style={input} /></label>
-            <label style={field}><span style={label}>Sıralama</span><input type="number" value={productForm.sort_order} onChange={(e) => setProductForm((prev) => ({ ...prev, sort_order: Number(e.target.value || 100) }))} style={input} /></label>
-            <label style={field}><span style={label}>Faturalama</span><select value={productForm.billing_period} onChange={(e) => setProductForm((prev) => ({ ...prev, billing_period: e.target.value as Product['billing_period'] }))} style={input}><option value="one_time">one_time</option><option value="monthly">monthly</option></select></label>
-            <label style={field}>
-              <span style={label}>Kullanım Tipi</span>
-              <select value={productForm.usage_type} onChange={(e) => setProductForm((prev) => ({ ...prev, usage_type: normalizeUsageType(e.target.value) }))} style={input}>
-                <option value="both">{PRODUCT_USAGE_LABELS.both}</option>
-                <option value="sale">{PRODUCT_USAGE_LABELS.sale}</option>
-                <option value="rental">{PRODUCT_USAGE_LABELS.rental} (aylık kira zorunlu)</option>
-              </select>
-            </label>
-            <label style={field}>
-              <span style={label}>Kiralama · aylık kira (USD, KDV hariç)</span>
-              <input type="number" min={0} step="0.01" value={productForm.rental_monthly_price} onChange={(e) => setProductForm((prev) => ({ ...prev, rental_monthly_price: e.target.value }))} style={input} placeholder="boş = kiralanamaz · örn. 15" />
-            </label>
-          </div>
-
-          <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap' }}>
-            <label style={checkLabel}><input type="checkbox" checked={productForm.is_recurring} onChange={(e) => setProductForm((prev) => ({ ...prev, is_recurring: e.target.checked }))} /> Recurring (aylık)</label>
-            <label style={checkLabel}><input type="checkbox" checked={productForm.is_active} onChange={(e) => setProductForm((prev) => ({ ...prev, is_active: e.target.checked }))} /> Aktif ürün</label>
-          </div>
-
-          <label style={field}><span style={label}>Açıklama</span><input value={productForm.description} onChange={(e) => setProductForm((prev) => ({ ...prev, description: e.target.value }))} style={input} placeholder="Kısa açıklama" /></label>
-          <label style={field}><span style={label}>Teknik Özellikler</span><textarea value={productForm.specsText} onChange={(e) => setProductForm((prev) => ({ ...prev, specsText: e.target.value }))} style={textarea} placeholder={'Her satıra bir özellik\nAndroid 12\nIP67'} /></label>
-
-          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-            <button onClick={saveProduct} disabled={savingProduct} style={primaryButton}>{savingProduct ? 'Kaydediliyor...' : 'Ürünü Kaydet'}</button>
-          </div>
-        </div>
+      <section className="quote-catalog-kpis" style={{ display: 'grid', gap: 10, gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))' }}>
+        {([
+          ['all', 'Aktif ürün', products.length - usageCounts.passive, '#4f46e5'],
+          ['both', USAGE_LABEL.both, usageCounts.both, USAGE_COLOR.both],
+          ['sale', USAGE_LABEL.sale, usageCounts.sale, USAGE_COLOR.sale],
+          ['rental', USAGE_LABEL.rental, usageCounts.rental, USAGE_COLOR.rental],
+        ] as const).map(([key, title, value, color]) => (
+          <button key={key} type="button" onClick={() => setListFilter(key)} style={{ ...kpiCard, boxShadow: `inset 3px 0 0 ${color}`, outline: listFilter === key ? `2px solid ${color}` : 'none', outlineOffset: -2 }}>
+            <span style={kpiLabel}>{title}</span>
+            <span style={{ fontSize: 22, fontWeight: 800, color: 'var(--text)' }}>{value}</span>
+          </button>
+        ))}
       </section>
 
-      <section style={{ ...surface, display: 'grid', gap: 14 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-          <div>
-            <div style={{ fontSize: 18, fontWeight: 900 }}>Fiyat Baremleri</div>
-            <div style={{ marginTop: 4, color: 'var(--text-3)', fontSize: 13 }}>{selectedProduct ? `${selectedProduct.name} için adet kırılımı` : 'Önce ürün seç.'}</div>
+      {msg ? (
+        <div role="status" style={{ ...surface, padding: '10px 14px', fontSize: 13.5, fontWeight: 700, color: okMsg ? 'var(--chip-green-color)' : 'var(--chip-red-color)', background: okMsg ? 'var(--chip-green-bg)' : 'var(--chip-red-bg)' }}>{msg}</div>
+      ) : null}
+
+      <section className="quote-catalog-layout" style={{ display: 'grid', gap: 14, gridTemplateColumns: 'minmax(300px, 0.85fr) 1.15fr', alignItems: 'start' }}>
+        <div style={{ ...surface, display: 'grid', gap: 10, alignContent: 'start' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <h2 style={sectionTitle}>Ürünler <span style={countBadge}>{visibleProducts.length}</span></h2>
+            <div role="tablist" aria-label="Ürün filtresi" style={segment}>
+              {([['all', 'Tümü'], ['both', 'İkisi'], ['sale', 'Satış'], ['rental', 'Kiralama'], ['passive', 'Pasif']] as const).map(([key, text]) => (
+                <button key={key} type="button" role="tab" aria-selected={listFilter === key} onClick={() => setListFilter(key)} style={{ ...segmentButton, ...(listFilter === key ? segmentActive : null) }}>{text}</button>
+              ))}
+            </div>
           </div>
-          {selectedProduct ? <div style={{ color: 'var(--text)', fontWeight: 800 }}>{selectedProduct.code}</div> : null}
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Kod, ad veya kategori ara…" aria-label="Ürün ara" style={input} />
+          <div style={{ display: 'grid', gap: 6, maxHeight: 680, overflowY: 'auto', paddingRight: 2 }}>
+            {loading ? <div style={emptyText}>Yükleniyor…</div> : null}
+            {!loading && !visibleProducts.length ? <div style={emptyText}>Bu filtrede ürün yok.</div> : null}
+            {visibleProducts.map((product) => {
+              const usage = normalizeUsageType(product.usage_type);
+              const ruleCount = ruleCountByProduct.get(product.id) ?? 0;
+              const showsSale = usage !== 'rental';
+              const showsRent = usage !== 'sale' && !product.is_recurring && product.rental_monthly_price;
+              return (
+                <button key={product.id} type="button" onClick={() => setSelectedProductId(product.id)} style={{ ...productRow, ...(selectedProductId === product.id ? selectedRow : null), opacity: product.is_active ? 1 : 0.6 }}>
+                  <div style={{ minWidth: 0, display: 'grid', gap: 3 }}>
+                    <div style={{ fontWeight: 800, fontSize: 13.5, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{product.name}</div>
+                    <div style={{ color: 'var(--text-3)', fontSize: 12 }}>{product.code} · {product.category}</div>
+                    <div style={{ display: 'flex', gap: 10, fontSize: 12, color: 'var(--text-2)', fontWeight: 700 }}>
+                      {showsSale ? <span>Satış: {product.is_recurring ? 'aylık hizmet' : ruleCount ? `${ruleCount} barem` : '—'}</span> : null}
+                      {showsRent ? (
+                        <span style={{ color: 'var(--chip-gold-color)' }}>
+                          Kira: ${Number(product.rental_monthly_price).toLocaleString('tr-TR')}/ay{product.rental_min_months ? ` · ${product.rental_min_months} ay` : ''}
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 4, flexDirection: 'column', alignItems: 'flex-end' }}>
+                    <span style={{ ...pill, ...usagePill[usage] }}>{USAGE_SHORT[usage]}</span>
+                    {!product.is_active ? <span style={{ ...pill, ...passivePill }}>Pasif</span> : null}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
-        {selectedProduct ? (
-          <>
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 760 }}>
-                <thead>
-                  <tr>
-                    {['Min Adet', 'Max Adet', 'Birim Fiyat', 'Önizleme', ''].map((head) => <th key={head} style={tableHead}>{head}</th>)}
-                  </tr>
-                </thead>
-                <tbody>
-                  {!selectedProductRules.length ? <tr><td colSpan={5} style={{ padding: 20, color: 'var(--text-3)' }}>Henüz fiyat baremi yok.</td></tr> : null}
-                  {selectedProductRules.map((rule) => (
-                    <tr key={rule.id} style={{ borderTop: '1px solid var(--border)' }}>
-                      <td style={tableCell}>{rule.min_qty}</td>
-                      <td style={tableCell}>{rule.max_qty ?? '∞'}</td>
-                      <td style={tableCell}>{money(rule.unit_price)}</td>
-                      <td style={tableCell}>{rule.min_qty} - {rule.max_qty ?? '+'} adet</td>
-                      <td style={tableCell}><button onClick={() => void deleteRule(rule.id)} style={dangerButton}>Sil</button></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+        <div style={{ display: 'grid', gap: 14 }}>
+          <div style={{ ...surface, display: 'grid', gap: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+              <h2 style={sectionTitle}>{productForm.id ? productForm.name || 'Ürün' : 'Yeni ürün'}</h2>
+              {productForm.id ? <span style={{ color: 'var(--text-3)', fontSize: 12, fontWeight: 700 }}>{productForm.code}</span> : null}
             </div>
 
-            <div className="quote-catalog-rule-grid" style={{ ...surfaceInset, display: 'grid', gap: 12, gridTemplateColumns: 'repeat(4,minmax(0,1fr))' }}>
-              <label style={field}><span style={label}>Min Adet</span><input type="number" min={1} value={ruleForm.min_qty} onChange={(e) => setRuleForm((prev) => ({ ...prev, min_qty: Number(e.target.value || 1) }))} style={input} /></label>
-              <label style={field}><span style={label}>Max Adet</span><input type="number" min={1} value={ruleForm.max_qty} onChange={(e) => setRuleForm((prev) => ({ ...prev, max_qty: e.target.value }))} style={input} placeholder="Boş = sınırsız" /></label>
-              <label style={field}><span style={label}>Birim Fiyat</span><input type="number" min={0} step="0.01" value={ruleForm.unit_price} onChange={(e) => setRuleForm((prev) => ({ ...prev, unit_price: e.target.value }))} style={input} placeholder="704" /></label>
-              <div style={{ display: 'flex', alignItems: 'flex-end' }}><button onClick={saveRule} disabled={savingRule} style={primaryButton}>{savingRule ? 'Kaydediliyor...' : 'Baremi Kaydet'}</button></div>
+            <fieldset style={fieldset}>
+              <legend style={legend}>1 · Kullanım tipi</legend>
+              <div role="radiogroup" className="quote-catalog-usage mobile-grid-stack" style={{ display: 'grid', gap: 8, gridTemplateColumns: 'repeat(3,minmax(0,1fr))' }}>
+                {(['both', 'sale', 'rental'] as ProductUsageType[]).map((key) => (
+                  <button key={key} type="button" role="radio" aria-checked={formUsage === key} onClick={() => setUsage(key)} style={{ ...usageCard, ...(formUsage === key ? { borderColor: USAGE_COLOR[key], boxShadow: `inset 0 0 0 1px ${USAGE_COLOR[key]}`, background: 'var(--card)' } : null) }}>
+                    <span style={{ fontWeight: 800, fontSize: 13.5, color: formUsage === key ? USAGE_COLOR[key] : 'var(--text)' }}>{USAGE_LABEL[key]}</span>
+                    <span style={{ fontSize: 12, color: 'var(--text-3)', lineHeight: 1.35 }}>{USAGE_HINT[key]}</span>
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+
+            <fieldset style={fieldset}>
+              <legend style={legend}>2 · Ürün bilgisi</legend>
+              <div className="mobile-grid-stack" style={grid2}>
+                <label style={field}><span style={label}>Kod *</span><input value={productForm.code} onChange={(e) => setProductForm((prev) => ({ ...prev, code: e.target.value.toUpperCase() }))} style={input} placeholder="A910SE+S210+CRADLE" /></label>
+                <label style={field}><span style={label}>Ürün adı *</span><input value={productForm.name} onChange={(e) => setProductForm((prev) => ({ ...prev, name: e.target.value }))} style={input} placeholder="PAX A910SE + S210 + Cradle" /></label>
+                <label style={field}>
+                  <span style={label}>Kategori</span>
+                  <input list="quote-catalog-categories" value={productForm.category} onChange={(e) => setProductForm((prev) => ({ ...prev, category: e.target.value }))} style={input} placeholder="EFT POS" />
+                  <datalist id="quote-catalog-categories">{categories.map((c) => <option key={c} value={c} />)}</datalist>
+                </label>
+                <label style={field}>
+                  <span style={label}>Ürün tipi</span>
+                  <select value={productForm.product_type} onChange={(e) => setProductForm((prev) => ({ ...prev, product_type: e.target.value as Product['product_type'] }))} style={input}>
+                    <option value="device">Cihaz</option>
+                    <option value="bundle">Set (birden çok cihaz)</option>
+                    <option value="peripheral">Aksesuar / çevre birimi</option>
+                    <option value="recurring">Hizmet</option>
+                  </select>
+                </label>
+                <label style={field}><span style={label}>Birim</span><input value={productForm.unit_label} onChange={(e) => setProductForm((prev) => ({ ...prev, unit_label: e.target.value }))} style={input} placeholder="adet" /></label>
+                <label style={field}><span style={label}>Para birimi</span><input value={productForm.currency} onChange={(e) => setProductForm((prev) => ({ ...prev, currency: e.target.value.toUpperCase() }))} style={input} placeholder="USD" /></label>
+              </div>
+              <label style={field}><span style={label}>Açıklama</span><input value={productForm.description} onChange={(e) => setProductForm((prev) => ({ ...prev, description: e.target.value }))} style={input} placeholder="Teklifte görünen kısa açıklama" /></label>
+              <label style={field}><span style={label}>Teknik özellikler</span><textarea value={productForm.specsText} onChange={(e) => setProductForm((prev) => ({ ...prev, specsText: e.target.value }))} style={textarea} placeholder={'Her satıra bir özellik\nAndroid 12\nIP67'} /></label>
+              <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', alignItems: 'center' }}>
+                <label style={{ ...checkLabel, opacity: formUsage === 'rental' ? 0.5 : 1 }} title={formUsage === 'rental' ? 'Sadece Kiralama ürünü abonelik olamaz' : undefined}>
+                  <input type="checkbox" disabled={formUsage === 'rental'} checked={productForm.is_recurring} onChange={(e) => setProductForm((prev) => ({ ...prev, is_recurring: e.target.checked, billing_period: e.target.checked ? 'monthly' : 'one_time' }))} /> Aylık hizmet (abonelik)
+                </label>
+                <label style={checkLabel}><input type="checkbox" checked={productForm.is_active} onChange={(e) => setProductForm((prev) => ({ ...prev, is_active: e.target.checked }))} /> Aktif</label>
+                <label style={{ ...checkLabel, gap: 6 }}>Liste sırası <input type="number" value={productForm.sort_order} onChange={(e) => setProductForm((prev) => ({ ...prev, sort_order: Number(e.target.value || 100) }))} style={{ ...input, width: 80, minHeight: 34 }} /></label>
+              </div>
+            </fieldset>
+
+            <fieldset style={{ ...fieldset, ...rentalPanel, ...(rentalAllowed ? null : { opacity: 0.6 }) }}>
+              <legend style={{ ...legend, color: 'var(--chip-gold-color)' }}>3 · Kiralama koşulları</legend>
+              {rentalAllowed ? (
+                <>
+                  <div className="mobile-grid-stack" style={{ display: 'grid', gap: 10, gridTemplateColumns: 'repeat(3,minmax(0,1fr))' }}>
+                    <label style={field}>
+                      <span style={label}>Aylık kira bedeli (USD){formUsage === 'rental' ? ' *' : ''}</span>
+                      <input type="number" min={0} step="0.01" value={productForm.rental_monthly_price} onChange={(e) => setProductForm((prev) => ({ ...prev, rental_monthly_price: e.target.value }))} style={{ ...input, ...(rentalMissing ? { borderColor: '#f87171' } : null) }} placeholder={formUsage === 'rental' ? 'örn. 15' : 'Boş = kiralanamaz'} />
+                    </label>
+                    <label style={field}>
+                      <span style={label}>Min. taahhüt (ay)</span>
+                      <input type="number" min={1} max={120} step={1} value={productForm.rental_min_months} onChange={(e) => setProductForm((prev) => ({ ...prev, rental_min_months: e.target.value }))} style={{ ...input, ...(monthsInvalid ? { borderColor: '#f87171' } : null) }} placeholder="örn. 12" />
+                    </label>
+                    <label style={field}>
+                      <span style={label}>Kurulum bedeli (USD, tek sefer)</span>
+                      <input type="number" min={0} step="0.01" value={productForm.rental_setup_fee} onChange={(e) => setProductForm((prev) => ({ ...prev, rental_setup_fee: e.target.value }))} style={input} placeholder="Boş = yok" />
+                    </label>
+                  </div>
+                  <div style={{ fontSize: 12.5, color: 'var(--text-2)' }}>
+                    Tutarlar KDV hariç, cihaz başına.{' '}
+                    {rentalTotal != null
+                      ? <>Taahhüt toplamı: <b style={{ color: 'var(--text)' }}>{money(rentalTotal)}</b> / cihaz ({productForm.rental_min_months} ay × {money(rentNumber)}{setupNumber > 0 ? ` + ${money(setupNumber)} kurulum` : ''}).</>
+                      : 'Kiralama satırında aylık kira buradan otomatik gelir.'}
+                  </div>
+                </>
+              ) : (
+                <div style={{ fontSize: 12.5, color: 'var(--text-3)' }}>
+                  {productForm.is_recurring ? 'Aylık hizmet ürünü kiralanmaz.' : 'Sadece Satış ürünü: kiralamaya kapalı, kira bilgisi kaydedilmez.'}
+                </div>
+              )}
+            </fieldset>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', borderTop: '1px solid var(--border)', paddingTop: 12 }}>
+              <span style={{ fontSize: 12.5, fontWeight: 700, color: formError ? 'var(--chip-red-color)' : 'var(--text-3)' }}>
+                {formError ?? (productForm.id ? 'Değişiklik yeni kayıtlara uygulanır; mevcut teklif ve satışlar değişmez.' : 'Kaydedince Satış, Teklif ve Forecast listelerinde görünür.')}
+              </span>
+              <button type="button" onClick={saveProduct} disabled={savingProduct || Boolean(formError)} style={{ ...primaryButton, opacity: savingProduct || formError ? 0.6 : 1 }}>
+                {savingProduct ? 'Kaydediliyor…' : productForm.id ? 'Değişiklikleri kaydet' : 'Ürünü ekle'}
+              </button>
             </div>
-          </>
-        ) : <div style={{ color: 'var(--text-3)' }}>Soldan bir ürün seç veya yeni ürün oluştur.</div>}
+          </div>
+
+          <div style={{ ...surface, display: 'grid', gap: 12, boxShadow: `inset 3px 0 0 ${USAGE_COLOR.sale}` }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+              <h2 style={sectionTitle}>Satış fiyat baremleri {selectedProduct && saleAllowed && !productForm.is_recurring ? <span style={countBadge}>{selectedProductRules.length}</span> : null}</h2>
+              {selectedProduct ? <span style={{ color: 'var(--text-3)', fontSize: 12, fontWeight: 700 }}>{selectedProduct.code}</span> : null}
+            </div>
+            {!selectedProduct || !productForm.id ? (
+              <div style={emptyText}>Barem eklemek için önce ürünü kaydedin ya da listeden seçin.</div>
+            ) : !saleAllowed ? (
+              <div style={{ ...emptyText, color: 'var(--chip-gold-color)' }}>Sadece Kiralama ürünü: satış baremi kullanılmaz, fiyat kiralama koşullarından gelir.</div>
+            ) : (
+              <>
+                <div style={{ fontSize: 12.5, color: 'var(--text-3)' }}>Adet aralığına göre cihaz başı satış fiyatı (USD, KDV hariç). Barem yoksa satışta fiyat elle girilir.</div>
+                <div style={{ overflowX: 'auto', border: '1px solid var(--border)', borderRadius: 12 }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 420 }}>
+                    <thead>
+                      <tr style={{ background: 'var(--surface-2)' }}>
+                        {['Adet aralığı', 'Birim fiyat', ''].map((head) => <th key={head || 'actions'} style={tableHead}>{head}</th>)}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {!selectedProductRules.length ? <tr><td colSpan={3} style={{ ...tableCell, color: 'var(--text-3)' }}>Barem yok.</td></tr> : null}
+                      {selectedProductRules.map((rule) => (
+                        <tr key={rule.id} style={{ borderTop: '1px solid var(--border)' }}>
+                          <td style={tableCell}>{rule.min_qty} – {rule.max_qty ?? '∞'} adet</td>
+                          <td style={{ ...tableCell, fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>{money(rule.unit_price)}</td>
+                          <td style={{ ...tableCell, textAlign: 'right' }}><button type="button" onClick={() => void deleteRule(rule.id)} style={dangerButton}>Sil</button></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="quote-catalog-rule-grid mobile-grid-stack" style={{ display: 'grid', gap: 8, gridTemplateColumns: 'repeat(3,minmax(0,1fr)) auto', alignItems: 'end' }}>
+                  <label style={field}><span style={label}>Min adet</span><input type="number" min={1} value={ruleForm.min_qty} onChange={(e) => setRuleForm((prev) => ({ ...prev, min_qty: Number(e.target.value || 1) }))} style={input} /></label>
+                  <label style={field}><span style={label}>Max adet</span><input type="number" min={1} value={ruleForm.max_qty} onChange={(e) => setRuleForm((prev) => ({ ...prev, max_qty: e.target.value }))} style={input} placeholder="Boş = sınırsız" /></label>
+                  <label style={field}><span style={label}>Birim fiyat (USD)</span><input type="number" min={0} step="0.01" value={ruleForm.unit_price} onChange={(e) => setRuleForm((prev) => ({ ...prev, unit_price: e.target.value }))} style={input} placeholder="704" /></label>
+                  <button type="button" onClick={saveRule} disabled={savingRule} style={primaryButton}>{savingRule ? '…' : 'Barem ekle'}</button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
       </section>
     </main>
   );
 }
 
-const surface: CSSProperties = { background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 22, padding: 16, boxShadow: 'var(--shadow)' };
-const surfaceInset: CSSProperties = { background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 18, padding: 14 };
-const eyebrow: CSSProperties = { fontSize: 12, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', color: '#6366f1' };
-const productCard: CSSProperties = { textAlign: 'left', border: '1px solid var(--border)', background: 'var(--surface)', borderRadius: 16, padding: 14, cursor: 'pointer' };
-const selectedCard: CSSProperties = { borderColor: '#6366f1', boxShadow: '0 0 0 2px rgba(99,102,241,.12)' };
-const primaryButton: CSSProperties = { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minHeight: 42, padding: '0 16px', borderRadius: 14, border: 'none', background: '#0e6fc7', color: 'var(--surface)', fontWeight: 800, cursor: 'pointer', textDecoration: 'none' };
-const ghostButton: CSSProperties = { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minHeight: 42, padding: '0 14px', borderRadius: 14, border: '1px solid #cbd5e1', background: 'var(--surface)', color: 'var(--text)', fontWeight: 700, cursor: 'pointer', textDecoration: 'none' };
-const dangerButton: CSSProperties = { minHeight: 34, padding: '0 12px', borderRadius: 12, border: '1px solid #fecaca', background: 'var(--chip-red-bg)', color: 'var(--chip-red-color)', fontWeight: 800, cursor: 'pointer' };
-const grid2: CSSProperties = { display: 'grid', gap: 12, gridTemplateColumns: 'repeat(2,minmax(0,1fr))' };
-const field: CSSProperties = { display: 'grid', gap: 6 };
-const label: CSSProperties = { fontSize: 12, fontWeight: 800, color: 'var(--text-2)', textTransform: 'uppercase', letterSpacing: '.04em' };
-const input: CSSProperties = { minHeight: 42, borderRadius: 14, border: '1px solid #cbd5e1', padding: '0 12px', background: 'var(--surface)', color: 'var(--text)' };
-const textarea: CSSProperties = { minHeight: 120, borderRadius: 14, border: '1px solid #cbd5e1', padding: '12px', background: 'var(--surface)', color: 'var(--text)', resize: 'vertical' };
-const tableHead: CSSProperties = { textAlign: 'left', padding: '0 12px 10px', color: 'var(--text-3)', fontWeight: 800, fontSize: 12, letterSpacing: '.06em', textTransform: 'uppercase' };
-const tableCell: CSSProperties = { padding: '14px 12px', color: 'var(--text)', verticalAlign: 'top' };
-const pill: CSSProperties = { display: 'inline-flex', alignItems: 'center', minHeight: 28, padding: '0 10px', borderRadius: 999, border: '1px solid transparent', fontSize: 12, fontWeight: 800 };
-const activePill: CSSProperties = { background: 'var(--chip-green-bg)', color: 'var(--chip-green-color)', borderColor: '#a7f3d0' };
-const passivePill: CSSProperties = { background: 'var(--surface-2)', color: 'var(--text-2)', borderColor: '#cbd5e1' };
-const checkLabel: CSSProperties = { display: 'inline-flex', gap: 8, alignItems: 'center', color: 'var(--text)', fontWeight: 700 };
+type ListFilter = 'all' | ProductUsageType | 'passive';
+const USAGE_LABEL = PRODUCT_USAGE_LABELS;
+const USAGE_SHORT: Record<ProductUsageType, string> = { both: 'Satış + Kira', sale: 'Sadece Satış', rental: 'Sadece Kira' };
+const USAGE_HINT: Record<ProductUsageType, string> = {
+  both: 'Satışta barem fiyatı, kiralamada aylık kira kullanılır.',
+  sale: 'Yalnız satış olarak seçilir; kiralamaya kapalı.',
+  rental: 'Yalnız kiralama olarak seçilir; aylık kira zorunlu.',
+};
+const USAGE_COLOR: Record<ProductUsageType, string> = { both: '#0e7490', sale: '#4338ca', rental: '#b45309' };
+
+const surface: CSSProperties = { background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 16, padding: 16, boxShadow: 'var(--shadow)' };
+const kpiCard: CSSProperties = { display: 'grid', gap: 4, textAlign: 'left', padding: '12px 14px', borderRadius: 12, border: '1px solid var(--border)', background: 'var(--card)', cursor: 'pointer', fontFamily: 'inherit' };
+const kpiLabel: CSSProperties = { fontSize: 11, fontWeight: 700, letterSpacing: '.05em', textTransform: 'uppercase', color: 'var(--text-3)' };
+const sectionTitle: CSSProperties = { margin: 0, display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 18, fontWeight: 800, color: 'var(--text)' };
+const countBadge: CSSProperties = { display: 'inline-flex', alignItems: 'center', minHeight: 20, padding: '0 8px', borderRadius: 999, background: 'var(--chip-indigo-bg)', color: 'var(--chip-indigo-color)', fontSize: 12, fontWeight: 800 };
+const segment: CSSProperties = { display: 'inline-flex', flexWrap: 'wrap', padding: 3, gap: 2, borderRadius: 10, border: '1px solid var(--border)', background: 'var(--surface-2)' };
+const segmentButton: CSSProperties = { minHeight: 26, padding: '0 9px', borderRadius: 7, border: 'none', background: 'transparent', color: 'var(--text-2)', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' };
+const segmentActive: CSSProperties = { background: 'var(--card)', color: 'var(--text)', boxShadow: '0 1px 2px rgba(15,23,42,.12)' };
+const productRow: CSSProperties = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, textAlign: 'left', border: '1px solid var(--border)', background: 'var(--surface)', borderRadius: 10, padding: '9px 12px', cursor: 'pointer', fontFamily: 'inherit' };
+const selectedRow: CSSProperties = { borderColor: '#6366f1', boxShadow: 'inset 3px 0 0 #6366f1', background: 'var(--chip-indigo-bg)' };
+const usageCard: CSSProperties = { display: 'grid', gap: 4, alignContent: 'start', textAlign: 'left', padding: '10px 12px', borderRadius: 12, border: '1px solid var(--border)', background: 'var(--surface-2)', cursor: 'pointer', fontFamily: 'inherit' };
+const fieldset: CSSProperties = { display: 'grid', gap: 10, margin: 0, padding: 0, border: 'none', minWidth: 0 };
+const rentalPanel: CSSProperties = { padding: '12px 14px', borderRadius: 12, border: '1px solid var(--chip-gold-bd)', background: 'var(--chip-gold-bg)' };
+const legend: CSSProperties = { padding: 0, marginBottom: 8, fontSize: 11, fontWeight: 700, letterSpacing: '.05em', textTransform: 'uppercase', color: 'var(--text-3)', float: 'left', width: '100%' };
+const emptyText: CSSProperties = { padding: '14px 4px', color: 'var(--text-3)', fontSize: 13 };
+const primaryButton: CSSProperties = { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minHeight: 38, padding: '0 16px', borderRadius: 10, border: 'none', background: '#0e6fc7', color: '#fff', fontWeight: 800, fontSize: 13.5, cursor: 'pointer', textDecoration: 'none', fontFamily: 'inherit', whiteSpace: 'nowrap' };
+const ghostButton: CSSProperties = { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minHeight: 38, padding: '0 14px', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontWeight: 700, fontSize: 13.5, cursor: 'pointer', textDecoration: 'none' };
+const dangerButton: CSSProperties = { minHeight: 30, padding: '0 10px', borderRadius: 8, border: '1px solid var(--chip-red-bd)', background: 'var(--chip-red-bg)', color: 'var(--chip-red-color)', fontWeight: 700, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' };
+const grid2: CSSProperties = { display: 'grid', gap: 10, gridTemplateColumns: 'repeat(2,minmax(0,1fr))' };
+const field: CSSProperties = { display: 'grid', gap: 5, minWidth: 0 };
+const label: CSSProperties = { fontSize: 11.5, fontWeight: 700, color: 'var(--text-2)' };
+const input: CSSProperties = { minHeight: 38, borderRadius: 10, border: '1px solid var(--border)', padding: '0 11px', background: 'var(--surface)', color: 'var(--text)', fontSize: 13.5, fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' };
+const textarea: CSSProperties = { ...input, minHeight: 84, padding: '9px 11px', resize: 'vertical' };
+const tableHead: CSSProperties = { textAlign: 'left', padding: '9px 12px', color: 'var(--text-3)', fontWeight: 700, fontSize: 11, letterSpacing: '.05em', textTransform: 'uppercase' };
+const tableCell: CSSProperties = { padding: '9px 12px', color: 'var(--text)', fontSize: 13 };
+const pill: CSSProperties = { display: 'inline-flex', alignItems: 'center', minHeight: 22, padding: '0 8px', borderRadius: 999, border: '1px solid transparent', fontSize: 11, fontWeight: 800, whiteSpace: 'nowrap' };
+const passivePill: CSSProperties = { background: 'var(--surface-2)', color: 'var(--text-2)', borderColor: 'var(--border)' };
+const usagePill: Record<ProductUsageType, CSSProperties> = {
+  both: { background: 'var(--surface-2)', color: 'var(--text-2)', borderColor: 'var(--border)' },
+  sale: { background: 'var(--chip-indigo-bg)', color: 'var(--chip-indigo-color)', borderColor: 'var(--chip-indigo-bd)' },
+  rental: { background: 'var(--chip-gold-bg)', color: 'var(--chip-gold-color)', borderColor: 'var(--chip-gold-bd)' },
+};
+const checkLabel: CSSProperties = { display: 'inline-flex', gap: 8, alignItems: 'center', color: 'var(--text)', fontWeight: 700, fontSize: 13 };

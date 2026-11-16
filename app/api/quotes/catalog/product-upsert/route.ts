@@ -26,6 +26,10 @@ type Body = {
   rental_monthly_price?: number | string | null;
   /** Kullanım tipi: both | sale | rental. */
   usage_type?: string;
+  /** Kiralama taahhüt süresi (ay). */
+  rental_min_months?: number | string | null;
+  /** Kiralama tek seferlik kurulum bedeli (USD). */
+  rental_setup_fee?: number | string | null;
 };
 
 export async function POST(request: Request) {
@@ -50,8 +54,21 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: 'Aylık hizmet (recurring) ürünü kiralamaya açılamaz.' }, { status: 400 });
     }
 
+    const optionalNumber = (value: unknown) => (value == null || String(value).trim() === '' ? null : Number(value));
+    const sellsAsRental = usageType !== 'sale' && !body.is_recurring;
+    const minMonths = sellsAsRental ? optionalNumber(body.rental_min_months) : null;
+    const setupFee = sellsAsRental ? optionalNumber(body.rental_setup_fee) : null;
+    if (minMonths != null && (!Number.isInteger(minMonths) || minMonths < 1 || minMonths > 120)) {
+      return NextResponse.json({ message: 'Taahhüt süresi 1-120 ay arası tam sayı olmalı.' }, { status: 400 });
+    }
+    if (setupFee != null && (!Number.isFinite(setupFee) || setupFee < 0)) {
+      return NextResponse.json({ message: 'Kurulum bedeli negatif olamaz.' }, { status: 400 });
+    }
+
     const payload = {
       usage_type: usageType,
+      rental_min_months: minMonths,
+      rental_setup_fee: setupFee,
       code,
       name,
       category: String(body.category ?? '').trim() || 'EFT POS',
@@ -64,7 +81,7 @@ export async function POST(request: Request) {
       specs: JSON.stringify(normalizedSpecs),
       sort_order: Number(body.sort_order ?? 100),
       is_active: body.is_active !== false,
-      rental_monthly_price: rentalRaw,
+      rental_monthly_price: usageType === 'sale' || body.is_recurring ? null : rentalRaw,
     };
 
     const admin = createPgAdminClient();

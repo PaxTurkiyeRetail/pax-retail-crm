@@ -40,6 +40,8 @@ type NavItem = {
   label: string;
   iconKey: IconKey;
   exact?: boolean;
+  /** Bu alt yollar kendi menü girdisine ait; üst girdi aktif görünmez. */
+  notUnder?: string[];
   hardNavigate?: boolean;
 };
 type NavGroup = { title: string; items: NavItem[]; tail?: boolean };
@@ -51,6 +53,7 @@ function isActive(pathname: string, item: NavItem, search = "") {
   const [itemPath, itemQuery] = item.href.split("?");
   if (itemQuery) return pathname === itemPath && search === `?${itemQuery}`;
   if (item.exact) return pathname === item.href;
+  if (item.notUnder?.some((p) => pathname === p || pathname.startsWith(p + "/"))) return false;
   return pathname === item.href || pathname.startsWith(`${item.href}/`);
 }
 
@@ -505,12 +508,20 @@ export default function PanelShell({
         href: "/crm/quotes",
         label: "Teklifler",
         iconKey: "quotes",
+        notUnder: ["/crm/quotes/catalog"],
       });
     // Satışlar: kazanılan tekliflerden türeyen düzenlenebilir satış kayıtları (07.09).
     if (allowed('quote.read') && allowed('screen.crm.quotes.view'))
       operations.push({
         href: "/crm/sales",
         label: "Satışlar",
+        iconKey: "quotes",
+      });
+    // Ürün Kataloğu: Satış/Teklif/Forecast ortak ürün, satış baremi ve kiralama koşulları.
+    if (allowed('quote.catalog.manage') && allowed('screen.crm.quotes.view'))
+      operations.push({
+        href: "/crm/quotes/catalog",
+        label: "Ürün Kataloğu",
         iconKey: "quotes",
       });
     if (allowed('customer.read') && allowed('screen.crm.customers.view'))
