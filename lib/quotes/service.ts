@@ -1,7 +1,7 @@
 import 'server-only';
 import { ApiError } from '@/lib/http/api-error';
 import type { PgClient } from '@/lib/pg/client';
-import { STATIC_QUOTE_PRICING_RULES, STATIC_QUOTE_PRODUCTS, normalizeQuoteProduct, type QuotePricingRule, type QuoteProduct } from '@/lib/quotes/catalog';
+import { STATIC_QUOTE_PRICING_RULES, STATIC_QUOTE_PRODUCTS, normalizeQuoteProduct, productAllowsSaleType, usageTypeError, type QuotePricingRule, type QuoteProduct } from '@/lib/quotes/catalog';
 import { manualUnitPrice, normalizeSaleType, priceLine, sumLineTotals, type SaleType } from '@/lib/quotes/line-pricing';
 
 export type QuoteLineInput = {
@@ -141,6 +141,7 @@ export function resolveQuoteLines(
       if (!product) throw new Error(`Ürün bulunamadı: ${item.product_id}`);
       const saleType = normalizeSaleType(item.sale_type);
       if (saleType === 'rental' && product.is_recurring) throw new Error(`Aylık hizmet kalemi kiralama olarak girilemez: ${product.name}`);
+      if (!productAllowsSaleType(product, saleType)) throw new ApiError('PRODUCT_USAGE_MISMATCH', usageTypeError(product.name, saleType), 400);
       const rules = rulesByProduct.get(item.product_id) ?? [];
       const manual = saleType === 'sale' ? manualUnitPrice(item) : null;
       if (manual != null && !options.allowManualPrice && !keepsExisting(item.product_id, manual)) {

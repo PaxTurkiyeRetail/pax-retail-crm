@@ -21,6 +21,7 @@ import { filtersToQuery, type FilterOption } from '@/lib/filters/schema';
 import type { Department } from '@/lib/departments';
 import { salesFilterConfig } from '@/lib/quotes/sales-filters';
 import { DEFAULT_RENTAL_OPS_STATUS, RENTAL_OPS_STATUSES, rentalOpsLabel } from '@/lib/sales/rental-ops';
+import { coerceSaleTypeForProduct, productAllowsSaleType, productUsageSuffix } from '@/lib/quotes/catalog';
 
 /** Tutar tutarlılık uyarılarını (045, engellemez) ekrandaki bilgi satırına çevirir. */
 const warningText = (json: any, base?: string | null) => {
@@ -67,7 +68,7 @@ type SaleRow = {
 type ChannelOption = { value: string; label: string };
 type OwnerOption = { id: string | null; name: string };
 type CustomerOption = { id: string; musteri: string };
-type ProductOption = { id: string; code: string; name: string; product_type: string; is_recurring: boolean; rental_monthly_price: number | null };
+type ProductOption = { id: string; code: string; name: string; product_type: string; is_recurring: boolean; rental_monthly_price: number | null; usage_type?: string };
 type NewLine = { uid: string; product_id: string; quantity: string; sale_type: 'sale' | 'rental'; manual_unit_price: string };
 
 const newLine = (): NewLine => ({ uid: Math.random().toString(36).slice(2), product_id: '', quantity: '1', sale_type: 'sale', manual_unit_price: '' });
@@ -200,6 +201,7 @@ export default function SalesClient() {
         id: String(row.id), code: String(row.code ?? ''), name: String(row.name ?? ''),
         product_type: String(row.product_type ?? 'device'), is_recurring: Boolean(row.is_recurring),
         rental_monthly_price: row.rental_monthly_price == null ? null : Number(row.rental_monthly_price),
+        usage_type: String(row.usage_type ?? 'both'),
       })),
     });
   }, []);
@@ -561,12 +563,12 @@ export default function SalesClient() {
                   <div key={line.uid} style={{ display: 'grid', gap: 8, gridTemplateColumns: 'minmax(0, 3fr) 92px 132px auto', alignItems: 'center' }}>
                     <select
                       value={line.product_id}
-                      onChange={(e) => setNewLines((prev) => prev.map((row) => (row.uid === line.uid ? { ...row, product_id: e.target.value } : row)))}
+                      onChange={(e) => setNewLines((prev) => prev.map((row) => (row.uid === line.uid ? { ...row, product_id: e.target.value, sale_type: coerceSaleTypeForProduct(options?.products.find((p) => p.id === e.target.value), row.sale_type) } : row)))}
                       style={inputStyle}
                     >
                       <option value="">{options ? 'Ürün seçin' : 'Yükleniyor…'}</option>
                       {(options?.products ?? []).map((product) => (
-                        <option key={product.id} value={product.id}>{product.code ? `${product.code} · ` : ''}{product.name}</option>
+                        <option key={product.id} value={product.id}>{product.code ? `${product.code} · ` : ''}{product.name}{productUsageSuffix(product)}</option>
                       ))}
                     </select>
                     <input
@@ -582,8 +584,8 @@ export default function SalesClient() {
                       style={inputStyle}
                       aria-label={`Satır ${index + 1} satış tipi`}
                     >
-                      <option value="sale">Satış</option>
-                      <option value="rental">Kiralama</option>
+                      <option value="sale" disabled={!productAllowsSaleType(options?.products.find((p) => p.id === line.product_id), 'sale')}>Satış</option>
+                      <option value="rental" disabled={!productAllowsSaleType(options?.products.find((p) => p.id === line.product_id), 'rental')}>Kiralama</option>
                     </select>
                     <button
                       type="button"

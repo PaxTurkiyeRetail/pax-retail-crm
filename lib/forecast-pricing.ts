@@ -6,6 +6,8 @@
 //   * Satış satırında rental_monthly_price tutulmaz (null).
 //   * include_in_retail_plan yoksa true.
 
+import { productAllowsSaleType, usageTypeError } from '@/lib/quotes/catalog';
+
 export type ForecastSaleType = 'sale' | 'rental';
 
 export type ForecastPricingInput = {
@@ -39,11 +41,14 @@ const parseBool = (value: unknown, fallback: boolean) => {
 
 export function parseForecastPricing(
   input: ForecastPricingInput,
-  product?: { rental_monthly_price?: number | string | null } | null,
+  product?: { rental_monthly_price?: number | string | null; usage_type?: unknown; is_recurring?: unknown; name?: unknown } | null,
 ): { ok: true; value: ForecastPricing } | { ok: false; message: string } {
   const rawType = String(input.sale_type ?? '').trim().toLowerCase();
   if (rawType && rawType !== 'sale' && rawType !== 'rental') return { ok: false, message: 'Satış tipi gecersiz (sale | rental).' };
   const saleType: ForecastSaleType = rawType === 'rental' ? 'rental' : 'sale';
+  if (product && !productAllowsSaleType(product, saleType)) {
+    return { ok: false, message: usageTypeError(String(product.name ?? 'Ürün'), saleType) };
+  }
 
   const unitPrice = optionalNumber(input.unit_price);
   if (unitPrice === 'invalid' || (unitPrice != null && unitPrice < 0)) return { ok: false, message: 'Birim fiyat gecersiz.' };

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { assertOwnedResourceAccess, requireActivityReadOrThrow } from '@/lib/authz';
+import { assertOwnedResourceAccess, requireActivityReadOrThrow, userHasPermission } from '@/lib/authz';
 import { createPgAdminClient } from '@/lib/pg/admin';
 
 export const dynamic = 'force-dynamic';
@@ -21,7 +21,10 @@ export async function GET(req: Request) {
     const admin = createPgAdminClient();
     const { data: customer } = await admin.from('musteriler').select('owner_user_id,sorumlu').eq('id', musteriId).maybeSingle();
     if (!customer) return NextResponse.json({ message: 'Müşteri bulunamadı' }, { status: 404 });
-    assertOwnedResourceAccess({ user: me, resource: customer, ownPermission: 'activity.read', anyPermission: 'activity.read.any' });
+    // Aktivite girebilen satışçı başka firmanın faz durumunu da görmeli (aktivite ekleme ekranı, 16.11).
+    if (!userHasPermission(me, 'activity.create')) {
+      assertOwnedResourceAccess({ user: me, resource: customer, ownPermission: 'activity.read', anyPermission: 'activity.read.any' });
+    }
 
     const { data: phaseStatus } = await admin
       .from('pipeline_eventleri')

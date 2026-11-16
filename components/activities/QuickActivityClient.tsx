@@ -157,7 +157,7 @@ export default function QuickActivityClient() {
       try {
         const [meRes, customersRes, fazRes, partnerFazRes, activityOptionsRes] = await Promise.all([
           fetch('/api/me', { cache: 'no-store' }),
-          fetch('/api/activities/customers?all=1&limit=5000', { cache: 'no-store' }),
+          fetch('/api/activities/customers?all=1&pick=1&limit=5000', { cache: 'no-store' }),
           fetch('/api/faz/list', { cache: 'no-store' }),
           fetch('/api/faz/list?type=business-partner', { cache: 'no-store' }),
           fetch('/api/activities/options', { cache: 'no-store' })
@@ -220,7 +220,7 @@ export default function QuickActivityClient() {
     const loadCustomers = async () => {
       setCustomerLoading(true);
       try {
-        const params = new URLSearchParams({ all: '1', limit: debouncedCustomerSearch ? '5000' : '5000' });
+        const params = new URLSearchParams({ all: '1', pick: '1', limit: '5000' });
         if (debouncedCustomerSearch) params.set('q', debouncedCustomerSearch);
         if (musteriId) params.set('id', musteriId);
         const res = await fetch(`/api/activities/customers?${params.toString()}`, { cache: 'no-store' });

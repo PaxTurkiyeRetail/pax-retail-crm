@@ -4,13 +4,14 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import ActivitySelect from '@/components/activities/ActivitySelect';
 import { priceLine, sumLineTotals, type SaleType } from '@/lib/quotes/line-pricing';
+import { coerceSaleTypeForProduct, productAllowsSaleType, productUsageSuffix } from '@/lib/quotes/catalog';
 
 type Product = {
   id: string; code: string; name: string; category: string;
   product_type: 'device' | 'bundle' | 'recurring' | 'peripheral';
   is_recurring: boolean; billing_period: 'one_time' | 'monthly'; description: string;
   /** Katalog kira tarifesi (USD/ay, KDV hariç); null = kiralanamaz. 08.09: A80 15 · A910S 15 · A6650 20. */
-  rental_monthly_price?: number | null;
+  rental_monthly_price?: number | null; usage_type?: string;
 };
 type Rule = { product_id: string; min_qty: number; max_qty: number | null; unit_price: number };
 type Customer = { id: string; musteri: string; sektor: string | null; sorumlu: string | null };
@@ -209,13 +210,13 @@ export default function QuoteBuilder({ showHero = false }: Props) {
                       role="radio"
                       aria-checked={item.sale_type === kind}
                       onClick={() => toggleSaleType(item.uid, kind)}
-                      disabled={kind === 'rental' && Boolean(item.product?.is_recurring)}
-                      title={kind === 'rental' && item.product?.is_recurring ? 'Aylık hizmet kalemi kiralama olarak girilemez' : undefined}
+                      disabled={!productAllowsSaleType(item.product, kind)}
+                      title={!productAllowsSaleType(item.product, kind) ? (kind === 'rental' ? 'Bu ürün kiralamaya açık değil' : 'Bu ürün sadece kiralamaya açık') : undefined}
                       style={{
                         minHeight: 30, padding: '0 12px', borderRadius: 9, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 800, fontFamily: 'inherit',
                         background: item.sale_type === kind ? (kind === 'rental' ? '#b45309' : '#4338ca') : 'transparent',
                         color: item.sale_type === kind ? '#fff' : 'var(--text-2)',
-                        opacity: kind === 'rental' && item.product?.is_recurring ? 0.5 : 1,
+                        opacity: productAllowsSaleType(item.product, kind) ? 1 : 0.5,
                       }}
                     >
                       {kind === 'sale' ? 'Satış' : 'Kiralama'}
@@ -230,9 +231,9 @@ export default function QuoteBuilder({ showHero = false }: Props) {
 
             <div>
               <label className="pax-label" style={{ display: 'block', marginBottom: 8 }}>Ürün *</label>
-              <select value={item.product_id} onChange={(e) => setItems(prev => prev.map(i => i.uid === item.uid ? { ...i, product_id: e.target.value } : i))} className="pax-input" required style={{ width: '100%', minHeight: 48, fontSize: 16 }}>
+              <select value={item.product_id} onChange={(e) => setItems(prev => prev.map(i => i.uid === item.uid ? { ...i, product_id: e.target.value, sale_type: coerceSaleTypeForProduct(productMap.get(e.target.value), i.sale_type) } : i))} className="pax-input" required style={{ width: '100%', minHeight: 48, fontSize: 16 }}>
                 <option value="">Ürün seç...</option>
-                {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                {products.map(p => <option key={p.id} value={p.id}>{p.name}{productUsageSuffix(p)}</option>)}
               </select>
               {item.product && <div style={{ marginTop: 6, fontSize: 12, color: 'var(--text-3)' }}>{item.product.category} • {item.product.description}</div>}
             </div>

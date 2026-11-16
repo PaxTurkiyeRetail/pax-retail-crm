@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requirePermissionOrThrow } from '@/lib/authz';
 import { createPgAdminClient } from '@/lib/pg/admin';
 import { getQuoteCatalog } from '@/lib/quotes/service';
+import { normalizeUsageType } from '@/lib/quotes/catalog';
 import { buildForecastYears, FORECAST_MONTHS, getForecastParameterOptions } from '@/lib/forecast';
 
 export const dynamic = 'force-dynamic';
@@ -25,6 +26,8 @@ export async function GET() {
         product_type: product.product_type,
         /** Katalog kira tarifesi (045): forecast kiralama satırında varsayılan aylık kira. */
         rental_monthly_price: product.rental_monthly_price ?? null,
+        is_recurring: Boolean(product.is_recurring),
+        usage_type: normalizeUsageType(product.usage_type),
       })),
       catalogSource: source,
       salesChannels: params.channels,

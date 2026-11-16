@@ -3,6 +3,7 @@
 import type { CSSProperties } from 'react';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
+import { PRODUCT_USAGE_LABELS, normalizeUsageType, type ProductUsageType } from '@/lib/quotes/catalog';
 
 type Product = {
   id: string;
@@ -20,6 +21,7 @@ type Product = {
   is_active: boolean;
   /** Kiralama tarifesi (USD/ay, KDV hariç); null = kiralanamaz. 08.09: A80 15 · A910S 15 · A6650 20. */
   rental_monthly_price?: number | null;
+  usage_type?: ProductUsageType;
 };
 
 type Rule = {
@@ -46,6 +48,7 @@ type FormProduct = {
   is_active: boolean;
   /** Boş = kiralanamaz. */
   rental_monthly_price: string;
+  usage_type: ProductUsageType;
 };
 
 const emptyProduct: FormProduct = {
@@ -62,6 +65,7 @@ const emptyProduct: FormProduct = {
   sort_order: 100,
   is_active: true,
   rental_monthly_price: '',
+  usage_type: 'both',
 };
 
 function money(value: number) {
@@ -137,6 +141,7 @@ export default function QuotesCatalogAdminClient() {
       sort_order: selectedProduct.sort_order,
       is_active: selectedProduct.is_active,
       rental_monthly_price: selectedProduct.rental_monthly_price == null ? '' : String(selectedProduct.rental_monthly_price),
+      usage_type: normalizeUsageType(selectedProduct.usage_type),
     });
   }, [selectedProduct]);
 
@@ -260,6 +265,9 @@ export default function QuotesCatalogAdminClient() {
                   </div>
                   <div style={{ display: 'grid', gap: 6, justifyItems: 'end' }}>
                     <span style={{ ...pill, ...(product.is_active ? activePill : passivePill) }}>{product.is_active ? 'Aktif' : 'Pasif'}</span>
+                    {normalizeUsageType(product.usage_type) !== 'both' ? (
+                      <span style={{ ...pill, background: 'var(--chip-indigo-bg)', color: '#4338ca', borderColor: 'var(--chip-indigo-bd)' }}>{PRODUCT_USAGE_LABELS[normalizeUsageType(product.usage_type)]}</span>
+                    ) : null}
                     {product.rental_monthly_price ? (
                       <span style={{ ...pill, background: 'var(--chip-gold-bg)', color: 'var(--chip-gold-color)', borderColor: 'var(--chip-gold-bd)' }} title="Kiralama tarifesi (KDV hariç)">
                         Kira ${Number(product.rental_monthly_price).toLocaleString('tr-TR')} / ay
@@ -283,6 +291,14 @@ export default function QuotesCatalogAdminClient() {
             <label style={field}><span style={label}>Para Birimi</span><input value={productForm.currency} onChange={(e) => setProductForm((prev) => ({ ...prev, currency: e.target.value.toUpperCase() }))} style={input} /></label>
             <label style={field}><span style={label}>Sıralama</span><input type="number" value={productForm.sort_order} onChange={(e) => setProductForm((prev) => ({ ...prev, sort_order: Number(e.target.value || 100) }))} style={input} /></label>
             <label style={field}><span style={label}>Faturalama</span><select value={productForm.billing_period} onChange={(e) => setProductForm((prev) => ({ ...prev, billing_period: e.target.value as Product['billing_period'] }))} style={input}><option value="one_time">one_time</option><option value="monthly">monthly</option></select></label>
+            <label style={field}>
+              <span style={label}>Kullanım Tipi</span>
+              <select value={productForm.usage_type} onChange={(e) => setProductForm((prev) => ({ ...prev, usage_type: normalizeUsageType(e.target.value) }))} style={input}>
+                <option value="both">{PRODUCT_USAGE_LABELS.both}</option>
+                <option value="sale">{PRODUCT_USAGE_LABELS.sale}</option>
+                <option value="rental">{PRODUCT_USAGE_LABELS.rental} (aylık kira zorunlu)</option>
+              </select>
+            </label>
             <label style={field}>
               <span style={label}>Kiralama · aylık kira (USD, KDV hariç)</span>
               <input type="number" min={0} step="0.01" value={productForm.rental_monthly_price} onChange={(e) => setProductForm((prev) => ({ ...prev, rental_monthly_price: e.target.value }))} style={input} placeholder="boş = kiralanamaz · örn. 15" />

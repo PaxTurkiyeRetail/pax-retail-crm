@@ -15,7 +15,55 @@ export type QuoteProduct = {
   sort_order: number;
   /** Kiralama tarifesi (USD/ay, KDV hariç). null = kiralanamaz. 08.09: A80 15 · A910S 15 · A6650 20. */
   rental_monthly_price?: number | null;
+  /** Kullanım tipi (kırılım). Yoksa 'both'. */
+  usage_type?: ProductUsageType;
 };
+
+/** Ürün kırılımı: hangi işlem tipine açık. */
+export type ProductUsageType = 'both' | 'sale' | 'rental';
+
+export const PRODUCT_USAGE_LABELS: Record<ProductUsageType, string> = {
+  both: 'Satış + Kiralama',
+  sale: 'Sadece Satış',
+  rental: 'Sadece Kiralama',
+};
+
+export function normalizeUsageType(value: unknown): ProductUsageType {
+  const raw = String(value ?? '').trim().toLowerCase();
+  return raw === 'sale' || raw === 'rental' ? raw : 'both';
+}
+
+/** Ürün bu işlem tipiyle (satış/kiralama) seçilebilir mi. Aylık hizmetler kiralanamaz. */
+export function productAllowsSaleType(
+  product: { usage_type?: unknown; is_recurring?: unknown } | null | undefined,
+  saleType: 'sale' | 'rental',
+): boolean {
+  if (!product) return true;
+  const usage = normalizeUsageType(product.usage_type);
+  if (saleType === 'rental') return usage !== 'sale' && !product.is_recurring;
+  return usage !== 'rental';
+}
+
+/** Ürün seçilince geçerli işlem tipi: izin verilmeyen tip seçiliyse diğerine çevrilir. */
+export function coerceSaleTypeForProduct(
+  product: { usage_type?: unknown; is_recurring?: unknown } | null | undefined,
+  saleType: 'sale' | 'rental',
+): 'sale' | 'rental' {
+  if (productAllowsSaleType(product, saleType)) return saleType;
+  return saleType === 'sale' ? 'rental' : 'sale';
+}
+
+/** Ürün seçicide ad sonuna eklenen kırılım etiketi (both için boş). */
+export function productUsageSuffix(product: { usage_type?: unknown } | null | undefined): string {
+  const usage = normalizeUsageType(product?.usage_type);
+  return usage === 'both' ? '' : ` · ${PRODUCT_USAGE_LABELS[usage]}`;
+}
+
+export function usageTypeError(productName: string, saleType: 'sale' | 'rental') {
+  return saleType === 'sale'
+    ? `${productName} sadece kiralamaya açık; satış olarak girilemez.`
+    : `${productName} kiralamaya açık değil; kiralama olarak girilemez.`;
+}
 
 export type QuotePricingRule = {
   id: string;
@@ -57,12 +105,13 @@ export function normalizeQuoteSpecs(input: unknown): string[] {
   return [];
 }
 
-export function normalizeQuoteProduct<T extends Record<string, any>>(product: T): T & { specs: string[]; rental_monthly_price: number | null } {
+export function normalizeQuoteProduct<T extends Record<string, any>>(product: T): T & { specs: string[]; rental_monthly_price: number | null; usage_type: ProductUsageType } {
   const rental = product?.rental_monthly_price == null ? NaN : Number(product.rental_monthly_price);
   return {
     ...product,
     specs: normalizeQuoteSpecs(product?.specs),
     rental_monthly_price: Number.isFinite(rental) && rental > 0 ? rental : null,
+    usage_type: normalizeUsageType(product?.usage_type),
   };
 }
 

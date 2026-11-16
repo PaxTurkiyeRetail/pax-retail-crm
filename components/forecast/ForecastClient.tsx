@@ -5,8 +5,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { appToast } from '@/lib/app-toast';
 import { useConfiguredPageSize } from '@/components/hooks/useConfiguredPageSize';
 import { PAGE_SIZE_OPTIONS } from '@/lib/ui-pagination';
+import { coerceSaleTypeForProduct, productAllowsSaleType, productUsageSuffix } from '@/lib/quotes/catalog';
 
-type Product = { id: string; code: string; name: string; category: string; product_type?: string; rental_monthly_price?: number | null };
+type Product = { id: string; code: string; name: string; category: string; product_type?: string; rental_monthly_price?: number | null; usage_type?: string; is_recurring?: boolean };
 type Option = { label: string; value: string };
 type MonthOption = { label: string; value: number };
 type ForecastLine = {
@@ -400,13 +401,13 @@ export default function ForecastClient() {
                   <button type="button" className="forecast-line-remove" onClick={() => removeDraftLine(line.uid)} disabled={draftLines.length <= 1}>Kaldır</button>
                 </div>
                 <div className="premium-filter-grid forecast-entry-grid">
-                  <label className="premium-field wide"><span>Ürün</span><select value={line.productId} onChange={(event) => updateDraftLine(line.uid, { productId: event.target.value })}><option value="">Ürün seç</option>{options.products.map((product) => <option key={product.id} value={product.id}>{product.code} - {product.name}</option>)}</select></label>
+                  <label className="premium-field wide"><span>Ürün</span><select value={line.productId} onChange={(event) => updateDraftLine(line.uid, { productId: event.target.value, saleType: coerceSaleTypeForProduct(options.products.find((item) => item.id === event.target.value), line.saleType) })}><option value="">Ürün seç</option>{options.products.map((product) => <option key={product.id} value={product.id}>{product.code} - {product.name}{productUsageSuffix(product)}</option>)}</select></label>
                   <label className="premium-field"><span>Adet</span><input type="number" min={1} value={line.quantity} onChange={(event) => updateDraftLine(line.uid, { quantity: event.target.value })} placeholder="Adet" /></label>
                   <label className="premium-field"><span>Ay</span><select value={line.forecastMonth} onChange={(event) => updateDraftLine(line.uid, { forecastMonth: event.target.value })}>{options.months.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
                   <label className="premium-field"><span>Yıl</span><select value={line.forecastYear} onChange={(event) => updateDraftLine(line.uid, { forecastYear: event.target.value })}>{options.years.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
                   <label className="premium-field"><span>Satış Kanalı</span><select value={line.salesChannel} onChange={(event) => updateDraftLine(line.uid, { salesChannel: event.target.value })}>{options.salesChannels.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
                   <label className="premium-field"><span>Gerçekleşme</span><select value={line.probability} onChange={(event) => updateDraftLine(line.uid, { probability: event.target.value })}>{options.probabilities.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
-                  <label className="premium-field"><span>Satış Tipi</span><select value={line.saleType} onChange={(event) => updateDraftLine(line.uid, { saleType: event.target.value === 'rental' ? 'rental' : 'sale' })}><option value="sale">Satış</option><option value="rental">Kiralama</option></select></label>
+                  <label className="premium-field"><span>Satış Tipi</span><select value={line.saleType} onChange={(event) => updateDraftLine(line.uid, { saleType: event.target.value === 'rental' ? 'rental' : 'sale' })}><option value="sale" disabled={!productAllowsSaleType(options.products.find((item) => item.id === line.productId), 'sale')}>Satış</option><option value="rental" disabled={!productAllowsSaleType(options.products.find((item) => item.id === line.productId), 'rental')}>Kiralama</option></select></label>
                   {line.saleType === 'rental' ? (
                     <label className="premium-field"><span>Aylık Kira (USD)</span><input type="number" min={0} step="0.01" value={line.rentalMonthlyPrice} onChange={(event) => updateDraftLine(line.uid, { rentalMonthlyPrice: event.target.value })} placeholder={(() => { const p = options.products.find((item) => item.id === line.productId)?.rental_monthly_price; return p ? `Katalog: ${p}` : 'Zorunlu'; })()} /></label>
                   ) : (

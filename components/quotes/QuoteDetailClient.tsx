@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { priceLine, rentalMonths, rentalPeriodLabel, sumLineTotals, type SaleType } from '@/lib/quotes/line-pricing';
 import { formatDate } from '@/lib/utils';
+import { coerceSaleTypeForProduct, productAllowsSaleType, productUsageSuffix } from '@/lib/quotes/catalog';
 
 type QuoteDetail = {
   id: string;
@@ -63,7 +64,7 @@ type Product = {
   billing_period: 'one_time' | 'monthly';
   description: string;
   /** Katalog kira tarifesi (USD/ay); null = kiralanamaz. */
-  rental_monthly_price?: number | null;
+  rental_monthly_price?: number | null; usage_type?: string;
 };
 
 type Rule = { product_id: string; min_qty: number; max_qty: number | null; unit_price: number };
@@ -434,9 +435,9 @@ export default function QuoteDetailClient({ quoteId }: { quoteId: string }) {
                 <div key={item.uid} className="quote-detail-line-grid" style={{ display: 'grid', gridTemplateColumns: '2fr 130px 110px 130px auto', gap: 10, alignItems: 'end', border: '1px solid var(--border)', borderRadius: 16, padding: 12 }}>
                   <div>
                     <label style={labelStyle}>Ürün</label>
-                    <select value={item.product_id} onChange={(event) => setEditItems((current) => current.map((row) => row.uid === item.uid ? { ...row, product_id: event.target.value } : row))} style={{ ...inputStyle, width: '100%' }}>
+                    <select value={item.product_id} onChange={(event) => setEditItems((current) => current.map((row) => row.uid === item.uid ? { ...row, product_id: event.target.value, sale_type: coerceSaleTypeForProduct(productMap.get(event.target.value), row.sale_type) } : row))} style={{ ...inputStyle, width: '100%' }}>
                       <option value="">Ürün seç...</option>
-                      {products.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}
+                      {products.map((product) => <option key={product.id} value={product.id}>{product.name}{productUsageSuffix(product)}</option>)}
                     </select>
                     {item.product ? <div style={{ marginTop: 5, color: 'var(--text-3)', fontSize: 12 }}>{item.product.category} · {item.product.description}</div> : null}
                   </div>
@@ -457,8 +458,8 @@ export default function QuoteDetailClient({ quoteId }: { quoteId: string }) {
                     <div style={{ color: 'var(--text-3)', fontSize: 12 }}>Satır {index + 1} · {item.sale_type === 'rental' ? `Aylık kira: ${money(item.unit_price)} × ${item.quantity} = ${money(item.priced.monthly_total)} / ay` : `Birim fiyat: ${money(item.unit_price)}`}{item.priced.problem ? <span style={{ color: '#b91c1c', fontWeight: 700 }}> · {item.priced.problem}</span> : null}</div>
                     <div role="radiogroup" aria-label="Satış tipi" style={{ display: 'inline-flex', padding: 3, borderRadius: 12, border: '1px solid var(--border)', background: 'var(--surface)' }}>
                       {(['sale', 'rental'] as SaleType[]).map((kind) => (
-                        <button key={kind} type="button" role="radio" aria-checked={item.sale_type === kind} onClick={() => toggleEditSaleType(item.uid, kind)} disabled={kind === 'rental' && Boolean(item.product?.is_recurring)}
-                          style={{ minHeight: 28, padding: '0 12px', borderRadius: 9, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 800, fontFamily: 'inherit', background: item.sale_type === kind ? (kind === 'rental' ? '#b45309' : '#4338ca') : 'transparent', color: item.sale_type === kind ? '#fff' : 'var(--text-2)', opacity: kind === 'rental' && item.product?.is_recurring ? 0.5 : 1 }}>
+                        <button key={kind} type="button" role="radio" aria-checked={item.sale_type === kind} onClick={() => toggleEditSaleType(item.uid, kind)} disabled={!productAllowsSaleType(item.product, kind)}
+                          style={{ minHeight: 28, padding: '0 12px', borderRadius: 9, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 800, fontFamily: 'inherit', background: item.sale_type === kind ? (kind === 'rental' ? '#b45309' : '#4338ca') : 'transparent', color: item.sale_type === kind ? '#fff' : 'var(--text-2)', opacity: productAllowsSaleType(item.product, kind) ? 1 : 0.5 }}>
                           {kind === 'sale' ? 'Satış' : 'Kiralama'}
                         </button>
                       ))}

@@ -200,7 +200,9 @@ export async function POST(req: Request) {
     }
   }
 
-  if (!userHasPermission(me, 'activity.read.any') && !userHasPermission(me, 'customer.read.any') && String(customer.owner_user_id ?? '') !== me.id) {
+  // Aktivite ekleme yetkisi olan satışçı başka satışçının firmasına da aktivite girebilir (16.11).
+  // Düzenleme yine activity.update.own/any ile korunur (yukarıda).
+  if (!userHasPermission(me, 'activity.create') && !userHasPermission(me, 'activity.read.any') && !userHasPermission(me, 'customer.read.any') && String(customer.owner_user_id ?? '') !== me.id) {
     return NextResponse.json({ message: 'Bu müşteri için aktivite oluşturma yetkiniz yok.' }, { status: 403 });
   }
 

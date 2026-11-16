@@ -5,6 +5,7 @@ import { NextResponse } from 'next/server';
 import { requirePermissionOrThrow, userHasPermission } from '@/lib/authz';
 import { createPgAdminClient } from '@/lib/pg/admin';
 import { getQuoteCatalog } from '@/lib/quotes/service';
+import { normalizeUsageType } from '@/lib/quotes/catalog';
 import { isReportOnlyCustomer } from '@/lib/report-only-customers';
 import { db } from '@/lib/db';
 import { OWNER_ORDER, normalizeName, ownerOrderCompare } from '@/lib/reports/live-board-shared';
@@ -56,6 +57,7 @@ export async function GET() {
           id: String(product.id), code: String(product.code ?? ''), name: String(product.name ?? ''),
           product_type: String(product.product_type ?? 'device'), is_recurring: Boolean(product.is_recurring),
           rental_monthly_price: product.rental_monthly_price == null ? null : Number(product.rental_monthly_price),
+          usage_type: normalizeUsageType(product.usage_type),
         })),
       },
       { headers: { 'Cache-Control': 'no-store, max-age=0' } },

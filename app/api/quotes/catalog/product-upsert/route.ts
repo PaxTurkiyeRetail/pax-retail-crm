@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
 import { requireQuoteCatalogAccessOrThrow } from '@/lib/authz';
 import { createPgAdminClient } from '@/lib/pg/admin';
-import { normalizeQuoteSpecs } from '@/lib/quotes/catalog';
+import { normalizeQuoteSpecs, normalizeUsageType } from '@/lib/quotes/catalog';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -24,6 +24,8 @@ type Body = {
   is_active?: boolean;
   /** Kiralama tarifesi (USD/ay, KDV hariç); null/boş = kiralanamaz. */
   rental_monthly_price?: number | string | null;
+  /** Kullanım tipi: both | sale | rental. */
+  usage_type?: string;
 };
 
 export async function POST(request: Request) {
@@ -40,7 +42,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: 'Aylık kira pozitif bir sayı olmalı (boş = kiralanamaz).' }, { status: 400 });
     }
 
+    const usageType = normalizeUsageType(body.usage_type);
+    if (usageType === 'rental' && rentalRaw == null) {
+      return NextResponse.json({ message: 'Sadece Kiralama ürününde aylık kira zorunlu.' }, { status: 400 });
+    }
+    if (usageType === 'rental' && body.is_recurring) {
+      return NextResponse.json({ message: 'Aylık hizmet (recurring) ürünü kiralamaya açılamaz.' }, { status: 400 });
+    }
+
     const payload = {
+      usage_type: usageType,
       code,
       name,
       category: String(body.category ?? '').trim() || 'EFT POS',

@@ -6,9 +6,10 @@
 // (ör. tabloda çok satır varsa üst bileşen bir kez çekip paylaştırır).
 
 import { useEffect, useState, type CSSProperties } from 'react';
+import { coerceSaleTypeForProduct, productAllowsSaleType, productUsageSuffix } from '@/lib/quotes/catalog';
 
 export type ForecastQuickAddOptions = {
-  products: Array<{ id: string; code: string; name: string; rental_monthly_price?: number | null }>;
+  products: Array<{ id: string; code: string; name: string; rental_monthly_price?: number | null; usage_type?: string; is_recurring?: boolean }>;
   salesChannels: Array<{ label: string; value: string }>;
   probabilities: Array<{ label: string; value: string }>;
   months: Array<{ label: string; value: number }>;
@@ -95,9 +96,9 @@ export default function ForecastQuickAdd({ customerId, customerName, options: gi
   return (
     <div style={{ display: 'grid', gap: 4 }}>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-        <select value={productId} onChange={(e) => setProductId(e.target.value)} style={{ ...field, minWidth: compact ? 110 : 160 }} disabled={disabled} aria-label="Model">
+        <select value={productId} onChange={(e) => { setProductId(e.target.value); setSaleType((prev) => coerceSaleTypeForProduct(options?.products.find((p) => p.id === e.target.value), prev)); }} style={{ ...field, minWidth: compact ? 110 : 160 }} disabled={disabled} aria-label="Model">
           <option value="">{options ? 'Model' : 'Yükleniyor…'}</option>
-          {(options?.products ?? []).map((p) => <option key={p.id} value={p.id}>{p.code || p.name}</option>)}
+          {(options?.products ?? []).map((p) => <option key={p.id} value={p.id}>{p.code || p.name}{productUsageSuffix(p)}</option>)}
         </select>
         <input inputMode="numeric" value={quantity} onChange={(e) => setQuantity(e.target.value.replace(/\D/g, ''))} placeholder="Adet" style={{ ...field, width: 72 }} disabled={disabled} aria-label="Adet" />
         <select value={month} onChange={(e) => setMonth(e.target.value)} style={field} disabled={disabled} aria-label="Ay">
@@ -109,8 +110,8 @@ export default function ForecastQuickAdd({ customerId, customerName, options: gi
           </select>
         ) : null}
         <select value={saleType} onChange={(e) => setSaleType(e.target.value === 'rental' ? 'rental' : 'sale')} style={field} disabled={disabled} aria-label="Satış tipi">
-          <option value="sale">Satış</option>
-          <option value="rental">Kiralama</option>
+          <option value="sale" disabled={!productAllowsSaleType(options?.products.find((p) => p.id === productId), 'sale')}>Satış</option>
+          <option value="rental" disabled={!productAllowsSaleType(options?.products.find((p) => p.id === productId), 'rental')}>Kiralama</option>
         </select>
         <button type="button" onClick={() => void save()} disabled={disabled} style={button}>{busy ? '…' : '+ Forecast'}</button>
       </div>

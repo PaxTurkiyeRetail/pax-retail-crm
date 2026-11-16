@@ -54,7 +54,11 @@ export async function GET(req: Request) {
     const q = normalizeSearchText(qRaw);
     const selectedId = String(url.searchParams.get('id') ?? '').trim();
     const includeAll = url.searchParams.get('all') === '1';
-    const canReadAny = userHasPermission(me, 'activity.read.any');
+    // Aktivite girerken (pick=1) satışçı TÜM firmaları seçebilir: başka satışçının
+    // firmasına da ziyaret/telefon kaydı girilebilmeli (Erdi vakası, 16.11). Liste/rapor
+    // görünürlüğü değişmez; yalnız aktivite ekleme seçicisi genişler.
+    const pickForCreate = url.searchParams.get('pick') === '1' && userHasPermission(me, 'activity.create');
+    const canReadAny = pickForCreate || userHasPermission(me, 'activity.read.any');
     const ownCustomerResult = canReadAny
       ? { data: null as any[] | null, error: null as any }
       : await admin.from('musteriler').select('id').eq('owner_user_id', me.id).limit(5000);
