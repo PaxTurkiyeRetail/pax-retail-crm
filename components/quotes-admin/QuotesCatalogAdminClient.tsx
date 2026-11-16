@@ -98,7 +98,6 @@ export default function QuotesCatalogAdminClient() {
   const [savingRule, setSavingRule] = useState(false);
   const [search, setSearch] = useState('');
   const [listFilter, setListFilter] = useState<ListFilter>('all');
-  const [editorTab, setEditorTab] = useState<'general' | 'pricing'>('general');
 
   async function load(preferredProductId?: string) {
     setLoading(true);
@@ -389,13 +388,6 @@ export default function QuotesCatalogAdminClient() {
               </div>
             </div>
 
-            <div role="tablist" aria-label="Ürün bölümleri" style={{ ...segment, alignSelf: 'start', justifySelf: 'start' }}>
-              {([['general', 'Genel bilgi'], ['pricing', 'Fiyatlandırma']] as const).map(([key, text]) => (
-                <button key={key} type="button" role="tab" aria-selected={editorTab === key} onClick={() => setEditorTab(key)} style={{ ...segmentButton, minHeight: 32, padding: '0 14px', fontSize: 13, ...(editorTab === key ? segmentActive : null) }}>{text}</button>
-              ))}
-            </div>
-
-            {editorTab === 'general' ? <>
             <fieldset style={fieldset}>
               <legend style={legend}>1 · Kullanım tipi</legend>
               <div role="radiogroup" className="quote-catalog-usage mobile-grid-stack" style={{ display: 'grid', gap: 8, gridTemplateColumns: 'repeat(3,minmax(0,1fr))' }}>
@@ -441,9 +433,6 @@ export default function QuotesCatalogAdminClient() {
               </div>
             </fieldset>
 
-            </> : null}
-
-            {editorTab === 'pricing' ? (
             <fieldset style={{ ...fieldset, ...rentalPanel, ...(rentalAllowed ? null : { opacity: 0.6 }) }}>
               <legend style={{ ...legend, color: 'var(--chip-gold-color)' }}>3 · Kiralama koşulları</legend>
               {rentalAllowed ? (
@@ -475,7 +464,6 @@ export default function QuotesCatalogAdminClient() {
                 </div>
               )}
             </fieldset>
-            ) : null}
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', borderTop: '1px solid var(--border)', paddingTop: 12 }}>
               <span style={{ fontSize: 12.5, fontWeight: 700, color: formError ? 'var(--chip-red-color)' : 'var(--text-3)' }}>
@@ -487,7 +475,6 @@ export default function QuotesCatalogAdminClient() {
             </div>
           </div>
 
-          {editorTab === 'pricing' ? (
           <div style={{ ...surface, display: 'grid', gap: 12, boxShadow: `inset 3px 0 0 ${USAGE_COLOR.sale}` }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
               <h2 style={sectionTitle}>Satış fiyat baremleri {selectedProduct && saleAllowed && !productForm.is_recurring ? <span style={countBadge}>{selectedProductRules.length}</span> : null}</h2>
@@ -528,7 +515,6 @@ export default function QuotesCatalogAdminClient() {
               </>
             )}
           </div>
-          ) : null}
         </div>
       </section>
     </main>
