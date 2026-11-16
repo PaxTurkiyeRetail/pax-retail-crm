@@ -391,8 +391,8 @@ export default function QuotesCatalogAdminClient() {
               <legend style={legend}>1 · Kullanım tipi</legend>
               <div role="radiogroup" className="quote-catalog-usage mobile-grid-stack" style={{ display: 'grid', gap: 8, gridTemplateColumns: 'repeat(3,minmax(0,1fr))' }}>
                 {(['both', 'sale', 'rental'] as ProductUsageType[]).map((key) => (
-                  <button key={key} type="button" role="radio" aria-checked={formUsage === key} onClick={() => setUsage(key)} style={{ ...usageCard, ...(formUsage === key ? { borderColor: USAGE_COLOR[key], boxShadow: `inset 0 0 0 1px ${USAGE_COLOR[key]}`, background: 'var(--card)' } : null) }}>
-                    <span style={{ fontWeight: 800, fontSize: 13.5, color: formUsage === key ? USAGE_COLOR[key] : 'var(--text)' }}>{USAGE_LABEL[key]}</span>
+                  <button key={key} type="button" role="radio" aria-checked={formUsage === key} onClick={() => setUsage(key)} style={{ ...usageCard, ...(formUsage === key ? { borderColor: USAGE_COLOR[key], boxShadow: `inset 0 0 0 2px ${USAGE_COLOR[key]}`, background: `${USAGE_COLOR[key]}14` } : { opacity: 0.7 }) }}>
+                    <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, fontWeight: 800, fontSize: 13.5, color: formUsage === key ? USAGE_COLOR[key] : 'var(--text)' }}>{USAGE_LABEL[key]}<span aria-hidden style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 18, height: 18, borderRadius: 999, flexShrink: 0, fontSize: 11, color: '#fff', background: formUsage === key ? USAGE_COLOR[key] : 'transparent', border: formUsage === key ? 'none' : '1.5px solid var(--border)' }}>{formUsage === key ? '✓' : ''}</span></span>
                     <span style={{ fontSize: 12, color: 'var(--text-3)', lineHeight: 1.35 }}>{USAGE_HINT[key]}</span>
                   </button>
                 ))}
@@ -560,10 +560,10 @@ const segmentButton: CSSProperties = { minHeight: 26, padding: '0 9px', borderRa
 const segmentActive: CSSProperties = { background: 'var(--card)', color: 'var(--text)', boxShadow: '0 1px 2px rgba(15,23,42,.12)' };
 const productRow: CSSProperties = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, textAlign: 'left', border: '1px solid var(--border)', background: 'var(--surface)', borderRadius: 10, padding: '9px 12px', cursor: 'pointer', fontFamily: 'inherit' };
 const selectedRow: CSSProperties = { borderColor: '#6366f1', boxShadow: 'inset 3px 0 0 #6366f1', background: 'var(--chip-indigo-bg)' };
-const usageCard: CSSProperties = { display: 'grid', gap: 4, alignContent: 'start', textAlign: 'left', padding: '10px 12px', borderRadius: 12, border: '1px solid var(--border)', background: 'var(--surface-2)', cursor: 'pointer', fontFamily: 'inherit' };
+const usageCard: CSSProperties = { display: 'grid', gap: 4, transition: 'background .15s, opacity .15s', alignContent: 'start', textAlign: 'left', padding: '10px 12px', borderRadius: 12, border: '1px solid var(--border)', background: 'var(--surface-2)', cursor: 'pointer', fontFamily: 'inherit' };
 const fieldset: CSSProperties = { display: 'grid', gap: 10, margin: 0, padding: 0, border: 'none', minWidth: 0 };
 const rentalPanel: CSSProperties = { padding: '12px 14px', borderRadius: 12, border: '1px solid var(--chip-gold-bd)', background: 'var(--chip-gold-bg)' };
-const legend: CSSProperties = { padding: 0, marginBottom: 8, fontSize: 11, fontWeight: 700, letterSpacing: '.05em', textTransform: 'uppercase', color: 'var(--text-3)' };
+const legend: CSSProperties = { padding: 0, marginBottom: 8, fontSize: 11, fontWeight: 700, letterSpacing: '.05em', textTransform: 'uppercase', color: 'var(--text-3)', float: 'left', width: '100%' };
 const emptyText: CSSProperties = { padding: '14px 4px', color: 'var(--text-3)', fontSize: 13 };
 const primaryButton: CSSProperties = { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minHeight: 38, padding: '0 16px', borderRadius: 10, border: 'none', background: '#0e6fc7', color: '#fff', fontWeight: 800, fontSize: 13.5, cursor: 'pointer', textDecoration: 'none', fontFamily: 'inherit', whiteSpace: 'nowrap' };
 const dangerButton: CSSProperties = { minHeight: 30, padding: '0 10px', borderRadius: 8, border: '1px solid var(--chip-red-bd)', background: 'var(--chip-red-bg)', color: 'var(--chip-red-color)', fontWeight: 700, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' };
