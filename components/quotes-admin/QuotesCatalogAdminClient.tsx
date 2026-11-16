@@ -433,7 +433,7 @@ export default function QuotesCatalogAdminClient() {
             </fieldset>
 
             <fieldset style={{ ...fieldset, ...rentalPanel, ...(rentalAllowed ? null : { opacity: 0.6 }) }}>
-              <legend style={{ ...legend, color: 'var(--chip-gold-color)' }}>3 · Kiralama koşulları</legend>
+              <legend style={{ ...legend, color: 'var(--chip-gold-color)', float: 'left', width: '100%', marginBottom: 0 }}>3 · Kiralama koşulları</legend>
               {rentalAllowed ? (
                 <>
                   <div className="mobile-grid-stack" style={{ display: 'grid', gap: 10, gridTemplateColumns: 'repeat(3,minmax(0,1fr))' }}>
