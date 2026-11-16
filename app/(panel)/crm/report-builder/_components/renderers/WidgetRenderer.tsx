@@ -155,7 +155,7 @@ export function DataTableView({ result, style, onDrill, groupBy }: { result: Rep
                 <div key={st.label} className="min-w-0 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-2" style={{ boxShadow: `inset 0 3px 0 ${accent}` }}>
                   <div className="truncate text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]" title={st.label}>{st.label}</div>
                   <div className="text-[18px] font-extrabold tabular-nums text-[var(--text)]">{'col' in st && st.col ? fmt(st.col, st.value, st.format) : st.value.toLocaleString('tr-TR')}</div>
-                  <div className="text-[11px] tabular-nums text-[var(--muted)]">{pct == null ? 'başlangıç' : `→ %${pct} dönüşüm`}</div>
+                  <div className="text-[11px] tabular-nums text-[var(--muted)]">{i === 0 ? `${seg ?? 'Tüm segmentler'}` : pct != null && pct <= 100 ? `→ %${pct} dönüşüm` : `firma başı ${(st.value / Math.max(1, rows.length)).toLocaleString('tr-TR', { maximumFractionDigits: 1 })}`}</div>
                 </div>
               );
             })}
