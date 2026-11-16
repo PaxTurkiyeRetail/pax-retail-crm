@@ -107,6 +107,7 @@ export function DataTableView({ result, style, onDrill, groupBy }: { result: Rep
   const [sort, setSort] = useState<{ key: string; dir: 1 | -1 } | null>(null);
   const [q, setQ] = useState('');
   const [seg, setSeg] = useState<string | null>(null);
+  const [subtotals, setSubtotals] = useState(true);
   const segTabs = useMemo(() => (groupCol ? groupRows(result.rows, groupCol.key).map((g) => ({ key: g.key, count: g.rows.length })) : []), [result.rows, groupCol]);
   const rows = useMemo(() => {
     const needle = q.trim().toLocaleLowerCase('tr');
@@ -189,7 +190,13 @@ export function DataTableView({ result, style, onDrill, groupBy }: { result: Rep
         <span className="font-semibold tabular-nums text-[var(--text)]">{rows.length.toLocaleString('tr-TR')}{rows.length !== result.rows.length ? ` / ${result.rows.length.toLocaleString('tr-TR')}` : ''} kayıt</span>
         <div className="ml-auto flex items-center gap-1.5">
           <button type="button" className={TOOL_BTN} onClick={downloadCsv} title="Görünen satırları CSV olarak indir">⤓ CSV indir</button>
-          <button type="button" className={TOOL_BTN} aria-pressed={!fit} onClick={() => { setFit((v) => !v); setWidths({}); }} title={fit ? 'Sütunlar içeriği kadar genişlesin' : 'Ekrana sığdır'}>{fit ? '↔ Geniş' : '⇔ Sığdır'}</button>
+          <details className="relative">
+            <summary aria-label="Tablo seçenekleri" className={`${TOOL_BTN} list-none cursor-pointer [&::-webkit-details-marker]:hidden`}>⋯</summary>
+            <div className="absolute right-0 z-20 mt-1 grid min-w-48 gap-0.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-1 text-[12.5px] text-[var(--text)] shadow-lg">
+              <button type="button" className="rounded-md px-2.5 py-1.5 text-left hover:bg-[var(--surface-2)]" onClick={() => { setFit((v) => !v); setWidths({}); }}>{fit ? '↔ Sütunları genişlet' : '⇔ Ekrana sığdır'}</button>
+              {groupCol && sumCols.length > 0 && <button type="button" className="rounded-md px-2.5 py-1.5 text-left hover:bg-[var(--surface-2)]" onClick={() => setSubtotals((v) => !v)}>{subtotals ? '✓ ' : ''}Grup ara toplamları</button>}
+            </div>
+          </details>
           {(customWidth || sort) && <button type="button" className={TOOL_BTN} onClick={() => { setWidths({}); setSort(null); }}>Sıfırla</button>}
         </div>
       </div>
@@ -234,7 +241,7 @@ export function DataTableView({ result, style, onDrill, groupBy }: { result: Rep
               })}
             </tr>
           )),
-            ...(groupCol && seg == null && sumCols.length ? [
+            ...(subtotals && groupCol && seg == null && sumCols.length ? [
               <tr key={`s-${g.key}`} className="border-b-2 border-[var(--border)]">
                 {cols.map(({ col, format }, ci) => (
                   <td key={col.key} className={`${pad} text-[12px] font-bold ${col.role !== 'dimension' ? 'text-right tabular-nums' : 'text-left'}`} style={{ color: groupColor(g.key) }}>
