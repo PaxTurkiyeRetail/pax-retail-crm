@@ -272,7 +272,9 @@ export default function AppToaster() {
     window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
       const method = requestMethod(input, init);
       const url = requestUrl(input);
-      const mutating = MUTATING_METHODS.has(method);
+      // Rapor çalıştırma/detay POST ile gider ama salt okumadır: "kaydedildi" bildirimi çıkmasın.
+      const readOnlyPost = /\/api\/report-builder\/(pages\/run|query|drilldown)(\?|$)/.test(normalizeUrl(url)?.pathname ?? url);
+      const mutating = MUTATING_METHODS.has(method) && !readOnlyPost;
       const downloadLike = isDownloadLike(url, init);
       const shouldNotify = isInternalApi(url) && !isAuthApi(url) && (mutating || downloadLike);
       const toastId = shouldNotify ? makeToastId(downloadLike ? 'download' : 'save') : '';
