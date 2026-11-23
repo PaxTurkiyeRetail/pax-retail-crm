@@ -58,8 +58,14 @@ export default function SozlesmeFaturalamaClient() {
     const refAy = AY[mIdx(ref)] ?? '';
     const prevAy = ref > 0 ? AY[mIdx(ref - 1)] : '';
     const idxs = data.months.map((_, i) => i);
-    const ayAdi = idxs.map((i) => AY[mIdx(i)]);
-    const ayKisa = idxs.map((i) => AY_KISA[mIdx(i)]);
+    // Birden fazla yıla yayılıyorsa ay adına yıl eki (Mar '27).
+    const multiYear = data.months[0]?.slice(0, 4) !== data.months[data.months.length - 1]?.slice(0, 4);
+    const yEk = (i: number) => (multiYear ? ` '${data.months[i].slice(2, 4)}` : '');
+    const ayAdi = idxs.map((i) => `${AY[mIdx(i)]}${multiYear ? ` ${data.months[i].slice(0, 4)}` : ''}`);
+    const ayKisa = idxs.map((i) => `${AY_KISA[mIdx(i)]}${yEk(i)}`);
+    const first = data.months[0];
+    const last = data.months[data.months.length - 1];
+    const period = `${AY[Number(first.slice(5, 7)) - 1]} ${first.slice(0, 4)}–${AY[Number(last.slice(5, 7)) - 1]} ${last.slice(0, 4)}`;
     const maxAdet = Math.max(0, ...data.monthly.map((m) => m.adet));
     // Firma × ay (faturalama tarihine göre cihaz adedi).
     const firms = new Map<string, { musteri: string; cells: number[]; tutar: number; cihaz: number }>();
@@ -73,11 +79,11 @@ export default function SozlesmeFaturalamaClient() {
       firms.set(r.customerId, f);
     }
     const firmRows = [...firms.entries()].map(([id, f]) => ({ id, ...f })).sort((a, b) => b.cihaz - a.cihaz || b.tutar - a.tutar);
-    return { ref, refAy, prevAy, idxs, ayAdi, ayKisa, maxAdet, firmRows };
+    return { ref, refAy, prevAy, idxs, ayAdi, ayKisa, maxAdet, firmRows, period };
   }, [data]);
 
   const today = new Date().toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-  const period = data ? `Ocak–Aralık ${data.year}` : '';
+  const period = view?.period ?? '';
   const detail: BillingSaleRow[] = (data?.rows ?? []).filter((r) => !onlyMissing || r.fromSaleDate);
 
   return (
@@ -93,7 +99,7 @@ export default function SozlesmeFaturalamaClient() {
               <div className="kpe-source">Kaynak: Satışlar · Sözleşme / Faturalama<br />{today}</div>
               <div className="kpe-tools no-print">
                 <select value={year} onChange={(e) => setYear(Number(e.target.value))}>
-                  {[currentYear + 1, currentYear, currentYear - 1].map((y) => <option key={y} value={y}>{y}</option>)}
+                  {[currentYear, currentYear - 1].map((y) => <option key={y} value={y}>{y}&apos;dan itibaren</option>)}
                 </select>
                 <button type="button" onClick={() => window.print()} disabled={!data}>PDF / Yazdır</button>
               </div>

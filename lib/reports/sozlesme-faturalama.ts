@@ -45,9 +45,8 @@ export async function buildSozlesmeFaturalama({ year }: { year?: number } = {}):
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Istanbul' });
   const curYear = Number(today.slice(0, 4));
   const y = year && year > 2000 && year < 2100 ? year : curYear;
-  // Ocak–Aralık her zaman 12 ay (ileri tarihli fatura başlangıçları da görünür).
-  const months = Array.from({ length: 12 }, (_, i) => `${y}-${String(i + 1).padStart(2, '0')}`);
-  const refIdx = y === curYear ? Number(today.slice(5, 7)) - 1 : y < curYear ? 11 : 0;
+  // Seçilen yılın Ocak ayından başlar, ileri tarihli en son fatura başlangıcına kadar kesintisiz devam eder
+  // (en az o yılın Aralık'ı ve bu ay).
 
   const { rows } = await db.query<any>(
     `
@@ -76,7 +75,7 @@ export async function buildSozlesmeFaturalama({ year }: { year?: number } = {}):
              (case when item_count > 0 then item_devices else device_count end)::int as devices,
              coalesce(amount, 0)::float8 as amount, coalesce(rental_monthly_amount, 0)::float8 as rental_monthly
       from s
-      where extract(year from billing_date) = $1
+      where billing_date >= make_date($1::int, 1, 1)
       order by billing_date desc, musteri
     `,
     [y],
@@ -100,6 +99,17 @@ export async function buildSozlesmeFaturalama({ year }: { year?: number } = {}):
     amount: Number(r.amount ?? 0),
     rentalMonthly: Number(r.rental_monthly ?? 0),
   }));
+
+  const lastKey = [`${y}-12`, today.slice(0, 7), ...list.map((r) => r.billingDate.slice(0, 7))].sort().at(-1)!;
+  const months: string[] = [];
+  for (let yy = y, mm = 1; ; ) {
+    const k = `${yy}-${String(mm).padStart(2, '0')}`;
+    months.push(k);
+    if (k >= lastKey) break;
+    if (++mm > 12) { mm = 1; yy++; }
+  }
+  const curIdx = months.indexOf(today.slice(0, 7));
+  const refIdx = curIdx >= 0 ? curIdx : months.length - 1;
 
   const monthly: BillingMonth[] = months.map((month) => {
     const inMonth = list.filter((r) => r.billingDate.startsWith(month));
