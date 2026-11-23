@@ -48,6 +48,10 @@ export type SaleRow = {
   rental_ops_note: string | null;
   rental_ops_updated_at: string | null;
   rental_ops_updated_by: string | null;
+  /** Sözleşme / faturalama (054): boş fatura başlangıcı raporda satış tarihine düşer. */
+  billing_start_date: string | null;
+  contract_no: string | null;
+  contract_months: number | null;
 };
 
 export type RentalPeriod = { start: string | null; end: string | null };
@@ -209,6 +213,9 @@ export async function listSales(filter: SalesFilter, page: { limit: number; offs
              to_jsonb(s) ->> 'rental_ops_note' as rental_ops_note,
              to_jsonb(s) ->> 'rental_ops_updated_at' as rental_ops_updated_at,
              to_jsonb(s) ->> 'rental_ops_updated_by' as rental_ops_updated_by,
+             to_jsonb(s) ->> 'billing_start_date' as billing_start_date,
+             to_jsonb(s) ->> 'contract_no' as contract_no,
+             (to_jsonb(s) ->> 'contract_months')::int as contract_months,
              coalesce(q.total_device_count, 0) as quote_device_count,
              coalesce(q.total_amount, 0)::float8 as quote_amount
       from public.crm_sales s
