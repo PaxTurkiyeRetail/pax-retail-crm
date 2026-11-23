@@ -24,7 +24,8 @@ const pctChange = (cur: number, prev: number) => (prev > 0 ? Math.round(((cur - 
 const signed = (n: number | null) => (n == null ? '—' : `${n >= 0 ? '+' : '-'}%${Math.abs(n)}`);
 const barW = (v: number, max: number) => (max > 0 ? Math.max((v / max) * 100, v > 0 ? 2 : 0) : 0);
 const dt = (v: string | null) => (v ? new Date(`${v.slice(0, 10)}T00:00:00`).toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—');
-const ayStr = (k: string) => `${AY_KISA[Number(k.slice(5, 7)) - 1]} ${k.slice(0, 4)}`;
+const SOURCE_LABEL = { fatura: 'Hizmet faturası', kiralama: 'Kiralama', satis: 'Satış' } as const;
+const ayStr =(k: string) => `${AY_KISA[Number(k.slice(5, 7)) - 1]} ${k.slice(0, 4)}`;
 
 export default function SozlesmeFaturalamaClient() {
   const year = new Date().getFullYear();
@@ -157,15 +158,24 @@ export default function SozlesmeFaturalamaClient() {
                 </div>
 
                 <div className="kpe-card">
-                  <h3>Devam eden sözleşmeler ({view.refAy})</h3>
+                  <h3>Kaynağa göre ({view.refAy})</h3>
                   <table className="kpe-ytd">
+                    <thead><tr><th /><th>Firma</th><th>Adet</th><th>Tutar</th></tr></thead>
                     <tbody>
-                      <tr><td>Firma</td><td className="g">{fmt(data.kpi.refFirma)}</td></tr>
-                      <tr><td>KasaPOS adet</td><td className="g">{fmt(data.kpi.refAdet)}</td></tr>
-                      <tr><td>Yaklaşan bitiş (90 gün)</td><td className="g">{fmt(data.kpi.yaklasanBitis)}</td></tr>
+                      {(['fatura', 'kiralama', 'satis'] as const).map((src) => {
+                        const b = data.monthly[view.ref]?.bySource[src];
+                        return (
+                          <tr key={src}>
+                            <td>{SOURCE_LABEL[src]}</td>
+                            <td>{fmt(b?.firma ?? 0)}</td>
+                            <td>{fmt(b?.adet ?? 0)}</td>
+                            <td className="g">{usd(b?.tutar ?? 0)}</td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
-                  <p className="kpe-note">Sözleşme bitiş tarihine kadar her ay devam eder; bitiş yoksa süresiz. Faturası henüz kesilmemiş ay son faturadan taşınır. Kiralama satışları fatura başlangıcından itibaren KasaPOS sayılarının üstüne eklenir ({view.refAy}: {fmt(data.monthly[view.ref]?.satisAdet ?? 0)} adet).</p>
+                  <p className="kpe-note">Hizmet faturası = KasaPOS faturaları (faturasız ay son faturadan taşınır). Kiralama / Satış = Satışlar&apos;daki sözleşme başlangıcından bitişe kadar her ay. Yaklaşan bitiş (90 gün): {fmt(data.kpi.yaklasanBitis)}.</p>
                 </div>
               </div>
             </>
@@ -200,7 +210,7 @@ export default function SozlesmeFaturalamaClient() {
                     {data.rows.map((r, idx) => (
                       <tr key={`${r.source}-${r.customerId}`}>
                         <td className="idx">{idx + 1}</td>
-                        <td className="l firm">{r.musteri}{r.source === 'satis' ? <span className="c-muted"> · kiralama</span> : null}</td>
+                        <td className="l firm">{r.musteri}{r.source !== 'fatura' ? <span className="c-muted"> · {SOURCE_LABEL[r.source].toLowerCase()}</span> : null}</td>
                         {r.cells.map((c, i) => (
                           <td
                             key={i}
@@ -251,9 +261,9 @@ export default function SozlesmeFaturalamaClient() {
                       <tr key={`${r.source}-${r.customerId}`}>
                         <td className="l idx">{idx + 1}</td>
                         <td className="l firm">{r.musteri}</td>
-                        <td className="l">{r.source === 'satis' ? 'Satış (kiralama)' : 'Hizmet faturası'}</td>
+                        <td className="l">{SOURCE_LABEL[r.source]}</td>
                         <td className="l">{r.owner}</td>
-                        <td title={r.fromPeriod ? (r.source === 'satis' ? 'Fatura başlangıcı girilmemiş — satış tarihi' : 'Sözleşme başlangıcı girilmemiş — ilk fatura dönemi') : 'Sözleşme başlangıcı'} style={{ color: r.fromPeriod ? ORANGE : undefined, fontWeight: 700 }}>
+                        <td title={r.fromPeriod ? (r.source !== 'fatura' ? 'Sözleşme başlangıcı girilmemiş — satış tarihi' : 'Sözleşme başlangıcı girilmemiş — ilk fatura dönemi') : 'Sözleşme başlangıcı'} style={{ color: r.fromPeriod ? ORANGE : undefined, fontWeight: 700 }}>
                           {dt(r.start)}{r.fromPeriod ? ' *' : ''}
                         </td>
                         <td className={r.end ? undefined : 'c-teal'} style={r.end ? { color: ORANGE } : undefined}>{r.end ? `Bitiş ${dt(r.end)}` : 'Devam ediyor'}</td>

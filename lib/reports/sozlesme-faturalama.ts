@@ -9,8 +9,8 @@ import { INTEGRATION_DEVICE_SERVICE_KEYS } from '@/lib/sales/service-invoices-sh
 
 export type ContractFirmRow = {
   customerId: string;
-  /** fatura = Hizmet Faturaları (KasaPOS) · satis = kiralama satışı (Satışlar). */
-  source: 'fatura' | 'satis';
+  /** fatura = Hizmet Faturaları (KasaPOS) · kiralama / satis = Satışlar. */
+  source: ContractSource;
   musteri: string;
   owner: string;
   start: string;
@@ -25,8 +25,12 @@ export type ContractFirmRow = {
   cells: Array<{ adet: number; tutar: number; actual: boolean }>;
 };
 
-/** adet/tutar = KasaPOS faturaları + kiralama satışları; satisAdet = bunun kiralama satışından gelen kısmı. */
-export type BillingMonth = { month: string; adet: number; tutar: number; firma: number; yeni: number; satisAdet: number };
+export type ContractSource = 'fatura' | 'kiralama' | 'satis';
+/** adet/tutar = toplam; bySource = Hizmet faturası (KasaPOS) / Kiralama / Satış kırılımı. */
+export type BillingMonth = {
+  month: string; adet: number; tutar: number; firma: number; yeni: number;
+  bySource: Record<ContractSource, { adet: number; tutar: number; firma: number }>;
+};
 
 export type SozlesmeFaturalamaPayload = {
   year: number;
@@ -98,6 +102,7 @@ export async function buildSozlesmeFaturalama({ year }: { year?: number } = {}):
              coalesce(nullif(trim(s.owner_name), ''), 'Havuz Account') as owner,
              coalesce(s.billing_start_date, s.sale_date)::text as start, (s.billing_start_date is null) as from_sale,
              s.contract_ended_on::text as c_end,
+             (case when s.sale_type in ('rental', 'mixed') then 'kiralama' else 'satis' end) as kind,
              (case when exists (select 1 from public.crm_sale_items i where i.sale_id = s.id)
                    then coalesce((select sum(i.quantity) filter (where public.crm_sale_item_is_device(i.product_type, i.is_recurring))
                                   from public.crm_sale_items i where i.sale_id = s.id), 0)
@@ -169,8 +174,12 @@ export async function buildSozlesmeFaturalama({ year }: { year?: number } = {}):
     .sort((a, b) => b.cells[ref].adet - a.cells[ref].adet || b.lastAdet - a.lastAdet || a.musteri.localeCompare(b.musteri, 'tr'));
 
   const rentalFirms = new Map<string, any[]>();
-  for (const r of rentals) rentalFirms.set(r.customer_id, [...(rentalFirms.get(r.customer_id) ?? []), r]);
-  for (const [customerId, rs] of rentalFirms) {
+  for (const r of rentals) {
+    const key = `${r.customer_id}|${r.kind}`;
+    rentalFirms.set(key, [...(rentalFirms.get(key) ?? []), r]);
+  }
+  for (const [key, rs] of rentalFirms) {
+    const [customerId, kind] = key.split('|') as [string, 'kiralama' | 'satis'];
     const sorted = [...rs].sort((a, b) => String(a.start).localeCompare(String(b.start)));
     const active = (r: any, month: string) => mk(r.start) <= month && (!r.c_end || mk(r.c_end) >= month);
     const cells = months.map((month) => {
@@ -183,7 +192,7 @@ export async function buildSozlesmeFaturalama({ year }: { year?: number } = {}):
     const refCell = cells[ref].adet ? cells[ref] : cells.find((c) => c.adet) ?? cells[0];
     list.push({
       customerId,
-      source: 'satis',
+      source: kind,
       musteri: lastSale.musteri,
       owner: lastSale.owner,
       start: sorted[0].start,
@@ -207,12 +216,15 @@ export async function buildSozlesmeFaturalama({ year }: { year?: number } = {}):
       tutar: act.reduce((s, r) => s + r.cells[i].tutar, 0),
       firma: new Set(act.map((r) => r.customerId)).size,
       yeni: list.filter((r) => mk(r.start) === month).length,
-      satisAdet: act.filter((r) => r.source === 'satis').reduce((s, r) => s + r.cells[i].adet, 0),
+      bySource: Object.fromEntries((['fatura', 'kiralama', 'satis'] as const).map((src) => {
+        const rs = act.filter((r) => r.source === src);
+        return [src, { adet: rs.reduce((s, r) => s + r.cells[i].adet, 0), tutar: rs.reduce((s, r) => s + r.cells[i].tutar, 0), firma: rs.length }];
+      })) as BillingMonth['bySource'],
     };
   });
 
   const cur = monthly[ref];
-  const prev = ref > 0 ? monthly[ref - 1] : { adet: 0, tutar: 0, firma: 0, satisAdet: 0 } as BillingMonth;
+  const prev = ref > 0 ? monthly[ref - 1] : { adet: 0, tutar: 0, firma: 0 } as BillingMonth;
   const in90 = new Date(`${today}T00:00:00Z`);
   in90.setUTCDate(in90.getUTCDate() + 90);
   const limit = in90.toISOString().slice(0, 10);
