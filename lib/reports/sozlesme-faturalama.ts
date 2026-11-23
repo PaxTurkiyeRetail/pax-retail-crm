@@ -105,7 +105,8 @@ export async function buildSozlesmeFaturalama({ year }: { year?: number } = {}):
              (case when s.currency = 'USD' then coalesce(nullif(s.rental_monthly_amount, 0), s.amount, 0) else 0 end)::float8 as tutar
       from public.crm_sales s
       left join public.musteriler m on m.id = s.customer_id
-      where s.status = 'active' and s.sale_type in ('rental', 'mixed')
+      -- Kiralama ya da sözleşme no girilmiş satış = sözleşme.
+      where s.status = 'active' and (s.sale_type in ('rental', 'mixed') or nullif(btrim(s.contract_no), '') is not null)
     `,
   );
 

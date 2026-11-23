@@ -63,7 +63,21 @@ type SaleRow = {
   rental_ops_note?: string | null;
   rental_ops_updated_at?: string | null;
   rental_ops_updated_by?: string | null;
+  /** Sözleşme / faturalama (054): boş fatura başlangıcı raporda satış tarihine düşer. */
+  billing_start_date?: string | null;
+  contract_no?: string | null;
+  contract_months?: number | null;
+  contract_ended_on?: string | null;
 };
+
+// Sözleşme süresiz: fatura başlangıcından bitiş tarihine (Sözleşmeyi Bitir) kadar her ay devam eder.
+type ContractForm = { billing: string; no: string; ended: string };
+const emptyContract = (): ContractForm => ({ billing: '', no: '', ended: '' });
+const contractPayload = (form: ContractForm) => ({
+  billing_start_date: form.billing || null,
+  contract_no: form.no.trim() || null,
+  contract_ended_on: form.ended || null,
+});
 
 type ChannelOption = { value: string; label: string };
 type OwnerOption = { id: string | null; name: string };
@@ -125,6 +139,8 @@ export default function SalesClient() {
   const [formRentalEnd, setFormRentalEnd] = useState('');
   const [formOpsStatus, setFormOpsStatus] = useState<string>(DEFAULT_RENTAL_OPS_STATUS);
   const [formOpsNote, setFormOpsNote] = useState('');
+  const [formContract, setFormContract] = useState<ContractForm>(emptyContract());
+  const [newContract, setNewContract] = useState<ContractForm>(emptyContract());
 
   // Yeni (teklifsiz) satış penceresi — 027
   const [creating, setCreating] = useState(false);
@@ -185,6 +201,11 @@ export default function SalesClient() {
     setFormRentalEnd(String(row.rental_end_date ?? '').slice(0, 10));
     setFormOpsStatus(row.rental_ops_status || DEFAULT_RENTAL_OPS_STATUS);
     setFormOpsNote(row.rental_ops_note ?? '');
+    setFormContract({
+      billing: String(row.billing_start_date ?? '').slice(0, 10),
+      no: row.contract_no ?? '',
+      ended: String(row.contract_ended_on ?? '').slice(0, 10),
+    });
     setMsg(null);
     if (!options) void loadOptions();
   };
@@ -209,7 +230,7 @@ export default function SalesClient() {
   const openCreate = async () => {
     setCreating(true);
     setMsg(null);
-    setNewCustomer(''); setNewDate(todayIso()); setNewChannel(''); setNewNote(''); setNewAgreed(''); setNewLines([newLine()]);
+    setNewCustomer(''); setNewDate(todayIso()); setNewChannel(''); setNewNote(''); setNewAgreed(''); setNewLines([newLine()]); setNewContract(emptyContract());
     if (!options) await loadOptions();
   };
 
@@ -233,6 +254,7 @@ export default function SalesClient() {
         note: newNote || null,
         agreed_amount: !canOverridePrice || newAgreed.trim() === '' ? null : Number(newAgreed),
         lines,
+        ...contractPayload(newContract),
       }),
     });
     const json = await res.json().catch(() => ({}));
@@ -258,6 +280,7 @@ export default function SalesClient() {
         note: formNote,
         sales_channel: formChannel || null,
         owner_name: formOwner || undefined,
+        ...contractPayload(formContract),
         ...(editing.sale_type !== 'sale'
           ? {
             rental_start_date: formRentalStart || null,
@@ -379,7 +402,16 @@ export default function SalesClient() {
                     </td>
                     <td style={tableCell}>{channelLabel(channels, row.sales_channel) || <span style={{ color: 'var(--text-3)' }}>—</span>}</td>
                     <td style={tableCell}>{row.owner_name || '—'}</td>
-                    <td style={{ ...tableCell, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{fmtDate(row.sale_date)}</td>
+                    <td style={{ ...tableCell, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{fmtDate(row.sale_date)}
+                      {row.billing_start_date || row.contract_no ? (
+                        <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 2 }}>
+                          {row.billing_start_date ? `Fatura: ${fmtDate(row.billing_start_date)}` : null}
+                          {row.billing_start_date && row.contract_no ? ' · ' : null}
+                          {row.contract_no ? `Sözl. ${row.contract_no}` : null}
+                          {row.contract_ended_on ? ` · Bitti: ${fmtDate(row.contract_ended_on)}` : null}
+                        </div>
+                      ) : null}
+                    </td>
                     <td style={tableCell}>
                       <b>{Number(row.device_count ?? 0).toLocaleString('tr-TR')}</b>
                       {row.quote_id && deviceDiff !== 0 ? <div style={{ fontSize: 12, color: 'var(--text-3)' }}>teklif {Number(row.quote_device_count ?? 0).toLocaleString('tr-TR')} ({deviceDiff > 0 ? '+' : ''}{deviceDiff})</div> : null}
@@ -510,6 +542,7 @@ export default function SalesClient() {
                 </label>
               </>
             ) : null}
+            <ContractFields value={formContract} onChange={setFormContract} saleDate={formDate} />
             <label style={fieldStyle}>
               <span style={labelStyle}>Not</span>
               <textarea value={formNote} onChange={(e) => setFormNote(e.target.value)} rows={3} style={{ ...inputStyle, minHeight: 80, padding: 10 }} />
@@ -616,6 +649,10 @@ export default function SalesClient() {
               <button type="button" onClick={() => setNewLines((prev) => [...prev, newLine()])} style={{ ...ghostButton, marginTop: 8 }}>+ Satır ekle</button>
             </div>
 
+            <div style={{ marginTop: 12 }}>
+              <ContractFields value={newContract} onChange={setNewContract} saleDate={newDate} />
+            </div>
+
             <label style={{ ...fieldStyle, marginTop: 12 }}>
               <span style={labelStyle}>Not</span>
               <textarea value={newNote} onChange={(e) => setNewNote(e.target.value)} rows={2} style={{ ...inputStyle, minHeight: 64, padding: 10 }} />
@@ -678,6 +715,41 @@ const pillMuted: CSSProperties = { background: 'var(--surface-2)', color: 'var(-
 const pillRental: CSSProperties = { background: 'var(--chip-gold-bg)', color: 'var(--chip-gold-color)', borderColor: 'var(--chip-gold-bd)' };
 const modalBackdrop: CSSProperties = { position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', display: 'grid', placeItems: 'center', padding: 16, zIndex: 50 };
 const modalCard: CSSProperties = { ...surface, width: 'min(560px, 100%)', maxWidth: '100%', maxHeight: '90vh', overflowY: 'auto', display: 'grid', gap: 4 };
+/** Sözleşme / faturalama alanları (054) — "+ Satış Ekle" ve Düzenle ortak kullanır. */
+function ContractFields({ value, onChange, saleDate }: { value: ContractForm; onChange: (next: ContractForm) => void; saleDate: string }) {
+  const start = value.billing || saleDate || '';
+  return (
+    <div style={{ padding: 12, borderRadius: 14, border: '1px solid var(--border)', background: 'var(--surface-2)', marginBottom: 12 }}>
+      <div style={{ ...labelStyle, marginBottom: 8 }}>Sözleşme / Faturalama</div>
+      <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
+        <label style={{ ...fieldStyle, marginBottom: 0 }}>
+          <span style={labelStyle}>Fatura Başlangıç Tarihi</span>
+          <input type="date" value={value.billing} onChange={(e) => onChange({ ...value, billing: e.target.value })} style={inputStyle} />
+        </label>
+        <label style={{ ...fieldStyle, marginBottom: 0 }}>
+          <span style={labelStyle}>Sözleşme No</span>
+          <input value={value.no} maxLength={80} onChange={(e) => onChange({ ...value, no: e.target.value })} placeholder="Opsiyonel" style={inputStyle} />
+        </label>
+        <label style={{ ...fieldStyle, marginBottom: 0 }}>
+          <span style={labelStyle}>Sözleşme Bitiş Tarihi</span>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <input type="date" value={value.ended} min={start || undefined} onChange={(e) => onChange({ ...value, ended: e.target.value })} style={{ ...inputStyle, flex: 1, minWidth: 0 }} />
+            {value.ended ? (
+              <button type="button" onClick={() => onChange({ ...value, ended: '' })} style={{ ...inputStyle, width: 'auto', cursor: 'pointer' }} title="Bitişi kaldır, sözleşme devam etsin">Geri al</button>
+            ) : (
+              <button type="button" onClick={() => onChange({ ...value, ended: todayIso() })} style={{ ...inputStyle, width: 'auto', cursor: 'pointer', fontWeight: 700 }} title="Bugün itibarıyla sözleşmeyi bitir">Bitir</button>
+            )}
+          </div>
+        </label>
+      </div>
+      <small style={{ ...hintStyle, display: 'block', marginTop: 8 }}>
+        {value.billing ? '' : 'Fatura başlangıcı boşsa satış tarihi kullanılır. '}
+        {value.ended ? `Sözleşme ${fmtDate(value.ended)} tarihinde bitiyor.` : 'Bitiş girilmedikçe sözleşme her ay devam eder.'}
+      </small>
+    </div>
+  );
+}
+
 const fieldStyle: CSSProperties = { display: 'grid', gap: 6, marginBottom: 12 };
 const labelStyle: CSSProperties = { fontWeight: 800, fontSize: 13, color: 'var(--text-2)' };
 const hintStyle: CSSProperties = { color: 'var(--text-3)', fontSize: 12 };
