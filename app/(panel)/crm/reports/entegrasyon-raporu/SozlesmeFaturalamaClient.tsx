@@ -77,7 +77,7 @@ export default function SozlesmeFaturalamaClient() {
   }, [data]);
 
   const today = new Date().toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-  const period = view?.refAy && data ? `Ocak–${view.refAy} ${data.year}` : '';
+  const period = data ? `Ocak–Aralık ${data.year}` : '';
   const detail: BillingSaleRow[] = (data?.rows ?? []).filter((r) => !onlyMissing || r.fromSaleDate);
 
   return (
@@ -93,7 +93,7 @@ export default function SozlesmeFaturalamaClient() {
               <div className="kpe-source">Kaynak: Satışlar · Sözleşme / Faturalama<br />{today}</div>
               <div className="kpe-tools no-print">
                 <select value={year} onChange={(e) => setYear(Number(e.target.value))}>
-                  {[currentYear, currentYear - 1].map((y) => <option key={y} value={y}>{y}</option>)}
+                  {[currentYear + 1, currentYear, currentYear - 1].map((y) => <option key={y} value={y}>{y}</option>)}
                 </select>
                 <button type="button" onClick={() => window.print()} disabled={!data}>PDF / Yazdır</button>
               </div>
@@ -108,6 +108,11 @@ export default function SozlesmeFaturalamaClient() {
           )}
           {error && <div className="kpe-error">{error}</div>}
           {loading && <div className="kpe-card muted">Yükleniyor…</div>}
+          {!loading && data && data.rows.length === 0 && (
+            <div className="kpe-card muted">
+              {data.year} için sözleşme / faturalama bilgisi girilmiş satış yok. Satışlar › Düzenle › Sözleşme / Faturalama&apos;dan girildikçe burada görünür.
+            </div>
+          )}
 
           {!loading && data && view && (
             <>

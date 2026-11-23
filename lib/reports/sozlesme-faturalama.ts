@@ -45,8 +45,9 @@ export async function buildSozlesmeFaturalama({ year }: { year?: number } = {}):
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Istanbul' });
   const curYear = Number(today.slice(0, 4));
   const y = year && year > 2000 && year < 2100 ? year : curYear;
-  const lastMonth = y === curYear ? Number(today.slice(5, 7)) : 12;
-  const months = Array.from({ length: lastMonth }, (_, i) => `${y}-${String(i + 1).padStart(2, '0')}`);
+  // Ocak–Aralık her zaman 12 ay (ileri tarihli fatura başlangıçları da görünür).
+  const months = Array.from({ length: 12 }, (_, i) => `${y}-${String(i + 1).padStart(2, '0')}`);
+  const refIdx = y === curYear ? Number(today.slice(5, 7)) - 1 : y < curYear ? 11 : 0;
 
   const { rows } = await db.query<any>(
     `
@@ -63,6 +64,8 @@ export async function buildSozlesmeFaturalama({ year }: { year?: number } = {}):
         from public.crm_sales s
         left join public.musteriler m on m.id = s.customer_id
         where s.status = 'active'
+          -- Yalnız sözleşme / faturalama bilgisi girilmiş satışlar.
+          and (s.billing_start_date is not null or nullif(trim(s.contract_no), '') is not null or s.contract_months is not null)
       )
       select id::text as sale_id, customer_id::text as customer_id, musteri, owner,
              sale_date::text as sale_date, billing_start_date::text as billing_start,
@@ -96,7 +99,7 @@ export async function buildSozlesmeFaturalama({ year }: { year?: number } = {}):
     devices: Number(r.devices ?? 0),
     amount: Number(r.amount ?? 0),
     rentalMonthly: Number(r.rental_monthly ?? 0),
-  })).filter((r) => r.billingDate.slice(0, 7) <= months[months.length - 1]);
+  }));
 
   const monthly: BillingMonth[] = months.map((month) => {
     const inMonth = list.filter((r) => r.billingDate.startsWith(month));
@@ -110,7 +113,7 @@ export async function buildSozlesmeFaturalama({ year }: { year?: number } = {}):
     };
   });
 
-  const ref = months.length - 1;
+  const ref = refIdx;
   const cur = monthly[ref];
   const prev = ref > 0 ? monthly[ref - 1] : { adet: 0, cihaz: 0, tutar: 0 } as BillingMonth;
   const in90 = new Date(`${today}T00:00:00Z`);
