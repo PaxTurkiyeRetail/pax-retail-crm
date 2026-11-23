@@ -25,6 +25,9 @@ export async function POST(request: Request) {
       {
         customerId: input.customer_id, periodMonth: input.period_month, currency: input.currency,
         invoiceDate: input.invoice_date ?? null, invoiceNo: input.invoice_no ?? null,
+        // Gönderilmezse mevcut sözleşme tarihi korunur (undefined → servis mevcut değeri kullanır).
+        contractStartDate: input.contract_start_date === undefined ? undefined : (input.contract_start_date || null),
+        contractEndDate: input.contract_end_date === undefined ? undefined : (input.contract_end_date || null),
         ownerName: input.owner_name ?? null, note: input.note ?? null, lines: input.lines,
       },
     );

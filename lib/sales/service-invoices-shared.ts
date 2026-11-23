@@ -73,6 +73,9 @@ export type ServiceInvoiceRow = {
   period_month: string;
   invoice_date: string | null;
   invoice_no: string | null;
+  /** Sözleşme (057): başlangıç boşsa dönem ayı; bitiş boşsa devam ediyor. */
+  contract_start_date: string | null;
+  contract_end_date: string | null;
   currency: ServiceCurrency;
   amount: number;
   status: 'active' | 'cancelled';
@@ -97,6 +100,8 @@ export type ServiceInvoiceInput = {
   currency: ServiceCurrency;
   invoiceDate?: string | null;
   invoiceNo?: string | null;
+  contractStartDate?: string | null;
+  contractEndDate?: string | null;
   ownerName?: string | null;
   note?: string | null;
   lines: ServiceInvoiceLineInput[];

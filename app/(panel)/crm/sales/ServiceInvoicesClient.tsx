@@ -42,6 +42,9 @@ type Draft = {
   currency: ServiceCurrency;
   invoice_no: string;
   invoice_date: string;
+  /** Sözleşme (057): başlangıç boşsa dönem ayı; bitiş boşsa sözleşme devam ediyor. */
+  contract_start: string;
+  contract_end: string;
   owner_name: string;
   note: string;
   lines: DraftLine[];
@@ -67,7 +70,7 @@ const parseMoney = (raw: string): number => {
 };
 
 function emptyDraft(period: string): Draft {
-  return { id: null, customer_id: '', period: periodInputValue(period), currency: 'TRY', invoice_no: '', invoice_date: todayIso(), owner_name: '', note: '', lines: [newLine()] };
+  return { id: null, customer_id: '', period: periodInputValue(period), currency: 'TRY', invoice_no: '', invoice_date: todayIso(), contract_start: '', contract_end: '', owner_name: '', note: '', lines: [newLine()] };
 }
 
 function draftFromRow(row: ServiceInvoiceRow): Draft {
@@ -78,6 +81,8 @@ function draftFromRow(row: ServiceInvoiceRow): Draft {
     currency: row.currency,
     invoice_no: row.invoice_no ?? '',
     invoice_date: row.invoice_date ?? '',
+    contract_start: String(row.contract_start_date ?? '').slice(0, 10),
+    contract_end: String(row.contract_end_date ?? '').slice(0, 10),
     owner_name: row.owner_name,
     note: row.note ?? '',
     lines: row.items.length
@@ -237,6 +242,8 @@ export default function ServiceInvoicesClient() {
         currency: draft.currency,
         invoice_no: draft.invoice_no.trim() || null,
         invoice_date: draft.invoice_date || null,
+        contract_start_date: draft.contract_start || null,
+        contract_end_date: draft.contract_end || null,
         owner_name: draft.owner_name.trim() || null,
         note: draft.note.trim() || null,
         lines: draft.lines
@@ -399,6 +406,11 @@ export default function ServiceInvoicesClient() {
                   <td style={tableCell}>
                     <div style={{ fontWeight: 700, color: row.invoice_no ? 'var(--text-2)' : 'var(--text-3)' }}>{row.invoice_no ?? '—'}</div>
                     <div style={{ fontSize: 12, color: 'var(--text-3)' }}>{fmtDate(row.invoice_date)}</div>
+                    {row.contract_start_date || row.contract_end_date ? (
+                      <div style={{ fontSize: 11, color: 'var(--text-3)' }}>
+                        Sözl. {fmtDate(row.contract_start_date)} → {row.contract_end_date ? fmtDate(row.contract_end_date) : 'devam'}
+                      </div>
+                    ) : null}
                   </td>
                   <td style={tableCell}>{row.owner_name || '—'}</td>
                   <td style={tableCell}>
@@ -469,6 +481,23 @@ export default function ServiceInvoicesClient() {
               <label style={fieldStyle}>
                 <span style={labelStyle}>Fatura tarihi</span>
                 <input type="date" value={draft.invoice_date} onChange={(e) => setDraft((prev) => (prev ? { ...prev, invoice_date: e.target.value } : prev))} style={inputStyle} />
+              </label>
+              <label style={fieldStyle}>
+                <span style={labelStyle}>Sözleşme başlangıcı</span>
+                <input type="date" value={draft.contract_start} onChange={(e) => setDraft((prev) => (prev ? { ...prev, contract_start: e.target.value } : prev))} style={inputStyle} />
+                <small style={{ color: 'var(--text-3)', fontSize: 12 }}>Boşsa raporda dönem ayı kullanılır.</small>
+              </label>
+              <label style={fieldStyle}>
+                <span style={labelStyle}>Sözleşme bitişi</span>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <input type="date" value={draft.contract_end} min={draft.contract_start || undefined} onChange={(e) => setDraft((prev) => (prev ? { ...prev, contract_end: e.target.value } : prev))} style={{ ...inputStyle, flex: 1, minWidth: 0 }} />
+                  {draft.contract_end ? (
+                    <button type="button" onClick={() => setDraft((prev) => (prev ? { ...prev, contract_end: '' } : prev))} style={ghostButton} title="Bitişi kaldır, sözleşme devam etsin">Geri al</button>
+                  ) : (
+                    <button type="button" onClick={() => setDraft((prev) => (prev ? { ...prev, contract_end: todayIso() } : prev))} style={ghostButton} title="Bugün itibarıyla sözleşmeyi bitir">Bitir</button>
+                  )}
+                </div>
+                <small style={{ color: 'var(--text-3)', fontSize: 12 }}>{draft.contract_end ? 'Bu tarihte bitiyor.' : 'Bitiş girilmedikçe her ay devam eder.'}</small>
               </label>
               <label style={fieldStyle}>
                 <span style={labelStyle}>Satışçı</span>

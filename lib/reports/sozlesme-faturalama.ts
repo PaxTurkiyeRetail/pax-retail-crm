@@ -1,107 +1,103 @@
 import { db } from '@/lib/db';
+import { INTEGRATION_DEVICE_SERVICE_KEYS } from '@/lib/sales/service-invoices-shared';
 
-// Sözleşme / Faturalama raporu (054). Faturalama tarihi = fatura başlangıcı, yoksa satış tarihi.
-// Kaynak: crm_sales (aktif). Kurallar crm_sales_billing_v ile aynı.
+// Sözleşme / Faturalama raporu (057). Kaynak: Hizmet Faturaları (crm_service_invoices) — KasaPOS Adet & Tutar
+// ile aynı süzgeç (KasaPOS kalemleri; adet = quantity, tutar = USD total_price).
+// Sözleşme = firma. Başlangıç = faturalardaki sözleşme başlangıcı, yoksa ilk fatura dönemi.
+// Bitiş = sözleşme bitişi (Bitir); yoksa süresiz. Fatura olan ay gerçek değer; faturasız ay (sözleşme sürerken)
+// son faturanın değeriyle devam eder.
 
-export type BillingSaleRow = {
-  saleId: string;
+export type ContractFirmRow = {
   customerId: string;
   musteri: string;
   owner: string;
-  saleDate: string;
-  billingStart: string | null;
-  billingDate: string;
-  fromSaleDate: boolean;
-  contractNo: string | null;
-  contractMonths: number | null;
-  contractEnd: string | null;
-  saleType: 'sale' | 'rental' | 'mixed';
-  salesChannel: string | null;
-  devices: number;
-  amount: number;
-  rentalMonthly: number;
+  start: string;
+  fromPeriod: boolean;
+  end: string | null;
+  firstPeriod: string;
+  lastPeriod: string;
+  invoices: number;
+  lastAdet: number;
+  lastTutar: number;
+  /** Ay başına değer; `actual` false ise son faturadan taşındı. */
+  cells: Array<{ adet: number; tutar: number; actual: boolean }>;
 };
 
-export type BillingMonth = { month: string; adet: number; cihaz: number; tutar: number; kira: number; firma: number };
-
-export type OngoingMonth = { month: string; adet: number; cihaz: number; kira: number; tutar: number };
+export type BillingMonth = { month: string; adet: number; tutar: number; firma: number; yeni: number };
 
 export type SozlesmeFaturalamaPayload = {
   year: number;
   months: string[];
   refMonthIndex: number;
   monthly: BillingMonth[];
-  ongoing: OngoingMonth[];
-  rows: BillingSaleRow[];
+  rows: ContractFirmRow[];
   kpi: {
     refAdet: number; prevAdet: number;
-    refCihaz: number; prevCihaz: number;
     refTutar: number; prevTutar: number;
-    toplamAdet: number; toplamTutar: number; toplamKira: number;
-    faturaGirilmemis: number;
+    refFirma: number; prevFirma: number;
+    toplamFirma: number; devamEden: number; biten: number;
+    baslangicGirilmemis: number;
     yaklasanBitis: number;
   };
   generatedAt: string;
 };
 
+const mk = (v: string) => v.slice(0, 7);
+
 export async function buildSozlesmeFaturalama({ year }: { year?: number } = {}): Promise<SozlesmeFaturalamaPayload> {
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Istanbul' });
   const curYear = Number(today.slice(0, 4));
   const y = year && year > 2000 && year < 2100 ? year : curYear;
-  // Seçilen yılın Ocak ayından başlar, ileri tarihli en son fatura başlangıcına kadar kesintisiz devam eder
-  // (en az o yılın Aralık'ı ve bu ay).
 
   const { rows } = await db.query<any>(
     `
-      with s as (
-        select s.id, s.customer_id, coalesce(m.musteri, '—') as musteri,
-               coalesce(nullif(trim(s.owner_name), ''), 'Havuz Account') as owner,
-               s.sale_date, s.billing_start_date,
-               coalesce(s.billing_start_date, s.sale_date) as billing_date,
-               s.contract_no, s.contract_months, s.contract_ended_on, s.sale_type, s.sales_channel,
-               s.amount, s.rental_monthly_amount, s.device_count,
-               coalesce((select sum(i.quantity) filter (where public.crm_sale_item_is_device(i.product_type, i.is_recurring))
-                         from public.crm_sale_items i where i.sale_id = s.id), 0)::int as item_devices,
-               (select count(*) from public.crm_sale_items i where i.sale_id = s.id)::int as item_count
-        from public.crm_sales s
-        left join public.musteriler m on m.id = s.customer_id
-        -- Tüm aktif satışlar: fatura başlangıcı girilmemişse satış tarihi faturalama tarihi sayılır.
-        where s.status = 'active'
-      )
-      select id::text as sale_id, customer_id::text as customer_id, musteri, owner,
-             sale_date::text as sale_date, billing_start_date::text as billing_start,
-             billing_date::text as billing_date, contract_no, contract_months,
-             contract_ended_on::text as contract_end,
-             sale_type, sales_channel,
-             (case when item_count > 0 then item_devices else device_count end)::int as devices,
-             coalesce(amount, 0)::float8 as amount, coalesce(rental_monthly_amount, 0)::float8 as rental_monthly
-      from s
-      order by billing_date desc, musteri
+      select s.customer_id::text as customer_id, coalesce(m.musteri, '—') as musteri,
+             coalesce(nullif(trim(s.owner_name), ''), 'Havuz Account') as owner,
+             s.period_month::text as period, s.contract_start_date::text as c_start, s.contract_end_date::text as c_end,
+             coalesce(sum(i.quantity), 0)::int as adet,
+             coalesce(sum(i.total_price) filter (where s.currency = 'USD'), 0)::float8 as tutar
+      from public.crm_service_invoices s
+      join public.crm_service_invoice_items i on i.invoice_id = s.id
+      left join public.musteriler m on m.id = s.customer_id
+      where s.status = 'active'
+        and (lower(btrim(i.service_key)) = any($1::text[]) or lower(btrim(i.service_label)) = any($1::text[]))
+      group by s.id, s.customer_id, m.musteri, s.owner_name, s.period_month, s.contract_start_date, s.contract_end_date
+      order by s.period_month
     `,
+    [INTEGRATION_DEVICE_SERVICE_KEYS],
   );
 
-  const all: BillingSaleRow[] = rows.map((r: any) => ({
-    saleId: r.sale_id,
-    customerId: r.customer_id,
-    musteri: r.musteri,
-    owner: r.owner,
-    saleDate: r.sale_date,
-    billingStart: r.billing_start,
-    billingDate: r.billing_date,
-    fromSaleDate: !r.billing_start,
-    contractNo: r.contract_no,
-    contractMonths: r.contract_months == null ? null : Number(r.contract_months),
-    contractEnd: r.contract_end,
-    saleType: r.sale_type,
-    salesChannel: r.sales_channel,
-    devices: Number(r.devices ?? 0),
-    amount: Number(r.amount ?? 0),
-    rentalMonthly: Number(r.rental_monthly ?? 0),
-  }));
-  const startKey = `${y}-01`;
-  const list = all.filter((r) => r.billingDate.slice(0, 7) >= startKey);
+  type Inv = { period: string; adet: number; tutar: number; owner: string; start: string | null; end: string | null };
+  const firms = new Map<string, { musteri: string; inv: Map<string, Inv> }>();
+  for (const r of rows) {
+    const f = firms.get(r.customer_id) ?? { musteri: r.musteri, inv: new Map<string, Inv>() };
+    const key = mk(r.period);
+    const cur = f.inv.get(key);
+    // Aynı ay birden fazla fatura (TL + USD) → topla.
+    f.inv.set(key, {
+      period: key,
+      adet: (cur?.adet ?? 0) + Number(r.adet ?? 0),
+      tutar: (cur?.tutar ?? 0) + Number(r.tutar ?? 0),
+      owner: r.owner,
+      start: r.c_start ?? cur?.start ?? null,
+      end: r.c_end ?? cur?.end ?? null,
+    });
+    firms.set(r.customer_id, f);
+  }
 
-  const lastKey = [`${y}-12`, today.slice(0, 7), ...list.map((r) => r.billingDate.slice(0, 7))].sort().at(-1)!;
+  const base = [...firms.entries()].map(([customerId, f]) => {
+    const inv = [...f.inv.values()].sort((a, b) => a.period.localeCompare(b.period));
+    const starts = inv.map((x) => x.start).filter(Boolean) as string[];
+    const last = inv[inv.length - 1];
+    // Bitiş: en son faturadaki bitiş; yoksa herhangi bir faturadaki en geç bitiş.
+    const ends = inv.map((x) => x.end).filter(Boolean) as string[];
+    const end = last.end ?? (ends.length ? ends.sort().at(-1)! : null);
+    const start = starts.length ? starts.sort()[0] : `${inv[0].period}-01`;
+    return { customerId, musteri: f.musteri, inv, start, fromPeriod: !starts.length, end, last };
+  });
+
+  // Ay aralığı: seçilen yılın Ocak'ından en az o yılın Aralık'ı / bu ay / en geç faturaya kadar kesintisiz.
+  const lastKey = [`${y}-12`, mk(today), ...base.map((b) => b.last.period)].sort().at(-1)!;
   const months: string[] = [];
   for (let yy = y, mm = 1; ; ) {
     const k = `${yy}-${String(mm).padStart(2, '0')}`;
@@ -109,57 +105,71 @@ export async function buildSozlesmeFaturalama({ year }: { year?: number } = {}):
     if (k >= lastKey) break;
     if (++mm > 12) { mm = 1; yy++; }
   }
-  const curIdx = months.indexOf(today.slice(0, 7));
-  const refIdx = curIdx >= 0 ? curIdx : months.length - 1;
+  const curIdx = months.indexOf(mk(today));
+  const ref = curIdx >= 0 ? curIdx : months.length - 1;
 
-  const monthly: BillingMonth[] = months.map((month) => {
-    const inMonth = list.filter((r) => r.billingDate.startsWith(month));
+  const list: ContractFirmRow[] = base
+    .map((b) => {
+      const sKey = mk(b.start);
+      const eKey = b.end ? mk(b.end) : null;
+      const cells = months.map((month) => {
+        const own = b.inv.find((x) => x.period === month);
+        if (own) return { adet: own.adet, tutar: own.tutar, actual: true };
+        if (month < sKey || (eKey && month > eKey)) return { adet: 0, tutar: 0, actual: false };
+        const prev = [...b.inv].reverse().find((x) => x.period < month);
+        return prev ? { adet: prev.adet, tutar: prev.tutar, actual: false } : { adet: 0, tutar: 0, actual: false };
+      });
+      return {
+        customerId: b.customerId,
+        musteri: b.musteri,
+        owner: b.last.owner,
+        start: b.start,
+        fromPeriod: b.fromPeriod,
+        end: b.end,
+        firstPeriod: b.inv[0].period,
+        lastPeriod: b.last.period,
+        invoices: b.inv.length,
+        lastAdet: b.last.adet,
+        lastTutar: b.last.tutar,
+        cells,
+      };
+    })
+    .filter((r) => r.cells.some((c) => c.adet || c.tutar))
+    .sort((a, b) => b.cells[ref].adet - a.cells[ref].adet || b.lastAdet - a.lastAdet || a.musteri.localeCompare(b.musteri, 'tr'));
+
+  const monthly: BillingMonth[] = months.map((month, i) => {
+    const act = list.filter((r) => r.cells[i].adet || r.cells[i].tutar);
     return {
       month,
-      adet: inMonth.length,
-      cihaz: inMonth.reduce((s, r) => s + r.devices, 0),
-      tutar: inMonth.reduce((s, r) => s + r.amount, 0),
-      kira: inMonth.reduce((s, r) => s + r.rentalMonthly, 0),
-      firma: new Set(inMonth.map((r) => r.customerId)).size,
+      adet: act.reduce((s, r) => s + r.cells[i].adet, 0),
+      tutar: act.reduce((s, r) => s + r.cells[i].tutar, 0),
+      firma: act.length,
+      yeni: list.filter((r) => mk(r.start) === month).length,
     };
   });
 
-  // Devam eden sözleşmeler: başlangıç ayından bitiş ayına kadar (bitiş yoksa süresiz) her ay sayılır.
-  const ongoing: OngoingMonth[] = months.map((month) => {
-    const act = all.filter((r) => r.billingDate.slice(0, 7) <= month && (!r.contractEnd || r.contractEnd.slice(0, 7) >= month));
-    return {
-      month,
-      adet: act.length,
-      cihaz: act.reduce((s, r) => s + r.devices, 0),
-      kira: act.reduce((s, r) => s + r.rentalMonthly, 0),
-      tutar: act.reduce((s, r) => s + r.amount, 0),
-    };
-  });
-
-  const ref = refIdx;
   const cur = monthly[ref];
-  const prev = ref > 0 ? monthly[ref - 1] : { adet: 0, cihaz: 0, tutar: 0 } as BillingMonth;
+  const prev = ref > 0 ? monthly[ref - 1] : { adet: 0, tutar: 0, firma: 0 } as BillingMonth;
   const in90 = new Date(`${today}T00:00:00Z`);
   in90.setUTCDate(in90.getUTCDate() + 90);
   const limit = in90.toISOString().slice(0, 10);
+  const biten = list.filter((r) => r.end && r.end < today).length;
 
   return {
     year: y,
     months,
     refMonthIndex: ref,
     monthly,
-    ongoing,
     rows: list,
     kpi: {
       refAdet: cur.adet, prevAdet: prev.adet,
-      // Cihaz / tutar: o ay devam eden sözleşmeler (bitene kadar düşmez).
-      refCihaz: ongoing[ref].cihaz, prevCihaz: ref > 0 ? ongoing[ref - 1].cihaz : 0,
-      refTutar: ongoing[ref].tutar, prevTutar: ref > 0 ? ongoing[ref - 1].tutar : 0,
-      toplamAdet: list.length,
-      toplamTutar: list.reduce((s, r) => s + r.amount, 0),
-      toplamKira: list.reduce((s, r) => s + r.rentalMonthly, 0),
-      faturaGirilmemis: list.filter((r) => r.fromSaleDate).length,
-      yaklasanBitis: list.filter((r) => r.contractEnd && r.contractEnd >= today && r.contractEnd <= limit).length,
+      refTutar: cur.tutar, prevTutar: prev.tutar,
+      refFirma: cur.firma, prevFirma: prev.firma,
+      toplamFirma: list.length,
+      devamEden: list.length - biten,
+      biten,
+      baslangicGirilmemis: list.filter((r) => r.fromPeriod).length,
+      yaklasanBitis: list.filter((r) => r.end && r.end >= today && r.end <= limit).length,
     },
     generatedAt: new Date().toISOString(),
   };

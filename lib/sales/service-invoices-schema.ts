@@ -9,6 +9,9 @@ export const serviceInvoiceSchema = z.object({
   currency: z.enum(SERVICE_CURRENCIES),
   invoice_date: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/).nullish(),
   invoice_no: z.string().trim().max(60).nullish(),
+  // Sözleşme (057): başlangıç boşsa dönem ayı; bitiş boşsa sözleşme devam ediyor.
+  contract_start_date: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, 'Sözleşme başlangıcı geçersiz.').nullish().or(z.literal('')),
+  contract_end_date: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, 'Sözleşme bitişi geçersiz.').nullish().or(z.literal('')),
   owner_name: z.string().trim().max(120).nullish(),
   note: z.string().trim().max(1000).nullish(),
   lines: z.array(z.object({

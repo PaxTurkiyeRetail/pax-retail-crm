@@ -35,6 +35,7 @@ const SELECT_ROWS = `
   select i.id::text as id, i.customer_id::text as customer_id, m.musteri,
          i.owner_name, i.owner_user_id, i.period_month::text as period_month,
          i.invoice_date::text as invoice_date, i.invoice_no, i.currency,
+         i.contract_start_date::text as contract_start_date, i.contract_end_date::text as contract_end_date,
          i.amount::float8 as amount, i.status, i.note, i.cancel_reason,
          i.created_at::text as created_at, i.updated_at::text as updated_at, i.updated_by,
          coalesce((
@@ -166,7 +167,17 @@ function validateInput(input: ServiceInvoiceInput) {
   if (!lines.length) throw new ApiError('LINES_REQUIRED', 'En az bir hizmet kalemi girilmeli (adet > 0).', 400);
   const invoiceDate = input.invoiceDate ? String(input.invoiceDate).slice(0, 10) : null;
   if (invoiceDate && !/^\d{4}-\d{2}-\d{2}$/.test(invoiceDate)) throw new ApiError('DATE_INVALID', 'Fatura tarihi geçersiz.', 400);
-  return { period, lines, amount, invoiceDate, invoiceNo: String(input.invoiceNo ?? '').trim() || null, note: String(input.note ?? '').trim() || null };
+  const isoOrNull = (value: string | null | undefined) => {
+    const raw = String(value ?? '').trim().slice(0, 10);
+    if (raw && !/^\d{4}-\d{2}-\d{2}$/.test(raw)) throw new ApiError('DATE_INVALID', 'Sözleşme tarihi geçersiz.', 400);
+    return raw || null;
+  };
+  const contractStart = isoOrNull(input.contractStartDate);
+  const contractEnd = isoOrNull(input.contractEndDate);
+  if (contractEnd && contractEnd < (contractStart ?? period)) {
+    throw new ApiError('DATE_INVALID', 'Sözleşme bitişi başlangıçtan önce olamaz.', 400);
+  }
+  return { period, lines, amount, invoiceDate, contractStart, contractEnd, invoiceNo: String(input.invoiceNo ?? '').trim() || null, note: String(input.note ?? '').trim() || null };
 }
 
 async function writeItems(client: PoolClient, invoiceId: string, lines: Array<{ service_key: string; quantity: number; unit_price: number; total_price: number }>, labels: Map<string, string>) {
@@ -204,10 +215,10 @@ export async function createServiceInvoice(actor: Actor, input: ServiceInvoiceIn
       const inserted = await client.query<{ id: string }>(
         `insert into public.crm_service_invoices
            (customer_id, owner_name, owner_user_id, period_month, invoice_date, invoice_no, currency, amount, status, note,
-            created_by, created_by_user_id, updated_by)
-         values ($1, $2, $3, $4::date, $5::date, $6, $7, $8, 'active', $9, $10, $11, $10)
+            created_by, created_by_user_id, updated_by, contract_start_date, contract_end_date)
+         values ($1, $2, $3, $4::date, $5::date, $6, $7, $8, 'active', $9, $10, $11, $10, $12::date, $13::date)
          returning id::text as id`,
-        [input.customerId, owner.name, owner.userId, v.period, v.invoiceDate, v.invoiceNo, input.currency, v.amount, v.note, actor.name, actor.id],
+        [input.customerId, owner.name, owner.userId, v.period, v.invoiceDate, v.invoiceNo, input.currency, v.amount, v.note, actor.name, actor.id, v.contractStart, v.contractEnd],
       );
       id = inserted.rows[0].id;
     } catch (error) {
@@ -229,7 +240,12 @@ export async function updateServiceInvoice(actor: Actor, id: string, input: Omit
     const before = await loadOne(client, id);
     if (!before) throw new ApiError('NOT_FOUND', 'Hizmet faturası bulunamadı.', 404);
     if (before.status === 'cancelled') throw new ApiError('CANCELLED', 'İptal edilmiş fatura düzenlenemez.', 409);
-    const v = validateInput({ ...input, customerId: input.customerId ?? before.customer_id });
+    const v = validateInput({
+      ...input,
+      customerId: input.customerId ?? before.customer_id,
+      contractStartDate: input.contractStartDate === undefined ? before.contract_start_date : input.contractStartDate,
+      contractEndDate: input.contractEndDate === undefined ? before.contract_end_date : input.contractEndDate,
+    });
     const labels = await resolveServiceLabels(v.lines.map((line) => line.service_key));
     const customerId = input.customerId ?? before.customer_id;
     const customer = await client.query<{ musteri: string; sorumlu: string | null }>(
@@ -240,9 +256,10 @@ export async function updateServiceInvoice(actor: Actor, id: string, input: Omit
       await client.query(
         `update public.crm_service_invoices
          set customer_id = $2, owner_name = $3, owner_user_id = $4, period_month = $5::date, invoice_date = $6::date,
-             invoice_no = $7, currency = $8, amount = $9, note = $10, updated_by = $11
+             invoice_no = $7, currency = $8, amount = $9, note = $10, updated_by = $11,
+             contract_start_date = $12::date, contract_end_date = $13::date
          where id = $1`,
-        [id, customerId, owner.name, owner.userId, v.period, v.invoiceDate, v.invoiceNo, input.currency, v.amount, v.note, actor.name],
+        [id, customerId, owner.name, owner.userId, v.period, v.invoiceDate, v.invoiceNo, input.currency, v.amount, v.note, actor.name, v.contractStart, v.contractEnd],
       );
     } catch (error) {
       if (isUniqueViolation(error)) throw new ApiError('INVOICE_NO_DUPLICATE', `Bu fatura numarası (${v.invoiceNo}) zaten kayıtlı.`, 409);
@@ -252,8 +269,8 @@ export async function updateServiceInvoice(actor: Actor, id: string, input: Omit
     const after = await loadOne(client, id);
     await recordAuditEvent({
       actorId: actor.id, actorEmail: actor.email, action: 'service_invoice.updated', resourceType: 'service_invoice', resourceId: id,
-      before: { period: before.period_month, currency: before.currency, amount: before.amount, owner: before.owner_name, lines: before.items.length, invoice_no: before.invoice_no },
-      after: { period: v.period, currency: input.currency, amount: v.amount, owner: owner.name, lines: v.lines.length, invoice_no: v.invoiceNo },
+      before: { period: before.period_month, currency: before.currency, amount: before.amount, owner: before.owner_name, lines: before.items.length, invoice_no: before.invoice_no, contract_start_date: before.contract_start_date, contract_end_date: before.contract_end_date },
+      after: { period: v.period, currency: input.currency, amount: v.amount, owner: owner.name, lines: v.lines.length, invoice_no: v.invoiceNo, contract_start_date: v.contractStart, contract_end_date: v.contractEnd },
     }, client);
     return after!;
   });

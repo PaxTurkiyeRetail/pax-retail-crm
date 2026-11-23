@@ -122,13 +122,6 @@ const SALES: DatasetDef = {
     rental_start_date: { label: 'Kiralama başlangıç tarihi', sql: 's.rental_start_date', type: 'date', grains: ALL_GRAINS, group: 'Kiralama', description: 'Satış kaydındaki kiralama döneminin başlangıcı; kiralama yoksa boştur.' },
     rental_end_date: { label: 'Kiralama bitiş tarihi', sql: 's.rental_end_date', type: 'date', grains: ALL_GRAINS, group: 'Kiralama', description: 'Satış kaydındaki kiralama döneminin bitişi; kiralama yoksa boştur.' },
     rental_ops_status: { label: 'Kiralama operasyon durumu', sql: `case when s.sale_type in ('rental', 'mixed') then coalesce(s.rental_ops_status, 'hazirlik') end`, type: 'string', group: 'Kiralama', options: RENTAL_OPS_STATUSES.map(s => s.value), description: 'Kiralama veya karma satışın operasyon aşaması. Boş kiralama durumu Hazırlık sayılır; normal satışlarda boştur.' },
-    // Sözleşme / faturalama (054): fatura başlangıcı yoksa satış tarihi.
-    billing_date: { label: 'Faturalama tarihi', sql: 'coalesce(s.billing_start_date, s.sale_date)', type: 'date', grains: ALL_GRAINS, group: 'Sözleşme / Faturalama', description: 'Fatura başlangıç tarihi; girilmemişse satış tarihi.' },
-    billing_start_date: { label: 'Fatura başlangıç tarihi (girilen)', sql: 's.billing_start_date', type: 'date', grains: ALL_GRAINS, group: 'Sözleşme / Faturalama', description: 'Yalnız elle girilen değer; boşsa boştur.' },
-    billing_date_source: { label: 'Faturalama tarihi kaynağı', sql: `case when s.billing_start_date is null then 'Satış tarihi' else 'Fatura başlangıcı' end`, type: 'string', group: 'Sözleşme / Faturalama', options: ['Fatura başlangıcı', 'Satış tarihi'] },
-    contract_no: { label: 'Sözleşme no', sql: `coalesce(nullif(trim(s.contract_no), ''), '—')`, type: 'string', group: 'Sözleşme / Faturalama' },
-    contract_months: { label: 'Sözleşme süresi (ay)', sql: 's.contract_months::text', type: 'string', group: 'Sözleşme / Faturalama' },
-    contract_end_date: { label: 'Sözleşme bitiş tarihi', sql: `case when s.contract_months is null then null else (coalesce(s.billing_start_date, s.sale_date) + make_interval(months => s.contract_months) - interval '1 day')::date end`, type: 'date', grains: ALL_GRAINS, group: 'Sözleşme / Faturalama', description: 'Faturalama tarihi + sözleşme süresi.' },
     currency: { label: 'Para birimi', sql: 's.currency', type: 'string', group: 'Satış' },
     price_source: { label: 'Fiyat kaynağı', sql: 's.price_source', type: 'string', group: 'Satış', options: ['catalog', 'manual'] },
     quote_no: { label: 'Teklif no', sql: 's.quote_no', type: 'string', group: 'Satış' },
