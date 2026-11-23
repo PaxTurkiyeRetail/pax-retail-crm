@@ -62,9 +62,8 @@ export async function buildSozlesmeFaturalama({ year }: { year?: number } = {}):
                (select count(*) from public.crm_sale_items i where i.sale_id = s.id)::int as item_count
         from public.crm_sales s
         left join public.musteriler m on m.id = s.customer_id
+        -- Tüm aktif satışlar: fatura başlangıcı girilmemişse satış tarihi faturalama tarihi sayılır.
         where s.status = 'active'
-          -- Yalnız sözleşme / faturalama bilgisi girilmiş satışlar.
-          and (s.billing_start_date is not null or nullif(trim(s.contract_no), '') is not null or s.contract_months is not null)
       )
       select id::text as sale_id, customer_id::text as customer_id, musteri, owner,
              sale_date::text as sale_date, billing_start_date::text as billing_start,
