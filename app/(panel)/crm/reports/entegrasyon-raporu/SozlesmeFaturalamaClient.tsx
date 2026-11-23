@@ -193,16 +193,13 @@ export default function SozlesmeFaturalamaClient() {
         {!loading && data && view && (
           <>
             <section className="kpe-section">
-              <h2 className="kpe-title" style={{ marginBottom: 18 }}>Aylık cihaz ve tutar (faturalama tarihine göre), {period}</h2>
+              <h2 className="kpe-title" style={{ marginBottom: 18 }}>Aylık cihaz ve tutar (devam eden sözleşmeler), {period}</h2>
               <div className="kpe-card">
                 <div className="kpe-chart-title c-blue">Cihaz</div>
-                <VChart values={data.monthly.map((m) => m.cihaz)} labels={view.ayKisa} refIdx={view.ref} color={BLUE} colorL={BLUE_L} />
+                <VChart values={data.ongoing.map((m) => m.cihaz)} labels={view.ayKisa} refIdx={view.ref} color={BLUE} colorL={BLUE_L} />
                 <hr className="kpe-divider" />
                 <div className="kpe-chart-title c-teal">Tutar</div>
-                <VChart values={data.monthly.map((m) => m.tutar)} labels={view.ayKisa} refIdx={view.ref} color={TEAL} colorL={TEAL_L} money />
-                <hr className="kpe-divider" />
-                <div className="kpe-chart-title c-blue">Devam eden sözleşmeler — toplam cihaz (kümülatif)</div>
-                <VChart values={data.ongoing.map((m) => m.cihaz)} labels={view.ayKisa} refIdx={view.ref} color={BLUE} colorL={BLUE_L} />
+                <VChart values={data.ongoing.map((m) => m.tutar)} labels={view.ayKisa} refIdx={view.ref} color={TEAL} colorL={TEAL_L} money />
               </div>
             </section>
 

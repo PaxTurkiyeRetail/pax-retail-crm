@@ -24,7 +24,7 @@ export type BillingSaleRow = {
 
 export type BillingMonth = { month: string; adet: number; cihaz: number; tutar: number; kira: number; firma: number };
 
-export type OngoingMonth = { month: string; adet: number; cihaz: number; kira: number };
+export type OngoingMonth = { month: string; adet: number; cihaz: number; kira: number; tutar: number };
 
 export type SozlesmeFaturalamaPayload = {
   year: number;
@@ -132,6 +132,7 @@ export async function buildSozlesmeFaturalama({ year }: { year?: number } = {}):
       adet: act.length,
       cihaz: act.reduce((s, r) => s + r.devices, 0),
       kira: act.reduce((s, r) => s + r.rentalMonthly, 0),
+      tutar: act.reduce((s, r) => s + r.amount, 0),
     };
   });
 
@@ -151,8 +152,9 @@ export async function buildSozlesmeFaturalama({ year }: { year?: number } = {}):
     rows: list,
     kpi: {
       refAdet: cur.adet, prevAdet: prev.adet,
-      refCihaz: cur.cihaz, prevCihaz: prev.cihaz,
-      refTutar: cur.tutar, prevTutar: prev.tutar,
+      // Cihaz / tutar: o ay devam eden sözleşmeler (bitene kadar düşmez).
+      refCihaz: ongoing[ref].cihaz, prevCihaz: ref > 0 ? ongoing[ref - 1].cihaz : 0,
+      refTutar: ongoing[ref].tutar, prevTutar: ref > 0 ? ongoing[ref - 1].tutar : 0,
       toplamAdet: list.length,
       toplamTutar: list.reduce((s, r) => s + r.amount, 0),
       toplamKira: list.reduce((s, r) => s + r.rentalMonthly, 0),
