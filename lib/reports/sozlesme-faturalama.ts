@@ -24,11 +24,14 @@ export type BillingSaleRow = {
 
 export type BillingMonth = { month: string; adet: number; cihaz: number; tutar: number; kira: number; firma: number };
 
+export type OngoingMonth = { month: string; adet: number; cihaz: number; kira: number };
+
 export type SozlesmeFaturalamaPayload = {
   year: number;
   months: string[];
   refMonthIndex: number;
   monthly: BillingMonth[];
+  ongoing: OngoingMonth[];
   rows: BillingSaleRow[];
   kpi: {
     refAdet: number; prevAdet: number;
@@ -74,13 +77,11 @@ export async function buildSozlesmeFaturalama({ year }: { year?: number } = {}):
              (case when item_count > 0 then item_devices else device_count end)::int as devices,
              coalesce(amount, 0)::float8 as amount, coalesce(rental_monthly_amount, 0)::float8 as rental_monthly
       from s
-      where billing_date >= make_date($1::int, 1, 1)
       order by billing_date desc, musteri
     `,
-    [y],
   );
 
-  const list: BillingSaleRow[] = rows.map((r: any) => ({
+  const all: BillingSaleRow[] = rows.map((r: any) => ({
     saleId: r.sale_id,
     customerId: r.customer_id,
     musteri: r.musteri,
@@ -98,6 +99,10 @@ export async function buildSozlesmeFaturalama({ year }: { year?: number } = {}):
     amount: Number(r.amount ?? 0),
     rentalMonthly: Number(r.rental_monthly ?? 0),
   }));
+  const startKey = `${y}-01`;
+  const list = all.filter((r) => r.billingDate.slice(0, 7) >= startKey);
+  // Sözleşmeler süresiz: iptal edilene kadar devam eder. Başlangıç yılından önce başlayanlar devreden.
+  const before = all.filter((r) => r.billingDate.slice(0, 7) < startKey);
 
   const lastKey = [`${y}-12`, today.slice(0, 7), ...list.map((r) => r.billingDate.slice(0, 7))].sort().at(-1)!;
   const months: string[] = [];
@@ -122,6 +127,15 @@ export async function buildSozlesmeFaturalama({ year }: { year?: number } = {}):
     };
   });
 
+  // Devam eden (kümülatif) sözleşmeler: ay sonu itibarıyla faturası başlamış tüm aktif satışlar.
+  let dAdet = before.length;
+  let dCihaz = before.reduce((s, r) => s + r.devices, 0);
+  let dKira = before.reduce((s, r) => s + r.rentalMonthly, 0);
+  const ongoing: OngoingMonth[] = monthly.map((m) => {
+    dAdet += m.adet; dCihaz += m.cihaz; dKira += m.kira;
+    return { month: m.month, adet: dAdet, cihaz: dCihaz, kira: dKira };
+  });
+
   const ref = refIdx;
   const cur = monthly[ref];
   const prev = ref > 0 ? monthly[ref - 1] : { adet: 0, cihaz: 0, tutar: 0 } as BillingMonth;
@@ -134,6 +148,7 @@ export async function buildSozlesmeFaturalama({ year }: { year?: number } = {}):
     months,
     refMonthIndex: ref,
     monthly,
+    ongoing,
     rows: list,
     kpi: {
       refAdet: cur.adet, prevAdet: prev.adet,

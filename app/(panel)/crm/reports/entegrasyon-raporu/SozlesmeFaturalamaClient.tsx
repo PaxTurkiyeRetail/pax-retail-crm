@@ -175,14 +175,15 @@ export default function SozlesmeFaturalamaClient() {
                 </div>
 
                 <div className="kpe-card">
-                  <h3>Sözleşme bitişleri</h3>
+                  <h3>Devam eden sözleşmeler ({view.refAy})</h3>
                   <table className="kpe-ytd">
                     <tbody>
-                      <tr><td>Süresi girilen sözleşme</td><td className="g">{fmt(data.rows.filter((r) => r.contractMonths).length)}</td></tr>
-                      <tr><td>90 gün içinde bitecek</td><td className="g" style={{ color: data.kpi.yaklasanBitis ? ORANGE : undefined }}>{fmt(data.kpi.yaklasanBitis)}</td></tr>
+                      <tr><td>Sözleşme</td><td className="g">{fmt(data.ongoing[view.ref]?.adet ?? 0)}</td></tr>
+                      <tr><td>Cihaz</td><td className="g">{fmt(data.ongoing[view.ref]?.cihaz ?? 0)}</td></tr>
+                      <tr><td>Aylık kira</td><td className="g">{usd(data.ongoing[view.ref]?.kira ?? 0)}</td></tr>
                     </tbody>
                   </table>
-                  <p className="kpe-note">Bitiş = faturalama tarihi + sözleşme süresi (ay).</p>
+                  <p className="kpe-note">Sözleşmeler süresiz; iptal edilene kadar devam eder.</p>
                 </div>
               </div>
             </>
@@ -199,6 +200,9 @@ export default function SozlesmeFaturalamaClient() {
                 <hr className="kpe-divider" />
                 <div className="kpe-chart-title c-teal">Tutar</div>
                 <VChart values={data.monthly.map((m) => m.tutar)} labels={view.ayKisa} refIdx={view.ref} color={TEAL} colorL={TEAL_L} money />
+                <hr className="kpe-divider" />
+                <div className="kpe-chart-title c-blue">Devam eden sözleşmeler — toplam cihaz (kümülatif)</div>
+                <VChart values={data.ongoing.map((m) => m.cihaz)} labels={view.ayKisa} refIdx={view.ref} color={BLUE} colorL={BLUE_L} />
               </div>
             </section>
 
@@ -274,7 +278,7 @@ export default function SozlesmeFaturalamaClient() {
                         </td>
                         <td className="l">{r.contractNo ?? <span className="c-muted">–</span>}</td>
                         <td>{r.contractMonths ? `${r.contractMonths} ay` : <span className="c-muted">–</span>}</td>
-                        <td>{dt(r.contractEnd)}</td>
+                        <td className="c-teal">{r.contractEnd ? dt(r.contractEnd) : 'Devam ediyor'}</td>
                         <td>{fmt(r.devices)}</td>
                         <td>{usd(r.amount)}</td>
                         <td className={r.rentalMonthly ? undefined : 'c-muted'}>{r.rentalMonthly ? usd(r.rentalMonthly) : '–'}</td>
