@@ -27,8 +27,7 @@ const dt = (v: string | null) => (v ? new Date(`${v.slice(0, 10)}T00:00:00`).toL
 const ayStr = (k: string) => `${AY_KISA[Number(k.slice(5, 7)) - 1]} ${k.slice(0, 4)}`;
 
 export default function SozlesmeFaturalamaClient() {
-  const currentYear = new Date().getFullYear();
-  const [year, setYear] = useState(currentYear);
+  const year = new Date().getFullYear();
   const [data, setData] = useState<SozlesmeFaturalamaPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -56,7 +55,8 @@ export default function SozlesmeFaturalamaClient() {
     const ref = data.refMonthIndex;
     const mIdx = (i: number) => Number(data.months[i]?.slice(5, 7)) - 1;
     const refAy = AY[mIdx(ref)] ?? '';
-    const prevAy = ref > 0 ? AY[mIdx(ref - 1)] : '';
+    // Ekran bu aydan başlar; önceki ay (kıyas) listede yok, takvimden alınır.
+    const prevAy = AY[(mIdx(ref) + 11) % 12] ?? '';
     const idxs = data.months.map((_, i) => i);
     const multiYear = data.months[0]?.slice(0, 4) !== data.months[data.months.length - 1]?.slice(0, 4);
     const yEk = (i: number) => (multiYear ? ` '${data.months[i].slice(2, 4)}` : '');
@@ -85,9 +85,6 @@ export default function SozlesmeFaturalamaClient() {
             <div>
               <div className="kpe-source">Kaynak: Satışlar › Hizmet Faturaları<br />{today}</div>
               <div className="kpe-tools no-print">
-                <select value={year} onChange={(e) => setYear(Number(e.target.value))}>
-                  {[currentYear, currentYear - 1].map((y) => <option key={y} value={y}>{y}&apos;dan itibaren</option>)}
-                </select>
                 <button type="button" onClick={() => window.print()} disabled={!data}>PDF / Yazdır</button>
               </div>
             </div>

@@ -119,9 +119,14 @@ export async function buildSozlesmeFaturalama({ year }: { year?: number } = {}):
   });
 
   // Ay aralığı: seçilen yılın Ocak'ından en az o yılın Aralık'ı / bu ay / en geç faturaya kadar kesintisiz.
-  const lastKey = [`${y}-12`, mk(today), ...base.map((b) => b.last.period)].sort().at(-1)!;
+  // Bu aydan başlar, en az 12 ay ve en geç başlangıç/faturaya kadar ileri gider.
+  const ty = Number(today.slice(0, 4));
+  const tm = Number(today.slice(5, 7));
+  const plus11 = `${tm === 1 ? ty : ty + 1}-${String(tm === 1 ? 12 : tm - 1).padStart(2, '0')}`;
+  const lastKey = [plus11, ...base.map((b) => b.last.period), ...rentals.map((r: any) => mk(r.start))].sort().at(-1)!;
   const months: string[] = [];
-  for (let yy = y, mm = 1; ; ) {
+  // Önceki ay yalnız "önceki aya göre" kıyası için hesaplanır, ekrana gönderilmez.
+  for (let yy = tm === 1 ? ty - 1 : ty, mm = tm === 1 ? 12 : tm - 1; ; ) {
     const k = `${yy}-${String(mm).padStart(2, '0')}`;
     months.push(k);
     if (k >= lastKey) break;
@@ -210,12 +215,13 @@ export async function buildSozlesmeFaturalama({ year }: { year?: number } = {}):
   const limit = in90.toISOString().slice(0, 10);
   const biten = list.filter((r) => r.end && r.end < today).length;
 
+  // İlk eleman (önceki ay) kıyas içindi; ekran bu aydan başlar.
   return {
     year: y,
-    months,
-    refMonthIndex: ref,
-    monthly,
-    rows: list,
+    months: months.slice(1),
+    refMonthIndex: ref - 1,
+    monthly: monthly.slice(1),
+    rows: list.map((r) => ({ ...r, cells: r.cells.slice(1) })).filter((r) => r.cells.some((c) => c.adet || c.tutar)),
     kpi: {
       refAdet: cur.adet, prevAdet: prev.adet,
       refTutar: cur.tutar, prevTutar: prev.tutar,
