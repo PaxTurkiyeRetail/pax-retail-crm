@@ -46,6 +46,8 @@ export type SozlesmeFaturalamaPayload = {
 };
 
 const mk = (v: string) => v.slice(0, 7);
+/** Rapor sayfasının ilk yılı (yönetim kararı: 2027 Ocak'tan başlar). */
+const START_YEAR = 2027;
 
 export async function buildSozlesmeFaturalama({ year }: { year?: number } = {}): Promise<SozlesmeFaturalamaPayload> {
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Istanbul' });
@@ -119,21 +121,21 @@ export async function buildSozlesmeFaturalama({ year }: { year?: number } = {}):
   });
 
   // Ay aralığı: seçilen yılın Ocak'ından en az o yılın Aralık'ı / bu ay / en geç faturaya kadar kesintisiz.
-  // Bu aydan başlar, en az 12 ay ve en geç başlangıç/faturaya kadar ileri gider.
+  // Sayfa 2027 Ocak'tan (sonraki yıllarda o yılın Ocak'ından) başlar; en az Aralık'a, en geç başlangıç/faturaya kadar.
   const ty = Number(today.slice(0, 4));
-  const tm = Number(today.slice(5, 7));
-  const plus11 = `${tm === 1 ? ty : ty + 1}-${String(tm === 1 ? 12 : tm - 1).padStart(2, '0')}`;
-  const lastKey = [plus11, ...base.map((b) => b.last.period), ...rentals.map((r: any) => mk(r.start))].sort().at(-1)!;
+  const startYear = Math.max(START_YEAR, ty);
+  const lastKey = [`${startYear}-12`, ...base.map((b) => b.last.period), ...rentals.map((r: any) => mk(r.start))].sort().at(-1)!;
   const months: string[] = [];
-  // Önceki ay yalnız "önceki aya göre" kıyası için hesaplanır, ekrana gönderilmez.
-  for (let yy = tm === 1 ? ty - 1 : ty, mm = tm === 1 ? 12 : tm - 1; ; ) {
+  // Önceki Aralık yalnız "önceki aya göre" kıyası için hesaplanır, ekrana gönderilmez.
+  for (let yy = startYear - 1, mm = 12; ; ) {
     const k = `${yy}-${String(mm).padStart(2, '0')}`;
     months.push(k);
     if (k >= lastKey) break;
     if (++mm > 12) { mm = 1; yy++; }
   }
   const curIdx = months.indexOf(mk(today));
-  const ref = curIdx >= 0 ? curIdx : months.length - 1;
+  // Referans ay: bu ay sayfadaysa o, değilse ilk ay (Ocak). 0. eleman kıyas ayı, ekranda yok.
+  const ref = curIdx >= 1 ? curIdx : 1;
 
   const list: ContractFirmRow[] = base
     .map((b) => {
