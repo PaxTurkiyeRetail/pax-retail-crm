@@ -9,6 +9,8 @@ import { INTEGRATION_DEVICE_SERVICE_KEYS } from '@/lib/sales/service-invoices-sh
 
 export type ContractFirmRow = {
   customerId: string;
+  /** fatura = Hizmet Faturaları (KasaPOS) · satis = kiralama satışı (Satışlar). */
+  source: 'fatura' | 'satis';
   musteri: string;
   owner: string;
   start: string;
@@ -23,7 +25,8 @@ export type ContractFirmRow = {
   cells: Array<{ adet: number; tutar: number; actual: boolean }>;
 };
 
-export type BillingMonth = { month: string; adet: number; tutar: number; firma: number; yeni: number };
+/** adet/tutar = KasaPOS faturaları + kiralama satışları; satisAdet = bunun kiralama satışından gelen kısmı. */
+export type BillingMonth = { month: string; adet: number; tutar: number; firma: number; yeni: number; satisAdet: number };
 
 export type SozlesmeFaturalamaPayload = {
   year: number;
@@ -85,6 +88,25 @@ export async function buildSozlesmeFaturalama({ year }: { year?: number } = {}):
     firms.set(r.customer_id, f);
   }
 
+  // Kiralama satışları (Satışlar): fatura başlangıcından (yoksa satış tarihi) itibaren her ay, bitene kadar
+  // cihaz adedi + aylık kira KasaPOS sayılarının üstüne eklenir. Tek seferlik cihaz satışları dahil değil.
+  const { rows: rentals } = await db.query<any>(
+    `
+      select s.customer_id::text as customer_id, coalesce(m.musteri, '—') as musteri,
+             coalesce(nullif(trim(s.owner_name), ''), 'Havuz Account') as owner,
+             coalesce(s.billing_start_date, s.sale_date)::text as start, (s.billing_start_date is null) as from_sale,
+             s.contract_ended_on::text as c_end,
+             (case when exists (select 1 from public.crm_sale_items i where i.sale_id = s.id)
+                   then coalesce((select sum(i.quantity) filter (where public.crm_sale_item_is_device(i.product_type, i.is_recurring))
+                                  from public.crm_sale_items i where i.sale_id = s.id), 0)
+                   else coalesce(s.device_count, 0) end)::int as adet,
+             (case when s.currency = 'USD' then coalesce(nullif(s.rental_monthly_amount, 0), s.amount, 0) else 0 end)::float8 as tutar
+      from public.crm_sales s
+      left join public.musteriler m on m.id = s.customer_id
+      where s.status = 'active' and s.sale_type in ('rental', 'mixed')
+    `,
+  );
+
   const base = [...firms.entries()].map(([customerId, f]) => {
     const inv = [...f.inv.values()].sort((a, b) => a.period.localeCompare(b.period));
     const starts = inv.map((x) => x.start).filter(Boolean) as string[];
@@ -121,6 +143,7 @@ export async function buildSozlesmeFaturalama({ year }: { year?: number } = {}):
       });
       return {
         customerId: b.customerId,
+        source: 'fatura' as const,
         musteri: b.musteri,
         owner: b.last.owner,
         start: b.start,
@@ -137,19 +160,51 @@ export async function buildSozlesmeFaturalama({ year }: { year?: number } = {}):
     .filter((r) => r.cells.some((c) => c.adet || c.tutar))
     .sort((a, b) => b.cells[ref].adet - a.cells[ref].adet || b.lastAdet - a.lastAdet || a.musteri.localeCompare(b.musteri, 'tr'));
 
+  const rentalFirms = new Map<string, any[]>();
+  for (const r of rentals) rentalFirms.set(r.customer_id, [...(rentalFirms.get(r.customer_id) ?? []), r]);
+  for (const [customerId, rs] of rentalFirms) {
+    const sorted = [...rs].sort((a, b) => String(a.start).localeCompare(String(b.start)));
+    const active = (r: any, month: string) => mk(r.start) <= month && (!r.c_end || mk(r.c_end) >= month);
+    const cells = months.map((month) => {
+      const act = sorted.filter((r) => active(r, month));
+      return { adet: act.reduce((s, r) => s + Number(r.adet ?? 0), 0), tutar: act.reduce((s, r) => s + Number(r.tutar ?? 0), 0), actual: true };
+    });
+    if (!cells.some((c) => c.adet || c.tutar)) continue;
+    const ends = sorted.map((r) => r.c_end);
+    const lastSale = sorted[sorted.length - 1];
+    const refCell = cells[ref].adet ? cells[ref] : cells.find((c) => c.adet) ?? cells[0];
+    list.push({
+      customerId,
+      source: 'satis',
+      musteri: lastSale.musteri,
+      owner: lastSale.owner,
+      start: sorted[0].start,
+      fromPeriod: sorted.some((r) => r.from_sale),
+      end: ends.every(Boolean) ? ends.sort().at(-1) : null,
+      firstPeriod: mk(sorted[0].start),
+      lastPeriod: mk(lastSale.start),
+      invoices: sorted.length,
+      lastAdet: refCell.adet,
+      lastTutar: refCell.tutar,
+      cells,
+    });
+  }
+  list.sort((a, b) => b.cells[ref].adet - a.cells[ref].adet || b.lastAdet - a.lastAdet || a.musteri.localeCompare(b.musteri, 'tr'));
+
   const monthly: BillingMonth[] = months.map((month, i) => {
     const act = list.filter((r) => r.cells[i].adet || r.cells[i].tutar);
     return {
       month,
       adet: act.reduce((s, r) => s + r.cells[i].adet, 0),
       tutar: act.reduce((s, r) => s + r.cells[i].tutar, 0),
-      firma: act.length,
+      firma: new Set(act.map((r) => r.customerId)).size,
       yeni: list.filter((r) => mk(r.start) === month).length,
+      satisAdet: act.filter((r) => r.source === 'satis').reduce((s, r) => s + r.cells[i].adet, 0),
     };
   });
 
   const cur = monthly[ref];
-  const prev = ref > 0 ? monthly[ref - 1] : { adet: 0, tutar: 0, firma: 0 } as BillingMonth;
+  const prev = ref > 0 ? monthly[ref - 1] : { adet: 0, tutar: 0, firma: 0, satisAdet: 0 } as BillingMonth;
   const in90 = new Date(`${today}T00:00:00Z`);
   in90.setUTCDate(in90.getUTCDate() + 90);
   const limit = in90.toISOString().slice(0, 10);
@@ -168,7 +223,7 @@ export async function buildSozlesmeFaturalama({ year }: { year?: number } = {}):
       toplamFirma: list.length,
       devamEden: list.length - biten,
       biten,
-      baslangicGirilmemis: list.filter((r) => r.fromPeriod).length,
+      baslangicGirilmemis: list.filter((r) => r.source === 'fatura' && r.fromPeriod).length,
       yaklasanBitis: list.filter((r) => r.end && r.end >= today && r.end <= limit).length,
     },
     generatedAt: new Date().toISOString(),

@@ -168,7 +168,7 @@ export default function SozlesmeFaturalamaClient() {
                       <tr><td>Yaklaşan bitiş (90 gün)</td><td className="g">{fmt(data.kpi.yaklasanBitis)}</td></tr>
                     </tbody>
                   </table>
-                  <p className="kpe-note">Sözleşme bitiş tarihine kadar her ay devam eder; bitiş yoksa süresiz. Faturası henüz kesilmemiş ay son faturadan taşınır.</p>
+                  <p className="kpe-note">Sözleşme bitiş tarihine kadar her ay devam eder; bitiş yoksa süresiz. Faturası henüz kesilmemiş ay son faturadan taşınır. Kiralama satışları fatura başlangıcından itibaren KasaPOS sayılarının üstüne eklenir ({view.refAy}: {fmt(data.monthly[view.ref]?.satisAdet ?? 0)} adet).</p>
                 </div>
               </div>
             </>
@@ -201,9 +201,9 @@ export default function SozlesmeFaturalamaClient() {
                   </thead>
                   <tbody>
                     {data.rows.map((r, idx) => (
-                      <tr key={r.customerId}>
+                      <tr key={`${r.source}-${r.customerId}`}>
                         <td className="idx">{idx + 1}</td>
-                        <td className="l firm">{r.musteri}</td>
+                        <td className="l firm">{r.musteri}{r.source === 'satis' ? <span className="c-muted"> · kiralama</span> : null}</td>
                         {r.cells.map((c, i) => (
                           <td
                             key={i}
@@ -239,22 +239,24 @@ export default function SozlesmeFaturalamaClient() {
                     <tr>
                       <th className="l">#</th>
                       <th className="l">Firma</th>
+                      <th className="l">Kaynak</th>
                       <th className="l">Satıcı</th>
                       <th>Sözleşme başlangıcı</th>
                       <th>Durum</th>
-                      <th>Fatura</th>
-                      <th>Son fatura</th>
-                      <th>Son adet</th>
-                      <th>Son tutar</th>
+                      <th>Kayıt</th>
+                      <th>Son kayıt</th>
+                      <th>Adet</th>
+                      <th>Aylık tutar</th>
                     </tr>
                   </thead>
                   <tbody>
                     {detail.map((r, idx) => (
-                      <tr key={r.customerId}>
+                      <tr key={`${r.source}-${r.customerId}`}>
                         <td className="l idx">{idx + 1}</td>
                         <td className="l firm">{r.musteri}</td>
+                        <td className="l">{r.source === 'satis' ? 'Satış (kiralama)' : 'Hizmet faturası'}</td>
                         <td className="l">{r.owner}</td>
-                        <td title={r.fromPeriod ? 'Sözleşme başlangıcı girilmemiş — ilk fatura dönemi' : 'Sözleşme başlangıcı'} style={{ color: r.fromPeriod ? ORANGE : undefined, fontWeight: 700 }}>
+                        <td title={r.fromPeriod ? (r.source === 'satis' ? 'Fatura başlangıcı girilmemiş — satış tarihi' : 'Sözleşme başlangıcı girilmemiş — ilk fatura dönemi') : 'Sözleşme başlangıcı'} style={{ color: r.fromPeriod ? ORANGE : undefined, fontWeight: 700 }}>
                           {dt(r.start)}{r.fromPeriod ? ' *' : ''}
                         </td>
                         <td className={r.end ? undefined : 'c-teal'} style={r.end ? { color: ORANGE } : undefined}>{r.end ? `Bitiş ${dt(r.end)}` : 'Devam ediyor'}</td>
