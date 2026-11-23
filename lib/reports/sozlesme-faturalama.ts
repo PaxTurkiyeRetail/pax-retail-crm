@@ -58,7 +58,7 @@ export async function buildSozlesmeFaturalama({ year }: { year?: number } = {}):
                coalesce(nullif(trim(s.owner_name), ''), 'Havuz Account') as owner,
                s.sale_date, s.billing_start_date,
                coalesce(s.billing_start_date, s.sale_date) as billing_date,
-               s.contract_no, s.contract_months, s.sale_type, s.sales_channel,
+               s.contract_no, s.contract_months, s.contract_ended_on, s.sale_type, s.sales_channel,
                s.amount, s.rental_monthly_amount, s.device_count,
                coalesce((select sum(i.quantity) filter (where public.crm_sale_item_is_device(i.product_type, i.is_recurring))
                          from public.crm_sale_items i where i.sale_id = s.id), 0)::int as item_devices,
@@ -71,8 +71,7 @@ export async function buildSozlesmeFaturalama({ year }: { year?: number } = {}):
       select id::text as sale_id, customer_id::text as customer_id, musteri, owner,
              sale_date::text as sale_date, billing_start_date::text as billing_start,
              billing_date::text as billing_date, contract_no, contract_months,
-             case when contract_months is null then null
-                  else (billing_date + make_interval(months => contract_months) - interval '1 day')::date::text end as contract_end,
+             contract_ended_on::text as contract_end,
              sale_type, sales_channel,
              (case when item_count > 0 then item_devices else device_count end)::int as devices,
              coalesce(amount, 0)::float8 as amount, coalesce(rental_monthly_amount, 0)::float8 as rental_monthly
@@ -101,8 +100,6 @@ export async function buildSozlesmeFaturalama({ year }: { year?: number } = {}):
   }));
   const startKey = `${y}-01`;
   const list = all.filter((r) => r.billingDate.slice(0, 7) >= startKey);
-  // Sözleşmeler süresiz: iptal edilene kadar devam eder. Başlangıç yılından önce başlayanlar devreden.
-  const before = all.filter((r) => r.billingDate.slice(0, 7) < startKey);
 
   const lastKey = [`${y}-12`, today.slice(0, 7), ...list.map((r) => r.billingDate.slice(0, 7))].sort().at(-1)!;
   const months: string[] = [];
@@ -127,13 +124,15 @@ export async function buildSozlesmeFaturalama({ year }: { year?: number } = {}):
     };
   });
 
-  // Devam eden (kümülatif) sözleşmeler: ay sonu itibarıyla faturası başlamış tüm aktif satışlar.
-  let dAdet = before.length;
-  let dCihaz = before.reduce((s, r) => s + r.devices, 0);
-  let dKira = before.reduce((s, r) => s + r.rentalMonthly, 0);
-  const ongoing: OngoingMonth[] = monthly.map((m) => {
-    dAdet += m.adet; dCihaz += m.cihaz; dKira += m.kira;
-    return { month: m.month, adet: dAdet, cihaz: dCihaz, kira: dKira };
+  // Devam eden sözleşmeler: başlangıç ayından bitiş ayına kadar (bitiş yoksa süresiz) her ay sayılır.
+  const ongoing: OngoingMonth[] = months.map((month) => {
+    const act = all.filter((r) => r.billingDate.slice(0, 7) <= month && (!r.contractEnd || r.contractEnd.slice(0, 7) >= month));
+    return {
+      month,
+      adet: act.length,
+      cihaz: act.reduce((s, r) => s + r.devices, 0),
+      kira: act.reduce((s, r) => s + r.rentalMonthly, 0),
+    };
   });
 
   const ref = refIdx;

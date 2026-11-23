@@ -21,7 +21,6 @@ import { filtersToQuery, type FilterOption } from '@/lib/filters/schema';
 import type { Department } from '@/lib/departments';
 import { salesFilterConfig } from '@/lib/quotes/sales-filters';
 import { DEFAULT_RENTAL_OPS_STATUS, RENTAL_OPS_STATUSES, rentalOpsLabel } from '@/lib/sales/rental-ops';
-import { contractEndDate } from '@/lib/sales/contract';
 import { coerceSaleTypeForProduct, productAllowsSaleType, productUsageSuffix } from '@/lib/quotes/catalog';
 
 /** Tutar tutarlılık uyarılarını (045, engellemez) ekrandaki bilgi satırına çevirir. */
@@ -68,14 +67,16 @@ type SaleRow = {
   billing_start_date?: string | null;
   contract_no?: string | null;
   contract_months?: number | null;
+  contract_ended_on?: string | null;
 };
 
-type ContractForm = { billing: string; no: string; months: string };
-const emptyContract = (): ContractForm => ({ billing: '', no: '', months: '' });
+// Sözleşme süresiz: fatura başlangıcından bitiş tarihine (Sözleşmeyi Bitir) kadar her ay devam eder.
+type ContractForm = { billing: string; no: string; ended: string };
+const emptyContract = (): ContractForm => ({ billing: '', no: '', ended: '' });
 const contractPayload = (form: ContractForm) => ({
   billing_start_date: form.billing || null,
   contract_no: form.no.trim() || null,
-  contract_months: form.months.trim() === '' ? null : Number(form.months),
+  contract_ended_on: form.ended || null,
 });
 
 type ChannelOption = { value: string; label: string };
@@ -203,7 +204,7 @@ export default function SalesClient() {
     setFormContract({
       billing: String(row.billing_start_date ?? '').slice(0, 10),
       no: row.contract_no ?? '',
-      months: row.contract_months == null ? '' : String(row.contract_months),
+      ended: String(row.contract_ended_on ?? '').slice(0, 10),
     });
     setMsg(null);
     if (!options) void loadOptions();
@@ -407,6 +408,7 @@ export default function SalesClient() {
                           {row.billing_start_date ? `Fatura: ${fmtDate(row.billing_start_date)}` : null}
                           {row.billing_start_date && row.contract_no ? ' · ' : null}
                           {row.contract_no ? `Sözl. ${row.contract_no}` : null}
+                          {row.contract_ended_on ? ` · Bitti: ${fmtDate(row.contract_ended_on)}` : null}
                         </div>
                       ) : null}
                     </td>
@@ -715,8 +717,7 @@ const modalBackdrop: CSSProperties = { position: 'fixed', inset: 0, background: 
 const modalCard: CSSProperties = { ...surface, width: 'min(560px, 100%)', maxWidth: '100%', maxHeight: '90vh', overflowY: 'auto', display: 'grid', gap: 4 };
 /** Sözleşme / faturalama alanları (054) — "+ Satış Ekle" ve Düzenle ortak kullanır. */
 function ContractFields({ value, onChange, saleDate }: { value: ContractForm; onChange: (next: ContractForm) => void; saleDate: string }) {
-  const months = value.months.trim() === '' ? null : Number(value.months);
-  const end = contractEndDate(value.billing || saleDate || null, months && Number.isInteger(months) ? months : null);
+  const start = value.billing || saleDate || '';
   return (
     <div style={{ padding: 12, borderRadius: 14, border: '1px solid var(--border)', background: 'var(--surface-2)', marginBottom: 12 }}>
       <div style={{ ...labelStyle, marginBottom: 8 }}>Sözleşme / Faturalama</div>
@@ -730,13 +731,20 @@ function ContractFields({ value, onChange, saleDate }: { value: ContractForm; on
           <input value={value.no} maxLength={80} onChange={(e) => onChange({ ...value, no: e.target.value })} placeholder="Opsiyonel" style={inputStyle} />
         </label>
         <label style={{ ...fieldStyle, marginBottom: 0 }}>
-          <span style={labelStyle}>Sözleşme Süresi (ay)</span>
-          <input inputMode="numeric" value={value.months} onChange={(e) => onChange({ ...value, months: e.target.value.replace(/\D/g, '').slice(0, 3) })} placeholder="Örn. 12" style={inputStyle} />
+          <span style={labelStyle}>Sözleşme Bitiş Tarihi</span>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <input type="date" value={value.ended} min={start || undefined} onChange={(e) => onChange({ ...value, ended: e.target.value })} style={{ ...inputStyle, flex: 1, minWidth: 0 }} />
+            {value.ended ? (
+              <button type="button" onClick={() => onChange({ ...value, ended: '' })} style={{ ...inputStyle, width: 'auto', cursor: 'pointer' }} title="Bitişi kaldır, sözleşme devam etsin">Geri al</button>
+            ) : (
+              <button type="button" onClick={() => onChange({ ...value, ended: todayIso() })} style={{ ...inputStyle, width: 'auto', cursor: 'pointer', fontWeight: 700 }} title="Bugün itibarıyla sözleşmeyi bitir">Bitir</button>
+            )}
+          </div>
         </label>
       </div>
       <small style={{ ...hintStyle, display: 'block', marginTop: 8 }}>
-        {value.billing ? '' : 'Boş bırakılırsa faturalama raporunda satış tarihi kullanılır. '}
-        {end ? `Sözleşme bitişi: ${fmtDate(end)}` : null}
+        {value.billing ? '' : 'Fatura başlangıcı boşsa satış tarihi kullanılır. '}
+        {value.ended ? `Sözleşme ${fmtDate(value.ended)} tarihinde bitiyor.` : 'Bitiş girilmedikçe sözleşme her ay devam eder.'}
       </small>
     </div>
   );

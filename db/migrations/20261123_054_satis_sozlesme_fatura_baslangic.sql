@@ -37,6 +37,11 @@ comment on column public.crm_sales.billing_start_date is
 comment on column public.crm_sales.contract_no is 'Sözleşme numarası (054), opsiyonel.';
 comment on column public.crm_sales.contract_months is 'Sözleşme süresi ay (054), opsiyonel. Bitiş = fatura başlangıcı + süre.';
 
+-- Sözleşme süresiz: bitiş tarihi girilene ("Sözleşmeyi Bitir") kadar her ay devam eder.
+alter table public.crm_sales add column if not exists contract_ended_on date;
+comment on column public.crm_sales.contract_ended_on is
+  'Sözleşme bitiş tarihi (054). Boşsa sözleşme devam ediyor; raporda bitiş ayına kadar sayılır.';
+
 create index if not exists crm_sales_billing_start_idx
   on public.crm_sales (billing_start_date) where billing_start_date is not null;
 
@@ -58,9 +63,7 @@ select
   case when s.billing_start_date is null then 'satis_tarihi' else 'fatura_baslangic' end as billing_date_source,
   s.contract_no,
   s.contract_months,
-  case when s.contract_months is null then null
-       else (coalesce(s.billing_start_date, s.sale_date) + make_interval(months => s.contract_months) - interval '1 day')::date
-  end as contract_end_date,
+  s.contract_ended_on as contract_end_date,
   s.rental_start_date,
   s.rental_end_date,
   s.device_count,

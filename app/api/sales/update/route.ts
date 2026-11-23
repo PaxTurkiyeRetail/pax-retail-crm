@@ -36,6 +36,7 @@ type Body = {
   billing_start_date?: string | null;
   contract_no?: string | null;
   contract_months?: number | string | null;
+  contract_ended_on?: string | null;
 };
 
 const isoDate = (value: unknown) => {
@@ -55,7 +56,7 @@ export async function POST(request: Request) {
     const admin = createPgAdminClient();
     const { data: sale, error: readError } = await admin
       .from('crm_sales')
-      .select('id,quote_id,owner_user_id,owner_name,device_count,amount,price_source,status,sale_date,note,sale_type,rental_start_date,rental_end_date,rental_monthly_amount,hardware_amount,sales_channel,source,billing_start_date,contract_no,contract_months')
+      .select('id,quote_id,owner_user_id,owner_name,device_count,amount,price_source,status,sale_date,note,sale_type,rental_start_date,rental_end_date,rental_monthly_amount,hardware_amount,sales_channel,source,billing_start_date,contract_no,contract_months,contract_ended_on')
       .eq('id', saleId)
       .maybeSingle();
     if (readError) return NextResponse.json({ message: readError.message }, { status: 400 });
@@ -180,6 +181,7 @@ export async function POST(request: Request) {
       billing_start_date: (sale as any).billing_start_date ?? null,
       contract_no: (sale as any).contract_no ?? null,
       contract_months: (sale as any).contract_months ?? null,
+      contract_ended_on: (sale as any).contract_ended_on ?? null,
     });
     if ('error' in contract) return NextResponse.json({ message: contract.error }, { status: 400 });
 
@@ -210,7 +212,7 @@ export async function POST(request: Request) {
 
     await tryRecordAuditEvent({
       actorId: me.id, actorEmail: me.email, action: 'sale.updated', resourceType: 'sale', resourceId: saleId,
-      before: { device_count: (sale as any).device_count, amount: (sale as any).amount, price_source: (sale as any).price_source, rental_start_date: (sale as any).rental_start_date, rental_end_date: (sale as any).rental_end_date, owner_name: (sale as any).owner_name, sales_channel: (sale as any).sales_channel, billing_start_date: (sale as any).billing_start_date, contract_no: (sale as any).contract_no, contract_months: (sale as any).contract_months },
+      before: { device_count: (sale as any).device_count, amount: (sale as any).amount, price_source: (sale as any).price_source, rental_start_date: (sale as any).rental_start_date, rental_end_date: (sale as any).rental_end_date, owner_name: (sale as any).owner_name, sales_channel: (sale as any).sales_channel, billing_start_date: (sale as any).billing_start_date, contract_no: (sale as any).contract_no, contract_months: (sale as any).contract_months, contract_ended_on: (sale as any).contract_ended_on },
       after: payload,
     });
 

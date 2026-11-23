@@ -5,6 +5,8 @@ export type ContractFields = {
   billing_start_date: string | null;
   contract_no: string | null;
   contract_months: number | null;
+  /** Sözleşme bitişi; boşsa sözleşme devam ediyor. */
+  contract_ended_on: string | null;
 };
 
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
@@ -40,7 +42,15 @@ export function parseContractFields(
     }
   }
 
-  return { value: { billing_start_date: billing, contract_no: contractNo, contract_months: months } };
+  let ended = current.contract_ended_on ?? null;
+  if (has('contract_ended_on')) {
+    const raw = String(body.contract_ended_on ?? '').trim().slice(0, 10);
+    if (raw && !ISO.test(raw)) return { error: 'Sözleşme bitiş tarihi geçersiz.' };
+    ended = raw || null;
+  }
+  if (ended && billing && ended < billing) return { error: 'Sözleşme bitişi fatura başlangıcından önce olamaz.' };
+
+  return { value: { billing_start_date: billing, contract_no: contractNo, contract_months: months, contract_ended_on: ended } };
 }
 
 /** Fatura başlangıcı (yoksa satış tarihi) + süre → sözleşme bitişi (son gün). */

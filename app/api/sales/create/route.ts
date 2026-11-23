@@ -40,6 +40,7 @@ const createSchema = z.object({
   // Sözleşme / faturalama (054) — hepsi opsiyonel; boş fatura başlangıcı raporda satış tarihine düşer.
   billing_start_date: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, 'Fatura başlangıç tarihi geçersiz.').nullish().or(z.literal('')),
   contract_no: z.string().trim().max(80).nullish(),
+  contract_ended_on: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, 'Sözleşme bitiş tarihi geçersiz.').nullish().or(z.literal('')),
   contract_months: z.number().int().min(1, 'Sözleşme süresi 1-240 ay arasında olmalı.').max(240, 'Sözleşme süresi 1-240 ay arasında olmalı.').nullish(),
 });
 
@@ -88,11 +89,12 @@ export async function POST(request: Request) {
       billing_start_date: input.billing_start_date || null,
       contract_no: input.contract_no?.trim() || null,
       contract_months: input.contract_months ?? null,
+      contract_ended_on: input.contract_ended_on || null,
     };
-    if (result.id && (contract.billing_start_date || contract.contract_no || contract.contract_months)) {
+    if (result.id && (contract.billing_start_date || contract.contract_no || contract.contract_months || contract.contract_ended_on)) {
       await db.query(
-        `update public.crm_sales set billing_start_date = $2::date, contract_no = $3, contract_months = $4 where id = $1`,
-        [result.id, contract.billing_start_date, contract.contract_no, contract.contract_months],
+        `update public.crm_sales set billing_start_date = $2::date, contract_no = $3, contract_months = $4, contract_ended_on = $5::date where id = $1`,
+        [result.id, contract.billing_start_date, contract.contract_no, contract.contract_months, contract.contract_ended_on],
       );
     }
 

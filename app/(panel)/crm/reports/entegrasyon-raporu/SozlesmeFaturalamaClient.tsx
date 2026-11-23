@@ -183,7 +183,7 @@ export default function SozlesmeFaturalamaClient() {
                       <tr><td>Aylık kira</td><td className="g">{usd(data.ongoing[view.ref]?.kira ?? 0)}</td></tr>
                     </tbody>
                   </table>
-                  <p className="kpe-note">Sözleşmeler süresiz; iptal edilene kadar devam eder.</p>
+                  <p className="kpe-note">Sözleşme, fatura başlangıcından bitiş tarihine kadar her ay devam eder; bitiş yoksa süresiz. Bitiş: Satışlar › Düzenle › Bitir.</p>
                 </div>
               </div>
             </>
@@ -258,8 +258,7 @@ export default function SozlesmeFaturalamaClient() {
                       <th>Satış tarihi</th>
                       <th>Faturalama tarihi</th>
                       <th className="l">Sözleşme no</th>
-                      <th>Süre</th>
-                      <th>Bitiş</th>
+                      <th>Durum</th>
                       <th>Cihaz</th>
                       <th>Tutar</th>
                       <th>Aylık kira</th>
@@ -277,8 +276,7 @@ export default function SozlesmeFaturalamaClient() {
                           {dt(r.billingDate)}{r.fromSaleDate ? ' *' : ''}
                         </td>
                         <td className="l">{r.contractNo ?? <span className="c-muted">–</span>}</td>
-                        <td>{r.contractMonths ? `${r.contractMonths} ay` : <span className="c-muted">–</span>}</td>
-                        <td className="c-teal">{r.contractEnd ? dt(r.contractEnd) : 'Devam ediyor'}</td>
+                        <td className={r.contractEnd ? undefined : 'c-teal'} style={r.contractEnd ? { color: ORANGE } : undefined}>{r.contractEnd ? `Bitti ${dt(r.contractEnd)}` : 'Devam ediyor'}</td>
                         <td>{fmt(r.devices)}</td>
                         <td>{usd(r.amount)}</td>
                         <td className={r.rentalMonthly ? undefined : 'c-muted'}>{r.rentalMonthly ? usd(r.rentalMonthly) : '–'}</td>
