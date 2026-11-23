@@ -3,11 +3,13 @@
 import { useState } from 'react';
 import EntegrasyonRaporuClient from './EntegrasyonRaporuClient';
 import KasaposEntegrasyonClient from './KasaposEntegrasyonClient';
+import SozlesmeFaturalamaClient from './SozlesmeFaturalamaClient';
 
 // Entegrasyon Raporu sekmeleri: firma faz durumu + KasaPOS adet & tutar (müdür raporu, 02.10.2026).
 const TABS = [
   { key: 'durum', label: 'Firma Durumu' },
   { key: 'adet-tutar', label: 'KasaPOS Adet & Tutar' },
+  { key: 'sozlesme', label: 'Sözleşme / Faturalama' },
 ] as const;
 
 type TabKey = (typeof TABS)[number]['key'];
@@ -33,7 +35,7 @@ export default function EntegrasyonRaporuTabs() {
           ))}
         </div>
       </div>
-      {tab === 'durum' ? <EntegrasyonRaporuClient /> : <KasaposEntegrasyonClient />}
+      {tab === 'durum' ? <EntegrasyonRaporuClient /> : tab === 'adet-tutar' ? <KasaposEntegrasyonClient /> : <SozlesmeFaturalamaClient />}
     </>
   );
 }

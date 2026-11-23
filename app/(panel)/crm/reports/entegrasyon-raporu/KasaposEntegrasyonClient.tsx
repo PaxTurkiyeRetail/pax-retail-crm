@@ -40,7 +40,7 @@ function KasaCell({ firm }: { firm: Firm }) {
   );
 }
 
-function VChart({
+export function VChart({
   values, labels, refIdx, color, colorL, money,
 }: { values: number[]; labels: string[]; refIdx: number; color: string; colorL: string; money?: boolean }) {
   const max = Math.max(0, ...values);
